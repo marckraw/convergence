@@ -1373,6 +1373,17 @@ type ProviderQuotaSnapshotData =
       stale: boolean
     }
 
+interface ProviderAccountChatGptAppsData {
+  providerAccountId: string
+  apps: Array<{
+    id: string
+    name: string
+    state: 'available' | 'unavailable' | 'off'
+  }>
+  requiresChatGpt: boolean
+  error: string | null
+}
+
 interface ProviderAccountConnectorsData {
   providerAccountId: string | null
   connectors: Array<{
@@ -2209,6 +2220,15 @@ interface ElectronAPI {
     scanSharedSettings: () => Promise<ProviderAccountSettingsWarningData[]>
     attest: () => Promise<ProviderAccountHealthData>
     health: () => Promise<ProviderAccountHealthData>
+    listChatGptApps: (input: {
+      accountId: string
+      forceRefetch?: boolean
+    }) => Promise<ProviderAccountChatGptAppsData>
+    manageChatGptApp: (input: {
+      accountId: string
+      appId: string
+    }) => Promise<void>
+    browseChatGptApps: () => Promise<void>
     listConnectors: (
       accountId: string | null,
     ) => Promise<ProviderAccountConnectorsData>

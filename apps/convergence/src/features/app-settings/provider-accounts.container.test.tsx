@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -64,6 +65,9 @@ const providerAccounts = {
   scanSharedSettings: vi.fn(),
   attest: vi.fn(),
   health: vi.fn(),
+  listChatGptApps: vi.fn(),
+  manageChatGptApp: vi.fn(),
+  browseChatGptApps: vi.fn(),
   listConnectors: vi.fn(),
   authorizeConnector: vi.fn(),
   connectLinear: vi.fn(),
@@ -72,6 +76,12 @@ const providerAccounts = {
 describe('ProviderAccountsContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    providerAccounts.listChatGptApps.mockResolvedValue({
+      providerAccountId: 'acct-a',
+      apps: [],
+      requiresChatGpt: false,
+      error: null,
+    })
     providerAccounts.loginAttempt.mockResolvedValue(null)
     providerAccounts.onLoginChanged.mockReturnValue(() => {})
     useDialogStore.getState().close()
@@ -1047,4 +1057,181 @@ it('MAR-3213 R3 the Connectors list says it is the CLI\u2019s view for a Claude 
   await screen.findByText('openai@example.com')
   fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
   expect(screen.queryByText(CLAUDE_CONNECTORS_SENTENCE)).not.toBeInTheDocument()
+})
+
+describe('MAR-3458 ChatGPT apps', () => {
+  const snapshot = {
+    providerAccountId: 'acct-a',
+    requiresChatGpt: false,
+    error: null,
+    apps: [
+      { id: 'figma', name: 'Figma', state: 'available' },
+      { id: 'hidden', name: 'Hidden app', state: 'unavailable' },
+      { id: 'off', name: 'Disabled app', state: 'off' },
+    ],
+  }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useDialogStore.getState().close()
+    providerAccounts.loginAttempt.mockResolvedValue(null)
+    providerAccounts.onLoginChanged.mockReturnValue(() => {})
+    providerAccounts.list.mockResolvedValue([account({ providerId: 'codex' })])
+    providerAccounts.health.mockResolvedValue(health())
+    providerAccounts.listConnectors.mockResolvedValue({
+      providerAccountId: 'acct-a',
+      connectors: [
+        {
+          name: 'linear',
+          status: 'ready',
+          statusLabel: 'Connected',
+          description: '',
+          needsAuthorization: false,
+        },
+      ],
+      error: null,
+    })
+    providerAccounts.listChatGptApps.mockResolvedValue(snapshot)
+    providerAccounts.manageChatGptApp.mockResolvedValue(undefined)
+    providerAccounts.browseChatGptApps.mockResolvedValue(undefined)
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      providerAccounts,
+    }
+  })
+  async function open() {
+    render(<ProviderAccountsContainer />)
+    fireEvent.click(await screen.findByRole('button', { name: 'OpenAI' }))
+    await screen.findByText('a@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+    return screen.findByRole('region', { name: 'From ChatGPT' })
+  }
+  it('R2/R5 shows ordered groups, honest states and one Manage action per app', async () => {
+    const group = await open()
+    await within(group).findByText('Figma')
+    expect(within(group).getByText('Tools available')).toBeInTheDocument()
+    expect(
+      within(group).getByText(
+        "Installed, but its tools aren't available to Codex here",
+      ),
+    ).toBeInTheDocument()
+    expect(within(group).getByText('Turned off')).toBeInTheDocument()
+    expect(group.textContent?.match(/sign-in/gi)).toHaveLength(1)
+    expect(group.textContent).not.toMatch(/ready|authorized|needs sign-in/i)
+    const local = screen.getByText('Configured on this Mac')
+    expect(
+      group.compareDocumentPosition(local) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.getByText('linear')).toBeInTheDocument()
+    const buttons = within(group).getAllByRole('button', {
+      name: 'Manage on ChatGPT',
+    })
+    expect(buttons).toHaveLength(3)
+    fireEvent.click(buttons[0])
+    expect(providerAccounts.manageChatGptApp).toHaveBeenCalledWith({
+      accountId: 'acct-a',
+      appId: 'figma',
+    })
+    fireEvent.click(
+      within(group).getByRole('button', { name: 'Browse apps on ChatGPT' }),
+    )
+    expect(providerAccounts.browseChatGptApps).toHaveBeenCalledExactlyOnceWith()
+  })
+  it('R4 focus triggers one forced refetch, Refresh does too, closed section does neither', async () => {
+    fireEvent.focus(window)
+    expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
+    const group = await open()
+    await within(group).findByText('Figma')
+    expect(providerAccounts.listChatGptApps).toHaveBeenCalledExactlyOnceWith({
+      accountId: 'acct-a',
+      forceRefetch: false,
+    })
+    providerAccounts.listChatGptApps.mockClear()
+    fireEvent.focus(window)
+    await waitFor(() =>
+      expect(providerAccounts.listChatGptApps).toHaveBeenCalledExactlyOnceWith({
+        accountId: 'acct-a',
+        forceRefetch: true,
+      }),
+    )
+    await waitFor(() =>
+      expect(
+        within(group).getByRole('button', { name: 'Refresh' }),
+      ).not.toBeDisabled(),
+    )
+    fireEvent.click(within(group).getByRole('button', { name: 'Refresh' }))
+    await waitFor(() =>
+      expect(providerAccounts.listChatGptApps).toHaveBeenCalledTimes(2),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+    providerAccounts.listChatGptApps.mockClear()
+    fireEvent.focus(window)
+    expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
+  })
+  it('R5 app-list failures retain both groups and configured servers', async () => {
+    providerAccounts.listChatGptApps.mockRejectedValue(new Error('fixture'))
+    const group = await open()
+    expect(await within(group).findByRole('alert')).toHaveTextContent(
+      'Could not read ChatGPT apps',
+    )
+    expect(screen.getByText('Configured on this Mac')).toBeInTheDocument()
+    expect(screen.getByText('linear')).toBeInTheDocument()
+  })
+  it('R1 API-key account explains the ChatGPT requirement', async () => {
+    providerAccounts.listChatGptApps.mockResolvedValue({
+      ...snapshot,
+      apps: [],
+      requiresChatGpt: true,
+    })
+    const group = await open()
+    expect(
+      await within(group).findByText('ChatGPT apps need a ChatGPT sign-in'),
+    ).toBeInTheDocument()
+  })
+  it('ignores a late app response after switching accounts', async () => {
+    let finish!: (value: unknown) => void
+    providerAccounts.list.mockResolvedValue([
+      account({ providerId: 'codex' }),
+      account({ id: 'acct-b', providerId: 'codex', email: 'b@example.com' }),
+    ])
+    providerAccounts.listChatGptApps
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      .mockResolvedValue({
+        ...snapshot,
+        providerAccountId: 'acct-b',
+        apps: [{ id: 'b', name: 'Account B app', state: 'available' }],
+      })
+    render(<ProviderAccountsContainer />)
+    await screen.findByRole('button', { name: 'OpenAI' })
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    await screen.findByText('b@example.com')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Connectors' })[0])
+    await waitFor(() =>
+      expect(providerAccounts.listChatGptApps).toHaveBeenCalledTimes(1),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('button', { name: 'Connectors' })[1],
+      ).not.toBeDisabled(),
+    )
+    fireEvent.click(screen.getAllByRole('button', { name: 'Connectors' })[1])
+    await screen.findByText('Account B app')
+    await act(async () => finish(snapshot))
+    expect(screen.queryByText('Figma')).not.toBeInTheDocument()
+    expect(screen.getByText('Account B app')).toBeInTheDocument()
+  })
+  it('keeps Claude accounts unchanged and never reads ChatGPT apps for them', async () => {
+    providerAccounts.list.mockResolvedValue([account()])
+    render(<ProviderAccountsContainer />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Connectors' }))
+    await screen.findByText('linear')
+    fireEvent.focus(window)
+    expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
+    expect(
+      screen.queryByRole('region', { name: 'From ChatGPT' }),
+    ).not.toBeInTheDocument()
+  })
 })

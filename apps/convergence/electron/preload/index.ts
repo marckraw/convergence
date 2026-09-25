@@ -693,6 +693,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('providerAccounts:scanSharedSettings'),
     attest: () => ipcRenderer.invoke('providerAccounts:attest'),
     health: () => ipcRenderer.invoke('providerAccounts:health'),
+    listChatGptApps: (input: { accountId: string; forceRefetch?: boolean }) =>
+      ipcRenderer.invoke('providerAccounts:listChatGptApps', input),
+    manageChatGptApp: (input: { accountId: string; appId: string }) =>
+      ipcRenderer.invoke('providerAccounts:manageChatGptApp', input),
+    browseChatGptApps: () =>
+      ipcRenderer.invoke('providerAccounts:browseChatGptApps'),
     listConnectors: (accountId: string | null) =>
       ipcRenderer.invoke('providerAccounts:listConnectors', accountId),
     connectLinear: (accountId: string) =>

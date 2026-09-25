@@ -1,5 +1,5 @@
 import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import {
   buildProviderAccountSettingsRows,
@@ -8,6 +8,7 @@ import {
   type ProviderAccount,
   type ProviderAccountEnrollmentProvider,
   type ProviderAccountConnectors,
+  type ProviderAccountChatGptApps,
   type ProviderAccountHealth,
   type ClaudeAccountLayout,
 } from '@/entities/provider-account'
@@ -59,6 +60,14 @@ export const ProviderAccountsContainer: FC = () => {
     useState<string | null>(null)
   const [connectors, setConnectors] =
     useState<ProviderAccountConnectors | null>(null)
+  const [chatGptApps, setChatGptApps] =
+    useState<ProviderAccountChatGptApps | null>(null)
+  const [isLoadingChatGptApps, setIsLoadingChatGptApps] = useState(false)
+  const [chatGptLinkError, setChatGptLinkError] = useState<{
+    accountId: string
+    message: string
+  } | null>(null)
+  const refreshChatGptApps = useRef<(() => void) | null>(null)
   const [isLoadingConnectors, setIsLoadingConnectors] = useState(false)
   const [authorizingServerName, setAuthorizingServerName] = useState<
     string | null
@@ -315,6 +324,60 @@ export const ProviderAccountsContainer: FC = () => {
     [load, runForAccount, privateDeletionAcknowledged],
   )
 
+  useEffect(() => {
+    if (providerId !== 'codex' || !expandedConnectorsAccountId) return
+    const accountId = expandedConnectorsAccountId
+    let live = true
+    let revision = 0
+    const refresh = async (forceRefetch: boolean) => {
+      const request = ++revision
+      setIsLoadingChatGptApps(true)
+      setChatGptLinkError(null)
+      try {
+        const result = await providerAccountApi.listChatGptApps({
+          accountId,
+          forceRefetch,
+        })
+        if (live && request === revision) setChatGptApps(result)
+      } catch {
+        if (live && request === revision)
+          setChatGptApps({
+            providerAccountId: accountId,
+            apps: [],
+            requiresChatGpt: false,
+            error: 'Could not read ChatGPT apps. Try Refresh.',
+          })
+      } finally {
+        if (live && request === revision) setIsLoadingChatGptApps(false)
+      }
+    }
+    const onFocus = () => {
+      void refresh(true)
+    }
+    refreshChatGptApps.current = onFocus
+    void refresh(false)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      live = false
+      refreshChatGptApps.current = null
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [expandedConnectorsAccountId, providerId])
+
+  const handleChatGptLink = async (accountId: string, appId?: string) => {
+    setChatGptLinkError(null)
+    try {
+      if (appId) await providerAccountApi.manageChatGptApp({ accountId, appId })
+      else await providerAccountApi.browseChatGptApps()
+    } catch {
+      setChatGptLinkError({
+        accountId,
+        message:
+          'Could not open the ChatGPT page. Try Refresh, then Manage on ChatGPT again.',
+      })
+    }
+  }
+
   const handleToggleConnectors = useCallback(
     async (accountId: string) => {
       if (expandedConnectorsAccountId === accountId) {
@@ -419,6 +482,22 @@ export const ProviderAccountsContainer: FC = () => {
       privateDeletionAcknowledged={privateDeletionAcknowledged}
       onPrivateDeletionAcknowledged={setPrivateDeletionAcknowledged}
       expandedConnectorsAccountId={expandedConnectorsAccountId}
+      chatGptApps={
+        chatGptApps?.providerAccountId === expandedConnectorsAccountId
+          ? chatGptApps
+          : null
+      }
+      isLoadingChatGptApps={isLoadingChatGptApps}
+      chatGptLinkError={
+        chatGptLinkError?.accountId === expandedConnectorsAccountId
+          ? chatGptLinkError.message
+          : null
+      }
+      onRefreshChatGptApps={() => refreshChatGptApps.current?.()}
+      onManageChatGptApp={(accountId, appId) =>
+        void handleChatGptLink(accountId, appId)
+      }
+      onBrowseChatGptApps={(accountId) => void handleChatGptLink(accountId)}
       connectors={connectors}
       isLoadingConnectors={isLoadingConnectors}
       authorizingServerName={authorizingServerName}

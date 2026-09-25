@@ -27,6 +27,7 @@ export type {
   ProviderAccountEnrollmentProvider,
   ProviderAccountConnector,
   ProviderAccountConnectors,
+  ProviderAccountChatGptApps,
   ProviderAccountAttestationOutcome,
   ProviderAccountAttestationResult,
   ProviderAccountEnrolResult,

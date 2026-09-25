@@ -4,6 +4,7 @@ import { Pencil, Plug, RefreshCw, Star, Trash2 } from 'lucide-react'
 import type {
   ClaudeAccountLayout,
   ProviderAccountConnectors,
+  ProviderAccountChatGptApps,
   ProviderAccountEnrollmentProvider,
   ProviderAccountSettingsRow,
   ProviderAccountSettingsWarning,
@@ -66,6 +67,12 @@ export interface ProviderAccountsFieldsProps {
   onPrivateDeletionAcknowledged: (value: boolean) => void
   /** The account whose connectors are open, if any. */
   expandedConnectorsAccountId: string | null
+  chatGptApps: ProviderAccountChatGptApps | null
+  isLoadingChatGptApps: boolean
+  chatGptLinkError: string | null
+  onRefreshChatGptApps: () => void
+  onManageChatGptApp: (accountId: string, appId: string) => void
+  onBrowseChatGptApps: (accountId: string) => void
   connectors: ProviderAccountConnectors | null
   isLoadingConnectors: boolean
   authorizingServerName: string | null
@@ -121,6 +128,12 @@ export function ProviderAccountsFields({
   privateDeletionAcknowledged,
   onPrivateDeletionAcknowledged,
   expandedConnectorsAccountId,
+  chatGptApps,
+  isLoadingChatGptApps,
+  chatGptLinkError,
+  onRefreshChatGptApps,
+  onManageChatGptApp,
+  onBrowseChatGptApps,
   connectors,
   isLoadingConnectors,
   authorizingServerName,
@@ -412,6 +425,112 @@ export function ProviderAccountsFields({
 
                 {showsConnectors ? (
                   <div className="space-y-2 rounded-lg border border-border/70 bg-card/40 px-3 py-3">
+                    {isCodex ? (
+                      <section
+                        aria-label="From ChatGPT"
+                        className="space-y-3 pb-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-sm font-medium">From ChatGPT</h4>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="min-h-10"
+                            disabled={isLoadingChatGptApps}
+                            onClick={onRefreshChatGptApps}
+                          >
+                            <RefreshCw className="mr-2 size-3.5" />
+                            Refresh
+                          </Button>
+                        </div>
+                        <p className="text-pretty text-xs leading-relaxed text-muted-foreground">
+                          Sign-in problems show up only when a tool is used. If
+                          a conversation says an app needs reauthentication,
+                          reconnect it on ChatGPT, then Refresh.
+                        </p>
+                        {isLoadingChatGptApps ? (
+                          <p
+                            role="status"
+                            className="text-sm text-muted-foreground"
+                          >
+                            Reading ChatGPT apps…
+                          </p>
+                        ) : null}
+                        {chatGptApps?.requiresChatGpt ? (
+                          <p className="text-sm text-muted-foreground">
+                            ChatGPT apps need a ChatGPT sign-in
+                          </p>
+                        ) : null}
+                        {chatGptApps?.apps.map((app) => (
+                          <div
+                            key={app.id}
+                            className="flex flex-wrap items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="break-words text-sm font-medium">
+                                {app.name}
+                              </p>
+                              <p className="text-pretty text-xs text-muted-foreground">
+                                {app.state === 'available'
+                                  ? 'Tools available'
+                                  : app.state === 'off'
+                                    ? 'Turned off'
+                                    : "Installed, but its tools aren't available to Codex here"}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="min-h-10"
+                              onClick={() => onManageChatGptApp(row.id, app.id)}
+                            >
+                              Manage on ChatGPT
+                            </Button>
+                          </div>
+                        ))}
+                        {!isLoadingChatGptApps &&
+                        chatGptApps &&
+                        !chatGptApps.error &&
+                        !chatGptApps.requiresChatGpt &&
+                        chatGptApps.apps.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No ChatGPT apps are available for this account.
+                          </p>
+                        ) : null}
+                        {chatGptApps?.error ? (
+                          <p
+                            role="alert"
+                            className="text-sm text-muted-foreground"
+                          >
+                            {chatGptApps.error}
+                          </p>
+                        ) : null}
+                        {chatGptLinkError ? (
+                          <p
+                            role="alert"
+                            className="text-sm text-muted-foreground"
+                          >
+                            {chatGptLinkError}
+                          </p>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="min-h-10"
+                          onClick={() => onBrowseChatGptApps(row.id)}
+                        >
+                          Browse apps on ChatGPT
+                        </Button>
+                      </section>
+                    ) : null}
+                    {isCodex ? (
+                      <h4 className="text-sm font-medium">
+                        Configured on this Mac
+                      </h4>
+                    ) : null}
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       MCP tokens are stored per account, so each account
                       authorizes a connector once — and keeps it across every

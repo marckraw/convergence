@@ -1,3 +1,11 @@
+import type { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
+import type { JsonRpcClient } from '../provider/codex/jsonrpc'
+import {
+  selectChatGptApps,
+  type ChatGptAppInfo,
+  type InstalledChatGptApp,
+  type ProviderAccountChatGptApps,
+} from './provider-account-chatgpt-apps.pure'
 import { spawn } from 'child_process'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
 import { mapClaudeStatus, parseClaudeListEntries } from '../mcp/claude-mcp.pure'
@@ -80,6 +88,7 @@ const defaultRunCommand: ProviderAccountCommandRunner = (command) =>
 
 export interface ProviderAccountMcpDeps {
   repository: ProviderAccountRepository
+  codexServerHosts?: Pick<CodexServerHostRegistry, 'get'>
   /** Reads. A pipe is the right shape for `mcp list`. */
   runCommand?: ProviderAccountCommandRunner
   /**
@@ -109,6 +118,7 @@ export interface ProviderAccountMcpDeps {
 }
 
 export class ProviderAccountMcpService {
+  private readonly codexServerHosts: ProviderAccountMcpDeps['codexServerHosts']
   private readonly repository: ProviderAccountRepository
   private readonly runCommand: ProviderAccountCommandRunner
   private readonly runInteractiveCommand: ProviderAccountInteractiveRunner
@@ -122,6 +132,7 @@ export class ProviderAccountMcpService {
   private readonly claudeConfigIo: ClaudeConfigIo | undefined
 
   constructor(deps: ProviderAccountMcpDeps) {
+    this.codexServerHosts = deps.codexServerHosts
     this.homeDir = deps.homeDir
     this.claudeConfigIo = deps.claudeConfigIo
     this.codexBinaryPath = deps.codexBinaryPath ?? null
@@ -134,6 +145,87 @@ export class ProviderAccountMcpService {
     this.workingDirectory = deps.workingDirectory ?? (() => process.cwd())
     this.accountMaintenance =
       deps.accountMaintenance ?? new ClaudeAccountMaintenance()
+  }
+
+  private chatGptHost(accountId: string) {
+    const account = this.codexAccount(accountId)
+    if (!account) throw new Error('ChatGPT apps require an OpenAI account.')
+    if (!this.codexServerHosts)
+      throw new Error('Codex app listing is unavailable.')
+    return this.codexServerHosts.get({
+      account,
+      executionHostId: account.executionHostId,
+    })
+  }
+
+  private async readChatGptDirectory(
+    rpc: Pick<JsonRpcClient, 'request'>,
+    forceRefetch: boolean,
+  ) {
+    const data: ChatGptAppInfo[] = []
+    let cursor: string | null = null
+    const seen = new Set<string>()
+    do {
+      const page = (await rpc.request('app/list', {
+        forceRefetch,
+        limit: 100,
+        cursor,
+      })) as {
+        data: ChatGptAppInfo[]
+        nextCursor: string | null
+      }
+      data.push(...page.data)
+      cursor = page.nextCursor
+      if (cursor && seen.has(cursor))
+        throw new Error('Codex repeated an apps page.')
+      if (cursor) seen.add(cursor)
+    } while (cursor)
+    return data
+  }
+
+  async listChatGptApps(
+    accountId: string,
+    forceRefetch = false,
+  ): Promise<ProviderAccountChatGptApps> {
+    const empty = {
+      providerAccountId: accountId,
+      apps: [],
+      requiresChatGpt: false,
+      error: null,
+    }
+    try {
+      return await this.chatGptHost(accountId).run(async (rpc) => {
+        const identity = (await rpc.request('account/read', {
+          refreshToken: false,
+        })) as {
+          account: { type: string } | null
+        }
+        if (identity.account?.type !== 'chatgpt')
+          return { ...empty, requiresChatGpt: true }
+        const directory = await this.readChatGptDirectory(rpc, forceRefetch)
+        const installed = (await rpc.request('app/installed', {
+          forceRefresh: forceRefetch,
+        })) as {
+          apps: InstalledChatGptApp[]
+        }
+        return { ...empty, apps: selectChatGptApps(directory, installed.apps) }
+      })
+    } catch {
+      return { ...empty, error: 'Could not read ChatGPT apps. Try Refresh.' }
+    }
+  }
+
+  async chatGptAppUrl(accountId: string, appId: string): Promise<string> {
+    const directory = await this.chatGptHost(accountId).run((rpc) =>
+      this.readChatGptDirectory(rpc, true),
+    )
+    const app = directory.find((entry) => entry.id === appId)
+    if (!app?.installUrl)
+      throw new Error('This app has no ChatGPT page available. Try Refresh.')
+    const url = new URL(app.installUrl)
+    if (url.protocol !== 'https:')
+      throw new Error('The app page must use HTTPS.')
+    return url.href
   }
 
   setBinaryPath(binaryPath: string | null): void {
