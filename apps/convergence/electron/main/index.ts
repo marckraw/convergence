@@ -149,6 +149,7 @@ import { HarnessEvidenceService } from '../backend/session/harness-evidence.serv
 import { APP_SETTINGS_KEY } from '../backend/app-settings/app-settings.constants'
 import { parseAppSettings } from '../backend/app-settings/app-settings.pure'
 import { BlockSentenceRepository } from '../backend/block-sentence/block-sentence.repository'
+import { BlockSentenceAttemptRepository } from '../backend/block-sentence/block-sentence-attempt.repository'
 import { BlockSentenceService } from '../backend/block-sentence/block-sentence.service'
 import { BLOCK_SENTENCE_PROMPT } from '../backend/block-sentence/block-sentence.prompt'
 import {
@@ -824,13 +825,16 @@ async function startApp(): Promise<void> {
   })
   sessionService.setNamer(namingService)
 
-  // MAR-3395 CV3: one GPT-6 Luna line per closed work block, after the turn.
+  // MAR-3395 CV3: one GPT-6 Luna line per closed work block.
   const blockSentenceRepository = new BlockSentenceRepository(db)
   let blockSentenceScratch: string | null = null
   const blockSentenceService = new BlockSentenceService({
     repository: blockSentenceRepository,
+    attempts: new BlockSentenceAttemptRepository(db),
     turnItems: (sessionId, turnId) =>
       sessionService.getTurnConversation(sessionId, turnId),
+    turnItemsSince: (sessionId, turnId, afterSequence) =>
+      sessionService.getTurnConversationSince(sessionId, turnId, afterSequence),
     isTurnActive: (sessionId, turnId) =>
       sessionService.isTurnActive(sessionId, turnId),
     isEnabled: () =>
@@ -851,6 +855,10 @@ async function startApp(): Promise<void> {
   })
   sessionService.setTurnClosedListener(({ sessionId, turnId }) =>
     blockSentenceService.turnEnded(sessionId, turnId),
+  )
+  // MAR-3422 CV3d: a block is asked for as soon as a boundary closes it.
+  sessionService.setTurnItemRecordedListener(({ sessionId, turnId, item }) =>
+    blockSentenceService.itemRecorded(sessionId, turnId, item),
   )
   registerBlockSentenceIpcHandlers({ repository: blockSentenceRepository })
 
