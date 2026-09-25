@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
+import { SessionWiresContainer } from '@/widgets/session-view'
 import { rendererPerfReport } from '@/shared/lib/usePerfProbe'
 import {
   landedProviderCatalog,
@@ -715,6 +716,29 @@ describe('ComposerContainer', () => {
     )
     return screen.getByPlaceholderText('Send a follow-up...')
   }
+
+  it('CH5 forwards an optional wires slot and updates it across the memo boundary', () => {
+    useSessionRelayStore.setState({ relays: [wireLeaving('session-1')] })
+    const context = {
+      kind: 'project' as const,
+      projectId: 'project-1',
+      workspaceId: null,
+      activeSessionId: 'session-1',
+    }
+    const { rerender } = render(<ComposerContainer context={context} />)
+    expect(screen.queryByText('Wire fixture')).toBeNull()
+    rerender(
+      <ComposerContainer
+        context={context}
+        wiresSlot={<button>Wire fixture</button>}
+      />,
+    )
+    expect(
+      screen.getByRole('switch', { name: 'Send quiet' }).nextElementSibling,
+    ).toBe(screen.getByRole('button', { name: 'Wire fixture' }))
+    rerender(<ComposerContainer context={context} />)
+    expect(screen.queryByText('Wire fixture')).toBeNull()
+  })
 
   describe('the quiet send (F10)', () => {
     it('shows no toggle at all when nothing leaves this session', () => {
@@ -4612,14 +4636,19 @@ describe('ComposerContainer', () => {
       )
     }
 
-    function ConversationParent() {
+    const wiresSlot = <SessionWiresContainer sessionId="session-1" />
+
+    function ConversationParent({ withWires = false }) {
       // Subscribed exactly as SessionView subscribes: every patch of the open
       // conversation redraws this component.
       useSessionStore((s) => s.activeConversation)
       return (
         <>
           <TranscriptStub />
-          <ComposerContainer context={{ ...OPEN_CONTEXT }} />
+          <ComposerContainer
+            context={{ ...OPEN_CONTEXT }}
+            wiresSlot={withWires ? wiresSlot : undefined}
+          />
         </>
       )
     }
@@ -4634,8 +4663,8 @@ describe('ComposerContainer', () => {
       reset: () => void
     }
 
-    function renderCounted(): CommitCounter {
-      render(<ConversationParent />)
+    function renderCounted(withWires = false): CommitCounter {
+      render(<ConversationParent withWires={withWires} />)
       let baseline = composerCommitTotal()
       return {
         get count() {
@@ -4706,36 +4735,55 @@ describe('ComposerContainer', () => {
       expect(commits.count).toBe(20)
     })
 
-    it('R2 30 summaries of another conversation draw nothing — mutation subscribe to the whole sessions list turns red', async () => {
-      act(() => {
-        useSessionStore.setState((state) => ({
-          sessions: [...state.sessions, summary('session-2')],
-          globalSessions: [...state.globalSessions, summary('session-2')],
-        }))
-      })
-      const commits = renderCounted()
-      await settle(commits)
-
-      for (let i = 1; i <= 30; i += 1) {
-        act(() => {
-          useSessionStore.getState().handleSessionSummaryUpdate(
-            summary('session-2', {
-              status: 'running',
-              activity: 'streaming',
-              updatedAt: `2026-09-24T00:00:${String(i).padStart(2, '0')}.000Z`,
-            }),
-          )
+    it.each([false, true])(
+      'R2 30 summaries of another conversation draw nothing (real wires slot: %s) — mutation subscribe to the whole sessions list turns red',
+      async (withWires) => {
+        useSessionRelayStore.setState({
+          relays: [
+            { ...wireLeaving('session-1'), targetSessionId: 'session-3' },
+          ],
         })
-      }
+        act(() => {
+          useSessionStore.setState((state) => ({
+            sessions: [...state.sessions, summary('session-2')],
+            globalSessions: [
+              ...state.globalSessions,
+              summary('session-2'),
+              summary('session-3'),
+            ],
+          }))
+        })
+        const commits = renderCounted(withWires)
+        await settle(commits)
+        if (withWires) {
+          expect(
+            screen.getByRole('button', {
+              name: '1 wire fires when this session finishes.',
+            }),
+          ).toBeVisible()
+        }
 
-      // The updates landed: the store's lists moved on.
-      expect(
-        useSessionStore
-          .getState()
-          .sessions.find((entry) => entry.id === 'session-2')?.updatedAt,
-      ).toBe('2026-09-24T00:00:30.000Z')
-      expect(commits.count).toBe(0)
-    })
+        for (let i = 1; i <= 30; i += 1) {
+          act(() => {
+            useSessionStore.getState().handleSessionSummaryUpdate(
+              summary('session-2', {
+                status: 'running',
+                activity: 'streaming',
+                updatedAt: `2026-09-24T00:00:${String(i).padStart(2, '0')}.000Z`,
+              }),
+            )
+          })
+        }
+
+        // The updates landed: the store's lists moved on.
+        expect(
+          useSessionStore
+            .getState()
+            .sessions.find((entry) => entry.id === 'session-2')?.updatedAt,
+        ).toBe('2026-09-24T00:00:30.000Z')
+        expect(commits.count).toBe(0)
+      },
+    )
 
     it('R2 30 streamed patches of the open conversation draw nothing while the transcript receives every one — mutation drop the memo turns red', async () => {
       act(() => {

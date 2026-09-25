@@ -1,7 +1,7 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
-import { useRef, type FC, type ReactNode } from 'react'
+import { useMemo, useRef, type FC, type ReactNode } from 'react'
 import type {
   ConversationItem,
   ConversationPrefix,
@@ -20,6 +20,7 @@ import {
   ConversationActionsContainer,
   conversationActionsAvailable,
 } from '@/features/conversation-actions'
+import { SessionWiresContainer } from './session-wires.container'
 import { SessionTranscript } from './session-transcript.container'
 
 interface SessionConversationSurfaceProps {
@@ -79,6 +80,12 @@ export const SessionConversationSurface: FC<
   onDeny,
   onInputAnswer,
 }) => {
+  // Keep the slot stable across streamed transcript updates so the composer's
+  // memo boundary still isolates typing from transcript redraws (MAR-3325).
+  const wiresSlot = useMemo(
+    () => <SessionWiresContainer key={session.id} sessionId={session.id} />,
+    [session.id],
+  )
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const actionsAvailable = conversationActionsAvailable({
     session,
@@ -129,7 +136,7 @@ export const SessionConversationSurface: FC<
 
       <div className="@container relative shrink-0 px-4 py-3">
         <AnnotationTray key={session.id} sessionId={session.id} />
-        {renderComposerArea(composerContext, composerDisabledReason)}
+        {renderComposerArea(composerContext, composerDisabledReason, wiresSlot)}
         {/*
           The Actions button (MAR-3393) is composed here, beside the composer
           rather than inside it: it reaches the composer only through composer
@@ -160,6 +167,7 @@ export const SessionConversationSurface: FC<
 function renderComposerArea(
   composerContext: ComposerSessionContext | null,
   composerDisabledReason: string | null,
+  wiresSlot: ReactNode,
 ): ReactNode {
   if (composerDisabledReason) {
     return (
@@ -172,6 +180,6 @@ function renderComposerArea(
   // The composer is a memo boundary and carries its own perf root inside it
   // (MAR-3325): wrapped here, the Profiler fired on every transcript redraw.
   return composerContext ? (
-    <ComposerContainer context={composerContext} />
+    <ComposerContainer context={composerContext} wiresSlot={wiresSlot} />
   ) : null
 }
