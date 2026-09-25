@@ -210,8 +210,16 @@ export class BlockSentenceService {
     return fresh
   }
 
-  /** R1: the blocks a boundary closed, read from the last cursor on. */
+  /**
+   * R1: the blocks a boundary closed, read from the last cursor on. Only
+   * while the turn still runs: a finished turn is the turn end's alone, and
+   * its sweep is the one that checks for a stored or refused line. A job
+   * that outlived its turn (queued behind another session, the turn ended
+   * with the switch Off) would otherwise start a fresh cursor at 0 and ask
+   * again for a block already asked for.
+   */
   private async describeClosedBlocks(job: Job) {
+    if (!this.deps.isTurnActive(job.sessionId, job.turnId)) return
     if (!this.deps.isEnabled()) return
     if (!this.model()) return
     const progress = this.progressFor(job.sessionId, job.turnId)

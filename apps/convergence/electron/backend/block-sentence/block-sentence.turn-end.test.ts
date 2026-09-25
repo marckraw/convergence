@@ -375,6 +375,47 @@ describe('a block is asked for when it closes (MAR-3422 CV3d)', () => {
     turn.patchSession({ status: 'completed' })
   })
 
+  it('a listener that throws never breaks the insert: the item lands and the turn still starts', async () => {
+    const startTurn = vi.spyOn(turnCapture, 'startTurn')
+    const listener = vi.fn(() => {
+      throw new Error('listener broke')
+    })
+    sessions.setTurnItemRecordedListener(listener)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const turn = emitter()
+      turn.patchSession({ status: 'running' })
+      turn.addUserMessage({ text: 'look around' })
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      const [recorded] = sessions.getConversation(sessionId)
+      expect(recorded).toMatchObject({ kind: 'message', actor: 'user' })
+      expect(startTurn).toHaveBeenCalledTimes(1)
+      expect(startTurn.mock.calls[0]![0]).toMatchObject({
+        sessionId,
+        turnId: recorded!.turnId,
+      })
+      turn.patchSession({ status: 'completed' })
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
+  it('only the running turn is reported: an item recorded after its turn ended calls no listener', async () => {
+    const listener = vi.fn()
+    sessions.setTurnItemRecordedListener(listener)
+    const { turn, turnId } = startTurn()
+    turn.patchSession({ status: 'completed' })
+    expect(sessions.isTurnActive(sessionId, turnId)).toBe(false)
+    listener.mockClear()
+
+    turn.addAssistantMessage({ text: 'Late.', state: 'complete' })
+
+    const late = sessions.getConversation(sessionId).at(-1)!
+    expect(late).toMatchObject({ kind: 'message', text: 'Late.', turnId })
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('R2: a kept line and a refused line are not asked again; the trailing block lands after the turn ends', async () => {
     answers = ['Read three files under src.', 'Read src/secrets.ts.']
     const { turn, turnId } = startTurn()

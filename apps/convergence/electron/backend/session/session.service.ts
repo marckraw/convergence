@@ -4799,9 +4799,15 @@ export class SessionService {
     )
 
     // The row landed (MAR-3422 CV3d): the running turn has news. The
-    // listener only takes note; no read happens on this path.
-    if (turnId && this.activeTurnIds.get(sessionId) === turnId)
-      this.onTurnItemRecorded?.({ sessionId, turnId, item })
+    // listener only takes note; no read happens on this path. A listener
+    // that throws never breaks the insert: what follows still runs.
+    if (turnId && this.activeTurnIds.get(sessionId) === turnId) {
+      try {
+        this.onTurnItemRecorded?.({ sessionId, turnId, item })
+      } catch (error) {
+        console.error('[session] Turn item listener failed', error)
+      }
+    }
 
     if (isUserMessage) this.unrecordedTurnIds.delete(sessionId)
 

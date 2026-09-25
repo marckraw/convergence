@@ -182,6 +182,56 @@ describe('the turn end asks for what is left, nothing twice (R2)', () => {
       ['turn-ended', 'stored'],
     ])
   })
+
+  it('a block-closed job that outlives its turn asks for nothing: Off at turn end, On before the job runs', async () => {
+    let enabled = true
+    const s2Asked = deferred()
+    const s2Release = deferred()
+    h = harness({
+      enabled: () => enabled,
+      answer: async (input) => {
+        if (input.prompt.includes('other/')) {
+          s2Asked.resolve()
+          await s2Release.promise
+          return { text: 'Read three files.' }
+        }
+        return { text: 'Read lib/secrets.ts.' }
+      },
+    })
+    h.say()
+    const refused = h.reads('src')
+    h.say()
+    await h.service.whenIdle()
+    expect(h.attempts.list('s1').map((row) => row.outcome)).toEqual(['refused'])
+
+    // Another session's request is in flight; s1's next boundary queues a
+    // block-closed job behind it.
+    h.reads('other', 's2')
+    h.say('s2')
+    await s2Asked.promise
+    h.say()
+
+    // The turn ends with the switch Off, and it is On again before the
+    // queued job runs.
+    enabled = false
+    h.end()
+    enabled = true
+    s2Release.resolve()
+    await h.service.whenIdle()
+
+    expect(
+      h.attempts
+        .list('s1')
+        .filter((row) => row.firstItemId === refused)
+        .map((row) => [row.trigger, row.outcome]),
+    ).toEqual([['block-closed', 'refused']])
+    expect(h.oneShot).toHaveBeenCalledTimes(2)
+    expect(
+      [...h.service['progress'].keys()].filter((key) =>
+        key.startsWith('s1\u0000'),
+      ),
+    ).toEqual([])
+  })
 })
 
 describe('every request leaves a row (R3)', () => {
@@ -392,6 +442,27 @@ describe('his switch and quitting still rule (R6)', () => {
 
     expect(h.oneShot).toHaveBeenCalledTimes(1)
     expect(h.repository.list('s1')).toEqual([])
+    expect(h.attempts.list('s1')).toEqual([])
+  })
+
+  it('after stop(): a call in flight that then fails writes no attempt row', async () => {
+    const asked = deferred()
+    const release = deferred()
+    h = harness({
+      answer: async () => {
+        asked.resolve()
+        await release.promise
+        throw new Error('codex oneShot timed out')
+      },
+    })
+    h.reads('first')
+    h.say()
+    await asked.promise
+    h.service.stop()
+    release.resolve()
+    await h.service.whenIdle()
+
+    expect(h.oneShot).toHaveBeenCalledTimes(1)
     expect(h.attempts.list('s1')).toEqual([])
   })
 })
