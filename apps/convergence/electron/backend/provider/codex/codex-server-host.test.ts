@@ -174,7 +174,7 @@ describe('CodexServerHost', () => {
     ).rejects.toThrow('login cancelled')
     const next = await host.connect()
     await expect(host.withStoppedServer(async () => {})).rejects.toThrow(
-      /in use/,
+      /running a turn/,
     )
     next.close()
     await host.withStoppedServer(async () => {})
@@ -190,7 +190,7 @@ describe('CodexServerHost', () => {
     connection.close()
     const next = await host.connect()
     await expect(host.withStoppedServer(async () => {})).rejects.toThrow(
-      /in use/,
+      /running a turn/,
     )
     next.close()
     env.registry.stopAll()
@@ -201,7 +201,7 @@ describe('CodexServerHost', () => {
     const connecting = host.connect()
     const mutateCredentials = vi.fn(async () => {})
     await expect(host.withStoppedServer(mutateCredentials)).rejects.toThrow(
-      /in use/,
+      /running a turn/,
     )
     expect(mutateCredentials).not.toHaveBeenCalled()
     const connection = await connecting
@@ -504,7 +504,7 @@ describe('CodexServerHost', () => {
     })
     await started
     await expect(host.withStoppedServer(async () => {})).rejects.toThrow(
-      /in use/,
+      /running a turn/,
     )
     release()
     await helper

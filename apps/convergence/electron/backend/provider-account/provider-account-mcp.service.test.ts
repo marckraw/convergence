@@ -4,6 +4,12 @@ import { ProviderAccountMcpService } from './provider-account-mcp.service'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
+import { CodexProvider } from '../provider/codex/codex-provider'
+import { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
+import {
+  FakeCodexChildProcess,
+  FakeCodexServer,
+} from '../provider/codex/codex-server-host.fixture'
 import type { ProviderAccountInteractiveRunner } from './provider-account-pty-runner'
 import {
   reconcileClaudeAccountConfigNow,
@@ -117,6 +123,70 @@ describe('Codex connectors (MAR-3183)', () => {
     expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
     expect(b.terminal).toHaveBeenCalledOnce()
   })
+  it.each(['authorize', 'connectLinear'] as const)(
+    'R4: %s evicts an idle conversation before running its command',
+    async (action) => {
+      const b = bench()
+      const account = b.repository.get('codex-test')!
+      const server = new FakeCodexServer()
+      const hosts = new CodexServerHostRegistry({
+        cwd: '/tmp',
+        spawnProcess: () => {
+          const child = new FakeCodexChildProcess()
+          setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
+          return child.asChildProcess()
+        },
+        probeReady: async () => true,
+        connectTransport: async () => server.connect(),
+        listProcesses: () => [],
+      })
+      hosts.setBinary('/fixture/codex', '0.154.0')
+      const handle = new CodexProvider(
+        hosts,
+        null,
+        undefined,
+        () => account,
+      ).start({
+        sessionId: 'idle-mcp',
+        workingDirectory: '/tmp',
+        initialMessage: 'first',
+        continuationToken: null,
+        providerAccountId: account.id,
+        model: 'gpt-6',
+        effort: 'high',
+      })
+      let status = 'running'
+      handle.onStatusChange((value) => {
+        status = value
+      })
+      try {
+        await vi.waitFor(() => expect(status).toBe('completed'))
+        const original = server.requests.find(
+          (request) => request.method === 'turn/start',
+        )!.connection
+        const run = b.maintenance.run.bind(b.maintenance)
+        b.maintenance.run = (_target, work) =>
+          hosts.withStoppedServer({ account }, () => run(account, work))
+        const terminal = b.terminal.getMockImplementation()!
+        b.terminal.mockImplementation((command, lifecycle) => {
+          expect(original.closed).toBe(true)
+          expect(hosts.get({ account }).isReady()).toBe(false)
+          return terminal(command, lifecycle)
+        })
+        if (action === 'authorize')
+          await b.subject.authorizeConnector({
+            accountId: account.id,
+            serverName: 'linear',
+          })
+        else await b.subject.connectLinear(account.id)
+        expect(b.terminal).toHaveBeenCalled()
+        expect(original.closed).toBe(true)
+      } finally {
+        await handle.dispose?.()
+        await hosts.stopAll()
+      }
+    },
+  )
   it('does not log in when authorization is unsupported after add', async () => {
     const b = bench(false, 'unsupported')
     await b.subject.connectLinear('codex-test')
@@ -183,7 +253,7 @@ describe('Codex connectors (MAR-3183)', () => {
     ).rejects.toThrow('Codex account maintenance is unavailable.')
     b.maintenance.run = async () => {
       throw new Error(
-        'This Codex account is in use. Wait for its active work to finish.',
+        'This Codex account is running a turn. Try again when it finishes.',
       )
     }
     await expect(
@@ -192,7 +262,7 @@ describe('Codex connectors (MAR-3183)', () => {
         serverName: 'linear',
       }),
     ).rejects.toThrow(
-      /^This Codex account is in use. Wait for its active work to finish\.$/,
+      /^This Codex account is running a turn\. Try again when it finishes\.$/,
     )
     expect(b.terminal).not.toHaveBeenCalled()
   })

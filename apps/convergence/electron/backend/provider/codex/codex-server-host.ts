@@ -70,6 +70,8 @@ export interface CodexServerObituary {
 }
 
 export interface CodexServerConnectionOptions {
+  /** Conversation-owned state; helpers without an owner stay busy until close. */
+  owner?: { isBusy(): boolean; endIdle(): void }
   onTransportFailure?: (error: Error) => void
   isProgressNotification?: (method: string, params: unknown) => boolean
 }
@@ -180,7 +182,7 @@ export class CodexServerHost {
   private stopped = false
   private retired = false
   private retiring: ChildProcess | null = null
-  private connectionLeases = 0
+  private connectionLeases = new Set<{ isBusy(): boolean; endIdle(): void }>()
   private maintaining: Promise<void> | null = null
   private generationCounter = 0
   private deathListeners = new Set<(obituary: CodexServerObituary) => void>()
@@ -304,13 +306,21 @@ export class CodexServerHost {
   ): Promise<CodexServerConnection> {
     // Admission is synchronous, before startup, socket connection or initialize
     // can yield. Helpers and warming connections count just like live turns.
-    if (counted) this.connectionLeases += 1
+    let initialized = false
+    const lease = {
+      isBusy: () => !initialized || !options.owner || options.owner.isBusy(),
+      endIdle: () => {
+        options.owner?.endIdle()
+        close()
+      },
+    }
+    if (counted) this.connectionLeases.add(lease)
     let released = false
     let rpc: JsonRpcClient | undefined
     const release = () => {
       if (released) return
       released = true
-      if (counted) this.connectionLeases -= 1
+      if (counted) this.connectionLeases.delete(lease)
     }
     const close = () => {
       rpc?.destroy()
@@ -331,6 +341,7 @@ export class CodexServerHost {
         capabilities: { experimentalApi: true },
       })
       rpc.notify('initialized')
+      initialized = true
       return { rpc, generation: server.generation, close }
     } catch (err) {
       // The socket is open and nobody else holds it: a handshake that rejects
@@ -365,9 +376,9 @@ export class CodexServerHost {
     if (this.stopped) throw new Error('This Codex account server is stopped.')
     if (this.maintaining)
       throw new Error('This Codex account is undergoing maintenance.')
-    if (!options.handoff && this.connectionLeases > 0) {
+    if (!options.handoff && this.hasBusyOwner()) {
       throw new Error(
-        'This Codex account is in use. Wait for its active work to finish.',
+        'This Codex account is running a turn. Try again when it finishes.',
       )
     }
     let release!: () => void
@@ -418,7 +429,7 @@ export class CodexServerHost {
             !options.handoff || loaded.includes(options.handoff.threadId)
           if (restart) {
             const busy =
-              this.connectionLeases > 0 ||
+              (options.handoff && this.connectionLeases.size > 0) ||
               this.possiblyLiveThreads.size > 0 ||
               !(await this.allThreadsIdle(control.rpc, loaded))
             if (busy) {
@@ -428,7 +439,7 @@ export class CodexServerHost {
                   `${options.handoff.accountLabel}'s server is busy with another conversation; try again when it settles. Your message was not sent.`,
                 )
               throw new Error(
-                'This Codex account server still has active work. Wait for it to finish.',
+                'This Codex account is running a turn. Try again when it finishes.',
               )
             }
           }
@@ -437,6 +448,15 @@ export class CodexServerHost {
         control?.close()
       }
       if (restart) {
+        if (!options.handoff) {
+          // The witness awaited the server: an existing owner may have accepted
+          // a send meanwhile. Recheck and evict in one synchronous step.
+          if (this.hasBusyOwner())
+            throw new Error(
+              'This Codex account is running a turn. Try again when it finishes.',
+            )
+          for (const lease of this.connectionLeases) lease.endIdle()
+        }
         mutating = true
         const running = this.server
         this.server = null
@@ -476,6 +496,10 @@ export class CodexServerHost {
     } finally {
       this.maintaining = null
     }
+  }
+
+  private hasBusyOwner(): boolean {
+    return [...this.connectionLeases].some((lease) => lease.isBusy())
   }
 
   async prepareThreadHandoff(
