@@ -476,7 +476,7 @@ export function ProviderAccountsFields({
                                   ? 'Tools available'
                                   : app.state === 'off'
                                     ? 'Turned off'
-                                    : "Installed, but its tools aren't available to Codex here"}
+                                    : 'Tools not available to Codex here'}
                               </p>
                             </div>
                             <Button

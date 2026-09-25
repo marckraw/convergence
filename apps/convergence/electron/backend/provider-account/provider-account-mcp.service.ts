@@ -210,8 +210,11 @@ export class ProviderAccountMcpService {
         }
         return { ...empty, apps: selectChatGptApps(directory, installed.apps) }
       })
-    } catch {
-      return { ...empty, error: 'Could not read ChatGPT apps. Try Refresh.' }
+    } catch (error) {
+      return {
+        ...empty,
+        error: `Could not read ChatGPT apps: ${error instanceof Error ? error.message : String(error)}`,
+      }
     }
   }
 

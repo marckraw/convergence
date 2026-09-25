@@ -108,7 +108,7 @@ describe('Codex connectors (MAR-3183)', () => {
       providerAccountId: 'codex-test',
       apps: [],
       requiresChatGpt: false,
-      error: 'Could not read ChatGPT apps. Try Refresh.',
+      error: 'Could not read ChatGPT apps: Codex app listing is unavailable.',
     })
     expect(configured).toMatchObject({
       providerAccountId: 'codex-test',

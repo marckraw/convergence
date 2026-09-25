@@ -15,6 +15,9 @@ import type {
 } from '@/entities/provider-account'
 import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsContainer } from './provider-accounts.container'
+import { ProviderAccountMcpService } from '../../../electron/backend/provider-account/provider-account-mcp.service'
+import type { ProviderAccountRepository } from '../../../electron/backend/provider-account/provider-account.repository'
+import type { CodexServerHostRegistry } from '../../../electron/backend/provider/codex/codex-server-host'
 
 function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
   return {
@@ -1104,14 +1107,67 @@ describe('MAR-3458 ChatGPT apps', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
     return screen.findByRole('region', { name: 'From ChatGPT' })
   }
+  function stubChatGptHost(run: ReturnType<typeof vi.fn>) {
+    const service = new ProviderAccountMcpService({
+      repository: {
+        get: () => account({ providerId: 'codex' }),
+      } as unknown as ProviderAccountRepository,
+      codexServerHosts: {
+        get: () => ({ run }),
+      } as unknown as CodexServerHostRegistry,
+      runCommand: vi.fn(),
+      runInteractiveCommand: vi.fn(),
+    })
+    providerAccounts.listChatGptApps.mockImplementation(
+      ({ accountId, forceRefetch }) =>
+        service.listChatGptApps(accountId, forceRefetch),
+    )
+  }
+  it('R6 renders an accessible but not installed app without claiming installation', async () => {
+    const request = vi.fn(async (method: string) => {
+      if (method === 'account/read') return { account: { type: 'chatgpt' } }
+      if (method === 'app/installed') return { apps: [] }
+      if (method === 'app/list')
+        return {
+          data: [
+            {
+              id: 'accessible-only',
+              name: 'Accessible only',
+              isAccessible: true,
+              isEnabled: true,
+              installUrl: 'https://chatgpt.com/apps/accessible-only',
+            },
+          ],
+          nextCursor: null,
+        }
+      throw new Error(`Unexpected RPC ${method}`)
+    })
+    stubChatGptHost(vi.fn(async (work) => work({ request })))
+    const group = await open()
+    const name = await within(group).findByText('Accessible only')
+    expect(name.nextElementSibling?.textContent).toBe(
+      'Tools not available to Codex here',
+    )
+  })
+  it('R7 renders the host rejection reason and retains configured servers', async () => {
+    const message =
+      'This Codex account is running a turn. Try again when it finishes.'
+    const run = vi.fn().mockRejectedValue(new Error(message))
+    stubChatGptHost(run)
+    const group = await open()
+    expect(await within(group).findByRole('alert')).toHaveTextContent(
+      `Could not read ChatGPT apps: ${message}`,
+    )
+    expect(run).toHaveBeenCalledOnce()
+    expect(screen.getByText('Configured on this Mac')).toBeInTheDocument()
+    expect(screen.getByText('linear')).toBeInTheDocument()
+  })
   it('R2/R5 shows ordered groups, honest states and one Manage action per app', async () => {
     const group = await open()
     await within(group).findByText('Figma')
     expect(within(group).getByText('Tools available')).toBeInTheDocument()
     expect(
-      within(group).getByText(
-        "Installed, but its tools aren't available to Codex here",
-      ),
+      within(group).getByText('Tools not available to Codex here'),
     ).toBeInTheDocument()
     expect(within(group).getByText('Turned off')).toBeInTheDocument()
     expect(group.textContent?.match(/sign-in/gi)).toHaveLength(1)

@@ -147,7 +147,7 @@ describe('MAR-3458 account-scoped ChatGPT apps', () => {
     b.request.mockRejectedValueOnce(new Error('fixture failure'))
     expect(await b.service.listChatGptApps('a')).toMatchObject({
       apps: [],
-      error: 'Could not read ChatGPT apps. Try Refresh.',
+      error: 'Could not read ChatGPT apps: fixture failure',
     })
   })
   it('refuses missing accounts without falling back to the ambient host', async () => {
