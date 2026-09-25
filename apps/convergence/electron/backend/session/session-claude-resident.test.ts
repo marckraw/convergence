@@ -231,7 +231,12 @@ it('R6′ stops only the selected id and waits for its terminal fact — mutatio
     reason: service.listAgentRuns(session.id)[0].stopReason,
     taskReason: service.listTasks(session.id)[0].stopReason,
   }).toEqual({
-    controls: [{ subtype: 'stop_task', task_id: 'selected' }],
+    // The start record's MCP status read (MAR-3206 R1) is the one other
+    // control: the stop reaches only the selected id.
+    controls: [
+      { subtype: 'mcp_status' },
+      { subtype: 'stop_task', task_id: 'selected' },
+    ],
     before: 'running',
     duplicate: true,
     killed: 0,

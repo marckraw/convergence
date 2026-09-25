@@ -381,6 +381,8 @@ export interface SessionSummary {
   originKind?: 'spawn' | 'resident' | null
   pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
+  /** Runtime fact: a running process can reconnect its MCP servers (MAR-3206). */
+  canReconnectMcpServers?: boolean
   parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */
   hasActiveHandle?: boolean

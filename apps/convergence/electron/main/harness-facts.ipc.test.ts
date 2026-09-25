@@ -22,10 +22,12 @@ vi.mock('electron', () => ({
 it('R3 reads the projection and broadcasts on the existing evidence callback — mutations drop IPC read or harness broadcast turn red', () => {
   let flush: ((event: { sessionId: string }) => void) | undefined
   const read = vi.fn(() => ({ compactions: ['record'] })),
+    refreshMcpServers = vi.fn(async () => {}),
     noop = () => {}
   const args = Array.from({ length: 18 }, () => ({}) as never)
   args[7] = {
     harnessFacts: read,
+    refreshMcpServers,
     setSummaryUpdateListener: noop,
     setEvidenceUpdateListener: (listener: typeof flush) => {
       flush = listener
@@ -36,10 +38,22 @@ it('R3 reads the projection and broadcasts on the existing evidence callback —
   } as never
   ;(registerIpcHandlers as (...values: never[]) => void)(...args)
   const facts = handlers.get('session:harnessFacts')?.({}, 'session')
+  // MAR-3206: Details' one MCP action reaches the service, server name intact.
+  void handlers.get('session:refreshMcpServers')?.(
+    {},
+    'session',
+    'claude.ai Figma',
+  )
   flush?.({ sessionId: 'session' })
-  expect({ facts, read: read.mock.calls, sent: send.mock.calls }).toEqual({
+  expect({
+    facts,
+    read: read.mock.calls,
+    refresh: refreshMcpServers.mock.calls,
+    sent: send.mock.calls,
+  }).toEqual({
     facts: { compactions: ['record'] },
     read: [['session']],
+    refresh: [['session', 'claude.ai Figma']],
     sent: [
       ['session:evidenceUpdated', { sessionId: 'session' }],
       ['harness.facts', { sessionId: 'session' }],

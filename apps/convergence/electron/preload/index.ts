@@ -484,6 +484,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:stopTask', sessionId, id),
     harnessFacts: (sessionId: string) =>
       ipcRenderer.invoke('session:harnessFacts', sessionId),
+    refreshMcpServers: (sessionId: string, reconnect: string | null) =>
+      ipcRenderer.invoke('session:refreshMcpServers', sessionId, reconnect),
     onHarnessFacts: (callback: (event: { sessionId: string }) => void) => {
       const handler = (_event: unknown, event: { sessionId: string }) =>
         callback(event)

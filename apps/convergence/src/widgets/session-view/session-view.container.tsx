@@ -77,7 +77,7 @@ import {
 } from './conversation-details-menu.container'
 import { ConversationProjectMenu } from './conversation-project-menu.container'
 import { ConversationViewMenu } from './conversation-view-menu.container'
-import { harnessPill } from './harness-facts.pure'
+import { harnessPill, mcpReconnectUnavailable } from './harness-facts.pure'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 import { SessionElapsedDuration } from './session-elapsed-duration.container'
 
@@ -165,6 +165,14 @@ export const SessionView: FC = () => {
     session?.providerId === 'claude-code' &&
     !isRemoteExecutionHost(session.executionHost)
   const harness = useHarnessFacts(supportsHarnessFacts ? activeSessionId : null)
+  // Details reads the running process's MCP status as it opens, so its
+  // servers say where they point now, not at the last start (MAR-3206 R1).
+  const canReconnectMcp = session?.canReconnectMcpServers === true
+  const { refreshMcpServers } = harness
+  useEffect(() => {
+    if (detailsOpen && supportsHarnessFacts && canReconnectMcp)
+      refreshMcpServers()
+  }, [detailsOpen, supportsHarnessFacts, canReconnectMcp, refreshMcpServers])
   // The session's own project, never the one selected in the sidebar (R1):
   // its name in the header, and its tools in the Project group (CH4 R4).
   const sessionProjectName = useProjectStore(
@@ -844,6 +852,13 @@ export const SessionView: FC = () => {
                         error={harness.error}
                         loading={harness.loading}
                         onRetry={harness.retry}
+                        mcp={{
+                          unavailable: mcpReconnectUnavailable(canReconnectMcp),
+                          pending: harness.mcpPending,
+                          error: harness.mcpError,
+                          onReconnect: (server) =>
+                            void harness.reconnectMcpServer(server),
+                        }}
                       />
                     </section>
                   )}

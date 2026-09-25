@@ -1,6 +1,9 @@
 import { readClaudeTaskFacts } from '../provider/claude-code/claude-evidence.pure'
 import { harnessPill } from '../../../src/widgets/session-view/harness-facts.pure'
-import { readClaudeHarnessFact } from '../provider/claude-code/claude-harness.pure'
+import {
+  readClaudeHarnessFact,
+  readClaudeMcpStatus,
+} from '../provider/claude-code/claude-harness.pure'
 import { afterEach, expect, it } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { HarnessEvidenceService } from './harness-evidence.service'
@@ -984,4 +987,42 @@ it('compares as instants only what is unambiguously one — a calendar-invalid s
     ['turn', []],
     ['turn2', ['boundary']],
   ])
+})
+
+it('MAR-3206 records the MCP status and folds the latest one since the latest start record — a start record forgets the status before it', () => {
+  const { service } = bed()
+  const init = readClaudeHarnessFact(
+    { type: 'system', subtype: 'init', mcp_servers: [] },
+    '2026-09-25T10:00:00.000Z',
+  )!
+  const status = (at: string, state: string) =>
+    readClaudeMcpStatus(
+      [
+        {
+          name: 'claude.ai Figma',
+          status: state,
+          scope: 'claudeai',
+          config: { type: 'claudeai-proxy', url: 'https://mcp.figma.com/mcp' },
+        },
+      ],
+      [{ plugin: 'figma', server: 'figma', origin: 'https://mcp.figma.com' }],
+      at,
+    )
+  service.apply('session', 'turn', init)
+  service.apply(
+    'session',
+    'turn',
+    status('2026-09-25T10:00:01.000Z', 'needs-auth'),
+  )
+  service.apply(
+    'session',
+    'turn',
+    status('2026-09-25T10:05:00.000Z', 'connected'),
+  )
+  expect(service.harnessFacts('session').mcpStatus).toEqual({
+    ...status('2026-09-25T10:05:00.000Z', 'connected'),
+    turnId: 'turn',
+  })
+  service.apply('session', 'turn', { ...init, at: '2026-09-25T11:00:00.000Z' })
+  expect(service.harnessFacts('session')).not.toHaveProperty('mcpStatus')
 })

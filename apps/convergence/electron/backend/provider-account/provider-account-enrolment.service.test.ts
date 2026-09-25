@@ -11,6 +11,12 @@ import { ProviderAccountRepository } from './provider-account.repository'
 import { CodexAccountHistoryService } from './provider-account-codex-history.service'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
 import { resolveAccountForTurn } from './provider-account-resolution.pure'
+import { CodexProvider } from '../provider/codex/codex-provider'
+import { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
+import {
+  FakeCodexChildProcess,
+  FakeCodexServer,
+} from '../provider/codex/codex-server-host.fixture'
 
 const HOME = '/Users/tester'
 const ACCOUNT_ID = 'acct-a'
@@ -926,6 +932,76 @@ describe('ProviderAccountEnrolmentService', () => {
         })
         await subject[action](ACCOUNT_ID)
         expect(maintenanceCalls).toEqual([{ id: ACCOUNT_ID, retire }])
+      },
+    )
+
+    it.each(['reconnect', 'remove'] as const)(
+      'R4: %s evicts an idle Codex conversation through the shared door',
+      async (action) => {
+        const { subject: enrolling, runner, fs } = codexFixture()
+        const { account } = await enrolling.enrol({
+          email: '',
+          providerId: 'codex',
+        })
+        const server = new FakeCodexServer()
+        const hosts = new CodexServerHostRegistry({
+          cwd: '/tmp',
+          spawnProcess: () => {
+            const child = new FakeCodexChildProcess()
+            setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
+            return child.asChildProcess()
+          },
+          probeReady: async () => true,
+          connectTransport: async () => server.connect(),
+          listProcesses: () => [],
+        })
+        hosts.setBinary('/fixture/codex', '0.154.0')
+        const provider = new CodexProvider(
+          hosts,
+          null,
+          undefined,
+          () => account,
+        )
+        const handle = provider.start({
+          sessionId: 'idle-maintenance',
+          workingDirectory: '/tmp',
+          initialMessage: 'first',
+          continuationToken: null,
+          providerAccountId: account.id,
+          model: 'gpt-6',
+          effort: 'high',
+        })
+        let status = 'running'
+        handle.onStatusChange((value) => {
+          status = value
+        })
+        try {
+          await vi.waitFor(() => expect(status).toBe('completed'))
+          const original = server.requests.find(
+            (request) => request.method === 'turn/start',
+          )!.connection
+          expect(original.closed).toBe(false)
+          const subject = service({
+            fs,
+            run: runner.run,
+            codexMaintenance: {
+              run: (target, work, retire) =>
+                hosts.withStoppedServer(
+                  { account: target, executionHostId: target.executionHostId },
+                  work,
+                  { retire },
+                ),
+            },
+          })
+          await subject[action](ACCOUNT_ID)
+          expect(original.closed).toBe(true)
+          if (action === 'reconnect')
+            expect(repository.get(ACCOUNT_ID)?.status).toBe('connected')
+          else expect(repository.get(ACCOUNT_ID)).toBeNull()
+        } finally {
+          await handle.dispose?.()
+          await hosts.stopAll()
+        }
       },
     )
 

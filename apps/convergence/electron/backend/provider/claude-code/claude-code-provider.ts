@@ -44,6 +44,7 @@ import {
   readClaudeToolResultMoment,
 } from './claude-code-task.pure'
 import { ClaudeEvidenceService } from './claude-evidence.service'
+import { ClaudeMcpStatusService } from './claude-mcp-status.service'
 import {
   createUnavailableContextWindow,
   deriveClaudeContextWindow,
@@ -89,6 +90,9 @@ import {
   describeMcpAuthorizationNote,
   matchClaudeMcpAuthFailure,
 } from '../../provider-account/provider-account-mcp.pure'
+
+const NO_RUNNING_CLAUDE_PROCESS =
+  'No Claude process is running for this conversation'
 
 function now(): string {
   return new Date().toISOString()
@@ -787,6 +791,18 @@ export class ClaudeCodeProvider implements Provider {
       },
     )
 
+    const mcpStatus = new ClaudeMcpStatusService(
+      (fact) => sessionEmitter.recordEvidence(fact),
+      now,
+    )
+    /** Read the MCP status of the process running now, if it still is after the read. */
+    function readMcpStatus(transport: ClaudeTransport): Promise<void> {
+      return mcpStatus.refresh(
+        transport,
+        () => child === transport && !stopped && !connectionEnding,
+      )
+    }
+
     function finishAnswer(): void {
       const counts = config.readParallelWorkCounts?.()
       const next =
@@ -1173,6 +1189,11 @@ export class ClaudeCodeProvider implements Provider {
               (value): value is string => typeof value === 'string',
             )
           : []
+        // After the start record, what the process loaded -- with scope and
+        // address (MAR-3206 R1). A CLI that refuses the status request leaves
+        // the start record's own list as the one Details shows.
+        mcpStatus.observeInit(raw)
+        if (child) void readMcpStatus(child).catch(() => {})
       }
       evidence.consume(data, now())
       if (
@@ -2037,6 +2058,26 @@ export class ClaudeCodeProvider implements Provider {
           evidence.cancelStop(id)
           throw error
         }
+      },
+      get canReconnectMcpServers() {
+        return !stopped && !connectionEnding && child !== null
+      },
+      refreshMcpServers: async (reconnect) => {
+        const transport = child
+        if (stopped || connectionEnding || !transport)
+          throw new Error(NO_RUNNING_CLAUDE_PROCESS)
+        // The running query's own reconnect: the process, the conversation
+        // and its turn all stay (MAR-3206 R3). The status is read even when
+        // the reconnect throws, so the row says what the server is now.
+        let failure: unknown = null
+        if (reconnect)
+          try {
+            await transport.reconnectMcpServer(reconnect)
+          } catch (error) {
+            failure = error
+          }
+        await readMcpStatus(transport)
+        if (failure) throw failure
       },
       resident: true,
       get retainQueuedInputsOnCompletion() {

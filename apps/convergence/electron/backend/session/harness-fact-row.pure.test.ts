@@ -42,3 +42,13 @@ it.each([
     ).toMatchObject({ kind, at: 'now', truncated: true })
   },
 )
+
+it('MAR-3206 a truncated MCP status is dropped, never shown as an empty list', () => {
+  expect(
+    readHarnessFactRow(
+      'harness.mcpStatus',
+      { truncated: true, bytes: 9000, preview: 'envelope head' },
+      'now',
+    ),
+  ).toBeNull()
+})

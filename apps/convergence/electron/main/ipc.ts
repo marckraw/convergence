@@ -1429,6 +1429,11 @@ export function registerIpcHandlers(
   ipcMain.handle('session:harnessFacts', (_event, sessionId: string) =>
     sessionService.harnessFacts(sessionId),
   )
+  ipcMain.handle(
+    'session:refreshMcpServers',
+    (_event, sessionId: string, reconnect: string | null) =>
+      sessionService.refreshMcpServers(sessionId, reconnect),
+  )
   ipcMain.handle('session:listAgentRuns', (_event, sessionId: string) =>
     sessionService.listAgentRuns(sessionId),
   )
