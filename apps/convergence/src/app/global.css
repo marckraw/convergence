@@ -36,7 +36,16 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-success-ink: var(--success-ink);
+  --color-success-surface: var(--success-surface);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-surface: var(--warning-surface);
+  --color-error-ink: var(--error-ink);
+  --color-error-surface: var(--error-surface);
+  --color-info-ink: var(--info-ink);
+  --color-info-surface: var(--info-surface);
   --color-border: var(--border);
+  --color-control-border: var(--control-border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
@@ -58,13 +67,30 @@
   --muted-foreground: oklch(0.46 0 0);
   --accent: oklch(0.915 0.075 95);
   --accent-foreground: oklch(0.28 0.04 80);
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.55 0.23 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --warning: oklch(0.78 0.16 75);
-  --warning-foreground: oklch(0.46 0.13 65);
+  --warning-foreground: var(--warning-ink);
+  /*
+   * Color roles (MAR-3460). A status `*-ink` is readable text: >= 4.5:1 on
+   * background, card and muted, and on its own `*-surface` (a tint laid over
+   * the card). `--control-border` outlines a control and clears 3:1;
+   * `--border` stays the quiet decorative separator. `--ring` clears 3:1.
+   * `theme-contrast.pure.test.ts` computes every pair, in both themes, from
+   * this file.
+   */
+  --success-ink: oklch(0.48 0.13 150);
+  --success-surface: oklch(0.72 0.15 150 / 0.14);
+  --warning-ink: oklch(0.46 0.13 65);
+  --warning-surface: oklch(0.72 0.15 75 / 0.14);
+  --error-ink: oklch(0.48 0.13 27);
+  --error-surface: oklch(0.72 0.15 27 / 0.14);
+  --info-ink: oklch(0.48 0.13 250);
+  --info-surface: oklch(0.72 0.15 250 / 0.14);
   --border: oklch(0.88 0 0);
+  --control-border: oklch(0.62 0 0);
   --input: oklch(0.88 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.5 0 0);
   --sidebar: oklch(0.96 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --chrome-edge: rgba(255, 255, 255, 0.48);
@@ -89,16 +115,25 @@
   --secondary: oklch(0.27 0.005 260);
   --secondary-foreground: oklch(0.88 0 0);
   --muted: oklch(0.27 0.005 260);
-  --muted-foreground: oklch(0.58 0 0);
+  --muted-foreground: oklch(0.66 0 0);
   --accent: oklch(0.27 0.005 260);
   --accent-foreground: oklch(0.88 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.88 0 0);
+  --destructive-foreground: oklch(0.18 0 0);
   --warning: oklch(0.78 0.16 75);
-  --warning-foreground: oklch(0.86 0.13 85);
+  --warning-foreground: var(--warning-ink);
+  --success-ink: oklch(0.78 0.13 150);
+  --success-surface: oklch(0.72 0.15 150 / 0.16);
+  --warning-ink: oklch(0.86 0.13 85);
+  --warning-surface: oklch(0.72 0.15 75 / 0.16);
+  --error-ink: oklch(0.78 0.13 27);
+  --error-surface: oklch(0.72 0.15 27 / 0.16);
+  --info-ink: oklch(0.78 0.13 250);
+  --info-surface: oklch(0.72 0.15 250 / 0.16);
   --border: oklch(0.32 0.005 260);
+  --control-border: oklch(0.55 0.005 260);
   --input: oklch(0.28 0.005 260);
-  --ring: oklch(0.5 0 0);
+  --ring: oklch(0.72 0 0);
   --sidebar: oklch(0.17 0.005 260);
   --sidebar-foreground: oklch(0.82 0 0);
   --chrome-edge: rgba(255, 255, 255, 0.12);
