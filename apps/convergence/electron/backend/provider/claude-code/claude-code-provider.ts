@@ -1338,8 +1338,8 @@ export class ClaudeCodeProvider implements Provider {
         case 'assistant': {
           const isChild = Boolean(evidence.identity(data).agentRunId)
           sawTurnOutput = true
-          // If we already streamed text via stream_events, flush that
-          // and skip text blocks in the assistant message (they're duplicates)
+          // Only this message's buffered text proves a streamed duplicate.
+          // Earlier messages in the turn must not suppress complete-only text.
           const hadStreamedText = !isChild && assistantTextBuffer.length > 0
           const hadStreamedThinking =
             !isChild &&
@@ -1380,7 +1380,7 @@ export class ClaudeCodeProvider implements Provider {
               } else if (
                 block.type === 'text' &&
                 block.text &&
-                (isChild || (!hadStreamedText && !currentTurnHasAssistantText))
+                (isChild || !hadStreamedText)
               ) {
                 sessionEmitter.addAssistantMessage({
                   ...evidence.identity(data),
