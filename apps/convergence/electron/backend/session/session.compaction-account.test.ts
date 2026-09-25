@@ -14,9 +14,17 @@ import {
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { isProviderBusyError } from '../provider/provider.types'
 import { ProviderRegistry } from '../provider/provider-registry'
+import {
+  CODEX_HOME_RESTORED_TEST,
+  isolateAmbientCodexHome,
+  isolatedCodexHomeTestsFinished,
+} from './isolate-ambient-codex-home'
 import { SessionQueuedInputService } from './session-queued-input.service'
 import { SessionService } from './session.service'
 import { TurnCaptureService } from './turn/turn-capture.service'
+
+const runnerCodexHome = process.env.CODEX_HOME
+isolateAmbientCodexHome()
 
 let service: SessionService
 let sessionId: string
@@ -446,4 +454,9 @@ it('a drain fired during compaction delivers nothing until compaction ends (R1, 
   const delivered = turnsSentToProvider(server).slice(sentBefore)
   expect(delivered).toHaveLength(1)
   expect(delivered[0]).toContain('the horse is done')
+})
+
+it(CODEX_HOME_RESTORED_TEST, () => {
+  expect(isolatedCodexHomeTestsFinished()).toBeGreaterThan(0)
+  expect(process.env.CODEX_HOME).toBe(runnerCodexHome)
 })
