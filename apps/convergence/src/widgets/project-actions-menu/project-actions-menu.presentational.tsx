@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, FC } from 'react'
+import type { ComponentPropsWithoutRef, FC, ReactNode } from 'react'
 import type {
   ProjectScript,
   ProjectScriptRun,
@@ -46,6 +46,8 @@ interface ProjectActionsMenuPresentationalProps {
   onEdit: (script: ProjectScript) => void
   onDelete: (script: ProjectScript) => void
   onToggleRun: (runId: string) => void
+  /** Sections after the lanes, in the same menu (MAR-3429 CH4 R4). */
+  children?: ReactNode
 }
 
 export const ProjectActionsMenuPresentational: FC<
@@ -66,6 +68,7 @@ export const ProjectActionsMenuPresentational: FC<
   onEdit,
   onDelete,
   onToggleRun,
+  children,
 }) => (
   <DropdownMenuContent
     align="end"
@@ -257,6 +260,7 @@ export const ProjectActionsMenuPresentational: FC<
           </Button>
         ) : null}
       </div>
+      {children}
     </div>
   </DropdownMenuContent>
 )

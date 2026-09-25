@@ -8,6 +8,7 @@ import {
   identityStyles,
   identityWidths,
   parseHeaderLayoutKey,
+  parallelWorkInRow,
   type IdentityNameStyle,
   type HeaderItem,
   type HeaderYieldId,
@@ -54,8 +55,10 @@ const more: HeaderItem = {
 }
 
 /**
- * The code header in DOM order with realistic measured widths: DOM order is
- * NOT the yield order, which is what makes the order test mean something.
+ * The code header in DOM order with realistic measured widths (MAR-3429 CH4):
+ * the live status on the left, then the groups View, Details, Project, then
+ * Stop and More. DOM order is NOT the yield order, which is what makes the
+ * order test mean something.
  */
 function codeHeader(
   options: {
@@ -68,57 +71,39 @@ function codeHeader(
 ): HeaderItem[] {
   return [
     identity(),
-    options.parallelRunning
-      ? status('parallel-work', 118)
-      : control('parallel-work', 96),
-    control('view', 110),
+    // Parallel work is in the row only while it runs (CH4 R2), and then it is
+    // live status.
+    ...(options.parallelRunning ? [status('parallel-work', 118)] : []),
     status('attention', 72),
     ...(options.remote ? [status('remote', 68)] : []),
     // The status items at their real maximums (MAR-3427 C): the activity chip
-    // is `max-w-[12rem]`, the harness pill `max-w-[15rem]`.
+    // is `max-w-[12rem]`, the harness chip `max-w-[15rem]`.
     status('activity', 192),
     ...(options.worktreeRemoved ? [status('worktree-removed', 116)] : []),
-    options.harnessAlert ? status('harness', 240) : control('harness', 150),
-    control('agent-meter', 120),
-    control('wires', 64),
-    control('session-details', 104),
-    control('project-actions', 118),
-    control('open', 70),
-    control('pull-request', 28),
-    control('terminal', 28),
-    control('pin', 40),
+    // The harness is in the row only while it alerts (CH4 R3).
+    ...(options.harnessAlert ? [status('harness', 240)] : []),
+    control('view', 64),
+    control('details', 76),
+    control('project', 88),
     ...(options.running ? [stop] : []),
     more,
   ]
 }
 
-/** The yield order, first to go first, for a header with every control. */
-const FULL_ORDER = [
-  'agent-meter',
-  'pin',
-  'terminal',
-  'pull-request',
-  'open',
-  'project-actions',
-  'view',
-  'harness',
-  'wires',
-  'session-details',
-  'parallel-work',
-]
-const without = (id: string) => FULL_ORDER.filter((entry) => entry !== id)
+/**
+ * The yield order, first to go first, for a header with every group: Project,
+ * then View, then Details (CH4 R8).
+ */
+const FULL_ORDER = ['project', 'view', 'details']
 
 /** Each scenario with the order its controls must yield in, as a literal. */
 const expectedOrder: Record<string, string[]> = {
   idle: FULL_ORDER,
-  // Parallel work runs: it is live status and never yields.
-  running: without('parallel-work'),
-  // Running, nothing parallel: Parallel work is a control again.
+  running: FULL_ORDER,
   'remote running': FULL_ORDER,
-  // The alert is live status and never yields.
-  'harness alert': without('harness'),
+  'harness alert': FULL_ORDER,
   'worktree removed': FULL_ORDER,
-  chat: ['view', 'parallel-work'],
+  chat: ['view'],
 }
 
 const scenarios: Array<[string, HeaderItem[]]> = [
@@ -131,8 +116,7 @@ const scenarios: Array<[string, HeaderItem[]]> = [
     'chat',
     [
       identity(40, 180),
-      control('parallel-work', 96),
-      control('view', 110),
+      control('view', 64),
       status('attention', 72),
       status('activity', 192),
       { ...more, onlyWithOverflow: true },
@@ -220,8 +204,8 @@ describe('headerLayout', () => {
         at += step.length
       }
       expect(at, name).toBe(expected.length)
-      // The order is observed, not assumed: most controls leave on their own.
-      expect(steps.length, name).toBeGreaterThanOrEqual(expected.length - 3)
+      // The order is observed, not assumed: each group leaves on its own.
+      expect(steps.length, name).toBe(expected.length)
     }
   })
 
@@ -255,9 +239,9 @@ describe('headerLayout', () => {
 
   it('R3 the row is measured exactly: 32 px of padding and one 6 px gap between items', () => {
     // identity 70 + gap + control 450 + gap + More 28 = 560, plus 32 padding.
-    const items = [identity(20, 30), control('open', 450), more]
+    const items = [identity(20, 30), control('project', 450), more]
     expect(headerLayout({ width: 592, items }).overflow).toEqual([])
-    expect(headerLayout({ width: 591, items }).overflow).toEqual(['open'])
+    expect(headerLayout({ width: 591, items }).overflow).toEqual(['project'])
   })
 
   it('R4 every control is either drawn or in More, never dropped', () => {
@@ -324,42 +308,15 @@ describe('headerLayout', () => {
     expect(headerLayout({ width: 2400, items: chat }).visible).not.toContain(
       'more',
     )
-    const narrow = headerLayout({ width: 650, items: chat })
+    const narrow = headerLayout({ width: 600, items: chat })
     expect(narrow.overflow.length).toBeGreaterThan(0)
     expect(narrow.visible).toContain('more')
   })
 
   it('never lists a control that draws nothing in More', () => {
-    const items = [identity(), control('wires', 0), control('open', 70), more]
+    const items = [identity(), control('view', 0), control('project', 70), more]
     const layout = headerLayout({ width: 330, items })
-    expect(layout.overflow).toEqual(['open'])
-  })
-})
-
-describe('MAR-3427 C a control whose panel is open', () => {
-  const withParallel = (open: boolean) =>
-    codeHeader({ running: true }).map((item) =>
-      item.id === 'parallel-work' ? { ...item, open } : item,
-    )
-
-  it('stays drawn at a width where it would otherwise yield — mutation unpin it turns red', () => {
-    // 700 px, running, one row: closed, Parallel work is the last control and
-    // still does not fit beside the pinned items.
-    const closed = headerLayout({ width: 700, items: withParallel(false) })
-    expect(closed.rows).toHaveLength(1)
-    expect(closed.overflow).toContain('parallel-work')
-
-    const open = headerLayout({ width: 700, items: withParallel(true) })
-    expect(open.rows).toHaveLength(1)
-    expect(open.visible).toContain('parallel-work')
-    expect(open.overflow).not.toContain('parallel-work')
-  })
-
-  it('sits with the live status when the header has two rows', () => {
-    const open = headerLayout({ width: 400, items: withParallel(true) })
-    expect(open.rows[0]).not.toContain('parallel-work')
-    expect(open.rows.slice(1).flat()).toContain('parallel-work')
-    expect(open.overflow).not.toContain('parallel-work')
+    expect(layout.overflow).toEqual(['project'])
   })
 })
 
@@ -479,5 +436,35 @@ describe('headerLayoutKey', () => {
     expect(
       headerLayoutKey(headerLayout({ width: 401, items: codeHeader() })),
     ).toBe(key)
+  })
+})
+
+describe('MAR-3429 CH4', () => {
+  it('R5 the pin mark takes its room beside the name: counted in the identity, and the name is capped short of it — mutation leave trailing out turns red', () => {
+    const plain = identityWidths({ projectNatural: 90, nameNatural: 100 })
+    const pinned = identityWidths({
+      projectNatural: 90,
+      nameNatural: 100,
+      trailing: 18,
+    })
+    expect(pinned.width - plain.width).toBe(18)
+    expect(pinned.minWidth - plain.minWidth).toBe(18)
+    expect(
+      identityStyles(pinned, { projectNatural: 90, trailing: 18 }).name
+        .maxWidth,
+    ).toBe('calc(100% - 78px)')
+  })
+
+  it('R2 Parallel work reads its running count, or its unknown count, and nothing when neither', () => {
+    const counts = (running: number, unknown: number) => ({
+      running,
+      unknown,
+      failed: 4,
+      stopped: 9,
+    })
+    expect(parallelWorkInRow(counts(2, 1))).toBe('Parallel work · 2')
+    expect(parallelWorkInRow(counts(0, 3))).toBe('Parallel work · 3 unknown')
+    expect(parallelWorkInRow(counts(0, 0))).toBeNull()
+    expect(parallelWorkInRow(undefined)).toBeNull()
   })
 })
