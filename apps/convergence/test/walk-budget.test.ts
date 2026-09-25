@@ -29,6 +29,29 @@ const TREE_WALKING_TESTS = [
   'test/doc-links.walk.test.ts',
   // No DialogTrigger whose value starts with a Tooltip root (MAR-3358).
   'src/widgets/sidebar/sidebar-settings-trigger.walk.test.ts',
+  // No surface draws the raw SessionBadge (MAR-3288). Already on the budget.
+  'src/entities/session/session-badge-sites.test.ts',
+  // Each card-state tone class lives in one non-test file (MAR-3366).
+  'src/features/needs-you/needs-you-card-state.styles.test.ts',
+  // No source says the app starts a ready ticket by itself (MAR-2981 R15).
+  'src/features/waves/learn-loom-copy.walk.test.ts',
+  // No plugin motion token survives in non-test source (MAR-3319).
+  'src/shared/ui/motion.styles.walk.test.ts',
+  // The sidebar's hover hints stay on the shared Tooltip (MAR-3314).
+  'src/widgets/sidebar/sidebar-tooltip-sites.test.ts',
+]
+
+/**
+ * Recursive walks of a directory the test itself created (MAR-3385).
+ *
+ * An exemption is a name, not a rule. A new test that walks a temp folder
+ * the same way stays red until someone writes its path here, with a reason.
+ * These do not spend `WALK_TEST_TIMEOUT_MS`: their size does not grow with
+ * the repository, so the budget loop above does not read this list.
+ */
+const TEMP_TREE_WALKS = [
+  // `sumRegularFileBytes` walks the temp lane copy the test just built, never the repo.
+  'electron/backend/lane/lane.service.test.ts',
 ]
 
 /** The configs that run one of the walkers above. */
@@ -46,6 +69,226 @@ function pureModuleTests(directory: string): string[] {
     .map(String)
     .filter((file) => file.endsWith('.pure.test.ts'))
     .map((file) => join(directory, file))
+}
+
+/** A directory read. `mkdir` / `rm` with `recursive: true` are not walks. */
+const DIRECTORY_READ = /\b(?:readdirSync|readdir|globSync|opendirSync)\s*\(/g
+
+function skipSpace(source: string, index: number): number {
+  let i = index
+  while (i < source.length) {
+    if (/\s/.test(source[i])) {
+      i++
+      continue
+    }
+    if (source.startsWith('//', i)) {
+      const nl = source.indexOf('\n', i)
+      i = nl < 0 ? source.length : nl + 1
+      continue
+    }
+    if (source.startsWith('/*', i)) {
+      const end = source.indexOf('*/', i + 2)
+      i = end < 0 ? source.length : end + 2
+      continue
+    }
+    break
+  }
+  return i
+}
+
+/** Index of the matching closer, respecting strings and comments. */
+function matchingCloser(
+  source: string,
+  openIndex: number,
+  open: string,
+  close: string,
+): number {
+  let depth = 0
+  let quote: string | null = null
+  for (let i = openIndex; i < source.length; i++) {
+    const char = source[i]
+    if (quote) {
+      if (char === '\\') {
+        i++
+        continue
+      }
+      if (char === quote) quote = null
+      continue
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char
+      continue
+    }
+    if (char === '/' && source[i + 1] === '/') {
+      const nl = source.indexOf('\n', i)
+      i = nl < 0 ? source.length : nl
+      continue
+    }
+    if (char === '/' && source[i + 1] === '*') {
+      const end = source.indexOf('*/', i + 2)
+      i = end < 0 ? source.length : end + 1
+      continue
+    }
+    if (char === open) depth++
+    else if (char === close) {
+      depth--
+      if (depth === 0) return i
+    }
+  }
+  return -1
+}
+
+/**
+ * Where a return type ends and the body can start.
+ *
+ * An object type (`: { a: string }`) is skipped: after its closing brace the
+ * next token is another `{` (a function) or `=>` (an arrow). The brace that
+ * is not followed by either of those is the function body.
+ */
+function returnTypeEnds(source: string, from: number, arrow: boolean): number {
+  let angle = 0
+  let paren = 0
+  let brace = 0
+  let bracket = 0
+  let quote: string | null = null
+  for (let i = from; i < source.length; i++) {
+    const char = source[i]
+    if (quote) {
+      if (char === '\\') {
+        i++
+        continue
+      }
+      if (char === quote) quote = null
+      continue
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char
+      continue
+    }
+    if (char === '/' && source[i + 1] === '/') {
+      const nl = source.indexOf('\n', i)
+      i = nl < 0 ? source.length : nl
+      continue
+    }
+    if (char === '/' && source[i + 1] === '*') {
+      const end = source.indexOf('*/', i + 2)
+      i = end < 0 ? source.length : end + 1
+      continue
+    }
+    if (char === '<') angle++
+    else if (char === '>') angle = Math.max(0, angle - 1)
+    else if (char === '(') paren++
+    else if (char === ')') paren = Math.max(0, paren - 1)
+    else if (char === '[') bracket++
+    else if (char === ']') bracket = Math.max(0, bracket - 1)
+    else if (char === '{') {
+      if (angle === 0 && paren === 0 && bracket === 0 && brace === 0) {
+        const close = matchingCloser(source, i, '{', '}')
+        if (close < 0) return i
+        const next = skipSpace(source, close + 1)
+        const typeBrace =
+          source[next] === '{' || (arrow && source.startsWith('=>', next))
+        if (typeBrace) {
+          i = close
+          continue
+        }
+        return i
+      }
+      brace++
+    } else if (char === '}') brace = Math.max(0, brace - 1)
+    else if (
+      arrow &&
+      angle === 0 &&
+      paren === 0 &&
+      brace === 0 &&
+      bracket === 0 &&
+      source.startsWith('=>', i)
+    ) {
+      return i
+    }
+  }
+  return source.length
+}
+
+/** Index of the function body `{`, or -1 when the declaration is not a block. */
+function bodyOpen(source: string, paramsClose: number, arrow: boolean): number {
+  let i = skipSpace(source, paramsClose + 1)
+  if (source[i] === ':')
+    i = skipSpace(source, returnTypeEnds(source, i + 1, arrow))
+  if (arrow) {
+    if (!source.startsWith('=>', i)) return -1
+    i = skipSpace(source, i + 2)
+  }
+  return source[i] === '{' ? i : -1
+}
+
+function functionBodies(source: string): Array<{ name: string; body: string }> {
+  const found: Array<{ name: string; body: string }> = []
+  const consider = (name: string, paren: number, arrow: boolean) => {
+    const paramsClose = matchingCloser(source, paren, '(', ')')
+    if (paramsClose < 0) return
+    const open = bodyOpen(source, paramsClose, arrow)
+    if (open < 0) return
+    const close = matchingCloser(source, open, '{', '}')
+    if (close < 0) return
+    found.push({ name, body: source.slice(open + 1, close) })
+  }
+
+  const functionDecl =
+    /(?:^|[\s;}])(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g
+  for (const match of source.matchAll(functionDecl)) {
+    consider(match[1], match.index + match[0].length - 1, false)
+  }
+
+  const assigned =
+    /(?:^|[\s;}])(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\(|\()/g
+  for (const match of source.matchAll(assigned)) {
+    const arrow = !match[0].includes('function')
+    consider(match[1], match.index + match[0].length - 1, arrow)
+  }
+  return found
+}
+
+function readsDirectoryRecursively(source: string): boolean {
+  for (const match of source.matchAll(DIRECTORY_READ)) {
+    const open = match.index + match[0].length - 1
+    const close = matchingCloser(source, open, '(', ')')
+    if (close < 0) continue
+    if (/\brecursive\s*:\s*true\b/.test(source.slice(open, close + 1))) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * A helper that reads a directory and calls itself — the walk that descends
+ * into subdirectories without passing `recursive: true`.
+ */
+function callsItselfOnSubdirectories(source: string): boolean {
+  const call = /\b(?:readdirSync|readdir|globSync|opendirSync)\s*\(/
+  return functionBodies(source).some(
+    ({ name, body }) =>
+      call.test(body) && new RegExp(`\\b${name}\\s*\\(`).test(body),
+  )
+}
+
+function isRecursiveTreeWalk(source: string): boolean {
+  return (
+    readsDirectoryRecursively(source) || callsItselfOnSubdirectories(source)
+  )
+}
+
+/** Every `*.test.ts` / `*.test.tsx` under `src/` and `electron/`. */
+function testSources(): string[] {
+  return ['src', 'electron'].flatMap((tree) =>
+    readdirSync(join(WORKSPACE, tree), { recursive: true })
+      .map(String)
+      .filter((file) => !file.includes('node_modules'))
+      .map((file) => file.split('\\').join('/'))
+      .filter((file) => /\.test\.tsx?$/.test(file))
+      .map((file) => `${tree}/${file}`),
+  )
 }
 
 describe('the tree-walk time budget', () => {
@@ -98,6 +341,30 @@ describe('the tree-walk time budget', () => {
         .map((file) => file.slice(WORKSPACE.length))
 
       expect(walkers).toEqual([])
+    },
+  )
+
+  it(
+    'names every recursive tree walk under src and electron',
+    { timeout: WALK_TEST_TIMEOUT_MS },
+    () => {
+      // MAR-3385. The old sweep only opened `*.pure.test.ts`, so a walk filed
+      // in a render test or a styles test never had to be listed. Every
+      // recursive walk under these two trees is now either budgeted by name
+      // or exempt by name. A temp-folder walk is not a kind: it stays red
+      // until its path is written into `TEMP_TREE_WALKS`.
+      const found = testSources()
+        .filter((file) =>
+          isRecursiveTreeWalk(readFileSync(join(WORKSPACE, file), 'utf8')),
+        )
+        .sort()
+      const named = [...TREE_WALKING_TESTS, ...TEMP_TREE_WALKS]
+        .filter(
+          (file) => file.startsWith('src/') || file.startsWith('electron/'),
+        )
+        .sort()
+
+      expect(found).toEqual(named)
     },
   )
 

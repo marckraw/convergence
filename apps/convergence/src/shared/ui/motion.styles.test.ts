@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { createElement } from 'react'
 import { render, waitFor } from '@testing-library/react'
@@ -24,17 +24,6 @@ const stylesheet = readFileSync(join(sourceRoot, 'app/global.css'), 'utf8')
 const primitives = ['tooltip', 'dropdown-menu', 'popover', 'select', 'dialog']
 const pluginTokens =
   /animate-in|animate-out|fade-in-|fade-out-|zoom-in-|zoom-out-|slide-in-from-|slide-out-to-/
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.name.startsWith('.env')) return []
-    if (entry.isDirectory()) return sourceFiles(path)
-    return entry.isFile() && !/\.(test|spec)\.[^.]+$/.test(entry.name)
-      ? [path]
-      : []
-  })
-}
 
 describe('MAR-3319: surface motion has real stylesheet definitions', () => {
   it('every animation used by a primitive has one theme entry and matching keyframes', () => {
@@ -112,17 +101,6 @@ describe('MAR-3319: surface motion has real stylesheet definitions', () => {
       expect(body).toContain('opacity: 0;')
       expect(body).toContain('opacity: 1;')
     }
-  })
-
-  it('no plugin motion token survives in any non-test source file', () => {
-    const files = sourceFiles(sourceRoot)
-    expect(files.length).toBeGreaterThan(100)
-    expect(files).toContain(join(__dirname, 'tooltip.tsx'))
-    expect(
-      files
-        .filter((path) => pluginTokens.test(readFileSync(path, 'utf8')))
-        .map((path) => path.slice(sourceRoot.length + 1)),
-    ).toEqual([])
   })
 })
 

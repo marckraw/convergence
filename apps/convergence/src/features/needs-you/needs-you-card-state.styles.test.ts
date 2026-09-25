@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { expect, it } from 'vitest'
+import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
 import { cardStateTone, cardStateToneKeys } from './needs-you-card-state.styles'
 
 const sourceRoot = resolve(__dirname, '../..')
@@ -37,27 +38,32 @@ function sourceFiles(directory: string): string[] {
 
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-it('MAR-3366 R6 each card tone class lives in one non-test file — mutation: the strip keeps its own copy of the classes turns red', () => {
-  const files = roots
-    .flatMap((root) => sourceFiles(join(sourceRoot, root)))
-    .map((path) => ({
-      name: relative(sourceRoot, path),
-      text: readFileSync(path, 'utf8'),
-    }))
-  const tokens = [
-    ...new Set(
-      cardStateToneKeys.flatMap((key) => cardStateTone[key].split(/\s+/)),
-    ),
-  ]
-  expect(tokens.length).toBeGreaterThanOrEqual(cardStateToneKeys.length)
-  for (const token of tokens) {
-    const pattern = new RegExp(`(?<![\\w:/-])${escape(token)}(?![\\w-])`)
-    const holders = files
-      .filter(({ name, text }) => {
-        if (!pattern.test(text)) return false
-        return !otherFacts[name]?.includes(token)
-      })
-      .map(({ name }) => name)
-    expect({ token, holders }).toEqual({ token, holders: [home] })
-  }
-})
+// Two source trees, so this spends the shared walk budget (MAR-3385).
+it(
+  'MAR-3366 R6 each card tone class lives in one non-test file — mutation: the strip keeps its own copy of the classes turns red',
+  { timeout: WALK_TEST_TIMEOUT_MS },
+  () => {
+    const files = roots
+      .flatMap((root) => sourceFiles(join(sourceRoot, root)))
+      .map((path) => ({
+        name: relative(sourceRoot, path),
+        text: readFileSync(path, 'utf8'),
+      }))
+    const tokens = [
+      ...new Set(
+        cardStateToneKeys.flatMap((key) => cardStateTone[key].split(/\s+/)),
+      ),
+    ]
+    expect(tokens.length).toBeGreaterThanOrEqual(cardStateToneKeys.length)
+    for (const token of tokens) {
+      const pattern = new RegExp(`(?<![\\w:/-])${escape(token)}(?![\\w-])`)
+      const holders = files
+        .filter(({ name, text }) => {
+          if (!pattern.test(text)) return false
+          return !otherFacts[name]?.includes(token)
+        })
+        .map(({ name }) => name)
+      expect({ token, holders }).toEqual({ token, holders: [home] })
+    }
+  },
+)
