@@ -350,6 +350,9 @@ export class SessionService {
   private turnCapture: TurnCaptureService | null = null
   private contextInjection: SessionContextInjectionService | null = null
   private onSessionTerminated: ((sessionId: string) => void) | null = null
+  private onTurnClosed:
+    | ((event: { sessionId: string; turnId: string }) => void)
+    | null = null
   private readonly sessionSettledListeners = new Set<SessionSettledListener>()
   private readonly pullRequestHintListeners = new Set<
     (sessionId: string) => void
@@ -490,6 +493,37 @@ export class SessionService {
 
   setNamer(namer: SessionNamer): void {
     this.namer = namer
+  }
+
+  /**
+   * Told once per turn, after the turn has closed (MAR-3395 CV3): the only
+   * moment a work block is known to be finished.
+   */
+  setTurnClosedListener(
+    listener: (event: { sessionId: string; turnId: string }) => void,
+  ): void {
+    this.onTurnClosed = listener
+  }
+
+  /** Whether `turnId` is still the session's running turn. */
+  isTurnActive(sessionId: string, turnId: string): boolean {
+    return this.activeTurnIds.get(sessionId) === turnId
+  }
+
+  /** One turn's items in sequence order, by the (session, turn) index. */
+  getTurnConversation(sessionId: string, turnId: string): ConversationItem[] {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    const rows = this.db
+      .prepare(
+        `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
+         FROM session_conversation_items items
+         INNER JOIN sessions ON sessions.id = items.session_id
+         LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id
+         WHERE items.session_id = ? AND items.turn_id = ?
+         ORDER BY items.sequence ASC`,
+      )
+      .all(sessionId, turnId) as ConversationItemRow[]
+    return rows.map(conversationItemFromRow)
   }
 
   setAttentionObserver(observer: SessionAttentionObserver): void {
@@ -6111,6 +6145,7 @@ export class SessionService {
       status,
       summarySource,
     })
+    this.onTurnClosed?.({ sessionId, turnId })
   }
 
   private firstAssistantTextForTurn(

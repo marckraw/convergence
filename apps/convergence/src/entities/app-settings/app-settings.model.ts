@@ -30,6 +30,7 @@ const EMPTY: AppSettings = {
   favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
   lanes: DEFAULT_LANES_PREFS,
   contextAlert: DEFAULT_CONTEXT_ALERT,
+  describeWorkBlocks: false,
 }
 
 interface AppSettingsState {

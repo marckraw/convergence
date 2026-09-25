@@ -26,7 +26,13 @@ if (candidate === 'luna') {
 const reportId = effort ? `luna-${effort}` : candidate
 const fixtureText = readFileSync(`${root}fixtures.json`, 'utf8')
 const fixtures = JSON.parse(fixtureText)
-const prompt = readFileSync(`${root}prompt.txt`, 'utf8')
+const prompt = readFileSync(
+  new URL(
+    '../../../electron/backend/block-sentence/block-sentence.prompt.txt',
+    import.meta.url,
+  ),
+  'utf8',
+)
 if (candidate === 'luna') {
   mkdirSync(`${root}scratch`, { recursive: true })
   buildSync({
@@ -157,7 +163,14 @@ const report = {
   timestamp: new Date().toISOString(),
   host,
   checkerSha256: createHash('sha256')
-    .update(readFileSync(`${root}truth-check.pure.ts`))
+    .update(
+      readFileSync(
+        new URL(
+          '../../../electron/backend/block-sentence/block-sentence.pure.ts',
+          import.meta.url,
+        ),
+      ),
+    )
     .digest('hex'),
   fixtureSha256: createHash('sha256').update(fixtureText).digest('hex'),
   promptSha256: createHash('sha256').update(prompt).digest('hex'),

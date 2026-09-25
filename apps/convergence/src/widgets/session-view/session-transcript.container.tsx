@@ -44,8 +44,10 @@ import {
   workBlockLabel,
   workBlockMembership,
   workDisplayRows,
-} from './work-blocks.pure'
+} from '@/entities/session'
 import { WorkBlockRow } from './work-block.presentational'
+import { useBlockSentences } from './use-block-sentences'
+import { workBlockSentence } from './work-block-sentence.pure'
 import { WORK_BLOCK_MEMBER_CLASS } from './work-block.styles'
 import {
   useTranscriptViewMode,
@@ -279,6 +281,8 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   )
   const viewMode = useTranscriptViewMode(session.id)
   const openBlocks = useTranscriptViewStore((state) => state.openBlocks)
+  // MAR-3395 CV3: the model's line for each closed block, when one is stored.
+  const blockSentences = useBlockSentences(session.id)
   const toggleBlock = useTranscriptViewStore((state) => state.toggleBlock)
   const openBlock = useTranscriptViewStore((state) => state.openBlock)
   // MAR-3391 R1: runs of tool items fold by the one rule the sidebar shares.
@@ -810,6 +814,15 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                     memberCount={row.members.length}
                     open={row.open}
                     working={row.id === workingBlockId}
+                    sentence={
+                      row.id === workingBlockId
+                        ? null
+                        : workBlockSentence(
+                            blockSentences,
+                            row.id,
+                            itemOfEntry(row.members.at(-1)!).id,
+                          )
+                    }
                     onToggle={() => toggleBlock(row.id)}
                   />
                 </div>

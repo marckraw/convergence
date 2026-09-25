@@ -26,8 +26,8 @@ import {
   Notification,
   shell,
 } from 'electron'
-import { existsSync } from 'fs'
-import { homedir } from 'os'
+import { existsSync, mkdtempSync } from 'fs'
+import { homedir, tmpdir } from 'os'
 import { resolveCodexAccountHandoffSource } from '../backend/provider-account/provider-account-resolution.pure'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
@@ -148,6 +148,14 @@ import { AutoDrillService } from '../backend/context-drill/auto-drill.service'
 import { HarnessEvidenceService } from '../backend/session/harness-evidence.service'
 import { APP_SETTINGS_KEY } from '../backend/app-settings/app-settings.constants'
 import { parseAppSettings } from '../backend/app-settings/app-settings.pure'
+import { BlockSentenceRepository } from '../backend/block-sentence/block-sentence.repository'
+import { BlockSentenceService } from '../backend/block-sentence/block-sentence.service'
+import { BLOCK_SENTENCE_PROMPT } from '../backend/block-sentence/block-sentence.prompt'
+import {
+  broadcastBlockSentencesChanged,
+  registerBlockSentenceIpcHandlers,
+} from '../backend/block-sentence/block-sentence.ipc'
+import { supportsResidentCodexServer } from '../backend/provider/codex/codex-server-host.pure'
 import {
   broadcastContextDrillChange,
   registerContextDrillIpcHandlers,
@@ -432,6 +440,9 @@ async function startApp(): Promise<void> {
   const codexServerHosts = new CodexServerHostRegistry({
     appVersion: app.getVersion(),
   })
+  // The detected Codex version, for the block-sentence gate (MAR-3395 A1):
+  // undefined until detection has run.
+  let codexVersion: string | null | undefined
   // Constructed here so it can report RPC failures to the debug sink, and so
   // it reads each account's own CODEX_HOME rather than the ambient one (PA9).
   const codexQuotaService = new CodexQuotaService({
@@ -573,6 +584,7 @@ async function startApp(): Promise<void> {
         // The version gates the resident server: an older codex-cli is refused
         // out loud rather than served by a path that no longer exists.
         codexServerHosts.setBinary(p.binaryPath, p.version ?? null)
+        codexVersion = p.version ?? null
         providerAccountMcpService.setCodexBinaryPath(p.binaryPath)
         codexQuotaService.setServerHosts(codexServerHosts)
         providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
@@ -811,6 +823,36 @@ async function startApp(): Promise<void> {
     appSettings: appSettingsService,
   })
   sessionService.setNamer(namingService)
+
+  // MAR-3395 CV3: one GPT-6 Luna line per closed work block, after the turn.
+  const blockSentenceRepository = new BlockSentenceRepository(db)
+  let blockSentenceScratch: string | null = null
+  const blockSentenceService = new BlockSentenceService({
+    repository: blockSentenceRepository,
+    turnItems: (sessionId, turnId) =>
+      sessionService.getTurnConversation(sessionId, turnId),
+    isTurnActive: (sessionId, turnId) =>
+      sessionService.isTurnActive(sessionId, turnId),
+    isEnabled: () =>
+      parseAppSettings(stateService.get(APP_SETTINGS_KEY)).describeWorkBlocks,
+    model: () => {
+      const codex = providerRegistry.get('codex')
+      if (!codex?.oneShot || !codexServerHosts.hasBinary()) return null
+      if (codexVersion === undefined) return null
+      if (!supportsResidentCodexServer(codexVersion)) return null
+      return { oneShot: (input) => codex.oneShot!(input) }
+    },
+    workingDirectory: () =>
+      (blockSentenceScratch ??= mkdtempSync(
+        join(tmpdir(), 'convergence-block-sentence-'),
+      )),
+    promptText: BLOCK_SENTENCE_PROMPT,
+    onChanged: broadcastBlockSentencesChanged,
+  })
+  sessionService.setTurnClosedListener(({ sessionId, turnId }) =>
+    blockSentenceService.turnEnded(sessionId, turnId),
+  )
+  registerBlockSentenceIpcHandlers({ repository: blockSentenceRepository })
 
   const sessionForkService = new SessionForkService({
     sessions: sessionService,
@@ -1295,6 +1337,9 @@ async function startApp(): Promise<void> {
   let sessionsDisposedForQuit = false
   let sessionQuitInFlight = false
   app.on('before-quit', (event) => {
+    // MAR-3395 R12: first, before sessions close their turns or the servers
+    // stop -- no sentence request, and so no fresh Codex host, after this.
+    blockSentenceService.stop()
     if (sessionsDisposedForQuit) return
     event.preventDefault()
     if (sessionQuitInFlight) return

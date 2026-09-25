@@ -224,6 +224,7 @@ function primeStores(
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
       contextAlert: DEFAULT_CONTEXT_ALERT,
+      describeWorkBlocks: false,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     },
@@ -410,9 +411,34 @@ describe('AppSettingsDialogContainer', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
+    })
+  })
+
+  it('MAR-3395 A4 "Describe work blocks" is Off by default, names what it spends, and saves On', async () => {
+    primeStores({
+      defaultProviderId: 'codex',
+      defaultModelId: 'gpt-5.4',
+      defaultEffortId: 'high',
+    })
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    const toggle = await screen.findByRole('switch', {
+      name: 'Describe work blocks',
+    })
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(
+      screen.getByText(/GPT-6 Luna on your default Codex account/),
+    ).toBeInTheDocument()
+    fireEvent.click(toggle)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({ describeWorkBlocks: true }),
+      )
     })
   })
 
@@ -485,6 +511,7 @@ describe('AppSettingsDialogContainer', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })

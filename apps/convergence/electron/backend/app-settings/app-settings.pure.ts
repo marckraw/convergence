@@ -210,6 +210,8 @@ function emptyAppSettings(): StoredAppSettings {
     favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     lanes: DEFAULT_LANES_PREFS,
     contextAlert: DEFAULT_CONTEXT_ALERT,
+    // Off by default: every sentence spends the default Codex account (A4).
+    describeWorkBlocks: false,
     claude: { residentIdleMinutes: 30 },
   }
 }
@@ -248,6 +250,7 @@ export function parseAppSettings(raw: string | null): StoredAppSettings {
       favoriteModels: parseFavoriteModelsPrefs(parsed.favoriteModels),
       lanes: parseLanesPrefs(parsed.lanes),
       contextAlert: parseContextAlertSettings(parsed.contextAlert),
+      describeWorkBlocks: parsed.describeWorkBlocks === true,
       claude: {
         residentIdleMinutes:
           typeof parsed.claude?.residentIdleMinutes === 'number' &&
@@ -323,6 +326,7 @@ export function validateAppSettings(
       favoriteModels,
       lanes: settings.lanes,
       contextAlert: settings.contextAlert,
+      describeWorkBlocks: settings.describeWorkBlocks,
       claude: settings.claude,
     }
   }
@@ -349,6 +353,7 @@ export function validateAppSettings(
       favoriteModels,
       lanes: settings.lanes,
       contextAlert: settings.contextAlert,
+      describeWorkBlocks: settings.describeWorkBlocks,
       claude: settings.claude,
     }
   }
@@ -374,6 +379,7 @@ export function validateAppSettings(
     favoriteModels,
     lanes: settings.lanes,
     contextAlert: settings.contextAlert,
+    describeWorkBlocks: settings.describeWorkBlocks,
     claude: settings.claude,
   }
 }

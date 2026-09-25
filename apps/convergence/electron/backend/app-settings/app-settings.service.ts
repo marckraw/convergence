@@ -333,6 +333,10 @@ export class AppSettingsService {
       favoriteModels,
       lanes,
       contextAlert,
+      describeWorkBlocks:
+        input.describeWorkBlocks === undefined
+          ? existing.describeWorkBlocks
+          : input.describeWorkBlocks === true,
       claude:
         input.claude === undefined
           ? existing.claude

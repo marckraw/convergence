@@ -3,7 +3,13 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
-const sourcePath = `${root}truth-check.pure.ts`
+// The check lives with the app's block-sentence module (MAR-3395 CV3).
+const sourcePath = fileURLToPath(
+  new URL(
+    '../../../electron/backend/block-sentence/block-sentence.pure.ts',
+    import.meta.url,
+  ),
+)
 const original = readFileSync(sourcePath, 'utf8')
 const needle = "if (unknownPaths.length) reasons.push('invented-path')"
 if (!original.includes(needle))

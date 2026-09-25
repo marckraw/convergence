@@ -1,16 +1,13 @@
-export const LUNA_MODEL_ID = 'gpt-6-luna'
+// The model and its budget live with the app's block-sentence module
+// (MAR-3395 CV3 A1); the harness imports them back.
+import {
+  LUNA_MODEL_ID,
+  LUNA_ONE_SHOT_TIMEOUT_MS,
+} from '../../../electron/backend/block-sentence/block-sentence.pure.ts'
+
+export { LUNA_MODEL_ID, LUNA_ONE_SHOT_TIMEOUT_MS }
 export const LUNA_EFFORTS = ['low', 'medium', 'high'] as const
 export type LunaEffort = (typeof LUNA_EFFORTS)[number]
-
-/**
- * Whole-call budget for one helper turn.
- *
- * The app's own default is 20s. That budget cannot cover a cold `codex
- * app-server` start (the host allows 90s) plus a cloud answer, and the harness
- * already abandons a row at 120s. 110s lets the worker report the timeout
- * itself instead of the parent killing a silent process.
- */
-export const LUNA_ONE_SHOT_TIMEOUT_MS = 110_000
 
 export function parseLunaEffort(argv: readonly string[]): LunaEffort {
   const effort = argv[0] === '--effort' ? argv[1] : undefined

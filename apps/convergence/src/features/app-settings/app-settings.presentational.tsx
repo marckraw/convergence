@@ -41,6 +41,7 @@ import { ContextAlertFields } from './context-alert-fields.presentational'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
+import { SwitchRow } from '@/shared/ui/switch'
 import { PiModelVisibilityContainer } from './pi-model-visibility.container'
 import { ProviderAccountsContainer } from './provider-accounts.container'
 import { ProviderCredentialsContainer } from './provider-credentials.container'
@@ -68,6 +69,7 @@ interface AppSettingsDialogProps {
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
+  describeWorkBlocksDraft: boolean
   piModelIdsDraft: string[]
   updatesStatus: UpdateStatus
   updatesVersion: string | null
@@ -95,6 +97,7 @@ interface AppSettingsDialogProps {
   onInstallUpdate: () => void
   onOpenReleaseNotes: () => void
   onToggleDebugLogging: (next: boolean) => void
+  onToggleDescribeWorkBlocks: (next: boolean) => void
   onTogglePiModel: (modelId: string, next: boolean) => void
   onOpenDebugLogFolder: () => void
   commandCenterShortcutDraft: CommandCenterShortcutPrefs
@@ -134,6 +137,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
+  describeWorkBlocksDraft,
   piModelIdsDraft,
   updatesStatus,
   updatesVersion,
@@ -161,6 +165,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onInstallUpdate,
   onOpenReleaseNotes,
   onToggleDebugLogging,
+  onToggleDescribeWorkBlocks,
   onTogglePiModel,
   onOpenDebugLogFolder,
   commandCenterShortcutDraft,
@@ -313,6 +318,20 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 providers={providers}
                 extractionDraft={extractionDraft}
                 onExtractionModelChange={onExtractionModelChange}
+              />
+            </SettingsSubsection>
+            <SettingsSubsection
+              withDivider
+              title="Work blocks"
+              description="One short line under each folded block of tool steps, written after the turn ends."
+            >
+              <SwitchRow
+                id="describe-work-blocks"
+                label="Describe work blocks"
+                description="Uses GPT-6 Luna on your default Codex account, one request per block of three or more steps, after each turn. Each line is checked against the block before it is shown."
+                checked={describeWorkBlocksDraft}
+                disabled={isSaving}
+                onChange={onToggleDescribeWorkBlocks}
               />
             </SettingsSubsection>
             <SettingsSubsection

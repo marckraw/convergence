@@ -416,6 +416,16 @@ interface SessionCrewData {
   members: SessionCrewMemberData[]
 }
 
+/** One stored work-block sentence (MAR-3395 CV3), keyed by its first item. */
+export interface BlockSentenceData {
+  sessionId: string
+  firstItemId: string
+  lastItemId: string
+  sentence: string
+  model: string
+  createdAt: string
+}
+
 interface CrewHailData {
   id: string
   crewId: string
@@ -2016,6 +2026,10 @@ interface ElectronAPI {
       callback: (change: ContextDrillChangeData) => void,
     ) => () => void
   }
+  blockSentences: {
+    list: (sessionId: string) => Promise<BlockSentenceData[]>
+    onChanged: (callback: (event: { sessionId: string }) => void) => () => void
+  }
   crewHail: {
     listOpen: () => Promise<CrewHailData[]>
     acknowledge: (id: string) => Promise<void>
@@ -2588,6 +2602,7 @@ interface AppSettingsData {
   }
   lanes: LanesPrefsData
   contextAlert: ContextAlertSettingsData
+  describeWorkBlocks: boolean
 }
 
 type AppSettingsInputData = Omit<
@@ -2604,6 +2619,7 @@ type AppSettingsInputData = Omit<
   | 'favoriteModels'
   | 'lanes'
   | 'contextAlert'
+  | 'describeWorkBlocks'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -2621,6 +2637,7 @@ type AppSettingsInputData = Omit<
   }
   lanes?: LanesPrefsData
   contextAlert?: ContextAlertSettingsData
+  describeWorkBlocks?: boolean
 }
 
 type LocalModelTunnelStateData =

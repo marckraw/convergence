@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ConversationItem } from '@/entities/session'
+import type { ConversationItem } from './session.types'
 import {
   commonFolder,
   fullDisplayRows,

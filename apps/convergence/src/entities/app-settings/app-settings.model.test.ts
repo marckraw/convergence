@@ -28,6 +28,7 @@ const EMPTY: AppSettings = {
   piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
   contextAlert: DEFAULT_CONTEXT_ALERT,
+  describeWorkBlocks: false,
 }
 
 type BroadcastCallback = (settings: AppSettings) => void
@@ -89,6 +90,7 @@ describe('useAppSettingsStore', () => {
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
       contextAlert: DEFAULT_CONTEXT_ALERT,
+      describeWorkBlocks: false,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     }
@@ -126,6 +128,7 @@ describe('useAppSettingsStore', () => {
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
       contextAlert: DEFAULT_CONTEXT_ALERT,
+      describeWorkBlocks: false,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     }
@@ -157,6 +160,7 @@ describe('useAppSettingsStore', () => {
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
       contextAlert: DEFAULT_CONTEXT_ALERT,
+      describeWorkBlocks: false,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     }

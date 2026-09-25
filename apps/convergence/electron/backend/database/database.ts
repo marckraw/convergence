@@ -1,4 +1,5 @@
 import { migrateReleaseActs } from './release-act-migration.service'
+import { migrateBlockSentences } from '../block-sentence/block-sentence-migration.service'
 import Database from 'better-sqlite3'
 import { APP_SETTINGS_KEY } from '../app-settings/app-settings.constants'
 import {
@@ -2346,6 +2347,8 @@ export function getDatabase(dbPath?: string): Database.Database {
     // above rather than being folded into it.
     migrateWorkLedgerBlocked(database)
     migrateReleaseActs(database)
+    // The model sentences for work blocks (MAR-3395): a new table of its own.
+    migrateBlockSentences(database)
     database.transaction(() => {
       if (getTableColumnNames(database, 'sessions').has('origin_kind')) return
       database.exec(
