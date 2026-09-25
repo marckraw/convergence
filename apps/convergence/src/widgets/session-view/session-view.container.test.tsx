@@ -384,7 +384,7 @@ describe('SessionView', () => {
         pill: screen.queryByTestId('harness-pill')?.textContent,
         marker: screen.queryByTestId('compaction-marker')?.textContent,
       }).toEqual({
-        pill: 'Harness · compacted',
+        pill: 'Harness',
         marker: 'Compacted (auto) · 84k → 12k tokens',
       }),
     )
@@ -456,6 +456,27 @@ describe('SessionView', () => {
   afterEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
+  })
+
+  it('CH1 R4 names the running code session Stop button', () => {
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'running' }
+          : session,
+      ),
+    }))
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    const name = useSessionStore
+      .getState()
+      .sessions.find((session) => session.id === 'session-1')!.name
+    const stop = screen.getByRole('button', { name: /^Stop / })
+    expect(stop).toHaveAttribute('aria-label', `Stop ${name}`)
+    expect(stop).toHaveAttribute('title', `Stop ${name}`)
   })
 
   it('MAR-3288 R5 says Compacting context… and never Finished while compacting — mutation drop the activity prop turns red', () => {
@@ -897,7 +918,7 @@ describe('SessionView', () => {
       screen.getByRole('button', { name: 'Session details' }),
     )
 
-    const branchRow = await screen.findByText('Branch')
+    const branchRow = await screen.findByText('Checkout branch')
     const rows = branchRow.closest('div')?.parentElement
     expect(rows?.textContent).toContain('master')
     expect(rows?.textContent).toContain('Pull request')

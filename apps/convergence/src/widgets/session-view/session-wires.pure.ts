@@ -12,6 +12,7 @@
 export interface OutgoingWireFact {
   sourceSessionId: string
   armed: boolean
+  conditionToken?: string | null
 }
 
 /**
@@ -42,19 +43,41 @@ export function formatSessionWireCount(total: number): string {
  * The sentence then has to say so, or the count is a promise the wires are not
  * keeping.
  */
-export function formatSessionWireSummary(total: number, armed: number): string {
+export function countSessionWires(wires: readonly OutgoingWireFact[]) {
+  let unconditional = 0
+  let conditional = 0
+  let disarmed = 0
+  for (const wire of wires) {
+    if (!wire.armed) disarmed++
+    else if (wire.conditionToken?.trim()) conditional++
+    else unconditional++
+  }
+  return { unconditional, conditional, disarmed }
+}
+
+export function formatSessionWireSummary(
+  unconditional: number,
+  conditional: number,
+  disarmed: number,
+): string {
+  const total = unconditional + conditional + disarmed
   const wires = formatSessionWireCount(total)
   const leave = total === 1 ? 'leaves' : 'leave'
   if (total === 0) return 'Nothing leaves this session.'
-  if (armed === 0) {
+  if (disarmed === total) {
     return total === 1
       ? `${wires} ${leave} this session, and it is disarmed.`
       : `${wires} ${leave} this session. Every one is disarmed.`
   }
-  if (armed === total) {
+  if (unconditional === total) {
     return `${wires} ${total === 1 ? 'fires' : 'fire'} when this session finishes.`
   }
-  return `${wires} leave this session; ${armed} of them ${
-    armed === 1 ? 'is' : 'are'
-  } armed.`
+  const parts: string[] = []
+  if (unconditional)
+    parts.push(
+      `${unconditional} ${unconditional === 1 ? 'fires' : 'fire'} when it finishes`,
+    )
+  if (conditional) parts.push(`${conditional} only on a matching BATON line`)
+  if (disarmed) parts.push(`${disarmed} disarmed`)
+  return `${wires} ${leave} this session: ${parts.join(', ')}.`
 }

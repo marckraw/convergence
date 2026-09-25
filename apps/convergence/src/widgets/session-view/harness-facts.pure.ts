@@ -2,12 +2,35 @@ import type { SessionHarnessFacts } from '../../shared/types/harness-facts.types
 export function harnessPill(facts: SessionHarnessFacts | null): {
   label: string
   alert: boolean
+  reason: string | null
 } {
   const current = facts?.currentTurn
-  const parts = ['Harness']
-  if (current?.hooks.length) parts.push(`hooks ${current.hooks.length}`)
   const retry = current?.retries
-  if (retry)
+  const servers = facts?.init?.mcpServers
+  const needsAuth =
+    servers?.others.filter((server) => server.status === 'needs-auth').length ??
+    0
+  const failed =
+    servers?.others.filter((server) => server.status === 'failed').length ?? 0
+  const omitted = servers?.omittedAlerts ?? 0
+  const reasons: string[] = []
+  if (needsAuth)
+    reasons.push(
+      `${needsAuth} integration${needsAuth === 1 ? ' needs' : 's need'} sign-in`,
+    )
+  if (failed)
+    reasons.push(`${failed} integration${failed === 1 ? '' : 's'} failed`)
+  // Omitted alerts carry a count, but no status breakdown. Do not guess it.
+  if (omitted)
+    reasons.push(
+      `${omitted} more integration${omitted === 1 ? ' needs' : 's need'} attention`,
+    )
+  if (retry?.state === 'in-flight') reasons.push('retrying')
+  const reason = reasons.length ? reasons.join(' · ') : null
+  const parts = ['Harness']
+  if (reason) parts.push(reason)
+  if (current?.hooks.length) parts.push(`hooks ${current.hooks.length}`)
+  if (retry && retry.state !== 'in-flight')
     parts.push(
       retry.state === 'failed'
         ? 'retry failed'
@@ -16,16 +39,7 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
           : `retry ${retry.attempts}`,
     )
   if (current?.denials?.length) parts.push(`denied ${current.denials.length}`)
-  if (facts?.compactions.length) parts.push('compacted')
-  return {
-    label: parts.join(' · '),
-    alert:
-      retry?.state === 'in-flight' ||
-      !!facts?.init?.mcpServers?.others.some((server) =>
-        isMcpAlertStatus(server.status),
-      ) ||
-      (facts?.init?.mcpServers?.omittedAlerts ?? 0) > 0,
-  }
+  return { label: parts.join(' · '), alert: reason !== null, reason }
 }
 export function compactionLabel(
   fact: SessionHarnessFacts['compactions'][number],

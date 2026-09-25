@@ -33,5 +33,5 @@ export function relayMuteTitle(muted: boolean, armedOutgoing: number): string {
   const wires = armedOutgoing === 1 ? '1 wire' : `${armedOutgoing} wires`
   return muted
     ? `This send will not fire the ${wires} leaving this session. It resets after you send.`
-    : `Sending will fire the ${wires} leaving this session. Switch this on to send quiet, once.`
+    : `Sending may fire the ${wires} leaving this session when it finishes, if their conditions match. Switch this on to send quiet, once.`
 }

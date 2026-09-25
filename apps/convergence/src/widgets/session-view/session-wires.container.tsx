@@ -6,6 +6,7 @@ import { useSessionRelayStore } from '@/entities/session-relay'
 import { buildRelaySentence } from '@/features/mission-control'
 import { SessionWires } from './session-wires.presentational'
 import {
+  countSessionWires,
   formatSessionWireSummary,
   selectOutgoingWires,
 } from './session-wires.pure'
@@ -49,13 +50,14 @@ export const SessionWiresContainer: FC<SessionWiresContainerProps> = ({
     [outgoing, globalSessions, projects],
   )
 
-  const armedCount = outgoing.filter((relay) => relay.armed).length
+  const { unconditional, conditional, disarmed } = countSessionWires(outgoing)
+  const armedCount = unconditional + conditional
 
   return (
     <SessionWires
       lines={lines}
       armedCount={armedCount}
-      summary={formatSessionWireSummary(lines.length, armedCount)}
+      summary={formatSessionWireSummary(unconditional, conditional, disarmed)}
     />
   )
 }

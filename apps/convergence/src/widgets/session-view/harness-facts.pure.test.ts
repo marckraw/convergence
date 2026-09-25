@@ -26,12 +26,13 @@ it('R9 pill uses the same current-turn fold as the popover — mutation separate
     init: null,
   } as unknown as SessionHarnessFacts
   expect(harnessPill(facts)).toEqual({
-    label: 'Harness · hooks 2 · retry 3 · denied 1 · compacted',
+    label: 'Harness · hooks 2 · retry 3 · denied 1',
     alert: false,
+    reason: null,
   })
 })
 it.each([
-  ['in-flight', 'retry 2', true],
+  ['in-flight', 'retrying', true],
   ['failed', 'retry failed', false],
   ['unknown', 'retry ?', false],
 ] as const)(
@@ -46,7 +47,11 @@ it.each([
       compactions: [],
       init: null,
     } as unknown as SessionHarnessFacts
-    expect(harnessPill(facts)).toEqual({ label: `Harness · ${text}`, alert })
+    expect(harnessPill(facts)).toEqual({
+      label: `Harness · ${text}`,
+      alert,
+      reason: alert ? text : null,
+    })
   },
 )
 it('R3 disconnected MCP is red — mutation ignore MCP status', () => {
@@ -184,4 +189,44 @@ it('O1 R4 hides compactions before a partial window and restores them when their
     ['first', [facts[0]]],
     ['last', [facts[1]]],
   ])
+})
+
+function pillFacts(statuses: string[], omittedAlerts = 0): SessionHarnessFacts {
+  return {
+    currentTurn: null,
+    compactions: [compact],
+    init: {
+      mcpServers: {
+        others: statuses.map((status) => ({ name: status, status })),
+        omittedAlerts,
+      },
+    },
+  } as unknown as SessionHarnessFacts
+}
+it('CH1 R1 the alert reason leads the label even with compaction history', () => {
+  expect(harnessPill(pillFacts(['needs-auth']))).toEqual({
+    label: 'Harness · 1 integration needs sign-in',
+    alert: true,
+    reason: '1 integration needs sign-in',
+  })
+  expect(harnessPill(pillFacts(['failed', 'failed']))).toEqual({
+    label: 'Harness · 2 integrations failed',
+    alert: true,
+    reason: '2 integrations failed',
+  })
+})
+it('CH1 R1 compaction history alone is quiet and absent from the pill', () => {
+  expect(harnessPill(pillFacts([]))).toEqual({
+    label: 'Harness',
+    alert: false,
+    reason: null,
+  })
+})
+it('CH1 R1 omitted alerts count without inventing their statuses', () => {
+  expect(harnessPill(pillFacts(['needs-auth'], 2))).toEqual({
+    label:
+      'Harness · 1 integration needs sign-in · 2 more integrations need attention',
+    alert: true,
+    reason: '1 integration needs sign-in · 2 more integrations need attention',
+  })
 })
