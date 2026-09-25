@@ -186,13 +186,13 @@ afterEach(() => {
   localStorage.clear()
 })
 
-async function mount(shape: 'compact' | 'expanded' = 'compact') {
+async function mount(shape: 'compact' | 'expanded' = 'compact', open = 2) {
   await act(async () => {
     render(<WavePanel reservedWidth={RESERVED} />)
   })
   await screen.findByLabelText('Loom')
   // The rows land a microtask after the crews do.
-  await screen.findByText(/^Now · 2 open/)
+  await screen.findByText(new RegExp(`^Now · ${open} open`))
   if (shape === 'expanded') {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
@@ -751,4 +751,42 @@ describe('MAR-3194 R6 with a real outside door (MAR-3236 verdict): Plan is still
       'row',
     ])
   })
+})
+
+describe('MAR-3457 R6: the mastermind survives issue search through the board and both shells', () => {
+  it.each(['compact', 'expanded'] as const)(
+    '%s keeps the mastermind and its unfiltered verdict count',
+    async (shape) => {
+      crews[0].members.unshift(residentSeat('fable', { role: 'mastermind' }))
+      crews[0].sessionIds.unshift('session-fable')
+      useSessionStore.setState({
+        globalSessions: [
+          ...useSessionStore.getState().globalSessions,
+          session('session-fable'),
+        ],
+      })
+      ledgers['crew-1'].entries = [
+        ...ROWS,
+        row('EX-RETURN', 'A returned lap', { state: 'returned' }),
+      ]
+      await mount(shape, 3)
+      const mastermind = screen.getByRole('region', { name: 'Mastermind' })
+      expect(mastermind).toHaveTextContent('fable')
+      expect(mastermind).toHaveTextContent('1 return waits for its verdict')
+      expect(
+        mastermind.compareDocumentPosition(
+          screen.getByRole('region', { name: 'Horses' }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      await search('nothing-matches-this')
+      expect(
+        screen.getByRole('region', { name: 'Mastermind' }),
+      ).toHaveTextContent('fable')
+      expect(
+        screen.getByRole('region', { name: 'Mastermind' }),
+      ).toHaveTextContent('1 return waits for its verdict')
+      expect(horseKeys()).toEqual([])
+      expect(miss()).toBeTruthy()
+    },
+  )
 })
