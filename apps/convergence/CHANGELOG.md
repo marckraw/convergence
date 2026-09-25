@@ -1,5 +1,11 @@
 # convergence
 
+## 0.89.0
+
+### Minor Changes
+
+- 9051eed: The conversation header always shows the project, the conversation's name and a Stop button; other controls move into More when space runs out.
+
 ## 0.88.3
 
 ### Patch Changes
