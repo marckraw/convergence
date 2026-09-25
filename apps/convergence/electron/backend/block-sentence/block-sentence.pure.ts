@@ -153,9 +153,6 @@ export function blockRecordsFromItems(
   return [...blockRecords(items)]
 }
 
-const TRUTH_PATH_PATTERN =
-  /(?:[\w.-]+\/)+[\w.-]+|\b[\w-]+\.(?:json|tsx?|css|md)\b/g
-
 /** A directory-listing command: its output lines are names the block saw. */
 const LISTING_COMMAND = /^ls(?:\s|$)/
 
@@ -174,6 +171,33 @@ export function normalizeTruthPath(path: string): string {
 }
 
 /**
+ * What reads as a path in text: a slash path (`src/a.ts`, `./a`, `../a`,
+ * `/Users/me/a.ts`, `node_modules/@types/x`) or any dotted name
+ * (`Cargo.toml`, `index.ts`, `vite.config.mjs`). CV2's check read sentences
+ * with this pattern; since R13 the truth set is read with it too.
+ */
+const PATH_TOKEN_PATTERN =
+  /(?:\.?\.?\/)?(?:[\w@.-]+\/)+[\w@.-]+|\b[\w-]+(?:\.[\w-]+)+/gu
+
+/**
+ * The one path reader of the gate (R13): `deriveBlockTruth` finds the paths
+ * a block's records name with it, and `truthCheck` finds the paths a
+ * sentence names with it, both through `normalizeTruthPath`. Two readers of
+ * one fact let a path the records plainly name (`cat Cargo.toml`) be read in
+ * the sentence and missed in the records -- a paid line, dropped. With one
+ * reader, every token a sentence can name was looked for in the records the
+ * same way.
+ */
+export function readPathTokens(text: string): string[] {
+  const tokens: string[] = []
+  for (const match of text.matchAll(PATH_TOKEN_PATTERN)) {
+    const path = normalizeTruthPath(match[0])
+    if (path) tokens.push(path)
+  }
+  return tokens
+}
+
+/**
  * Every contiguous run of a path's segments (R7): for `Users/me/src/app/a.ts`
  * that is `src/app`, `src/app/a.ts`, `app/a.ts`, `a.ts`, `Users/me`, and so
  * on. A sentence names a path the way a person would -- from the project,
@@ -188,18 +212,15 @@ function addSubPaths(paths: Set<string>, path: string): void {
 
 /**
  * What a sentence may name, from exactly the records sent (A3): every
- * contiguous sub-path of each literal path (R7), the literal entries a
- * listing printed, and the tool names. The spike's generator derives
- * `fixtures.json` with this same function.
+ * contiguous sub-path of each path `readPathTokens` finds (R7, R13), the
+ * literal entries a listing printed, and the tool names. The spike's
+ * generator derives `fixtures.json` with this same function.
  */
 export function deriveBlockTruth(records: readonly BlockRecord[]): BlockTruth {
   const paths = new Set<string>()
   for (const record of records) {
     const text = Object.values(record).join(' ')
-    for (const match of text.matchAll(TRUTH_PATH_PATTERN)) {
-      const path = normalizeTruthPath(match[0])
-      if (path) addSubPaths(paths, path)
-    }
+    for (const path of readPathTokens(text)) addSubPaths(paths, path)
     if (
       record.type === 'tool-result' &&
       LISTING_COMMAND.test(record.toolName)
@@ -305,16 +326,12 @@ export function truthCheck(sentence: string, block: TruthBlock) {
   const wordCount = text ? text.split(/\s+/u).length : 0
   if (wordCount > 14) reasons.push('over-14-words')
 
-  // Mask dotted paths before counting sentence punctuation.
-  const pathPattern =
-    /(?:\.?\.?\/)?(?:[\w@.-]+\/)+[\w@.-]+|\b[\w-]+(?:\.[\w-]+)+/gu
-  // R7: the same spelling the truth set was derived through.
+  // R13: the sentence is read with the same reader the truth set was.
   const normalize = normalizeTruthPath
-  const pathMentions = [...text.matchAll(pathPattern)].map((match) =>
-    normalize(match[0]),
-  )
+  const pathMentions = readPathTokens(text)
+  // Mask the same paths before counting sentence punctuation.
   const masked = text.replace(
-    pathPattern,
+    PATH_TOKEN_PATTERN,
     (match) => `PATH${match.match(/[.!?]+$/u)?.[0] ?? ''}`,
   )
   const sentences = masked

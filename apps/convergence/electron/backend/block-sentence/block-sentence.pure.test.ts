@@ -13,6 +13,8 @@ import {
   buildBlockPrompt,
   deriveBlockTruth,
   promptProviderName,
+  readPathTokens,
+  truthCheck,
   unwrapShellCommand,
   type BlockPrompt,
   type BlockRecord,
@@ -382,6 +384,156 @@ describe('Codex records in the spike shape (R8)', () => {
     ])
     expect(records).toEqual([
       { type: 'tool-result', toolName: 'pwd', outputText: 'pwd: /tmp/x' },
+    ])
+  })
+})
+
+/** A Claude Code tool call as the app records it (pretty-printed input). */
+function claudeCall(
+  id: string,
+  toolName: string,
+  input: Record<string, unknown>,
+): ConversationItem {
+  return {
+    ...base(id, 'tool-use', 'claude-code'),
+    kind: 'tool-call',
+    toolName,
+    inputText: JSON.stringify(input, null, 2),
+  }
+}
+
+/** A Codex step as `codex-provider.ts` records it, the command zsh-wrapped. */
+function codexWrapped(id: string, command: string, output: string) {
+  return codexCommand(
+    id,
+    `/bin/zsh -lc '${command.replaceAll(`'`, `'\\''`)}'`,
+    output,
+  )
+}
+
+describe('one path reader on both sides of the gate (R13)', () => {
+  /** Production-shaped blocks: what Claude Code and Codex actually record. */
+  const productionBlocks: Array<[string, ConversationItem[]]> = [
+    [
+      'claude-code',
+      [
+        claudeCall('r1', 'Read', {
+          file_path: '/Users/me/proj/node_modules/@scope/pkg/index.ts',
+        }),
+        claudeCall('r2', 'Read', { file_path: '/Users/me/proj/Cargo.toml' }),
+        claudeCall('g1', 'Grep', {
+          pattern: 'vite.config',
+          path: '/Users/me/proj/node_modules/@types/node',
+        }),
+        claudeCall('w1', 'Write', {
+          file_path: '/Users/me/proj/.github/workflows/ci.yml',
+          content:
+            'uses: actions/setup-node@v4\nrun: npm ci && tsc -p tsconfig.node.json',
+        }),
+        claudeCall('e1', 'Edit', {
+          file_path: './scripts/release.sh',
+          old_string: 'v1.2.3',
+          new_string: 'v1.2.4',
+        }),
+      ],
+    ],
+    [
+      'codex',
+      [
+        codexWrapped(
+          'c1',
+          'cat Cargo.toml',
+          '[package]\nname = "x"\nedition = "2021"',
+        ),
+        codexWrapped(
+          'c2',
+          'rg -n useState packages/@scope/ui/src',
+          'packages/@scope/ui/src/button.tsx:3: import { useState } from "react"',
+        ),
+        codexWrapped('c3', 'ls ../sibling/crates', 'core\ncli\nREADME.md'),
+        codexWrapped(
+          'c4',
+          "sed -n '1,20p' vite.config.mjs",
+          'export default defineConfig({ plugins: [react()] })',
+        ),
+        codexWrapped('c5', 'cat /etc/hosts', '127.0.0.1 localhost'),
+      ],
+    ],
+  ]
+
+  const cases: Array<{ name: string; records: BlockRecord[] }> = [
+    ...fixtures.map((block) => ({
+      name: block.id,
+      records: block.items as BlockRecord[],
+    })),
+    ...productionBlocks.map(([provider, items]) => ({
+      name: provider,
+      records: blockRecordsFromItems(items),
+    })),
+  ]
+
+  it('a sentence quoting any token the reader finds in a record passes the path gate', () => {
+    let tokens = 0
+    for (const { name, records } of cases) {
+      const truth = deriveBlockTruth(records)
+      for (const record of records)
+        for (const field of Object.values(record))
+          for (const token of readPathTokens(field)) {
+            tokens += 1
+            for (const sentence of [`Read ${token}.`, `Read \`${token}\`.`]) {
+              const result = truthCheck(sentence, { truth })
+              expect(result.unknownPaths, `${name}: ${sentence}`).toEqual([])
+              expect(result.pass, `${name}: ${sentence}`).toBe(true)
+            }
+          }
+    }
+    // Not vacuous: the fixtures and the production blocks name many paths.
+    expect(tokens).toBeGreaterThan(40)
+  })
+
+  it('`cat Cargo.toml` → "Read Cargo.toml." passes; an invented Cargo.lock still fails', () => {
+    const truth = deriveBlockTruth(
+      blockRecordsFromItems([
+        codexWrapped('c1', 'cat Cargo.toml', '[package]\nname = "x"'),
+      ]),
+    )
+    expect(acceptBlockSentence('Read Cargo.toml.', truth)).toBe(
+      'Read Cargo.toml.',
+    )
+    expect(acceptBlockSentence('Read Cargo.lock.', truth)).toBeNull()
+    expect(
+      acceptBlockSentence('Read Cargo.toml and Cargo.lock.', truth),
+    ).toBeNull()
+  })
+
+  it('`@scope/pkg/index.ts` passes, from an absolute Claude path', () => {
+    const truth = deriveBlockTruth(
+      blockRecordsFromItems([
+        claudeCall('r1', 'Read', {
+          file_path: '/Users/me/proj/node_modules/@scope/pkg/index.ts',
+        }),
+      ]),
+    )
+    for (const sentence of [
+      'Read @scope/pkg/index.ts.',
+      'Read node_modules/@scope/pkg/index.ts.',
+    ])
+      expect(acceptBlockSentence(sentence, truth), sentence).toBe(sentence)
+    expect(acceptBlockSentence('Read @scope/pkg/main.ts.', truth)).toBeNull()
+    expect(acceptBlockSentence('Read @other/pkg/index.ts.', truth)).toBeNull()
+  })
+
+  it('reads the same tokens the check reads, normalized once', () => {
+    expect(
+      readPathTokens(
+        'cat ./Cargo.toml /Users/me/a.ts node_modules/@types/x src/app/. ../up/b.rs',
+      ),
+    ).toEqual([
+      'Cargo.toml',
+      'Users/me/a.ts',
+      'node_modules/@types/x',
+      'src/app',
+      '../up/b.rs',
     ])
   })
 })
