@@ -156,16 +156,17 @@ script, or `.github/workflows/publish-mac-release.yml`, also run
 `npm run package:mac:unsigned` locally (from the repo root) and confirm that
 `apps/convergence/release/latest-mac.yml` still lists both the x64 and arm64 ZIPs under
 `files[]`. Missing or incorrect entries break auto-update silently for
-everyone on that arch — see `docs/specs/auto-updates.md` and
-`docs/runbook/auto-updates.md`.
+everyone on that arch — see `docs/runbook/auto-updates.md`.
 
 ## Architecture and File Organization
 
 Durable repo source of truth:
 
-- `docs/specs/project-spec.md`
-- `docs/specs/phase-0-repo-bootstrap.md`
 - `docs/architecture/quick-reference.md`
+
+It replaced the project spec and the phase-0 bootstrap spec, both deleted on
+2026-06-01 (`git show 7ef9e546^:docs/specs/project-spec.md`,
+`git show 7ef9e546^:docs/specs/phase-0-repo-bootstrap.md`).
 
 ### FSD-lite (renderer)
 

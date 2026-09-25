@@ -4,8 +4,8 @@ Convergence uses a single-context documentation layout.
 
 Authoritative domain and architecture docs:
 
-- `docs/specs/project-spec.md`
-- `docs/architecture/quick-reference.md`
+- `docs/architecture/quick-reference.md` — it replaced the project spec,
+  deleted on 2026-06-01 (`git show 7ef9e546^:docs/specs/project-spec.md`)
 - `docs/adr/`
 
 Feature specs and implementation plans live under:

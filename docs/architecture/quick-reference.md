@@ -27,7 +27,8 @@ Later product focus:
 - terminal support
 - richer project structures with multiple repositories
 - remotely reachable clients, cloud control plane, and execution-host
-  boundaries as described in `docs/specs/convergence-v2-boundaries.md`
+  boundaries as described in the v2 boundaries spec, deleted on 2026-06-01
+  (`git show 7ef9e546^:docs/specs/convergence-v2-boundaries.md`)
 - broader provider support if needed
 
 ## Workspace layout (MAR-2706, MAR-2737)
@@ -272,7 +273,7 @@ Sessions support image, PDF, and UTF-8 text attachments on outgoing messages:
 - **Persistence:** attachment ids live on normalized user `ConversationItem` payloads; attachment rows live in dedicated `attachments` table
 - **PDFs are Claude-Code-only**; Codex and Pi providers report `supportsPdf: false` and the composer surfaces a capability error with red chip outline + send-disabled state
 
-Full spec: `docs/specs/session-attachments.md`. History-render + post-normalization regression fix: `docs/specs/attachments-in-history.md`.
+Full spec and the history-render + post-normalization regression fix were deleted on 2026-06-01: `git show 7ef9e546^:docs/specs/session-attachments.md` and `git show 7ef9e546^:docs/specs/attachments-in-history.md`.
 
 ### 8. Mid-run session input
 
@@ -290,8 +291,8 @@ Supported V1 behavior:
 
 Queued follow-ups are persisted in `session_queued_inputs`, broadcast through
 session queue patch IPC, rendered near the composer, and cancellable while
-still in `queued` state. Full spec:
-`docs/specs/mid-run-session-input.md`.
+still in `queued` state. Full spec deleted on 2026-06-01:
+`git show 7ef9e546^:docs/specs/mid-run-session-input.md`.
 
 ### 9. Auto-updates
 
@@ -300,7 +301,7 @@ Packaged builds self-update from public GitHub Releases via
 IPC; a scheduler runs a startup check (+10s) and a 4h interval.
 The user is always asked before download and before install.
 Dev mode (`app.isPackaged === false`) short-circuits every update
-code path. Full spec: `docs/specs/auto-updates.md`.
+code path. Operator runbook: `docs/runbook/auto-updates.md`.
 
 ### 10. Flows: the relay engine
 

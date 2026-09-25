@@ -1,9 +1,10 @@
 # Auto-updates — operator runbook
 
-Short operational guide for the auto-update system. See
-`docs/specs/auto-updates.md` for the full design and
-`docs/specs/auto-updates-plan.md` for the phased implementation
-history.
+Short operational guide for the auto-update system, and the durable
+reference for it since the design spec and the phased implementation
+plan were deleted on 2026-06-01
+(`git show 7ef9e546^:docs/specs/auto-updates.md`,
+`git show 7ef9e546^:docs/specs/auto-updates-plan.md`).
 
 ## Publishing a release
 
