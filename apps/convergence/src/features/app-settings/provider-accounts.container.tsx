@@ -14,6 +14,10 @@ import {
 } from '@/entities/provider-account'
 import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsFields } from './provider-accounts.presentational'
+import {
+  mayRefreshChatGptAppsOnFocus,
+  settleChatGptAppsRead,
+} from './chatgpt-apps-refresh.pure'
 
 function describeError(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
@@ -68,6 +72,7 @@ export const ProviderAccountsContainer: FC = () => {
     message: string
   } | null>(null)
   const refreshChatGptApps = useRef<(() => void) | null>(null)
+  const returningFromChatGpt = useRef(false)
   const [isLoadingConnectors, setIsLoadingConnectors] = useState(false)
   const [authorizingServerName, setAuthorizingServerName] = useState<
     string | null
@@ -329,32 +334,44 @@ export const ProviderAccountsContainer: FC = () => {
     const accountId = expandedConnectorsAccountId
     let live = true
     let revision = 0
+    let lastReadStartedAt: number | null = null
     const refresh = async (forceRefetch: boolean) => {
       const request = ++revision
+      lastReadStartedAt = Date.now()
       setIsLoadingChatGptApps(true)
       setChatGptLinkError(null)
+      let read: ProviderAccountChatGptApps
       try {
-        const result = await providerAccountApi.listChatGptApps({
+        read = await providerAccountApi.listChatGptApps({
           accountId,
           forceRefetch,
         })
-        if (live && request === revision) setChatGptApps(result)
       } catch {
-        if (live && request === revision)
-          setChatGptApps({
-            providerAccountId: accountId,
-            apps: [],
-            requiresChatGpt: false,
-            error: 'Could not read ChatGPT apps. Try Refresh.',
-          })
-      } finally {
-        if (live && request === revision) setIsLoadingChatGptApps(false)
+        read = {
+          providerAccountId: accountId,
+          apps: [],
+          requiresChatGpt: false,
+          error: 'Could not read ChatGPT apps. Try Refresh.',
+        }
+      }
+      if (live && request === revision) {
+        setChatGptApps((shown) => settleChatGptAppsRead(shown, read))
+        setIsLoadingChatGptApps(false)
       }
     }
     const onFocus = () => {
+      if (
+        !mayRefreshChatGptAppsOnFocus({
+          lastReadStartedAt,
+          now: Date.now(),
+          returningFromChatGpt: returningFromChatGpt.current,
+        })
+      )
+        return
+      returningFromChatGpt.current = false
       void refresh(true)
     }
-    refreshChatGptApps.current = onFocus
+    refreshChatGptApps.current = () => void refresh(true)
     void refresh(false)
     window.addEventListener('focus', onFocus)
     return () => {
@@ -366,6 +383,7 @@ export const ProviderAccountsContainer: FC = () => {
 
   const handleChatGptLink = async (accountId: string, appId?: string) => {
     setChatGptLinkError(null)
+    returningFromChatGpt.current = true
     try {
       if (appId) await providerAccountApi.manageChatGptApp({ accountId, appId })
       else await providerAccountApi.browseChatGptApps()

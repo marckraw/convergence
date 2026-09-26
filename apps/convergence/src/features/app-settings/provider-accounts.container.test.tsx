@@ -15,6 +15,7 @@ import type {
 } from '@/entities/provider-account'
 import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsContainer } from './provider-accounts.container'
+import { CHATGPT_APPS_FOCUS_INTERVAL_MS } from './chatgpt-apps-refresh.pure'
 import { ProviderAccountMcpService } from '../../../electron/backend/provider-account/provider-account-mcp.service'
 import type { ProviderAccountRepository } from '../../../electron/backend/provider-account/provider-account.repository'
 import type { CodexServerHostRegistry } from '../../../electron/backend/provider/codex/codex-server-host'
@@ -1123,31 +1124,53 @@ describe('MAR-3458 ChatGPT apps', () => {
         service.listChatGptApps(accountId, forceRefetch),
     )
   }
-  it('R6 renders an accessible but not installed app without claiming installation', async () => {
+  it('R6/MAR-3485 an installed app Codex cannot use says so, under its app/read name', async () => {
     const request = vi.fn(async (method: string) => {
       if (method === 'account/read') return { account: { type: 'chatgpt' } }
-      if (method === 'app/installed') return { apps: [] }
-      if (method === 'app/list')
+      if (method === 'app/installed')
         return {
-          data: [
+          apps: [
             {
-              id: 'accessible-only',
-              name: 'Accessible only',
-              isAccessible: true,
-              isEnabled: true,
-              installUrl: 'https://chatgpt.com/apps/accessible-only',
+              id: 'hidden',
+              runtimeName: 'hidden-runtime',
+              enabled: true,
+              callable: false,
             },
           ],
-          nextCursor: null,
+        }
+      if (method === 'app/read')
+        return {
+          apps: [{ id: 'hidden', name: 'Hidden app', installUrl: null }],
+          missingAppIds: [],
         }
       throw new Error(`Unexpected RPC ${method}`)
     })
     stubChatGptHost(vi.fn(async (work) => work({ request })))
     const group = await open()
-    const name = await within(group).findByText('Accessible only')
+    const name = await within(group).findByText('Hidden app')
     expect(name.nextElementSibling?.textContent).toBe(
       'Tools not available to Codex here',
     )
+    expect(request.mock.calls.map(([method]) => method)).not.toContain(
+      'app/list',
+    )
+  })
+  it('MAR-3485 a Cloudflare challenge page never reaches the screen', async () => {
+    stubChatGptHost(
+      vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'failed to list apps: Request failed with status 403 Forbidden: <html><head><style>body{}</style></head><body><script>window._cf_chl_opt={}</script></body></html>',
+          ),
+        ),
+    )
+    const group = await open()
+    const alert = await within(group).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      "Could not read ChatGPT apps: ChatGPT's bot check refused the request (403). The apps themselves may still work in conversations. Try Refresh in a minute.",
+    )
+    expect(alert.textContent).not.toMatch(/[<>{}]|_cf_chl/)
   })
   it('R7 renders the host rejection reason and retains configured servers', async () => {
     const message =
@@ -1191,36 +1214,133 @@ describe('MAR-3458 ChatGPT apps', () => {
     )
     expect(providerAccounts.browseChatGptApps).toHaveBeenCalledExactlyOnceWith()
   })
-  it('R4 focus triggers one forced refetch, Refresh does too, closed section does neither', async () => {
-    fireEvent.focus(window)
-    expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
-    const group = await open()
-    await within(group).findByText('Figma')
-    expect(providerAccounts.listChatGptApps).toHaveBeenCalledExactlyOnceWith({
-      accountId: 'acct-a',
-      forceRefetch: false,
-    })
-    providerAccounts.listChatGptApps.mockClear()
-    fireEvent.focus(window)
-    await waitFor(() =>
+  it('R4/MAR-3485 focus re-reads at most once per interval, Refresh always does, a closed section never', async () => {
+    const realNow = Date.now.bind(Date)
+    let skew = 0
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockImplementation(() => realNow() + skew)
+    try {
+      fireEvent.focus(window)
+      expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
+      const group = await open()
+      await within(group).findByText('Figma')
       expect(providerAccounts.listChatGptApps).toHaveBeenCalledExactlyOnceWith({
         accountId: 'acct-a',
+        forceRefetch: false,
+      })
+      providerAccounts.listChatGptApps.mockClear()
+      fireEvent.focus(window)
+      expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
+      skew += CHATGPT_APPS_FOCUS_INTERVAL_MS
+      fireEvent.focus(window)
+      await waitFor(() =>
+        expect(
+          providerAccounts.listChatGptApps,
+        ).toHaveBeenCalledExactlyOnceWith({
+          accountId: 'acct-a',
+          forceRefetch: true,
+        }),
+      )
+      fireEvent.focus(window)
+      await waitFor(() =>
+        expect(
+          within(group).getByRole('button', { name: 'Refresh' }),
+        ).not.toBeDisabled(),
+      )
+      expect(providerAccounts.listChatGptApps).toHaveBeenCalledTimes(1)
+      fireEvent.click(within(group).getByRole('button', { name: 'Refresh' }))
+      await waitFor(() =>
+        expect(providerAccounts.listChatGptApps).toHaveBeenCalledTimes(2),
+      )
+      expect(providerAccounts.listChatGptApps).toHaveBeenLastCalledWith({
+        accountId: 'acct-a',
         forceRefetch: true,
-      }),
-    )
+      })
+      await waitFor(() =>
+        expect(
+          within(group).getByRole('button', { name: 'Refresh' }),
+        ).not.toBeDisabled(),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+      providerAccounts.listChatGptApps.mockClear()
+      skew += CHATGPT_APPS_FOCUS_INTERVAL_MS
+      fireEvent.focus(window)
+      expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
+    } finally {
+      clock.mockRestore()
+    }
+  })
+  it('MAR-3485 coming back from Manage on ChatGPT re-reads at once, inside the interval', async () => {
+    const group = await open()
+    await within(group).findByText('Figma')
     await waitFor(() =>
       expect(
         within(group).getByRole('button', { name: 'Refresh' }),
       ).not.toBeDisabled(),
     )
-    fireEvent.click(within(group).getByRole('button', { name: 'Refresh' }))
-    await waitFor(() =>
-      expect(providerAccounts.listChatGptApps).toHaveBeenCalledTimes(2),
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
     providerAccounts.listChatGptApps.mockClear()
     fireEvent.focus(window)
     expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
+    fireEvent.click(
+      within(group).getAllByRole('button', { name: 'Manage on ChatGPT' })[0],
+    )
+    fireEvent.focus(window)
+    expect(providerAccounts.listChatGptApps).toHaveBeenCalledExactlyOnceWith({
+      accountId: 'acct-a',
+      forceRefetch: true,
+    })
+    await waitFor(() =>
+      expect(
+        within(group).getByRole('button', { name: 'Refresh' }),
+      ).not.toBeDisabled(),
+    )
+    fireEvent.focus(window)
+    expect(providerAccounts.listChatGptApps).toHaveBeenCalledTimes(1)
+  })
+  it('MAR-3485 a failed refresh keeps the rows it had and says the refresh failed', async () => {
+    const group = await open()
+    await within(group).findByText('Figma')
+    await waitFor(() =>
+      expect(
+        within(group).getByRole('button', { name: 'Refresh' }),
+      ).not.toBeDisabled(),
+    )
+    providerAccounts.listChatGptApps.mockResolvedValueOnce({
+      ...snapshot,
+      apps: [],
+      error: 'Could not read ChatGPT apps: fixture',
+    })
+    fireEvent.click(within(group).getByRole('button', { name: 'Refresh' }))
+    expect(await within(group).findByRole('alert')).toHaveTextContent(
+      'Could not read ChatGPT apps: fixture. The list below is from the last read that worked.',
+    )
+    expect(within(group).getByText('Figma')).toBeInTheDocument()
+    expect(within(group).getByText('Disabled app')).toBeInTheDocument()
+  })
+  it('MAR-3485 a read in flight shows Reading alone, not the previous error beside it', async () => {
+    providerAccounts.listChatGptApps.mockResolvedValueOnce({
+      ...snapshot,
+      apps: [],
+      error: 'Could not read ChatGPT apps: first',
+    })
+    const group = await open()
+    expect(await within(group).findByRole('alert')).toHaveTextContent('first')
+    let finish!: (value: unknown) => void
+    providerAccounts.listChatGptApps.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    fireEvent.click(within(group).getByRole('button', { name: 'Refresh' }))
+    expect(
+      await within(group).findByText('Reading ChatGPT apps…'),
+    ).toBeInTheDocument()
+    expect(within(group).queryByRole('alert')).not.toBeInTheDocument()
+    await act(async () => finish(snapshot))
+    expect(await within(group).findByText('Figma')).toBeInTheDocument()
+    expect(within(group).queryByRole('alert')).not.toBeInTheDocument()
   })
   it('R5 app-list failures retain both groups and configured servers', async () => {
     providerAccounts.listChatGptApps.mockRejectedValue(new Error('fixture'))
