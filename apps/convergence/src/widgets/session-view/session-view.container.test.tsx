@@ -3273,6 +3273,32 @@ describe('SessionView', () => {
         await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(1))
         expect(refresh()).toHaveBeenCalledWith('session-1')
       })
+
+      it('R6 closing the pull request panel with its own button while Project stays open does not refresh again — mutation showPullRequestPanel || prGroupOpen.current turns red', async () => {
+        renderView()
+        openGroup('Project')
+        await screen.findByRole('menu')
+        await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(1))
+        fireEvent.click(
+          await screen.findByRole('menuitemcheckbox', {
+            name: /^Pull request/,
+          }),
+        )
+        await screen.findByRole('button', { name: 'Close pull request panel' })
+        await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(2))
+        openGroup('Project')
+        const projectMenu = await screen.findByRole('menu')
+        await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(3))
+        expect(projectMenu).toBeInTheDocument()
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: 'Close pull request panel',
+            hidden: true,
+          }),
+        )
+        await act(async () => {})
+        expect(refresh()).toHaveBeenCalledTimes(3)
+      })
     })
   })
 })
