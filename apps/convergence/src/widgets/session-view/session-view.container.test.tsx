@@ -3172,5 +3172,107 @@ describe('SessionView', () => {
         )
       })
     })
+
+    describe('CH4b (MAR-3466)', () => {
+      const refresh = () =>
+        vi.mocked(window.electronAPI.pullRequest.refreshForSession)
+
+      it('R1 switching the conversation while Details stays open refreshes the new conversation’s PR once, in order — mutation no refresh on the change turns red', async () => {
+        useSessionStore.setState((state) => ({
+          sessions: [
+            state.sessions[0],
+            {
+              ...state.sessions[0],
+              id: 'session-2',
+              name: 'Parent',
+            },
+          ],
+        }))
+        renderView()
+        openGroup('Details')
+        await screen.findByRole('menu')
+        await waitFor(() =>
+          expect(refresh().mock.calls.map((call) => call[0])).toEqual([
+            'session-1',
+          ]),
+        )
+        act(() => useSessionStore.setState({ activeSessionId: 'session-2' }))
+        await waitFor(() =>
+          expect(refresh().mock.calls.map((call) => call[0])).toEqual([
+            'session-1',
+            'session-2',
+          ]),
+        )
+      })
+
+      it('R1 switching the conversation while Project stays open refreshes the new conversation’s PR once, in order — mutation drop Project from the open-group read turns red', async () => {
+        useSessionStore.setState((state) => ({
+          sessions: [
+            state.sessions[0],
+            {
+              ...state.sessions[0],
+              id: 'session-2',
+              name: 'Parent',
+            },
+          ],
+        }))
+        renderView()
+        openGroup('Project')
+        await screen.findByRole('menu')
+        await waitFor(() =>
+          expect(refresh().mock.calls.map((call) => call[0])).toEqual([
+            'session-1',
+          ]),
+        )
+        act(() => useSessionStore.setState({ activeSessionId: 'session-2' }))
+        await waitFor(() =>
+          expect(refresh().mock.calls.map((call) => call[0])).toEqual([
+            'session-1',
+            'session-2',
+          ]),
+        )
+      })
+
+      it('R2 the harness chip opens Details and refreshes the PR once — mutation the chip skips the refresh turns red', async () => {
+        harnessAlert()
+        renderView()
+        const chip = await screen.findByTestId('harness-alert')
+        refresh().mockClear()
+        fireEvent.click(chip)
+        await screen.findByRole('region', { name: 'Harness history' })
+        expect(refresh()).toHaveBeenCalledTimes(1)
+        expect(refresh()).toHaveBeenCalledWith('session-1')
+      })
+
+      it('R2 More opens Details and refreshes the PR once — mutation the More entry calls setDetailsOpen(true) turns red', async () => {
+        headerWidth(400)
+        renderView()
+        await act(async () => {})
+        refresh().mockClear()
+        fireEvent.pointerDown(
+          screen.getByRole('button', { name: 'Session actions' }),
+        )
+        fireEvent.click(
+          await screen.findByRole('menuitem', { name: 'Details' }),
+        )
+        await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(1))
+        expect(refresh()).toHaveBeenCalledWith('session-1')
+      })
+
+      it('R2 More opens Project and refreshes the PR once — mutation the More entry calls setProjectOpen(true) turns red', async () => {
+        headerWidth(400)
+        renderView()
+        await act(async () => {})
+        refresh().mockClear()
+        fireEvent.pointerDown(
+          screen.getByRole('button', { name: 'Session actions' }),
+        )
+        fireEvent.click(
+          await screen.findByRole('menuitem', { name: 'Project' }),
+        )
+        await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(1))
+        expect(refresh()).toHaveBeenCalledWith('session-1')
+      })
+    })
   })
 })

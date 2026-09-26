@@ -57,6 +57,10 @@ export function HarnessFactsSections({
   )
   return (
     <>
+      {/* One title for the block, including while startup facts are still
+          absent (loading, an error, retries only). With init facts the
+          section below is that same title, so there is still one (CH4 E). */}
+      {!init && <h3 className="font-medium">Harness</h3>}
       {error ? (
         <div role="alert">
           {error}{' '}

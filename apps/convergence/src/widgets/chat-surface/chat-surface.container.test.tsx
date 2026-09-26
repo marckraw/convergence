@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { useContextDrillStore } from '@/entities/context-drill'
@@ -72,11 +73,21 @@ vi.mock('@/features/command-center', () => ({
   switchToSession: vi.fn(),
 }))
 
+/** The `docked` prop the real header was last rendered with (CH4b R3). */
+const chatHeaderDocked = vi.hoisted(() => ({
+  current: undefined as string | undefined,
+}))
+
 vi.mock('@/widgets/session-view', async (importOriginal) => {
   // The real header and its layout function: R6 is proven through them.
   const actual = await importOriginal<typeof import('@/widgets/session-view')>()
   return {
-    ConversationHeader: actual.ConversationHeader,
+    ConversationHeader: (
+      props: ComponentProps<typeof actual.ConversationHeader>,
+    ) => {
+      chatHeaderDocked.current = props.docked
+      return <actual.ConversationHeader {...props} />
+    },
     headerFocusTarget: actual.headerFocusTarget,
     // The real View group (MAR-3429 CH4 R9): More holds it when it yields,
     // here as in the app.
@@ -1070,5 +1081,16 @@ describe('ChatSurface', () => {
       expect(more()).toHaveAttribute('aria-expanded', 'false')
       expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     })
+  })
+
+  it('CH4b R3 chat passes docked parallel-work on the real header while Parallel work is open — mutation docked empty turns red', () => {
+    useSessionStore.setState({
+      globalChatSessions: [{ ...globalSession, parallelWork: oneRunning }],
+      activeGlobalSessionId: globalSession.id,
+    })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(chatHeaderDocked.current).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work · 1' }))
+    expect(chatHeaderDocked.current).toBe('parallel-work')
   })
 })
