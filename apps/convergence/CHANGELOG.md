@@ -1,5 +1,11 @@
 # convergence
 
+## 0.90.2
+
+### Patch Changes
+
+- 07e80a7: The pull request in Details refreshes when you switch conversations with Details open.
+
 ## 0.90.1
 
 ### Patch Changes
