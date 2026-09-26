@@ -28,6 +28,8 @@ export type {
   ProviderAccountConnector,
   ProviderAccountConnectors,
   ProviderAccountChatGptApps,
+  ProviderAccountChatGptSignIns,
+  ChatGptAppSignIn,
   ProviderAccountAttestationOutcome,
   ProviderAccountAttestationResult,
   ProviderAccountEnrolResult,

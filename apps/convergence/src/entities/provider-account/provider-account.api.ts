@@ -4,6 +4,7 @@ import type {
   ProviderAccount,
   ProviderAccountConnectors,
   ProviderAccountChatGptApps,
+  ProviderAccountChatGptSignIns,
   ProviderAccountEnrolResult,
   ProviderAccountEnrollmentProvider,
   ProviderAccountHealth,
@@ -67,6 +68,11 @@ export const providerAccountApi = {
     forceRefetch?: boolean
   }): Promise<ProviderAccountChatGptApps> =>
     window.electronAPI.providerAccounts.listChatGptApps(input),
+  /** Uses each installed app once, read-only, to see if its sign-in works. */
+  checkChatGptAppSignIns: (input: {
+    accountId: string
+  }): Promise<ProviderAccountChatGptSignIns> =>
+    window.electronAPI.providerAccounts.checkChatGptAppSignIns(input),
   manageChatGptApp: (input: {
     accountId: string
     appId: string

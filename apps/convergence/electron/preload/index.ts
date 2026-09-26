@@ -695,6 +695,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     health: () => ipcRenderer.invoke('providerAccounts:health'),
     listChatGptApps: (input: { accountId: string; forceRefetch?: boolean }) =>
       ipcRenderer.invoke('providerAccounts:listChatGptApps', input),
+    checkChatGptAppSignIns: (input: { accountId: string }) =>
+      ipcRenderer.invoke('providerAccounts:checkChatGptAppSignIns', input),
     manageChatGptApp: (input: { accountId: string; appId: string }) =>
       ipcRenderer.invoke('providerAccounts:manageChatGptApp', input),
     browseChatGptApps: () =>
