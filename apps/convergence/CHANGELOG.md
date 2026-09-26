@@ -1,5 +1,11 @@
 # convergence
 
+## 0.91.1
+
+### Patch Changes
+
+- 041d83d: With the theme on System, Convergence follows macOS switching between light and dark while open.
+
 ## 0.91.0
 
 ### Minor Changes
