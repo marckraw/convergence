@@ -499,7 +499,7 @@ export function ProviderAccountsFields({
                             No ChatGPT apps are available for this account.
                           </p>
                         ) : null}
-                        {chatGptApps?.error ? (
+                        {chatGptApps?.error && !isLoadingChatGptApps ? (
                           <p
                             role="alert"
                             className="text-sm text-muted-foreground"

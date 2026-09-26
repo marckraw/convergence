@@ -1,8 +1,10 @@
 import type { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
 import type { JsonRpcClient } from '../provider/codex/jsonrpc'
 import {
+  chatGptAppReadBatches,
+  describeChatGptAppsFailure,
   selectChatGptApps,
-  type ChatGptAppInfo,
+  type ChatGptAppMetadata,
   type InstalledChatGptApp,
   type ProviderAccountChatGptApps,
 } from './provider-account-chatgpt-apps.pure'
@@ -158,29 +160,30 @@ export class ProviderAccountMcpService {
     })
   }
 
-  private async readChatGptDirectory(
+  /**
+   * Names and ChatGPT pages for the given apps only (`app/read`), never the
+   * whole directory: one request per hundred ids, ~0.3 s, and no traffic to
+   * the directory address ChatGPT's bot check guards (MAR-3485).
+   */
+  private async readChatGptAppMetadata(
     rpc: Pick<JsonRpcClient, 'request'>,
-    forceRefetch: boolean,
-  ) {
-    const data: ChatGptAppInfo[] = []
-    let cursor: string | null = null
-    const seen = new Set<string>()
-    do {
-      const page = (await rpc.request('app/list', {
-        forceRefetch,
-        limit: 100,
-        cursor,
-      })) as {
-        data: ChatGptAppInfo[]
-        nextCursor: string | null
+    appIds: string[],
+    { tolerateFailure }: { tolerateFailure: boolean },
+  ): Promise<ChatGptAppMetadata[]> {
+    const metadata: ChatGptAppMetadata[] = []
+    for (const batch of chatGptAppReadBatches(appIds)) {
+      try {
+        const page = (await rpc.request('app/read', { appIds: batch })) as {
+          apps?: ChatGptAppMetadata[]
+        }
+        metadata.push(...(page.apps ?? []))
+      } catch (error) {
+        // A list keeps the names the other batches found; a single page
+        // lookup (Manage on ChatGPT) has nothing to fall back to.
+        if (!tolerateFailure) throw error
       }
-      data.push(...page.data)
-      cursor = page.nextCursor
-      if (cursor && seen.has(cursor))
-        throw new Error('Codex repeated an apps page.')
-      if (cursor) seen.add(cursor)
-    } while (cursor)
-    return data
+    }
+    return metadata
   }
 
   async listChatGptApps(
@@ -202,27 +205,42 @@ export class ProviderAccountMcpService {
         }
         if (identity.account?.type !== 'chatgpt')
           return { ...empty, requiresChatGpt: true }
-        const directory = await this.readChatGptDirectory(rpc, forceRefetch)
-        const installed = (await rpc.request('app/installed', {
-          forceRefresh: forceRefetch,
-        })) as {
-          apps: InstalledChatGptApp[]
-        }
-        return { ...empty, apps: selectChatGptApps(directory, installed.apps) }
+        const readInstalled = async (forceRefresh: boolean) =>
+          (
+            (await rpc.request('app/installed', { forceRefresh })) as {
+              apps: InstalledChatGptApp[]
+            }
+          ).apps
+        let installed = await readInstalled(forceRefetch)
+        // A host that has not published its runtime snapshot yet answers an
+        // unforced read with nothing; one forced read tells "none yet" from
+        // "none" (MAR-3485).
+        if (installed.length === 0 && !forceRefetch)
+          installed = await readInstalled(true)
+        // Names are a nicety; the rows and their states are the runtime's.
+        // A refused name read leaves the runtime's own names, not an error.
+        const metadata = await this.readChatGptAppMetadata(
+          rpc,
+          installed.map((app) => app.id),
+          { tolerateFailure: true },
+        )
+        return { ...empty, apps: selectChatGptApps(installed, metadata) }
       })
     } catch (error) {
       return {
         ...empty,
-        error: `Could not read ChatGPT apps: ${error instanceof Error ? error.message : String(error)}`,
+        error: `Could not read ChatGPT apps: ${describeChatGptAppsFailure(
+          error instanceof Error ? error.message : String(error),
+        )}`,
       }
     }
   }
 
   async chatGptAppUrl(accountId: string, appId: string): Promise<string> {
-    const directory = await this.chatGptHost(accountId).run((rpc) =>
-      this.readChatGptDirectory(rpc, true),
+    const metadata = await this.chatGptHost(accountId).run((rpc) =>
+      this.readChatGptAppMetadata(rpc, [appId], { tolerateFailure: false }),
     )
-    const app = directory.find((entry) => entry.id === appId)
+    const app = metadata.find((entry) => entry.id === appId)
     if (!app?.installUrl)
       throw new Error('This app has no ChatGPT page available. Try Refresh.')
     const url = new URL(app.installUrl)
