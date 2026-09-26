@@ -1,5 +1,12 @@
 # convergence
 
+## 0.91.0
+
+### Minor Changes
+
+- 83617fb: Both themes gain tested color roles: readable secondary text in dark, status colors that read in light, an opaque focus ring and a readable destructive button.
+- 67b3969: OpenAI accounts show their ChatGPT apps in Connectors with honest tool availability states: Tools available, Tools not available to Codex here, or Turned off. Manage each app on ChatGPT, browse more apps, and refresh the list manually or automatically when returning to Convergence. Read failures show their underlying reason while configured connectors remain visible.
+
 ## 0.90.2
 
 ### Patch Changes
