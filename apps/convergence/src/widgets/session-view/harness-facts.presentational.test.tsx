@@ -871,3 +871,96 @@ describe('MAR-3206 — MCP servers in Details', () => {
     })
   })
 })
+
+it('CH4b R4 the harness block keeps one visible Harness title with no startup facts and with them — mutation the heading only inside init turns red', () => {
+  const title = () => screen.getAllByRole('heading', { name: 'Harness' })
+  const onRetry = vi.fn()
+  const retryOnly: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: {
+      turnId: 't',
+      hooks: [],
+      denials: null,
+      retries: {
+        attempts: 2,
+        state: 'in-flight',
+        last: {
+          kind: 'harness.retry',
+          phase: 'attempt',
+          attempt: 2,
+          maxRetries: 10,
+          retryDelayMs: 100,
+          errorStatus: null,
+          message: 'error',
+          noResponse: null,
+          at: 'now',
+        },
+      },
+    },
+    compactions: [],
+    rateLimit: null,
+    init: null,
+  }
+  const withInit: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: null,
+    compactions: [],
+    rateLimit: null,
+    init: {
+      kind: 'harness.init',
+      at: 'now',
+      claudeCodeVersion: '1.0.0',
+      model: 'sonnet',
+      permissionMode: null,
+      mcpServers: null,
+      plugins: null,
+      capabilities: null,
+      tools: null,
+      skills: null,
+      slashCommands: null,
+    },
+  }
+  const { rerender } = render(
+    <HarnessFactsSections
+      facts={null}
+      error={null}
+      loading
+      onRetry={onRetry}
+    />,
+  )
+  expect(title()).toHaveLength(1)
+  expect(title()[0]).toBeVisible()
+
+  rerender(
+    <HarnessFactsSections
+      facts={null}
+      error="Could not read the harness"
+      loading={false}
+      onRetry={onRetry}
+    />,
+  )
+  expect(title()).toHaveLength(1)
+  expect(title()[0]).toBeVisible()
+
+  rerender(
+    <HarnessFactsSections
+      facts={retryOnly}
+      error={null}
+      loading={false}
+      onRetry={onRetry}
+    />,
+  )
+  expect(title()).toHaveLength(1)
+  expect(title()[0]).toBeVisible()
+
+  rerender(
+    <HarnessFactsSections
+      facts={withInit}
+      error={null}
+      loading={false}
+      onRetry={onRetry}
+    />,
+  )
+  expect(title()).toHaveLength(1)
+  expect(title()[0]).toBeVisible()
+})

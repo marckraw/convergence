@@ -371,13 +371,25 @@ export const SessionView: FC = () => {
     }
   }, [session?.workingDirectory])
 
-  // The PR is read again when its panel opens. Details (its row) and the
-  // Project group (its item) read it as they open, in their open handlers:
-  // one read per open, none on a close, and none for a group opening or
-  // closing while the panel is already showing (lap 2 D).
+  // The PR is read again when its panel opens, and not when that panel
+  // closes. Details and Project read it each time they open — including
+  // while the panel is already showing — and not when they close (lap 2 D).
+  // Those opens stay in the handlers: this effect must not re-run on the
+  // open itself, or the read would happen twice. It also reads once when
+  // the conversation changes while Details or Project stays open (CH4b R1).
+  // The refresh function's identity follows the session, so that change
+  // re-runs this effect; the seen-session ref is what keeps a panel close
+  // from reading again just because a group is still open.
+  const prGroupOpen = useRef(false)
+  prGroupOpen.current = detailsOpen || projectOpen
+  const prSessionSeen = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    if (showPullRequestPanel) void refreshPullRequest()
-  }, [refreshPullRequest, showPullRequestPanel])
+    const sessionId = session?.id ?? null
+    const sessionChanged = prSessionSeen.current !== sessionId
+    prSessionSeen.current = sessionId
+    if (showPullRequestPanel || (sessionChanged && prGroupOpen.current))
+      void refreshPullRequest()
+  }, [refreshPullRequest, showPullRequestPanel, session?.id])
 
   // Hydrate attachment metadata for the active session so the transcript can
   // render chips. It re-reads when the session changes and when the transcript
