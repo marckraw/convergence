@@ -79,3 +79,14 @@ export interface ProviderAccountConnectors {
   connectors: ProviderAccountConnector[]
   error: string | null
 }
+
+export interface ProviderAccountChatGptApps {
+  providerAccountId: string
+  apps: Array<{
+    id: string
+    name: string
+    state: 'available' | 'unavailable' | 'off'
+  }>
+  requiresChatGpt: boolean
+  error: string | null
+}

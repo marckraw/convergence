@@ -1,10 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { registerProviderAccountIpcHandlers } from './provider-account.ipc'
 
+const openExternal = vi.hoisted(() => vi.fn())
 const handlers = vi.hoisted(
   () => new Map<string, (...args: unknown[]) => unknown>(),
 )
 vi.mock('electron', () => ({
+  shell: { openExternal },
   ipcMain: {
     handle: (name: string, handler: (...args: unknown[]) => unknown) =>
       handlers.set(name, handler),
@@ -81,4 +83,44 @@ it('still rethrows Claude authorization failures', async () => {
     }),
   ).rejects.toBe(b.error)
   expect(b.mcp.listConnectors).not.toHaveBeenCalled()
+})
+
+it('MAR-3458 R3 ignores renderer URLs; only backend lookup reaches shell.openExternal', async () => {
+  const b = setup()
+  const chatGptAppUrl = vi
+    .fn()
+    .mockResolvedValue('https://chatgpt.com/apps/figma')
+  Object.assign(b.mcp, { chatGptAppUrl })
+  openExternal.mockClear()
+  await handlers.get('providerAccounts:manageChatGptApp')!(null, {
+    accountId: 'account',
+    appId: 'figma',
+    url: 'https://attacker.invalid',
+  })
+  expect(chatGptAppUrl).toHaveBeenCalledWith('account', 'figma')
+  expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+    'https://chatgpt.com/apps/figma',
+  )
+  chatGptAppUrl.mockRejectedValue(new Error('Unknown or unsafe app'))
+  openExternal.mockClear()
+  await expect(
+    handlers.get('providerAccounts:manageChatGptApp')!(null, {
+      accountId: 'account',
+      appId: 'unknown',
+      url: 'https://attacker.invalid',
+    }),
+  ).rejects.toThrow()
+  expect(openExternal).not.toHaveBeenCalled()
+})
+
+it('MAR-3458 Browse uses a fixed backend URL', async () => {
+  setup()
+  openExternal.mockClear()
+  await handlers.get('providerAccounts:browseChatGptApps')!(
+    null,
+    'https://attacker.invalid',
+  )
+  expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+    'https://chatgpt.com/apps',
+  )
 })

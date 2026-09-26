@@ -3,6 +3,7 @@ import type {
   ClaudeAccountLayout,
   ProviderAccount,
   ProviderAccountConnectors,
+  ProviderAccountChatGptApps,
   ProviderAccountEnrolResult,
   ProviderAccountEnrollmentProvider,
   ProviderAccountHealth,
@@ -61,6 +62,18 @@ export const providerAccountApi = {
    * `mcp list` as the account, because the ambient answer is a different
    * account's answer (PA11).
    */
+  listChatGptApps: (input: {
+    accountId: string
+    forceRefetch?: boolean
+  }): Promise<ProviderAccountChatGptApps> =>
+    window.electronAPI.providerAccounts.listChatGptApps(input),
+  manageChatGptApp: (input: {
+    accountId: string
+    appId: string
+  }): Promise<void> =>
+    window.electronAPI.providerAccounts.manageChatGptApp(input),
+  browseChatGptApps: (): Promise<void> =>
+    window.electronAPI.providerAccounts.browseChatGptApps(),
   listConnectors: (
     accountId: string | null,
   ): Promise<ProviderAccountConnectors> =>

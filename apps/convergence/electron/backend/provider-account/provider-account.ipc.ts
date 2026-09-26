@@ -1,5 +1,5 @@
 import type { ProviderAccountLoginService } from './provider-account-login.service'
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import type { ProviderAccountAttestationService } from './provider-account-attestation.service'
 import type { ProviderAccountMcpService } from './provider-account-mcp.service'
 import type {
@@ -91,6 +91,22 @@ export function registerProviderAccountIpcHandlers(deps: {
   ipcMain.handle('providerAccounts:attest', () => deps.attestation.attestAll())
 
   ipcMain.handle('providerAccounts:health', () => deps.attestation.getHealth())
+
+  ipcMain.handle(
+    'providerAccounts:listChatGptApps',
+    (_event, input: { accountId: string; forceRefetch?: boolean }) =>
+      deps.mcp.listChatGptApps(input.accountId, input.forceRefetch === true),
+  )
+  ipcMain.handle(
+    'providerAccounts:manageChatGptApp',
+    async (_event, input: { accountId: string; appId: string }) => {
+      const url = await deps.mcp.chatGptAppUrl(input.accountId, input.appId)
+      await shell.openExternal(url)
+    },
+  )
+  ipcMain.handle('providerAccounts:browseChatGptApps', () =>
+    shell.openExternal('https://chatgpt.com/apps'),
+  )
 
   ipcMain.handle(
     'providerAccounts:listConnectors',
