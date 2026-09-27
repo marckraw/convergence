@@ -5,6 +5,7 @@ import type {
   ClaudeAccountLayout,
   ProviderAccountConnectors,
   ProviderAccountChatGptApps,
+  ProviderAccountChatGptSignIns,
   ProviderAccountEnrollmentProvider,
   ProviderAccountSettingsRow,
   ProviderAccountSettingsWarning,
@@ -13,6 +14,13 @@ import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import {
+  chatGptManageLabel,
+  chatGptSignInLine,
+  configuredServerSignInLine,
+  describeChatGptSignInsCheckedAt,
+} from './chatgpt-app-sign-in.pure'
+import { CHATGPT_SIGN_IN_TONE } from './chatgpt-app-sign-in.styles'
 
 /**
  * Whose truth the Connectors list tells (MAR-3213, R3): the panel shows what
@@ -69,6 +77,9 @@ export interface ProviderAccountsFieldsProps {
   expandedConnectorsAccountId: string | null
   chatGptApps: ProviderAccountChatGptApps | null
   isLoadingChatGptApps: boolean
+  /** The expanded account's last sign-in check (MAR-3470). */
+  chatGptSignIns: ProviderAccountChatGptSignIns | null
+  isCheckingChatGptSignIns: boolean
   chatGptLinkError: string | null
   onRefreshChatGptApps: () => void
   onManageChatGptApp: (accountId: string, appId: string) => void
@@ -130,6 +141,8 @@ export function ProviderAccountsFields({
   expandedConnectorsAccountId,
   chatGptApps,
   isLoadingChatGptApps,
+  chatGptSignIns,
+  isCheckingChatGptSignIns,
   chatGptLinkError,
   onRefreshChatGptApps,
   onManageChatGptApp,
@@ -445,10 +458,28 @@ export function ProviderAccountsFields({
                           </Button>
                         </div>
                         <p className="text-pretty text-xs leading-relaxed text-muted-foreground">
-                          Sign-in problems show up only when a tool is used. If
-                          a conversation says an app needs reauthentication,
-                          reconnect it on ChatGPT, then Refresh.
+                          Opening this panel checks each app that has a "who am
+                          I" call by using it once through Codex. If an app
+                          needs signing in again, reconnect it on ChatGPT;
+                          coming back here checks again.
                         </p>
+                        {describeChatGptSignInsCheckedAt(
+                          chatGptSignIns?.checkedAt ?? null,
+                        ) ? (
+                          <p className="text-xs text-muted-foreground">
+                            {describeChatGptSignInsCheckedAt(
+                              chatGptSignIns?.checkedAt ?? null,
+                            )}
+                          </p>
+                        ) : null}
+                        {chatGptSignIns?.error ? (
+                          <p
+                            role="alert"
+                            className="text-sm text-muted-foreground"
+                          >
+                            {chatGptSignIns.error}
+                          </p>
+                        ) : null}
                         {isLoadingChatGptApps ? (
                           <p
                             role="status"
@@ -462,34 +493,56 @@ export function ProviderAccountsFields({
                             ChatGPT apps need a ChatGPT sign-in
                           </p>
                         ) : null}
-                        {chatGptApps?.apps.map((app) => (
-                          <div
-                            key={app.id}
-                            className="flex flex-wrap items-center justify-between gap-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="break-words text-sm font-medium">
-                                {app.name}
-                              </p>
-                              <p className="text-pretty text-xs text-muted-foreground">
-                                {app.state === 'available'
-                                  ? 'Tools available'
-                                  : app.state === 'off'
-                                    ? 'Turned off'
-                                    : 'Tools not available to Codex here'}
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="min-h-10"
-                              onClick={() => onManageChatGptApp(row.id, app.id)}
+                        {chatGptApps?.apps.map((app) => {
+                          const signIn = chatGptSignIns?.signIns.find(
+                            (entry) => entry.appId === app.id,
+                          )
+                          const line = chatGptSignInLine({
+                            signIn,
+                            checking: isCheckingChatGptSignIns,
+                            appState: app.state,
+                          })
+                          return (
+                            <div
+                              key={app.id}
+                              className="flex flex-wrap items-center justify-between gap-2"
                             >
-                              Manage on ChatGPT
-                            </Button>
-                          </div>
-                        ))}
+                              <div className="min-w-0">
+                                <p className="break-words text-sm font-medium">
+                                  {app.name}
+                                </p>
+                                <p className="text-pretty text-xs text-muted-foreground">
+                                  {app.state === 'available'
+                                    ? 'Tools available'
+                                    : app.state === 'off'
+                                      ? 'Turned off'
+                                      : 'Tools not available to Codex here'}
+                                </p>
+                                {line ? (
+                                  <p
+                                    className={cn(
+                                      'text-pretty break-words text-xs',
+                                      CHATGPT_SIGN_IN_TONE[line.tone],
+                                    )}
+                                  >
+                                    {line.text}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="min-h-10"
+                                onClick={() =>
+                                  onManageChatGptApp(row.id, app.id)
+                                }
+                              >
+                                {chatGptManageLabel(signIn)}
+                              </Button>
+                            </div>
+                          )
+                        })}
                         {!isLoadingChatGptApps &&
                         chatGptApps &&
                         !chatGptApps.error &&
@@ -546,36 +599,59 @@ export function ProviderAccountsFields({
                         No MCP servers are configured.
                       </p>
                     ) : (
-                      (connectors?.connectors ?? []).map((connector) => (
-                        <div
-                          key={connector.name}
-                          className="flex flex-wrap items-center justify-between gap-2"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">
-                              {connector.name}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {connector.statusLabel}
-                            </p>
+                      (connectors?.connectors ?? []).map((connector) => {
+                        // A Codex account's saved "Authorized" gives way to
+                        // what the sign-in check observed (MAR-3470).
+                        const live = isCodex
+                          ? configuredServerSignInLine({
+                              signIn: chatGptSignIns?.servers.find(
+                                (entry) => entry.server === connector.name,
+                              ),
+                              checking: isCheckingChatGptSignIns,
+                            })
+                          : null
+                        return (
+                          <div
+                            key={connector.name}
+                            className="flex flex-wrap items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {connector.name}
+                              </p>
+                              {live ? (
+                                <p
+                                  className={cn(
+                                    'text-pretty break-words text-xs',
+                                    CHATGPT_SIGN_IN_TONE[live.tone],
+                                  )}
+                                >
+                                  {live.text}
+                                </p>
+                              ) : (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {connector.statusLabel}
+                                </p>
+                              )}
+                            </div>
+                            {connector.needsAuthorization ||
+                            (isCodex && connector.status === 'ready') ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={authorizingServerName !== null}
+                                onClick={() =>
+                                  onAuthorizeConnector(row.id, connector.name)
+                                }
+                              >
+                                {authorizingServerName === connector.name
+                                  ? 'Waiting for browser...'
+                                  : 'Authorize'}
+                              </Button>
+                            ) : null}
                           </div>
-                          {connector.needsAuthorization ||
-                          (isCodex && connector.status === 'ready') ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={authorizingServerName !== null}
-                              onClick={() =>
-                                onAuthorizeConnector(row.id, connector.name)
-                              }
-                            >
-                              {authorizingServerName === connector.name
-                                ? 'Waiting for browser...'
-                                : 'Authorize'}
-                            </Button>
-                          ) : null}
-                        </div>
-                      ))
+                        )
+                      })
                     )}
                     {!isLoadingConnectors && connectors?.error ? (
                       <p className="text-sm text-muted-foreground">

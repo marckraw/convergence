@@ -9,6 +9,7 @@ import {
   type ProviderAccountEnrollmentProvider,
   type ProviderAccountConnectors,
   type ProviderAccountChatGptApps,
+  type ProviderAccountChatGptSignIns,
   type ProviderAccountHealth,
   type ClaudeAccountLayout,
 } from '@/entities/provider-account'
@@ -18,6 +19,11 @@ import {
   mayRefreshChatGptAppsOnFocus,
   settleChatGptAppsRead,
 } from './chatgpt-apps-refresh.pure'
+import {
+  chatGptSignInsCheckedAtMs,
+  shouldCheckChatGptSignIns,
+} from './chatgpt-app-sign-in.pure'
+import { useChatGptSignInsStore } from './chatgpt-sign-ins.model'
 
 function describeError(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
@@ -73,6 +79,11 @@ export const ProviderAccountsContainer: FC = () => {
   } | null>(null)
   const refreshChatGptApps = useRef<(() => void) | null>(null)
   const returningFromChatGpt = useRef(false)
+  // Sign-in checks per account (MAR-3470), in a store so they outlive this
+  // panel: each account keeps its own last answer, and a late answer lands
+  // where it belongs or nowhere.
+  const chatGptSignIns = useChatGptSignInsStore((state) => state.byAccount)
+  const signInChecksInFlight = useChatGptSignInsStore((state) => state.inFlight)
   const [isLoadingConnectors, setIsLoadingConnectors] = useState(false)
   const [authorizingServerName, setAuthorizingServerName] = useState<
     string | null
@@ -335,7 +346,24 @@ export const ProviderAccountsContainer: FC = () => {
     let live = true
     let revision = 0
     let lastReadStartedAt: number | null = null
-    const refresh = async (forceRefetch: boolean) => {
+    const checkSignIns = async () => {
+      const signIns = useChatGptSignInsStore.getState()
+      const check = signIns.begin(accountId)
+      let result: ProviderAccountChatGptSignIns
+      try {
+        result = await providerAccountApi.checkChatGptAppSignIns({ accountId })
+      } catch {
+        result = {
+          providerAccountId: accountId,
+          checkedAt: null,
+          signIns: [],
+          servers: [],
+          error: 'Could not check sign-ins. Try Refresh.',
+        }
+      }
+      signIns.settle(accountId, check, result)
+    }
+    const refresh = async (forceRefetch: boolean, checkRequested = false) => {
       const request = ++revision
       lastReadStartedAt = Date.now()
       setIsLoadingChatGptApps(true)
@@ -357,6 +385,21 @@ export const ProviderAccountsContainer: FC = () => {
       if (live && request === revision) {
         setChatGptApps((shown) => settleChatGptAppsRead(shown, read))
         setIsLoadingChatGptApps(false)
+        // A failed read carries no apps (the service answers errors with an
+        // empty list), so "has apps" is also "read without error".
+        if (
+          read.apps.length > 0 &&
+          shouldCheckChatGptSignIns({
+            lastCheckedAt: chatGptSignInsCheckedAtMs(
+              useChatGptSignInsStore.getState().byAccount[accountId]?.checkedAt,
+            ),
+            now: Date.now(),
+            requested: checkRequested,
+            inFlight:
+              useChatGptSignInsStore.getState().inFlight[accountId] != null,
+          })
+        )
+          void checkSignIns()
       }
     }
     const onFocus = () => {
@@ -368,10 +411,11 @@ export const ProviderAccountsContainer: FC = () => {
         })
       )
         return
+      const returning = returningFromChatGpt.current
       returningFromChatGpt.current = false
-      void refresh(true)
+      void refresh(true, returning)
     }
-    refreshChatGptApps.current = () => void refresh(true)
+    refreshChatGptApps.current = () => void refresh(true, true)
     void refresh(false)
     window.addEventListener('focus', onFocus)
     return () => {
@@ -506,6 +550,16 @@ export const ProviderAccountsContainer: FC = () => {
           : null
       }
       isLoadingChatGptApps={isLoadingChatGptApps}
+      chatGptSignIns={
+        expandedConnectorsAccountId
+          ? (chatGptSignIns[expandedConnectorsAccountId] ?? null)
+          : null
+      }
+      isCheckingChatGptSignIns={
+        expandedConnectorsAccountId
+          ? signInChecksInFlight[expandedConnectorsAccountId] != null
+          : false
+      }
       chatGptLinkError={
         chatGptLinkError?.accountId === expandedConnectorsAccountId
           ? chatGptLinkError.message

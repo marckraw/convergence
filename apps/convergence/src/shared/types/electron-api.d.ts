@@ -1384,6 +1384,24 @@ interface ProviderAccountChatGptAppsData {
   error: string | null
 }
 
+interface ProviderAccountChatGptSignInsData {
+  providerAccountId: string
+  checkedAt: string | null
+  signIns: Array<{
+    appId: string
+    status: 'signed-in' | 'needs-sign-in' | 'failed' | 'built-in' | 'unchecked'
+    account: string | null
+    reason: string | null
+  }>
+  servers: Array<{
+    server: string
+    status: 'signed-in' | 'needs-sign-in' | 'failed' | 'unchecked'
+    account: string | null
+    reason: string | null
+  }>
+  error: string | null
+}
+
 interface ProviderAccountConnectorsData {
   providerAccountId: string | null
   connectors: Array<{
@@ -2224,6 +2242,9 @@ interface ElectronAPI {
       accountId: string
       forceRefetch?: boolean
     }) => Promise<ProviderAccountChatGptAppsData>
+    checkChatGptAppSignIns: (input: {
+      accountId: string
+    }) => Promise<ProviderAccountChatGptSignInsData>
     manageChatGptApp: (input: {
       accountId: string
       appId: string

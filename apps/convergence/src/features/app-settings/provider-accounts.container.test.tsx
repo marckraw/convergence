@@ -16,6 +16,7 @@ import type {
 import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsContainer } from './provider-accounts.container'
 import { CHATGPT_APPS_FOCUS_INTERVAL_MS } from './chatgpt-apps-refresh.pure'
+import { useChatGptSignInsStore } from './chatgpt-sign-ins.model'
 import { ProviderAccountMcpService } from '../../../electron/backend/provider-account/provider-account-mcp.service'
 import type { ProviderAccountRepository } from '../../../electron/backend/provider-account/provider-account.repository'
 import type { CodexServerHostRegistry } from '../../../electron/backend/provider/codex/codex-server-host'
@@ -70,6 +71,7 @@ const providerAccounts = {
   attest: vi.fn(),
   health: vi.fn(),
   listChatGptApps: vi.fn(),
+  checkChatGptAppSignIns: vi.fn(),
   manageChatGptApp: vi.fn(),
   browseChatGptApps: vi.fn(),
   listConnectors: vi.fn(),
@@ -86,6 +88,14 @@ describe('ProviderAccountsContainer', () => {
       requiresChatGpt: false,
       error: null,
     })
+    providerAccounts.checkChatGptAppSignIns.mockResolvedValue({
+      providerAccountId: 'acct-a',
+      checkedAt: null,
+      signIns: [],
+      servers: [],
+      error: null,
+    })
+    useChatGptSignInsStore.setState({ byAccount: {}, inFlight: {} })
     providerAccounts.loginAttempt.mockResolvedValue(null)
     providerAccounts.onLoginChanged.mockReturnValue(() => {})
     useDialogStore.getState().close()
@@ -1095,6 +1105,14 @@ describe('MAR-3458 ChatGPT apps', () => {
       error: null,
     })
     providerAccounts.listChatGptApps.mockResolvedValue(snapshot)
+    providerAccounts.checkChatGptAppSignIns.mockResolvedValue({
+      providerAccountId: 'acct-a',
+      checkedAt: null,
+      signIns: [],
+      servers: [],
+      error: null,
+    })
+    useChatGptSignInsStore.setState({ byAccount: {}, inFlight: {} })
     providerAccounts.manageChatGptApp.mockResolvedValue(undefined)
     providerAccounts.browseChatGptApps.mockResolvedValue(undefined)
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
@@ -1193,8 +1211,14 @@ describe('MAR-3458 ChatGPT apps', () => {
       within(group).getByText('Tools not available to Codex here'),
     ).toBeInTheDocument()
     expect(within(group).getByText('Turned off')).toBeInTheDocument()
-    expect(group.textContent?.match(/sign-in/gi)).toHaveLength(1)
-    expect(group.textContent).not.toMatch(/ready|authorized|needs sign-in/i)
+    // MAR-3470: sign-in words now come only from an observed check; with no
+    // check answer there is no per-app sign-in claim at all.
+    await waitFor(() =>
+      expect(within(group).queryByText('Checking sign-in…')).toBeNull(),
+    )
+    expect(group.textContent).not.toMatch(
+      /ready|authorized|needs sign-in|signed in/i,
+    )
     const local = screen.getByText('Configured on this Mac')
     expect(
       group.compareDocumentPosition(local) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1398,6 +1422,288 @@ describe('MAR-3458 ChatGPT apps', () => {
     await act(async () => finish(snapshot))
     expect(screen.queryByText('Figma')).not.toBeInTheDocument()
     expect(screen.getByText('Account B app')).toBeInTheDocument()
+  })
+  describe('MAR-3470 each app says whether its sign-in works', () => {
+    const apps = {
+      ...snapshot,
+      apps: [
+        { id: 'figma', name: 'Figma', state: 'available' },
+        { id: 'github', name: 'GitHub', state: 'available' },
+        { id: 'connector_openai_hotline', name: 'Hotline', state: 'available' },
+        { id: 'off', name: 'Disabled app', state: 'off' },
+      ],
+    }
+    const observed = (accountId = 'acct-a', figmaStatus = 'needs-sign-in') => ({
+      providerAccountId: accountId,
+      checkedAt: '2026-09-27T00:52:00.000Z',
+      error: null,
+      signIns: [
+        {
+          appId: 'figma',
+          status: figmaStatus,
+          account: 'me@ef.com',
+          reason: null,
+        },
+        {
+          appId: 'github',
+          status: 'signed-in',
+          account: 'Marcin (m@icloud.com)',
+          reason: null,
+        },
+        {
+          appId: 'connector_openai_hotline',
+          status: 'built-in',
+          account: null,
+          reason: null,
+        },
+        { appId: 'off', status: 'unchecked', account: null, reason: null },
+      ],
+      servers: [
+        {
+          server: 'linear',
+          status: figmaStatus === 'signed-in' ? 'signed-in' : 'needs-sign-in',
+          account: figmaStatus === 'signed-in' ? 'marckraw@icloud.com' : null,
+          reason: null,
+        },
+      ],
+    })
+    beforeEach(() => {
+      providerAccounts.listChatGptApps.mockResolvedValue(apps)
+      providerAccounts.checkChatGptAppSignIns.mockResolvedValue(observed())
+    })
+    const lineOf = (group: HTMLElement, name: string) =>
+      within(group).getByText(name).parentElement?.textContent ?? ''
+
+    it('opening checks once and shows what each call observed', async () => {
+      const group = await open()
+      await within(group).findByText('Signed in as Marcin (m@icloud.com)')
+      expect(
+        providerAccounts.checkChatGptAppSignIns,
+      ).toHaveBeenCalledExactlyOnceWith({ accountId: 'acct-a' })
+      expect(lineOf(group, 'Figma')).toContain(
+        'Needs sign-in again on ChatGPT (linked to me@ef.com)',
+      )
+      expect(lineOf(group, 'Hotline')).toContain(
+        'Built into ChatGPT, no sign-in needed',
+      )
+      expect(lineOf(group, 'Disabled app')).not.toMatch(/sign/i)
+      expect(
+        within(group).getByRole('button', { name: 'Sign in again on ChatGPT' }),
+      ).toBeInTheDocument()
+      expect(
+        within(group).getAllByRole('button', { name: 'Manage on ChatGPT' }),
+      ).toHaveLength(3)
+      expect(
+        within(group).getByText(/^Sign-ins checked at /),
+      ).toBeInTheDocument()
+    })
+    it('rows with tools say Checking while the check runs', async () => {
+      let finish!: (value: unknown) => void
+      providerAccounts.checkChatGptAppSignIns.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      const group = await open()
+      await waitFor(() =>
+        expect(within(group).getAllByText('Checking sign-in…')).toHaveLength(3),
+      )
+      await act(async () => finish(observed()))
+      expect(within(group).queryByText('Checking sign-in…')).toBeNull()
+      expect(
+        within(group).getByText('Signed in as Marcin (m@icloud.com)'),
+      ).toBeInTheDocument()
+    })
+    it('Refresh and the return from ChatGPT check again; a focus inside five minutes does not', async () => {
+      const realNow = Date.now.bind(Date)
+      let skew = 0
+      const clock = vi
+        .spyOn(Date, 'now')
+        .mockImplementation(() => realNow() + skew)
+      try {
+        const group = await open()
+        await within(group).findByText('Signed in as Marcin (m@icloud.com)')
+        const refreshed = () =>
+          waitFor(() =>
+            expect(
+              within(group).getByRole('button', { name: 'Refresh' }),
+            ).not.toBeDisabled(),
+          )
+        skew += CHATGPT_APPS_FOCUS_INTERVAL_MS
+        fireEvent.focus(window)
+        await waitFor(() =>
+          expect(providerAccounts.listChatGptApps).toHaveBeenCalledTimes(2),
+        )
+        await refreshed()
+        expect(providerAccounts.checkChatGptAppSignIns).toHaveBeenCalledTimes(1)
+        fireEvent.click(within(group).getByRole('button', { name: 'Refresh' }))
+        await waitFor(() =>
+          expect(providerAccounts.checkChatGptAppSignIns).toHaveBeenCalledTimes(
+            2,
+          ),
+        )
+        await refreshed()
+        providerAccounts.checkChatGptAppSignIns.mockResolvedValue(
+          observed('acct-a', 'signed-in'),
+        )
+        fireEvent.click(
+          within(group).getByRole('button', {
+            name: 'Sign in again on ChatGPT',
+          }),
+        )
+        fireEvent.focus(window)
+        await waitFor(() =>
+          expect(providerAccounts.checkChatGptAppSignIns).toHaveBeenCalledTimes(
+            3,
+          ),
+        )
+        await waitFor(() =>
+          expect(lineOf(group, 'Figma')).toContain('Signed in as me@ef.com'),
+        )
+      } finally {
+        clock.mockRestore()
+      }
+    })
+    it('an older check never replaces a newer one', async () => {
+      const pending: Array<(value: unknown) => void> = []
+      providerAccounts.checkChatGptAppSignIns.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            pending.push(resolve)
+          }),
+      )
+      const group = await open()
+      await waitFor(() => expect(pending).toHaveLength(1))
+      await waitFor(() =>
+        expect(
+          within(group).getByRole('button', { name: 'Refresh' }),
+        ).not.toBeDisabled(),
+      )
+      fireEvent.click(within(group).getByRole('button', { name: 'Refresh' }))
+      await waitFor(() => expect(pending).toHaveLength(2))
+      await act(async () => pending[1](observed('acct-a', 'signed-in')))
+      await act(async () => pending[0](observed('acct-a', 'needs-sign-in')))
+      expect(lineOf(group, 'Figma')).toContain('Signed in as me@ef.com')
+    })
+    it('a check that failed is tried again at the next opening', async () => {
+      providerAccounts.checkChatGptAppSignIns.mockResolvedValueOnce({
+        providerAccountId: 'acct-a',
+        checkedAt: null,
+        signIns: [],
+        servers: [],
+        error: 'Could not check sign-ins: fixture.',
+      })
+      const group = await open()
+      await within(group).findByRole('alert')
+      fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+      const reopened = await screen.findByRole('region', {
+        name: 'From ChatGPT',
+      })
+      await within(reopened).findByText('Signed in as Marcin (m@icloud.com)')
+      expect(providerAccounts.checkChatGptAppSignIns).toHaveBeenCalledTimes(2)
+    })
+    it('the five-minute memory outlives the panel', async () => {
+      const first = render(<ProviderAccountsContainer />)
+      fireEvent.click(await screen.findByRole('button', { name: 'OpenAI' }))
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+      await screen.findByText('Signed in as Marcin (m@icloud.com)')
+      first.unmount()
+      await open()
+      await screen.findByText('Signed in as Marcin (m@icloud.com)')
+      expect(providerAccounts.checkChatGptAppSignIns).toHaveBeenCalledTimes(1)
+    })
+    it('a list that failed checks nothing', async () => {
+      providerAccounts.listChatGptApps.mockResolvedValue({
+        ...snapshot,
+        apps: [],
+        error: 'Could not read ChatGPT apps: fixture',
+      })
+      const group = await open()
+      await within(group).findByRole('alert')
+      expect(providerAccounts.checkChatGptAppSignIns).not.toHaveBeenCalled()
+    })
+    it("a configured server's live answer replaces its saved label", async () => {
+      providerAccounts.checkChatGptAppSignIns.mockResolvedValue(
+        observed('acct-a', 'signed-in'),
+      )
+      await open()
+      const linear = screen.getByText('linear').parentElement!
+      await waitFor(() =>
+        expect(linear.textContent).toContain(
+          'Signed in as marckraw@icloud.com',
+        ),
+      )
+      expect(linear.textContent).not.toContain('Connected')
+    })
+    it('a configured server whose sign-in stopped working says so instead of its saved label', async () => {
+      await open()
+      const linear = screen.getByText('linear').parentElement!
+      await waitFor(() =>
+        expect(linear.textContent).toContain(
+          'Needs sign-in again: press Authorize',
+        ),
+      )
+      expect(linear.textContent).not.toContain('Connected')
+    })
+    it('a failed check says so once and leaves the rows as read', async () => {
+      providerAccounts.checkChatGptAppSignIns.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        checkedAt: null,
+        signIns: [],
+        servers: [],
+        error: 'Could not check sign-ins: Codex started no thread.',
+      })
+      const group = await open()
+      expect(await within(group).findByRole('alert')).toHaveTextContent(
+        'Could not check sign-ins: Codex started no thread.',
+      )
+      expect(lineOf(group, 'Figma')).toContain('Tools available')
+      expect(lineOf(group, 'Figma')).not.toMatch(/sign/i)
+    })
+    it("each account keeps its own sign-ins; another account's never shows", async () => {
+      providerAccounts.list.mockResolvedValue([
+        account({ providerId: 'codex' }),
+        account({ id: 'acct-b', providerId: 'codex', email: 'b@example.com' }),
+      ])
+      providerAccounts.listChatGptApps.mockImplementation(({ accountId }) =>
+        Promise.resolve({ ...apps, providerAccountId: accountId }),
+      )
+      providerAccounts.checkChatGptAppSignIns.mockImplementation(
+        ({ accountId }) =>
+          Promise.resolve(
+            observed(
+              accountId,
+              accountId === 'acct-b' ? 'signed-in' : 'needs-sign-in',
+            ),
+          ),
+      )
+      render(<ProviderAccountsContainer />)
+      fireEvent.click(await screen.findByRole('button', { name: 'OpenAI' }))
+      await screen.findByText('b@example.com')
+      fireEvent.click(screen.getAllByRole('button', { name: 'Connectors' })[0])
+      let group = await screen.findByRole('region', { name: 'From ChatGPT' })
+      await waitFor(() =>
+        expect(lineOf(group, 'Figma')).toContain('Needs sign-in again'),
+      )
+      fireEvent.click(screen.getAllByRole('button', { name: 'Connectors' })[1])
+      group = await screen.findByRole('region', { name: 'From ChatGPT' })
+      await waitFor(() =>
+        expect(lineOf(group, 'Figma')).toContain('Signed in as me@ef.com'),
+      )
+      fireEvent.click(screen.getAllByRole('button', { name: 'Connectors' })[0])
+      group = await screen.findByRole('region', { name: 'From ChatGPT' })
+      await waitFor(() =>
+        expect(lineOf(group, 'Figma')).toContain('Needs sign-in again'),
+      )
+      expect(
+        providerAccounts.checkChatGptAppSignIns.mock.calls.map(
+          ([input]) => input.accountId,
+        ),
+      ).toEqual(['acct-a', 'acct-b'])
+    })
   })
   it('keeps Claude accounts unchanged and never reads ChatGPT apps for them', async () => {
     providerAccounts.list.mockResolvedValue([account()])

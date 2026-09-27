@@ -98,6 +98,11 @@ export function registerProviderAccountIpcHandlers(deps: {
       deps.mcp.listChatGptApps(input.accountId, input.forceRefetch === true),
   )
   ipcMain.handle(
+    'providerAccounts:checkChatGptAppSignIns',
+    (_event, input: { accountId: string }) =>
+      deps.mcp.checkChatGptAppSignIns(input.accountId),
+  )
+  ipcMain.handle(
     'providerAccounts:manageChatGptApp',
     async (_event, input: { accountId: string; appId: string }) => {
       const url = await deps.mcp.chatGptAppUrl(input.accountId, input.appId)

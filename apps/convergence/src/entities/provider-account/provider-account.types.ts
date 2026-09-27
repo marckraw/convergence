@@ -80,6 +80,30 @@ export interface ProviderAccountConnectors {
   error: string | null
 }
 
+/** One app's sign-in, observed by a read-only call (MAR-3470). */
+export interface ChatGptAppSignIn {
+  appId: string
+  status: 'signed-in' | 'needs-sign-in' | 'failed' | 'built-in' | 'unchecked'
+  account: string | null
+  reason: string | null
+}
+
+/** One MCP server configured on this Mac, observed live (MAR-3470). */
+export interface ConfiguredServerSignIn {
+  server: string
+  status: 'signed-in' | 'needs-sign-in' | 'failed' | 'unchecked'
+  account: string | null
+  reason: string | null
+}
+
+export interface ProviderAccountChatGptSignIns {
+  providerAccountId: string
+  checkedAt: string | null
+  signIns: ChatGptAppSignIn[]
+  servers: ConfiguredServerSignIn[]
+  error: string | null
+}
+
 export interface ProviderAccountChatGptApps {
   providerAccountId: string
   apps: Array<{
