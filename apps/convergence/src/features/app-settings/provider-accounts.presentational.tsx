@@ -15,12 +15,15 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
+  chatGptLinkCopiedMessage,
   chatGptManageLabel,
   chatGptSignInLine,
   configuredServerSignInLine,
   describeChatGptSignInsCheckedAt,
+  type ChatGptLinkAction,
 } from './chatgpt-app-sign-in.pure'
 import { CHATGPT_SIGN_IN_TONE } from './chatgpt-app-sign-in.styles'
+import { ChatGptLinkMenu } from './chatgpt-link-menu.presentational'
 
 /**
  * Whose truth the Connectors list tells (MAR-3213, R3): the panel shows what
@@ -81,9 +84,15 @@ export interface ProviderAccountsFieldsProps {
   chatGptSignIns: ProviderAccountChatGptSignIns | null
   isCheckingChatGptSignIns: boolean
   chatGptLinkError: string | null
+  /** A ChatGPT link of the expanded account was just copied (MAR-3486). */
+  chatGptLinkCopied: boolean
   onRefreshChatGptApps: () => void
-  onManageChatGptApp: (accountId: string, appId: string) => void
-  onBrowseChatGptApps: (accountId: string) => void
+  onManageChatGptApp: (
+    accountId: string,
+    appId: string,
+    action: ChatGptLinkAction,
+  ) => void
+  onBrowseChatGptApps: (accountId: string, action: ChatGptLinkAction) => void
   connectors: ProviderAccountConnectors | null
   isLoadingConnectors: boolean
   authorizingServerName: string | null
@@ -144,6 +153,7 @@ export function ProviderAccountsFields({
   chatGptSignIns,
   isCheckingChatGptSignIns,
   chatGptLinkError,
+  chatGptLinkCopied,
   onRefreshChatGptApps,
   onManageChatGptApp,
   onBrowseChatGptApps,
@@ -529,17 +539,12 @@ export function ProviderAccountsFields({
                                   </p>
                                 ) : null}
                               </div>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="min-h-10"
-                                onClick={() =>
-                                  onManageChatGptApp(row.id, app.id)
+                              <ChatGptLinkMenu
+                                label={chatGptManageLabel(signIn)}
+                                onChoose={(action) =>
+                                  onManageChatGptApp(row.id, app.id, action)
                                 }
-                              >
-                                {chatGptManageLabel(signIn)}
-                              </Button>
+                              />
                             </div>
                           )
                         })}
@@ -560,6 +565,14 @@ export function ProviderAccountsFields({
                             {chatGptApps.error}
                           </p>
                         ) : null}
+                        {chatGptLinkCopied ? (
+                          <p
+                            role="status"
+                            className="text-pretty text-sm text-muted-foreground"
+                          >
+                            {chatGptLinkCopiedMessage(row.identity)}
+                          </p>
+                        ) : null}
                         {chatGptLinkError ? (
                           <p
                             role="alert"
@@ -568,15 +581,12 @@ export function ProviderAccountsFields({
                             {chatGptLinkError}
                           </p>
                         ) : null}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="min-h-10"
-                          onClick={() => onBrowseChatGptApps(row.id)}
-                        >
-                          Browse apps on ChatGPT
-                        </Button>
+                        <ChatGptLinkMenu
+                          label="Browse apps on ChatGPT"
+                          onChoose={(action) =>
+                            onBrowseChatGptApps(row.id, action)
+                          }
+                        />
                       </section>
                     ) : null}
                     {isCodex ? (

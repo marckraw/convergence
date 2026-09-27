@@ -91,6 +91,23 @@ export function chatGptManageLabel(signIn: ChatGptAppSignIn | undefined) {
     : 'Manage on ChatGPT'
 }
 
+/** What a ChatGPT button can do with its link (MAR-3486). */
+export type ChatGptLinkAction = 'open' | 'copy'
+
+export const CHATGPT_LINK_ACTION_LABEL: Record<ChatGptLinkAction, string> = {
+  open: 'Open in default browser',
+  copy: 'Copy link',
+}
+
+/**
+ * Said once a link is copied. The default browser may be signed in to ChatGPT
+ * as another account, so the line names the login the link belongs to.
+ */
+export function chatGptLinkCopiedMessage(identity: string): string {
+  const login = identity.trim() || 'this account'
+  return `Link copied. Paste it into the browser profile where ChatGPT is signed in as ${login}; coming back here checks again.`
+}
+
 /** "Sign-ins checked at 01:52", in the viewer's clock. */
 export function describeChatGptSignInsCheckedAt(
   checkedAt: string | null,

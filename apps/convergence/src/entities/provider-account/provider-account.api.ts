@@ -80,6 +80,12 @@ export const providerAccountApi = {
     window.electronAPI.providerAccounts.manageChatGptApp(input),
   browseChatGptApps: (): Promise<void> =>
     window.electronAPI.providerAccounts.browseChatGptApps(),
+  /** Copies the link a ChatGPT button would open, for another browser profile. */
+  copyChatGptLink: (input: {
+    accountId: string
+    appId?: string | null
+  }): Promise<void> =>
+    window.electronAPI.providerAccounts.copyChatGptLink(input),
   listConnectors: (
     accountId: string | null,
   ): Promise<ProviderAccountConnectors> =>

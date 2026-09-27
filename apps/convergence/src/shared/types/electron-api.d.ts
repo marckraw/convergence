@@ -2250,6 +2250,10 @@ interface ElectronAPI {
       appId: string
     }) => Promise<void>
     browseChatGptApps: () => Promise<void>
+    copyChatGptLink: (input: {
+      accountId: string
+      appId?: string | null
+    }) => Promise<void>
     listConnectors: (
       accountId: string | null,
     ) => Promise<ProviderAccountConnectorsData>
