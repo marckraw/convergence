@@ -18,6 +18,7 @@ import {
   CONFIGURED_SERVERS_SENTENCE,
   chatGptLinkCopiedMessage,
   configuredServerAction,
+  configuredServerNeedsSignIn,
   chatGptManageLabel,
   chatGptSignInLine,
   configuredServerSignInLine,
@@ -639,12 +640,13 @@ export function ProviderAccountsFields({
                               checking: isCheckingChatGptSignIns,
                             })
                           : null
-                        const action = configuredServerAction({
+                        const observed = {
                           needsAuthorization: connector.needsAuthorization,
                           liveStatus: isCheckingChatGptSignIns
                             ? null
                             : (liveSignIn?.status ?? null),
-                        })
+                        }
+                        const action = configuredServerAction(observed)
                         return (
                           <div
                             key={connector.name}
@@ -670,11 +672,9 @@ export function ProviderAccountsFields({
                               )}
                               <OneSignInPerAppNote
                                 name={connector.name}
-                                needsSignIn={
-                                  connector.needsAuthorization ||
-                                  (!isCheckingChatGptSignIns &&
-                                    liveSignIn?.status === 'needs-sign-in')
-                                }
+                                needsSignIn={configuredServerNeedsSignIn(
+                                  observed,
+                                )}
                               />
                             </div>
                             {connector.needsAuthorization ||

@@ -160,10 +160,10 @@ export function configuredServerSignInLine(input: {
  * "OAuth apps"; three hand-overs measured on MAR-3486).
  */
 export const CONFIGURED_SERVERS_SENTENCE =
-  'Each account signs in to these servers on its own and keeps the sign-in across later swaps. Some services, like Figma, keep one sign-in per app for each of their users: signing in on another account signs this one out.'
+  'Each account signs in to these servers on its own and keeps the sign-in across later swaps. Some services, like Figma, keep one sign-in per app for each of their users: signing in with the same user on another account signs this one out.'
 
 export const ONE_SIGN_IN_PER_APP_NOTE =
-  'Figma keeps one sign-in per app for each Figma user: signing in here signs out any other account that uses this app, and signing in elsewhere signs this one out.'
+  'Figma keeps one sign-in per app for each Figma user: signing in with the same Figma user on another account signs this one out, and signing in here signs that one out.'
 
 /**
  * The line under a row that needs signing in, when the service is one that
@@ -187,10 +187,26 @@ export function configuredServerAction(input: {
   needsAuthorization: boolean
   liveStatus: ConfiguredServerSignIn['status'] | null
 }): { label: string; emphasis: 'primary' | 'secondary' } {
+  // What the check observed outranks the saved flag, as on the line above it.
+  if (input.liveStatus === 'signed-in')
+    return { label: 'Sign in again', emphasis: 'secondary' }
   if (input.needsAuthorization)
     return { label: 'Authorize', emphasis: 'primary' }
   return {
     label: 'Sign in again',
     emphasis: input.liveStatus === 'needs-sign-in' ? 'primary' : 'secondary',
   }
+}
+
+/**
+ * Whether a configured server needs signing in: the live check's answer when
+ * there is one, else the saved flag (MAR-3516, the blind reader's finding).
+ */
+export function configuredServerNeedsSignIn(input: {
+  needsAuthorization: boolean
+  liveStatus: ConfiguredServerSignIn['status'] | null
+}): boolean {
+  if (input.liveStatus === 'signed-in') return false
+  if (input.liveStatus === 'needs-sign-in') return true
+  return input.needsAuthorization
 }
