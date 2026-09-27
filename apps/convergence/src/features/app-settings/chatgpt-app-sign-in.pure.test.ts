@@ -3,6 +3,7 @@ import {
   CHATGPT_SIGN_IN_MEMORY_MS,
   chatGptSignInsCheckedAtMs,
   chatGptManageLabel,
+  configuredServerSignInLine,
   chatGptSignInLine,
   describeChatGptSignInsCheckedAt,
   shouldCheckChatGptSignIns,
@@ -108,5 +109,43 @@ describe('MAR-3470 the ChatGPT button and the checked-at line', () => {
     )
     expect(describeChatGptSignInsCheckedAt(null)).toBeNull()
     expect(describeChatGptSignInsCheckedAt('not a date')).toBeNull()
+  })
+})
+
+describe('MAR-3470 the live line of a server configured on this Mac', () => {
+  const server = (
+    status: 'signed-in' | 'needs-sign-in' | 'failed' | 'unchecked',
+    account: string | null = null,
+    reason: string | null = null,
+  ) => ({ server: 'linear', status, account, reason })
+  const line = (
+    signIn: ReturnType<typeof server> | undefined,
+    checking = false,
+  ) => configuredServerSignInLine({ signIn, checking })
+  it('who it is signed in as, or that it connected with its sign-in', () => {
+    expect(line(server('signed-in', 'marckraw@icloud.com'))).toEqual({
+      text: 'Signed in as marckraw@icloud.com',
+      tone: 'good',
+    })
+    expect(line(server('signed-in'))?.text).toBe('Connected and signed in')
+  })
+  it('a stored sign-in that stopped working points at Authorize', () => {
+    expect(line(server('needs-sign-in'))).toEqual({
+      text: 'Needs sign-in again: press Authorize',
+      tone: 'warn',
+    })
+  })
+  it("couldn't check says why; no answer or no claim leaves the saved label", () => {
+    expect(line(server('failed', null, 'handshake timed out.'))?.text).toBe(
+      "Couldn't check sign-in: handshake timed out.",
+    )
+    expect(line(server('unchecked'))).toBeNull()
+    expect(line(undefined)).toBeNull()
+  })
+  it('while checking, every configured row says so', () => {
+    expect(line(undefined, true)).toEqual({
+      text: 'Checking sign-in…',
+      tone: 'muted',
+    })
   })
 })

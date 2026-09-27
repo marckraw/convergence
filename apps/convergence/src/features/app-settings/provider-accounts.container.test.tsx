@@ -92,6 +92,7 @@ describe('ProviderAccountsContainer', () => {
       providerAccountId: 'acct-a',
       checkedAt: null,
       signIns: [],
+      servers: [],
       error: null,
     })
     useChatGptSignInsStore.setState({ byAccount: {}, inFlight: {} })
@@ -1108,6 +1109,7 @@ describe('MAR-3458 ChatGPT apps', () => {
       providerAccountId: 'acct-a',
       checkedAt: null,
       signIns: [],
+      servers: [],
       error: null,
     })
     useChatGptSignInsStore.setState({ byAccount: {}, inFlight: {} })
@@ -1456,6 +1458,14 @@ describe('MAR-3458 ChatGPT apps', () => {
         },
         { appId: 'off', status: 'unchecked', account: null, reason: null },
       ],
+      servers: [
+        {
+          server: 'linear',
+          status: figmaStatus === 'signed-in' ? 'signed-in' : 'needs-sign-in',
+          account: figmaStatus === 'signed-in' ? 'marckraw@icloud.com' : null,
+          reason: null,
+        },
+      ],
     })
     beforeEach(() => {
       providerAccounts.listChatGptApps.mockResolvedValue(apps)
@@ -1581,6 +1591,7 @@ describe('MAR-3458 ChatGPT apps', () => {
         providerAccountId: 'acct-a',
         checkedAt: null,
         signIns: [],
+        servers: [],
         error: 'Could not check sign-ins: fixture.',
       })
       const group = await open()
@@ -1614,11 +1625,35 @@ describe('MAR-3458 ChatGPT apps', () => {
       await within(group).findByRole('alert')
       expect(providerAccounts.checkChatGptAppSignIns).not.toHaveBeenCalled()
     })
+    it("a configured server's live answer replaces its saved label", async () => {
+      providerAccounts.checkChatGptAppSignIns.mockResolvedValue(
+        observed('acct-a', 'signed-in'),
+      )
+      await open()
+      const linear = screen.getByText('linear').parentElement!
+      await waitFor(() =>
+        expect(linear.textContent).toContain(
+          'Signed in as marckraw@icloud.com',
+        ),
+      )
+      expect(linear.textContent).not.toContain('Connected')
+    })
+    it('a configured server whose sign-in stopped working says so instead of its saved label', async () => {
+      await open()
+      const linear = screen.getByText('linear').parentElement!
+      await waitFor(() =>
+        expect(linear.textContent).toContain(
+          'Needs sign-in again: press Authorize',
+        ),
+      )
+      expect(linear.textContent).not.toContain('Connected')
+    })
     it('a failed check says so once and leaves the rows as read', async () => {
       providerAccounts.checkChatGptAppSignIns.mockResolvedValue({
         providerAccountId: 'acct-a',
         checkedAt: null,
         signIns: [],
+        servers: [],
         error: 'Could not check sign-ins: Codex started no thread.',
       })
       const group = await open()

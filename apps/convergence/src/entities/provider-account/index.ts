@@ -30,6 +30,7 @@ export type {
   ProviderAccountChatGptApps,
   ProviderAccountChatGptSignIns,
   ChatGptAppSignIn,
+  ConfiguredServerSignIn,
   ProviderAccountAttestationOutcome,
   ProviderAccountAttestationResult,
   ProviderAccountEnrolResult,

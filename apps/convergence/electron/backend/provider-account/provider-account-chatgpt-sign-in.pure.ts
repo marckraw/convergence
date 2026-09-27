@@ -25,12 +25,31 @@ export interface ChatGptAppSignIn {
   reason: string | null
 }
 
+/** One MCP server configured on this Mac for the account, observed live. */
+export interface ConfiguredServerSignIn {
+  server: string
+  status: Exclude<ChatGptAppSignInStatus, 'built-in'>
+  account: string | null
+  reason: string | null
+}
+
 export interface ProviderAccountChatGptSignIns {
   providerAccountId: string
   /** When the checks ran (ISO); null when nothing was checked. */
   checkedAt: string | null
   signIns: ChatGptAppSignIn[]
+  /** The account's configured MCP servers ("Configured on this Mac"). */
+  servers: ConfiguredServerSignIn[]
   error: string | null
+}
+
+/** An MCP server as `mcpServerStatus/list {threadId}` reports it. */
+export interface McpServerLiveStatus {
+  name: string
+  runtimeStatus: string | null
+  authStatus?: string | null
+  toolsError?: string | null
+  tools?: Record<string, CodexAppTool> | null
 }
 
 /** A `codex_apps` tool as `mcpServerStatus/list` reports it. Non-secret. */
@@ -72,7 +91,7 @@ export const CHATGPT_IDENTITY_PROBES: Readonly<
  * Anchored, so `get_company_profile` or `list_viewers` never qualify.
  */
 const IDENTITY_NAME =
-  /[._](?:whoami|who_am_i|get_current_user|current_user|get_me|me|userinfo|user_info|get_viewer)$/i
+  /(?:^|[._])(?:whoami|who_am_i|get_current_user|current_user|get_me|me|userinfo|user_info|get_viewer)$/i
 
 /** OpenAI's own apps (Hotline, Plugin Management…) need no user sign-in. */
 export function isBuiltInChatGptApp(appId: string): boolean {
@@ -235,5 +254,79 @@ export function classifyChatGptSignInProbe(
     status: 'signed-in',
     account: probe.identity ? describeChatGptIdentity(data) : null,
     reason: null,
+  }
+}
+
+/**
+ * Who-am-I calls of MCP servers configured on this Mac, by server name, read
+ * in the live tool lists on 2026-09-27 (Linear's needs a query).
+ */
+export const CONFIGURED_SERVER_IDENTITY_PROBES: Readonly<
+  Record<string, { tool: string; arguments: Readonly<Record<string, unknown>> }>
+> = {
+  linear: { tool: 'get_user', arguments: { query: 'me' } },
+  figma: { tool: 'whoami', arguments: {} },
+}
+
+/** Still starting: the thread has not reported this server's state yet. */
+export function isMcpServerStarting(server: McpServerLiveStatus): boolean {
+  return (
+    server.runtimeStatus === 'starting' || server.runtimeStatus === 'notStarted'
+  )
+}
+
+/**
+ * What a configured server's live state already answers, or the call that
+ * will (MAR-3470). Codex reports `authenticationRequired` itself when the
+ * stored sign-in no longer works; a connected server is asked who you are
+ * when it has such a call, and a connected server that signs in with OAuth
+ * or a bearer token but has none still proved its sign-in by connecting.
+ */
+export function planConfiguredServerCheck(
+  server: McpServerLiveStatus,
+):
+  | { kind: 'verdict'; verdict: Omit<ConfiguredServerSignIn, 'server'> }
+  | { kind: 'probe'; probe: ChatGptSignInProbe } {
+  const verdict = (
+    status: ConfiguredServerSignIn['status'],
+    reason: string | null = null,
+  ) => ({
+    kind: 'verdict' as const,
+    verdict: { status, account: null, reason },
+  })
+  switch (server.runtimeStatus) {
+    case 'authenticationRequired':
+      return verdict('needs-sign-in')
+    case 'failed':
+      return verdict(
+        'failed',
+        describeChatGptAppsFailure(
+          server.toolsError ?? 'The server failed to start.',
+        ),
+      )
+    case 'starting':
+    case 'notStarted':
+      return verdict('failed', 'The server did not finish starting.')
+    case 'connected': {
+      const tools = Object.values(server.tools ?? {})
+      const known = CONFIGURED_SERVER_IDENTITY_PROBES[server.name]
+      if (known && tools.some((tool) => tool.name === known.tool))
+        return {
+          kind: 'probe',
+          probe: {
+            tool: known.tool,
+            arguments: { ...known.arguments },
+            identity: true,
+          },
+        }
+      const probe = chooseChatGptSignInProbe(tools)
+      if (probe) return { kind: 'probe', probe }
+      return server.authStatus === 'oAuth' ||
+        server.authStatus === 'bearerToken'
+        ? verdict('signed-in')
+        : verdict('unchecked')
+    }
+    default:
+      return verdict('unchecked')
   }
 }

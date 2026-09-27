@@ -1393,6 +1393,12 @@ interface ProviderAccountChatGptSignInsData {
     account: string | null
     reason: string | null
   }>
+  servers: Array<{
+    server: string
+    status: 'signed-in' | 'needs-sign-in' | 'failed' | 'unchecked'
+    account: string | null
+    reason: string | null
+  }>
   error: string | null
 }
 

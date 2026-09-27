@@ -6,6 +6,8 @@ import {
   describeChatGptIdentity,
   groupCodexAppTools,
   isBuiltInChatGptApp,
+  isMcpServerStarting,
+  planConfiguredServerCheck,
   type CodexAppTool,
 } from './provider-account-chatgpt-sign-in.pure'
 
@@ -322,5 +324,114 @@ describe('MAR-3470 what one call observed', () => {
         { identity: false },
       ),
     ).toEqual({ status: 'signed-in', account: null, reason: null })
+  })
+})
+
+describe('MAR-3470 servers configured on this Mac, observed live', () => {
+  const server = (
+    name: string,
+    runtimeStatus: string | null,
+    extra: Partial<{
+      authStatus: string
+      toolsError: string
+      tools: string[]
+    }> = {},
+  ) => ({
+    name,
+    runtimeStatus,
+    authStatus: extra.authStatus ?? 'oAuth',
+    toolsError: extra.toolsError ?? null,
+    tools: Object.fromEntries(
+      (extra.tools ?? []).map((toolName) => [toolName, tool(toolName)]),
+    ),
+  })
+  it('Codex saying authentication is required is a sign-in to redo, no call needed', () => {
+    expect(
+      planConfiguredServerCheck(server('linear', 'authenticationRequired')),
+    ).toEqual({
+      kind: 'verdict',
+      verdict: { status: 'needs-sign-in', account: null, reason: null },
+    })
+  })
+  it('a server that failed or never finished starting says why', () => {
+    expect(
+      planConfiguredServerCheck(
+        server('linear', 'failed', { toolsError: 'handshake timed out' }),
+      ),
+    ).toEqual({
+      kind: 'verdict',
+      verdict: {
+        status: 'failed',
+        account: null,
+        reason: 'handshake timed out',
+      },
+    })
+    expect(planConfiguredServerCheck(server('linear', 'starting'))).toEqual({
+      kind: 'verdict',
+      verdict: {
+        status: 'failed',
+        account: null,
+        reason: 'The server did not finish starting.',
+      },
+    })
+    expect(isMcpServerStarting(server('x', 'starting'))).toBe(true)
+    expect(isMcpServerStarting(server('x', 'notStarted'))).toBe(true)
+    expect(isMcpServerStarting(server('x', 'connected'))).toBe(false)
+  })
+  it('a connected Linear or Figma is asked who you are, by its own call', () => {
+    expect(
+      planConfiguredServerCheck(
+        server('linear', 'connected', { tools: ['list_issues', 'get_user'] }),
+      ),
+    ).toEqual({
+      kind: 'probe',
+      probe: { tool: 'get_user', arguments: { query: 'me' }, identity: true },
+    })
+    expect(
+      planConfiguredServerCheck(
+        server('figma', 'connected', { tools: ['get_file', 'whoami'] }),
+      ),
+    ).toEqual({
+      kind: 'probe',
+      probe: { tool: 'whoami', arguments: {}, identity: true },
+    })
+  })
+  it('another connected server with a plain who-am-I tool is asked too', () => {
+    expect(
+      planConfiguredServerCheck(
+        server('acme', 'connected', { tools: ['search', 'whoami'] }),
+      ),
+    ).toEqual({
+      kind: 'probe',
+      probe: { tool: 'whoami', arguments: {}, identity: true },
+    })
+  })
+  it('connected without a who-am-I call: signed in when it signs in by token, else no claim', () => {
+    expect(
+      planConfiguredServerCheck(
+        server('acme', 'connected', { tools: ['search'], authStatus: 'oAuth' }),
+      ),
+    ).toEqual({
+      kind: 'verdict',
+      verdict: { status: 'signed-in', account: null, reason: null },
+    })
+    expect(
+      planConfiguredServerCheck(
+        server('acme', 'connected', {
+          tools: ['search'],
+          authStatus: 'unsupported',
+        }),
+      ),
+    ).toEqual({
+      kind: 'verdict',
+      verdict: { status: 'unchecked', account: null, reason: null },
+    })
+  })
+  it('disabled or unknown state makes no claim', () => {
+    for (const state of ['disabled', 'cancelled', null])
+      expect(planConfiguredServerCheck(server('acme', state))).toEqual({
+        kind: 'verdict',
+        verdict: { status: 'unchecked', account: null, reason: null },
+      })
   })
 })

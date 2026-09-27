@@ -11,8 +11,12 @@ import {
   classifyChatGptSignInProbe,
   groupCodexAppTools,
   isBuiltInChatGptApp,
+  isMcpServerStarting,
+  planConfiguredServerCheck,
   type ChatGptAppSignIn,
-  type CodexAppTool,
+  type ChatGptSignInProbe,
+  type ConfiguredServerSignIn,
+  type McpServerLiveStatus,
   type ProviderAccountChatGptSignIns,
 } from './provider-account-chatgpt-sign-in.pure'
 import {
@@ -281,6 +285,7 @@ export class ProviderAccountMcpService {
       providerAccountId: accountId,
       checkedAt: null,
       signIns: [],
+      servers: [],
       error: null,
     }
     try {
@@ -309,7 +314,15 @@ export class ProviderAccountMcpService {
         const apps = [
           ...new Map(installed.map((app) => [app.id, app])).values(),
         ]
-        const byApp = groupCodexAppTools(await this.readCodexAppTools(rpc))
+        const known = await this.readMcpServers(rpc, null)
+        const byApp = groupCodexAppTools(
+          Object.values(
+            known.find((server) => server.name === 'codex_apps')?.tools ?? {},
+          ),
+        )
+        const configured = known
+          .map((server) => server.name)
+          .filter((name) => name !== 'codex_apps')
         const plans = apps.map((app) => {
           const tools = byApp.get(app.id) ?? []
           return {
@@ -328,7 +341,7 @@ export class ProviderAccountMcpService {
           reason: null,
         })
         const checkedAt = () => new Date().toISOString()
-        if (plans.every((plan) => !plan.probe))
+        if (plans.every((plan) => !plan.probe) && configured.length === 0)
           return {
             ...empty,
             checkedAt: checkedAt(),
@@ -342,32 +355,74 @@ export class ProviderAccountMcpService {
         if (!threadId)
           throw new Error('Codex started no thread for the sign-in check.')
         try {
-          const signIns = await mapWithConcurrency(
-            plans,
+          const live =
+            configured.length > 0
+              ? await this.waitForConfiguredServers(rpc, threadId, configured)
+              : []
+          const call = (server: string, probe: ChatGptSignInProbe) =>
+            withTimeout(
+              rpc.request('mcpServer/tool/call', {
+                threadId,
+                server,
+                tool: probe.tool,
+                arguments: probe.arguments,
+              }),
+              CHATGPT_SIGN_IN_PROBE_TIMEOUT_MS,
+            ).then(
+              (response) => ({ response }),
+              (error: unknown) => ({ error }),
+            )
+          type Task =
+            | { kind: 'app'; plan: (typeof plans)[number] }
+            | { kind: 'server'; server: McpServerLiveStatus }
+          const tasks: Task[] = [
+            ...plans.map((plan) => ({ kind: 'app' as const, plan })),
+            ...live.map((server) => ({ kind: 'server' as const, server })),
+          ]
+          const results = await mapWithConcurrency(
+            tasks,
             CHATGPT_SIGN_IN_PROBE_CONCURRENCY,
-            async (plan): Promise<ChatGptAppSignIn> => {
-              if (!plan.probe) return unprobed(plan)
-              const outcome = await withTimeout(
-                rpc.request('mcpServer/tool/call', {
-                  threadId,
-                  server: 'codex_apps',
-                  tool: plan.probe.tool,
-                  arguments: plan.probe.arguments,
-                }),
-                CHATGPT_SIGN_IN_PROBE_TIMEOUT_MS,
-              ).then(
-                (response) => ({ response }),
-                (error: unknown) => ({ error }),
+            async (
+              task,
+            ): Promise<ChatGptAppSignIn | ConfiguredServerSignIn> => {
+              if (task.kind === 'app') {
+                const { plan } = task
+                if (!plan.probe) return unprobed(plan)
+                const verdict = classifyChatGptSignInProbe(
+                  await call('codex_apps', plan.probe),
+                  plan.probe,
+                )
+                return {
+                  appId: plan.app.id,
+                  ...verdict,
+                  account: verdict.account ?? plan.owner,
+                }
+              }
+              const planned = planConfiguredServerCheck(task.server)
+              if (planned.kind === 'verdict')
+                return { server: task.server.name, ...planned.verdict }
+              const verdict = classifyChatGptSignInProbe(
+                await call(task.server.name, planned.probe),
+                planned.probe,
               )
-              const verdict = classifyChatGptSignInProbe(outcome, plan.probe)
               return {
-                appId: plan.app.id,
+                server: task.server.name,
                 ...verdict,
-                account: verdict.account ?? plan.owner,
+                status:
+                  verdict.status === 'built-in' ? 'unchecked' : verdict.status,
               }
             },
           )
-          return { ...empty, checkedAt: checkedAt(), signIns }
+          return {
+            ...empty,
+            checkedAt: checkedAt(),
+            signIns: results.filter(
+              (result): result is ChatGptAppSignIn => 'appId' in result,
+            ),
+            servers: results.filter(
+              (result): result is ConfiguredServerSignIn => 'server' in result,
+            ),
+          }
         } finally {
           await rpc
             .request('thread/unsubscribe', { threadId })
@@ -384,30 +439,60 @@ export class ProviderAccountMcpService {
     }
   }
 
-  /** The `codex_apps` tools with their app, annotations and link owner. */
-  private async readCodexAppTools(
+  /**
+   * The configured servers' state on the check's thread, once each has
+   * finished starting or {@link CONFIGURED_SERVER_STARTUP_WAIT_MS} has passed
+   * (a server still starting then reads as "did not finish starting").
+   */
+  private async waitForConfiguredServers(
     rpc: Pick<JsonRpcClient, 'request'>,
-  ): Promise<CodexAppTool[]> {
-    const tools: CodexAppTool[] = []
+    threadId: string,
+    names: string[],
+  ): Promise<McpServerLiveStatus[]> {
+    const deadline = Date.now() + CONFIGURED_SERVER_STARTUP_WAIT_MS
+    for (;;) {
+      const servers = (await this.readMcpServers(rpc, threadId)).filter(
+        (server) => names.includes(server.name),
+      )
+      if (!servers.some(isMcpServerStarting) || Date.now() >= deadline)
+        return servers
+      await new Promise((resolve) =>
+        setTimeout(resolve, CONFIGURED_SERVER_STARTUP_POLL_MS),
+      )
+    }
+  }
+
+  /** Every MCP server with its tools; on a thread, with its live state. */
+  private async readMcpServers(
+    rpc: Pick<JsonRpcClient, 'request'>,
+    threadId: string | null,
+  ): Promise<McpServerLiveStatus[]> {
+    const servers = new Map<string, McpServerLiveStatus>()
     let cursor: string | null = null
     const seen = new Set<string>()
     do {
       const page = (await rpc.request('mcpServerStatus/list', {
         detail: 'toolsAndAuthOnly',
         cursor,
+        ...(threadId ? { threadId } : {}),
       })) as {
-        data?: Array<{ name: string; tools?: Record<string, CodexAppTool> }>
+        data?: McpServerLiveStatus[]
         nextCursor?: string | null
       }
-      for (const server of page.data ?? [])
-        if (server.name === 'codex_apps')
-          tools.push(...Object.values(server.tools ?? {}))
+      // One server's tools may continue on the next page: merge by name.
+      for (const server of page.data ?? []) {
+        const earlier = servers.get(server.name)
+        servers.set(server.name, {
+          ...server,
+          tools: { ...(earlier?.tools ?? {}), ...(server.tools ?? {}) },
+        })
+      }
       cursor = page.nextCursor ?? null
       if (cursor && seen.has(cursor))
         throw new Error('Codex repeated an MCP status page.')
       if (cursor) seen.add(cursor)
     } while (cursor)
-    return tools
+    return [...servers.values()]
   }
 
   setBinaryPath(binaryPath: string | null): void {
@@ -789,6 +874,10 @@ export class ProviderAccountMcpService {
     })
   }
 }
+
+/** How long the check waits for configured MCP servers to finish starting. */
+export const CONFIGURED_SERVER_STARTUP_WAIT_MS = 10_000
+const CONFIGURED_SERVER_STARTUP_POLL_MS = 500
 
 /** A single app's check waits this long; then it is "Couldn't check". */
 export const CHATGPT_SIGN_IN_PROBE_TIMEOUT_MS = 20_000

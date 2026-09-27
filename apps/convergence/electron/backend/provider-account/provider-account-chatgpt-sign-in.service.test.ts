@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
 import {
+  CONFIGURED_SERVER_STARTUP_WAIT_MS,
   CHATGPT_SIGN_IN_PROBE_CONCURRENCY,
   CHATGPT_SIGN_IN_PROBE_TIMEOUT_MS,
   ProviderAccountMcpService,
@@ -49,6 +50,8 @@ function bench(
   overrides: {
     installed?: (forceRefresh: boolean) => InstalledApp[]
     tools?: ReturnType<typeof appTool>[]
+    /** Configured servers per read; `threadId` set once the thread exists. */
+    configured?: (threadId: string | null) => Array<Record<string, unknown>>
   } = {},
 ) {
   const calls: Call[] = []
@@ -88,7 +91,9 @@ function bench(
       if (method === 'mcpServerStatus/list')
         return {
           data: [
-            { name: 'linear', tools: {} },
+            ...(overrides.configured?.(
+              (params as { threadId?: string }).threadId ?? null,
+            ) ?? []),
             {
               name: 'codex_apps',
               tools: Object.fromEntries(tools.map((t) => [t.name, t])),
@@ -347,6 +352,7 @@ describe('MAR-3470 checking each ChatGPT app by using it', () => {
       providerAccountId: 'a',
       checkedAt: null,
       signIns: [],
+      servers: [],
       error: null,
     })
     expect(b.request.mock.calls.map(([method]) => method)).toEqual([
@@ -397,6 +403,137 @@ describe('MAR-3470 checking each ChatGPT app by using it', () => {
     })
     await b.service.checkChatGptAppSignIns('a')
     expect(b.toolCalls().sort()).toEqual(['figma.whoami', 'github.get_profile'])
+  })
+  describe('servers configured on this Mac', () => {
+    const linearTools = {
+      list_issues: { name: 'list_issues', annotations: { readOnlyHint: true } },
+      get_user: {
+        name: 'get_user',
+        annotations: { readOnlyHint: true },
+        inputSchema: { required: ['query'] },
+      },
+    }
+    it('a connected Linear is asked who you are on its own server; Codex saying sign-in is needed takes no call', async () => {
+      const b = bench(
+        async (tool) =>
+          tool === 'get_user'
+            ? {
+                content: [
+                  {
+                    type: 'text',
+                    text: '{"name":"marckraw@icloud.com","email":"marckraw@icloud.com"}',
+                  },
+                ],
+              }
+            : { structuredContent: { name: 'Me' } },
+        {
+          installed: () => [],
+          configured: (threadId) => [
+            {
+              name: 'linear',
+              runtimeStatus: threadId ? 'connected' : null,
+              authStatus: 'oAuth',
+              tools: linearTools,
+            },
+            {
+              name: 'figma',
+              runtimeStatus: threadId ? 'authenticationRequired' : null,
+              authStatus: 'oAuth',
+              tools: {},
+            },
+          ],
+        },
+      )
+      const result = await b.service.checkChatGptAppSignIns('a')
+      expect(result.servers).toEqual([
+        {
+          server: 'linear',
+          status: 'signed-in',
+          account: 'marckraw@icloud.com',
+          reason: null,
+        },
+        {
+          server: 'figma',
+          status: 'needs-sign-in',
+          account: null,
+          reason: null,
+        },
+      ])
+      const serverCalls = b.calls
+        .filter((call) => call.method === 'mcpServer/tool/call')
+        .map((call) => call.params)
+      expect(serverCalls).toEqual([
+        {
+          threadId: 'thread-1',
+          server: 'linear',
+          tool: 'get_user',
+          arguments: { query: 'me' },
+        },
+      ])
+      expect(b.calls.at(-1)?.method).toBe('thread/unsubscribe')
+    })
+    it('waits for a server that is still starting, then checks it', async () => {
+      let reads = 0
+      const b = bench(
+        async () => ({ structuredContent: { name: 'Me', email: 'me@x.io' } }),
+        {
+          installed: () => [],
+          configured: (threadId) => {
+            if (threadId) reads++
+            return [
+              {
+                name: 'linear',
+                runtimeStatus: !threadId
+                  ? null
+                  : reads < 2
+                    ? 'starting'
+                    : 'connected',
+                authStatus: 'oAuth',
+                tools: linearTools,
+              },
+            ]
+          },
+        },
+      )
+      const { servers } = await b.service.checkChatGptAppSignIns('a')
+      expect(servers).toEqual([
+        {
+          server: 'linear',
+          status: 'signed-in',
+          account: 'Me (me@x.io)',
+          reason: null,
+        },
+      ])
+      expect(reads).toBe(2)
+    })
+    it(`a server still starting after ${CONFIGURED_SERVER_STARTUP_WAIT_MS / 1000} s says so and is not called`, async () => {
+      vi.useFakeTimers()
+      const b = bench(undefined, {
+        installed: () => [],
+        configured: (threadId) => [
+          {
+            name: 'linear',
+            runtimeStatus: threadId ? 'starting' : null,
+            authStatus: 'oAuth',
+            tools: linearTools,
+          },
+        ],
+      })
+      const checking = b.service.checkChatGptAppSignIns('a')
+      await vi.advanceTimersByTimeAsync(
+        CONFIGURED_SERVER_STARTUP_WAIT_MS + 1_000,
+      )
+      const { servers } = await checking
+      expect(servers).toEqual([
+        {
+          server: 'linear',
+          status: 'failed',
+          account: null,
+          reason: 'The server did not finish starting.',
+        },
+      ])
+      expect(b.toolCalls()).toEqual([])
+    })
   })
   it('refuses a missing account without touching any host', async () => {
     const b = bench()

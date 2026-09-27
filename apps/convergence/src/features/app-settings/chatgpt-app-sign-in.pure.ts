@@ -1,5 +1,6 @@
 import type {
   ChatGptAppSignIn,
+  ConfiguredServerSignIn,
   ProviderAccountChatGptApps,
 } from '@/entities/provider-account'
 
@@ -98,4 +99,39 @@ export function describeChatGptSignInsCheckedAt(
   const at = new Date(checkedAt)
   if (Number.isNaN(at.getTime())) return null
   return `Sign-ins checked at ${at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+}
+
+/**
+ * The live line of a server configured on this Mac, which replaces its saved
+ * "Authorized" label once a check has answered (MAR-3470): the label only
+ * says a sign-in was stored, the line says whether it works now.
+ */
+export function configuredServerSignInLine(input: {
+  signIn: ConfiguredServerSignIn | undefined
+  checking: boolean
+}): { text: string; tone: ChatGptSignInTone } | null {
+  const { signIn, checking } = input
+  if (checking) return { text: 'Checking sign-in…', tone: 'muted' }
+  if (!signIn) return null
+  switch (signIn.status) {
+    case 'signed-in':
+      return {
+        text: signIn.account
+          ? `Signed in as ${signIn.account}`
+          : 'Connected and signed in',
+        tone: 'good',
+      }
+    case 'needs-sign-in':
+      return {
+        text: 'Needs sign-in again: press Authorize',
+        tone: 'warn',
+      }
+    case 'failed':
+      return {
+        text: `Couldn't check sign-in: ${signIn.reason ?? 'no reason given.'}`,
+        tone: 'muted',
+      }
+    case 'unchecked':
+      return null
+  }
 }

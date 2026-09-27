@@ -357,6 +357,7 @@ export const ProviderAccountsContainer: FC = () => {
           providerAccountId: accountId,
           checkedAt: null,
           signIns: [],
+          servers: [],
           error: 'Could not check sign-ins. Try Refresh.',
         }
       }

@@ -17,6 +17,7 @@ import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
   chatGptManageLabel,
   chatGptSignInLine,
+  configuredServerSignInLine,
   describeChatGptSignInsCheckedAt,
 } from './chatgpt-app-sign-in.pure'
 import { CHATGPT_SIGN_IN_TONE } from './chatgpt-app-sign-in.styles'
@@ -598,36 +599,59 @@ export function ProviderAccountsFields({
                         No MCP servers are configured.
                       </p>
                     ) : (
-                      (connectors?.connectors ?? []).map((connector) => (
-                        <div
-                          key={connector.name}
-                          className="flex flex-wrap items-center justify-between gap-2"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">
-                              {connector.name}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {connector.statusLabel}
-                            </p>
+                      (connectors?.connectors ?? []).map((connector) => {
+                        // A Codex account's saved "Authorized" gives way to
+                        // what the sign-in check observed (MAR-3470).
+                        const live = isCodex
+                          ? configuredServerSignInLine({
+                              signIn: chatGptSignIns?.servers.find(
+                                (entry) => entry.server === connector.name,
+                              ),
+                              checking: isCheckingChatGptSignIns,
+                            })
+                          : null
+                        return (
+                          <div
+                            key={connector.name}
+                            className="flex flex-wrap items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {connector.name}
+                              </p>
+                              {live ? (
+                                <p
+                                  className={cn(
+                                    'text-pretty break-words text-xs',
+                                    CHATGPT_SIGN_IN_TONE[live.tone],
+                                  )}
+                                >
+                                  {live.text}
+                                </p>
+                              ) : (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {connector.statusLabel}
+                                </p>
+                              )}
+                            </div>
+                            {connector.needsAuthorization ||
+                            (isCodex && connector.status === 'ready') ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={authorizingServerName !== null}
+                                onClick={() =>
+                                  onAuthorizeConnector(row.id, connector.name)
+                                }
+                              >
+                                {authorizingServerName === connector.name
+                                  ? 'Waiting for browser...'
+                                  : 'Authorize'}
+                              </Button>
+                            ) : null}
                           </div>
-                          {connector.needsAuthorization ||
-                          (isCodex && connector.status === 'ready') ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={authorizingServerName !== null}
-                              onClick={() =>
-                                onAuthorizeConnector(row.id, connector.name)
-                              }
-                            >
-                              {authorizingServerName === connector.name
-                                ? 'Waiting for browser...'
-                                : 'Authorize'}
-                            </Button>
-                          ) : null}
-                        </div>
-                      ))
+                        )
+                      })
                     )}
                     {!isLoadingConnectors && connectors?.error ? (
                       <p className="text-sm text-muted-foreground">
