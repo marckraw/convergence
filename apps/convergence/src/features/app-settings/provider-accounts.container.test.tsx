@@ -789,9 +789,13 @@ describe('ProviderAccountsContainer', () => {
         },
       ])
       await screen.findByText('Authorized')
+      // A stored sign-in is signed in again, not authorized anew (MAR-3516).
       expect(
-        screen.getByRole('button', { name: 'Authorize' }),
+        screen.getByRole('button', { name: 'Sign in again' }),
       ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Authorize' }),
+      ).not.toBeInTheDocument()
       expect(
         screen.queryByRole('button', { name: 'Connect Linear' }),
       ).not.toBeInTheDocument()
@@ -901,6 +905,49 @@ describe('ProviderAccountsContainer', () => {
       expect(
         screen.queryByText(/linear authorized for this account/),
       ).not.toBeInTheDocument()
+    })
+
+    it('MAR-3516 a Claude Figma that needs signing in says why Figma drops, and the list promises only what holds', async () => {
+      providerAccounts.listConnectors.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [
+          {
+            name: 'claude.ai Figma',
+            status: 'needs-auth',
+            statusLabel: '! Needs authentication',
+            description: 'https://mcp.figma.com/mcp',
+            needsAuthorization: true,
+          },
+          {
+            name: 'linear',
+            status: 'needs-auth',
+            statusLabel: '! Needs authentication',
+            description: 'https://mcp.linear.app/mcp',
+            needsAuthorization: true,
+          },
+        ],
+        error: null,
+      })
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+      const figma = (await screen.findByText('claude.ai Figma')).parentElement!
+      expect(figma.textContent).toContain(
+        'Figma keeps one sign-in per app for each Figma user',
+      )
+      expect(
+        screen.getByText('linear').parentElement!.textContent,
+      ).not.toContain('keeps one sign-in')
+      expect(
+        screen.getByText(
+          /Some services, like Figma, keep one sign-in per app for each of their users/,
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/authorizes a connector once/)).toBeNull()
+      // Nothing is stored here, so it is still Authorize.
+      expect(screen.getAllByRole('button', { name: 'Authorize' })).toHaveLength(
+        2,
+      )
     })
 
     it('MAR-3185 R5 a Claude account whose linear needs authentication gets Authorize, not Connect Linear', async () => {
@@ -1571,9 +1618,14 @@ describe('MAR-3458 ChatGPT apps', () => {
       expect(lineOf(group, 'Figma')).toContain(
         'Needs sign-in again on ChatGPT (linked to me@ef.com)',
       )
+      // MAR-3516: why a Figma link drops, under the Figma row only.
+      expect(lineOf(group, 'Figma')).toContain(
+        'Figma keeps one sign-in per app for each Figma user',
+      )
       expect(lineOf(group, 'Hotline')).toContain(
         'Built into ChatGPT, no sign-in needed',
       )
+      expect(lineOf(group, 'Hotline')).not.toContain('keeps one sign-in')
       expect(lineOf(group, 'Disabled app')).not.toMatch(/sign/i)
       expect(
         within(group).getByRole('button', { name: 'Sign in again on ChatGPT' }),
@@ -1726,13 +1778,21 @@ describe('MAR-3458 ChatGPT apps', () => {
         ),
       )
       expect(linear.textContent).not.toContain('Connected')
+      // Signed in: the button offers signing in again, quietly (MAR-3516).
+      const row = linear.parentElement!
+      expect(
+        within(row).getByRole('button', { name: 'Sign in again' }),
+      ).toBeInTheDocument()
+      expect(
+        within(row).queryByRole('button', { name: 'Authorize' }),
+      ).toBeNull()
     })
     it('a configured server whose sign-in stopped working says so instead of its saved label', async () => {
       await open()
       const linear = screen.getByText('linear').parentElement!
       await waitFor(() =>
         expect(linear.textContent).toContain(
-          'Needs sign-in again: press Authorize',
+          'Needs sign-in again: press "Sign in again"',
         ),
       )
       expect(linear.textContent).not.toContain('Connected')

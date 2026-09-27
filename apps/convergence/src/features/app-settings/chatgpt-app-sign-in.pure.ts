@@ -140,7 +140,7 @@ export function configuredServerSignInLine(input: {
       }
     case 'needs-sign-in':
       return {
-        text: 'Needs sign-in again: press Authorize',
+        text: 'Needs sign-in again: press "Sign in again"',
         tone: 'warn',
       }
     case 'failed':
@@ -150,5 +150,47 @@ export function configuredServerSignInLine(input: {
       }
     case 'unchecked':
       return null
+  }
+}
+
+/**
+ * What every account's "Configured on this Mac" list may promise (MAR-3516).
+ * Tokens are per account and survive swaps, but a service can keep only one
+ * sign-in per app for each of its users: Figma does (developers.figma.com,
+ * "OAuth apps"; three hand-overs measured on MAR-3486).
+ */
+export const CONFIGURED_SERVERS_SENTENCE =
+  'Each account signs in to these servers on its own and keeps the sign-in across later swaps. Some services, like Figma, keep one sign-in per app for each of their users: signing in on another account signs this one out.'
+
+export const ONE_SIGN_IN_PER_APP_NOTE =
+  'Figma keeps one sign-in per app for each Figma user: signing in here signs out any other account that uses this app, and signing in elsewhere signs this one out.'
+
+/**
+ * The line under a row that needs signing in, when the service is one that
+ * keeps a single sign-in per app. Only Figma is measured, so only Figma says it.
+ */
+export function oneSignInPerAppNote(input: {
+  name: string
+  needsSignIn: boolean
+}): string | null {
+  return input.needsSignIn && /\bfigma\b/i.test(input.name)
+    ? ONE_SIGN_IN_PER_APP_NOTE
+    : null
+}
+
+/**
+ * The button beside a configured server. A server with a stored sign-in is
+ * signed in *again*, never "authorized" as if it had none; the button only
+ * asks for attention when nothing works (MAR-3516).
+ */
+export function configuredServerAction(input: {
+  needsAuthorization: boolean
+  liveStatus: ConfiguredServerSignIn['status'] | null
+}): { label: string; emphasis: 'primary' | 'secondary' } {
+  if (input.needsAuthorization)
+    return { label: 'Authorize', emphasis: 'primary' }
+  return {
+    label: 'Sign in again',
+    emphasis: input.liveStatus === 'needs-sign-in' ? 'primary' : 'secondary',
   }
 }

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CONFIGURED_SERVERS_SENTENCE,
+  ONE_SIGN_IN_PER_APP_NOTE,
   CHATGPT_LINK_ACTION_LABEL,
+  configuredServerAction,
+  oneSignInPerAppNote,
   CHATGPT_SIGN_IN_MEMORY_MS,
   chatGptLinkCopiedMessage,
   chatGptSignInsCheckedAtMs,
@@ -133,7 +137,7 @@ describe('MAR-3470 the live line of a server configured on this Mac', () => {
   })
   it('a stored sign-in that stopped working points at Authorize', () => {
     expect(line(server('needs-sign-in'))).toEqual({
-      text: 'Needs sign-in again: press Authorize',
+      text: 'Needs sign-in again: press "Sign in again"',
       tone: 'warn',
     })
   })
@@ -168,5 +172,59 @@ describe('MAR-3486 where a ChatGPT link goes', () => {
     expect(chatGptLinkCopiedMessage('  ')).toContain(
       'signed in as this account;',
     )
+  })
+})
+
+describe('MAR-3516 the panel promises only what holds', () => {
+  it('no longer claims a sign-in outlives every other account', () => {
+    expect(CONFIGURED_SERVERS_SENTENCE).not.toMatch(
+      /authorizes a connector once/,
+    )
+    expect(CONFIGURED_SERVERS_SENTENCE).toMatch(
+      /Some services, like Figma, keep one sign-in per app for each of their users: signing in on another account signs this one out\.$/,
+    )
+  })
+  it('the Figma rule sits under a Figma row that needs signing in, whatever the app', () => {
+    for (const name of [
+      'Figma',
+      'figma',
+      'claude.ai Figma',
+      'plugin:figma:figma',
+    ]) {
+      expect(oneSignInPerAppNote({ name, needsSignIn: true })).toBe(
+        ONE_SIGN_IN_PER_APP_NOTE,
+      )
+      expect(oneSignInPerAppNote({ name, needsSignIn: false })).toBeNull()
+    }
+  })
+  it('only Figma is measured, so nothing else claims it', () => {
+    expect(
+      oneSignInPerAppNote({ name: 'linear', needsSignIn: true }),
+    ).toBeNull()
+    expect(
+      oneSignInPerAppNote({ name: 'figmatic', needsSignIn: true }),
+    ).toBeNull()
+  })
+  it('a stored sign-in is signed in again, never authorized as if it had none', () => {
+    expect(
+      configuredServerAction({ needsAuthorization: true, liveStatus: null }),
+    ).toEqual({ label: 'Authorize', emphasis: 'primary' })
+    expect(
+      configuredServerAction({
+        needsAuthorization: false,
+        liveStatus: 'signed-in',
+      }),
+    ).toEqual({ label: 'Sign in again', emphasis: 'secondary' })
+    expect(
+      configuredServerAction({
+        needsAuthorization: false,
+        liveStatus: 'needs-sign-in',
+      }),
+    ).toEqual({ label: 'Sign in again', emphasis: 'primary' })
+    for (const liveStatus of ['failed', 'unchecked', null] as const) {
+      expect(
+        configuredServerAction({ needsAuthorization: false, liveStatus }),
+      ).toEqual({ label: 'Sign in again', emphasis: 'secondary' })
+    }
   })
 })
