@@ -1287,12 +1287,25 @@ describe('MAR-3458 ChatGPT apps', () => {
       appId: null,
     })
     expect(providerAccounts.browseChatGptApps).not.toHaveBeenCalled()
+    // Closing and reopening the section forgets the copy.
+    fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+    const reopened = await screen.findByRole('region', { name: 'From ChatGPT' })
+    await within(reopened).findByText('Figma')
+    expect(within(reopened).queryByText(/Link copied/)).toBeNull()
+    await chooseChatGptLink(
+      within(reopened).getByRole('button', { name: 'Browse apps on ChatGPT' }),
+      'Copy link',
+    )
+    expect(await within(reopened).findByRole('status')).toHaveTextContent(
+      /^Link copied/,
+    )
     // The next choice starts clean: an Open says nothing about a copy.
     await chooseChatGptLink(
-      within(group).getByRole('button', { name: 'Browse apps on ChatGPT' }),
+      within(reopened).getByRole('button', { name: 'Browse apps on ChatGPT' }),
       'Open in default browser',
     )
-    expect(within(group).queryByText(/Link copied/)).toBeNull()
+    expect(within(reopened).queryByText(/Link copied/)).toBeNull()
   })
   it('MAR-3486 a copy that failed says so and claims no copied link', async () => {
     const group = await open()

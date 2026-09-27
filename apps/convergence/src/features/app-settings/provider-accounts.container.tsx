@@ -468,6 +468,8 @@ export const ProviderAccountsContainer: FC = () => {
 
   const handleToggleConnectors = useCallback(
     async (accountId: string) => {
+      // A copied link is news only until the section closes (MAR-3486).
+      setChatGptLinkCopiedFor(null)
       if (expandedConnectorsAccountId === accountId) {
         setExpandedConnectorsAccountId(null)
         return
