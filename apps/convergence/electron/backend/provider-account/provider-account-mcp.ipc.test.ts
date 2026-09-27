@@ -2,11 +2,13 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { registerProviderAccountIpcHandlers } from './provider-account.ipc'
 
 const openExternal = vi.hoisted(() => vi.fn())
+const writeText = vi.hoisted(() => vi.fn())
 const handlers = vi.hoisted(
   () => new Map<string, (...args: unknown[]) => unknown>(),
 )
 vi.mock('electron', () => ({
   shell: { openExternal },
+  clipboard: { writeText },
   ipcMain: {
     handle: (name: string, handler: (...args: unknown[]) => unknown) =>
       handlers.set(name, handler),
@@ -123,4 +125,37 @@ it('MAR-3458 Browse uses a fixed backend URL', async () => {
   expect(openExternal).toHaveBeenCalledExactlyOnceWith(
     'https://chatgpt.com/apps',
   )
+})
+
+it('MAR-3486 Copy link copies the same link Open would open, and opens nothing', async () => {
+  const b = setup()
+  const chatGptAppUrl = vi
+    .fn()
+    .mockResolvedValue('https://chatgpt.com/apps/figma')
+  Object.assign(b.mcp, { chatGptAppUrl })
+  openExternal.mockClear()
+  writeText.mockClear()
+  await handlers.get('providerAccounts:copyChatGptLink')!(null, {
+    accountId: 'account',
+    appId: 'figma',
+    url: 'https://attacker.invalid',
+  })
+  expect(chatGptAppUrl).toHaveBeenCalledExactlyOnceWith('account', 'figma')
+  expect(writeText).toHaveBeenLastCalledWith('https://chatgpt.com/apps/figma')
+  await handlers.get('providerAccounts:copyChatGptLink')!(null, {
+    accountId: 'account',
+    url: 'https://attacker.invalid',
+  })
+  expect(chatGptAppUrl).toHaveBeenCalledTimes(1)
+  expect(writeText).toHaveBeenLastCalledWith('https://chatgpt.com/apps')
+  chatGptAppUrl.mockRejectedValue(new Error('This app has no ChatGPT page'))
+  writeText.mockClear()
+  await expect(
+    handlers.get('providerAccounts:copyChatGptLink')!(null, {
+      accountId: 'account',
+      appId: 'unknown',
+    }),
+  ).rejects.toThrow('This app has no ChatGPT page')
+  expect(writeText).not.toHaveBeenCalled()
+  expect(openExternal).not.toHaveBeenCalled()
 })

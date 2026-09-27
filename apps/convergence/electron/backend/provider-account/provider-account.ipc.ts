@@ -1,7 +1,8 @@
 import type { ProviderAccountLoginService } from './provider-account-login.service'
-import { ipcMain, shell } from 'electron'
+import { clipboard, ipcMain, shell } from 'electron'
 import type { ProviderAccountAttestationService } from './provider-account-attestation.service'
 import type { ProviderAccountMcpService } from './provider-account-mcp.service'
+import { CHATGPT_APPS_BROWSE_URL } from './provider-account-chatgpt-apps.pure'
 import type {
   EnrolProviderAccountInput,
   ProviderAccountEnrolmentService,
@@ -110,7 +111,25 @@ export function registerProviderAccountIpcHandlers(deps: {
     },
   )
   ipcMain.handle('providerAccounts:browseChatGptApps', () =>
-    shell.openExternal('https://chatgpt.com/apps'),
+    shell.openExternal(CHATGPT_APPS_BROWSE_URL),
+  )
+  /**
+   * Copies the link a ChatGPT button would open, for pasting into another
+   * browser profile (MAR-3486): the default browser may be signed in to
+   * ChatGPT as a different account than the one this panel belongs to.
+   * Resolved here like the open paths, so a renderer URL never becomes the
+   * link; written here, so a lookup that takes a cold host's seconds still
+   * lands on the clipboard after the window lost focus.
+   */
+  ipcMain.handle(
+    'providerAccounts:copyChatGptLink',
+    async (_event, input: { accountId: string; appId?: string | null }) => {
+      const link =
+        typeof input.appId === 'string'
+          ? await deps.mcp.chatGptAppUrl(input.accountId, input.appId)
+          : CHATGPT_APPS_BROWSE_URL
+      clipboard.writeText(link)
+    },
   )
 
   ipcMain.handle(

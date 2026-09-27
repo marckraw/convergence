@@ -22,6 +22,7 @@ import {
 import {
   chatGptSignInsCheckedAtMs,
   shouldCheckChatGptSignIns,
+  type ChatGptLinkAction,
 } from './chatgpt-app-sign-in.pure'
 import { useChatGptSignInsStore } from './chatgpt-sign-ins.model'
 
@@ -77,6 +78,10 @@ export const ProviderAccountsContainer: FC = () => {
     accountId: string
     message: string
   } | null>(null)
+  // The account whose ChatGPT link was just copied (MAR-3486).
+  const [chatGptLinkCopiedFor, setChatGptLinkCopiedFor] = useState<
+    string | null
+  >(null)
   const refreshChatGptApps = useRef<(() => void) | null>(null)
   const returningFromChatGpt = useRef(false)
   // Sign-in checks per account (MAR-3470), in a store so they outlive this
@@ -425,9 +430,30 @@ export const ProviderAccountsContainer: FC = () => {
     }
   }, [expandedConnectorsAccountId, providerId])
 
-  const handleChatGptLink = async (accountId: string, appId?: string) => {
+  const handleChatGptLink = async (
+    accountId: string,
+    appId: string | undefined,
+    action: ChatGptLinkAction,
+  ) => {
     setChatGptLinkError(null)
+    setChatGptLinkCopiedFor(null)
     returningFromChatGpt.current = true
+    if (action === 'copy') {
+      try {
+        await providerAccountApi.copyChatGptLink({
+          accountId,
+          appId: appId ?? null,
+        })
+        setChatGptLinkCopiedFor(accountId)
+      } catch {
+        setChatGptLinkError({
+          accountId,
+          message:
+            'Could not copy the ChatGPT link. Try Refresh, then Copy link again.',
+        })
+      }
+      return
+    }
     try {
       if (appId) await providerAccountApi.manageChatGptApp({ accountId, appId })
       else await providerAccountApi.browseChatGptApps()
@@ -565,11 +591,17 @@ export const ProviderAccountsContainer: FC = () => {
           ? chatGptLinkError.message
           : null
       }
-      onRefreshChatGptApps={() => refreshChatGptApps.current?.()}
-      onManageChatGptApp={(accountId, appId) =>
-        void handleChatGptLink(accountId, appId)
+      chatGptLinkCopied={
+        expandedConnectorsAccountId !== null &&
+        chatGptLinkCopiedFor === expandedConnectorsAccountId
       }
-      onBrowseChatGptApps={(accountId) => void handleChatGptLink(accountId)}
+      onRefreshChatGptApps={() => refreshChatGptApps.current?.()}
+      onManageChatGptApp={(accountId, appId, action) =>
+        void handleChatGptLink(accountId, appId, action)
+      }
+      onBrowseChatGptApps={(accountId, action) =>
+        void handleChatGptLink(accountId, undefined, action)
+      }
       connectors={connectors}
       isLoadingConnectors={isLoadingConnectors}
       authorizingServerName={authorizingServerName}

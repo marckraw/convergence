@@ -17,6 +17,15 @@ import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsContainer } from './provider-accounts.container'
 import { CHATGPT_APPS_FOCUS_INTERVAL_MS } from './chatgpt-apps-refresh.pure'
 import { useChatGptSignInsStore } from './chatgpt-sign-ins.model'
+
+/** Presses a ChatGPT button and picks one of its two choices (MAR-3486). */
+async function chooseChatGptLink(
+  trigger: HTMLElement,
+  choice: 'Open in default browser' | 'Copy link',
+) {
+  fireEvent.pointerDown(trigger)
+  fireEvent.click(await screen.findByRole('menuitem', { name: choice }))
+}
 import { ProviderAccountMcpService } from '../../../electron/backend/provider-account/provider-account-mcp.service'
 import type { ProviderAccountRepository } from '../../../electron/backend/provider-account/provider-account.repository'
 import type { CodexServerHostRegistry } from '../../../electron/backend/provider/codex/codex-server-host'
@@ -74,6 +83,7 @@ const providerAccounts = {
   checkChatGptAppSignIns: vi.fn(),
   manageChatGptApp: vi.fn(),
   browseChatGptApps: vi.fn(),
+  copyChatGptLink: vi.fn(),
   listConnectors: vi.fn(),
   authorizeConnector: vi.fn(),
   connectLinear: vi.fn(),
@@ -1115,6 +1125,7 @@ describe('MAR-3458 ChatGPT apps', () => {
     useChatGptSignInsStore.setState({ byAccount: {}, inFlight: {} })
     providerAccounts.manageChatGptApp.mockResolvedValue(undefined)
     providerAccounts.browseChatGptApps.mockResolvedValue(undefined)
+    providerAccounts.copyChatGptLink.mockResolvedValue(undefined)
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       providerAccounts,
     }
@@ -1228,15 +1239,75 @@ describe('MAR-3458 ChatGPT apps', () => {
       name: 'Manage on ChatGPT',
     })
     expect(buttons).toHaveLength(3)
-    fireEvent.click(buttons[0])
+    await chooseChatGptLink(buttons[0], 'Open in default browser')
     expect(providerAccounts.manageChatGptApp).toHaveBeenCalledWith({
       accountId: 'acct-a',
       appId: 'figma',
     })
-    fireEvent.click(
+    await chooseChatGptLink(
       within(group).getByRole('button', { name: 'Browse apps on ChatGPT' }),
+      'Open in default browser',
     )
     expect(providerAccounts.browseChatGptApps).toHaveBeenCalledExactlyOnceWith()
+    expect(providerAccounts.copyChatGptLink).not.toHaveBeenCalled()
+  })
+  it('MAR-3486 Copy link copies the link for another browser profile and names the login', async () => {
+    const group = await open()
+    await within(group).findByText('Figma')
+    await waitFor(() =>
+      expect(
+        within(group).getByRole('button', { name: 'Refresh' }),
+      ).not.toBeDisabled(),
+    )
+    providerAccounts.listChatGptApps.mockClear()
+    await chooseChatGptLink(
+      within(group).getAllByRole('button', { name: 'Manage on ChatGPT' })[0],
+      'Copy link',
+    )
+    expect(providerAccounts.copyChatGptLink).toHaveBeenCalledExactlyOnceWith({
+      accountId: 'acct-a',
+      appId: 'figma',
+    })
+    expect(providerAccounts.manageChatGptApp).not.toHaveBeenCalled()
+    expect(await within(group).findByRole('status')).toHaveTextContent(
+      'Link copied. Paste it into the browser profile where ChatGPT is signed in as a@example.com; coming back here checks again.',
+    )
+    // Coming back from the other browser checks again at once, as after Open.
+    fireEvent.focus(window)
+    expect(providerAccounts.listChatGptApps).toHaveBeenCalledExactlyOnceWith({
+      accountId: 'acct-a',
+      forceRefetch: true,
+    })
+    await chooseChatGptLink(
+      within(group).getByRole('button', { name: 'Browse apps on ChatGPT' }),
+      'Copy link',
+    )
+    expect(providerAccounts.copyChatGptLink).toHaveBeenLastCalledWith({
+      accountId: 'acct-a',
+      appId: null,
+    })
+    expect(providerAccounts.browseChatGptApps).not.toHaveBeenCalled()
+    // The next choice starts clean: an Open says nothing about a copy.
+    await chooseChatGptLink(
+      within(group).getByRole('button', { name: 'Browse apps on ChatGPT' }),
+      'Open in default browser',
+    )
+    expect(within(group).queryByText(/Link copied/)).toBeNull()
+  })
+  it('MAR-3486 a copy that failed says so and claims no copied link', async () => {
+    const group = await open()
+    await within(group).findByText('Figma')
+    providerAccounts.copyChatGptLink.mockRejectedValue(
+      new Error('This app has no ChatGPT page available. Try Refresh.'),
+    )
+    await chooseChatGptLink(
+      within(group).getAllByRole('button', { name: 'Manage on ChatGPT' })[0],
+      'Copy link',
+    )
+    expect(await within(group).findByRole('alert')).toHaveTextContent(
+      'Could not copy the ChatGPT link. Try Refresh, then Copy link again.',
+    )
+    expect(within(group).queryByText(/Link copied/)).toBeNull()
   })
   it('R4/MAR-3485 focus re-reads at most once per interval, Refresh always does, a closed section never', async () => {
     const realNow = Date.now.bind(Date)
@@ -1306,8 +1377,9 @@ describe('MAR-3458 ChatGPT apps', () => {
     providerAccounts.listChatGptApps.mockClear()
     fireEvent.focus(window)
     expect(providerAccounts.listChatGptApps).not.toHaveBeenCalled()
-    fireEvent.click(
+    await chooseChatGptLink(
       within(group).getAllByRole('button', { name: 'Manage on ChatGPT' })[0],
+      'Open in default browser',
     )
     fireEvent.focus(window)
     expect(providerAccounts.listChatGptApps).toHaveBeenCalledExactlyOnceWith({
@@ -1433,9 +1505,12 @@ describe('MAR-3458 ChatGPT apps', () => {
         { id: 'off', name: 'Disabled app', state: 'off' },
       ],
     }
+    // A check answered at the moment it is built: the five-minute memory is
+    // measured against the clock, so a fixed stamp is a test that expires
+    // (MAR-3486 found these red once 27 Sep 00:57Z passed).
     const observed = (accountId = 'acct-a', figmaStatus = 'needs-sign-in') => ({
       providerAccountId: accountId,
-      checkedAt: '2026-09-27T00:52:00.000Z',
+      checkedAt: new Date(Date.now()).toISOString(),
       error: null,
       signIns: [
         {
@@ -1547,10 +1622,11 @@ describe('MAR-3458 ChatGPT apps', () => {
         providerAccounts.checkChatGptAppSignIns.mockResolvedValue(
           observed('acct-a', 'signed-in'),
         )
-        fireEvent.click(
+        await chooseChatGptLink(
           within(group).getByRole('button', {
             name: 'Sign in again on ChatGPT',
           }),
+          'Open in default browser',
         )
         fireEvent.focus(window)
         await waitFor(() =>

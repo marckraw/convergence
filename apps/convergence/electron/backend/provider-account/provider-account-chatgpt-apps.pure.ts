@@ -22,6 +22,9 @@ export interface ProviderAccountChatGptApps {
   error: string | null
 }
 
+/** Where "Browse apps on ChatGPT" goes: a fixed page, never a renderer URL. */
+export const CHATGPT_APPS_BROWSE_URL = 'https://chatgpt.com/apps'
+
 /** `app/read` accepts at most this many ids per request (Codex 0.157). */
 export const CHATGPT_APP_READ_LIMIT = 100
 

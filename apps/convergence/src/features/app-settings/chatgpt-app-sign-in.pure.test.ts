@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CHATGPT_LINK_ACTION_LABEL,
   CHATGPT_SIGN_IN_MEMORY_MS,
+  chatGptLinkCopiedMessage,
   chatGptSignInsCheckedAtMs,
   chatGptManageLabel,
   configuredServerSignInLine,
@@ -147,5 +149,24 @@ describe('MAR-3470 the live line of a server configured on this Mac', () => {
       text: 'Checking sign-in…',
       tone: 'muted',
     })
+  })
+})
+
+describe('MAR-3486 where a ChatGPT link goes', () => {
+  it('the two choices, in his words', () => {
+    expect(CHATGPT_LINK_ACTION_LABEL).toEqual({
+      open: 'Open in default browser',
+      copy: 'Copy link',
+    })
+  })
+  it('a copied link names the ChatGPT login it belongs to', () => {
+    expect(chatGptLinkCopiedMessage('marcin@ef.design')).toBe(
+      'Link copied. Paste it into the browser profile where ChatGPT is signed in as marcin@ef.design; coming back here checks again.',
+    )
+  })
+  it('an account without a name still gets a sentence', () => {
+    expect(chatGptLinkCopiedMessage('  ')).toContain(
+      'signed in as this account;',
+    )
   })
 })
