@@ -1,5 +1,12 @@
 # convergence
 
+## 0.93.1
+
+### Patch Changes
+
+- ad2e10c: A Claude account's Connectors no longer say "Connected" for a server that new conversations silently skip. Claude Code keeps a "needs sign-in" note for up to 4 hours and never removes it when the server works again, for example after connecting Figma on claude.ai. When the panel sees such a server connected, it now clears that note and says so, so new conversations on the account try the server again. The note also stays per account, so it no longer makes removing a Claude account ask about private data.
+- 47adadf: Connectors no longer promise that a sign-in lasts no matter what: the panel now says that some services, like Figma, keep one sign-in per app for each of their users, so signing in with the same Figma user on another account signs this one out, and a Figma row that needs signing in again explains why. A server that already has a sign-in offers "Sign in again" instead of "Authorize".
+
 ## 0.93.0
 
 ### Minor Changes
