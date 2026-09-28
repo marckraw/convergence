@@ -1412,6 +1412,7 @@ interface ProviderAccountConnectorsData {
     needsAuthorization: boolean
   }>
   error: string | null
+  clearedNeedsAuthNotes?: string[]
 }
 
 type ProviderAccountStatusData = 'connected' | 'expired' | 'unavailable'

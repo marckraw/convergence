@@ -1,6 +1,13 @@
 import type { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
 import type { JsonRpcClient } from '../provider/codex/jsonrpc'
 import { tmpdir } from 'os'
+import { promises as nodeFs } from 'fs'
+import { randomUUID } from 'crypto'
+import { basename, dirname, join } from 'path'
+import {
+  CLAUDE_NEEDS_AUTH_NOTE_FILE,
+  pruneClaudeNeedsAuthNote,
+} from './claude-needs-auth-note.pure'
 import {
   buildCodexOneShotThreadParams,
   readCodexOneShotThreadId,
@@ -136,6 +143,43 @@ export interface ProviderAccountMcpDeps {
    */
   homeDir?: string
   claudeConfigIo?: ClaudeConfigIo
+  /** How a Claude account's "needs sign-in" note is read and replaced (MAR-3517). */
+  claudeNeedsAuthNoteIo?: ClaudeNeedsAuthNoteIo
+}
+
+/** The file seam for Claude Code's needs-auth note; tests pass a fake. */
+export interface ClaudeNeedsAuthNoteIo {
+  /**
+   * The account's own note, or null when there is none to edit: missing, or
+   * not a regular file of this account (a symlink points somewhere shared).
+   */
+  read: (path: string) => Promise<string | null>
+  /** Replaces the note in one step, keeping the file's permissions. */
+  replace: (path: string, contents: string) => Promise<void>
+}
+
+/** The real-filesystem note IO; exported for its own tests only. */
+export const defaultClaudeNeedsAuthNoteIo: ClaudeNeedsAuthNoteIo = {
+  read: async (path) => {
+    try {
+      if (!(await nodeFs.lstat(path)).isFile()) return null
+      return await nodeFs.readFile(path, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
+    }
+  },
+  replace: async (path, contents) => {
+    const mode = (await nodeFs.lstat(path)).mode & 0o777
+    const temp = join(dirname(path), `.${basename(path)}.tmp-${randomUUID()}`)
+    try {
+      await nodeFs.writeFile(temp, contents, { encoding: 'utf8', mode })
+      await nodeFs.rename(temp, path)
+    } catch (error) {
+      await nodeFs.rm(temp, { force: true }).catch(() => {})
+      throw error
+    }
+  },
 }
 
 export class ProviderAccountMcpService {
@@ -151,8 +195,11 @@ export class ProviderAccountMcpService {
   private readonly codexMaintenance: ProviderAccountMcpDeps['codexMaintenance']
   private readonly homeDir: string | undefined
   private readonly claudeConfigIo: ClaudeConfigIo | undefined
+  private readonly claudeNeedsAuthNoteIo: ClaudeNeedsAuthNoteIo
 
   constructor(deps: ProviderAccountMcpDeps) {
+    this.claudeNeedsAuthNoteIo =
+      deps.claudeNeedsAuthNoteIo ?? defaultClaudeNeedsAuthNoteIo
     this.codexServerHosts = deps.codexServerHosts
     this.homeDir = deps.homeDir
     this.claudeConfigIo = deps.claudeConfigIo
@@ -690,6 +737,20 @@ export class ProviderAccountMcpService {
    * inside `.claude.json`. Both of those are undocumented internal shapes whose
    * expiry semantics Convergence would have to guess at; `mcp list` is the
    * answer Claude itself gives, and Convergence already parses it.
+   *
+   * The note is still touched once, and only where it contradicts that answer
+   * (MAR-3517): `mcp list` writes it on "Needs authentication" and never
+   * clears it on "Connected", so a server fixed elsewhere reads Connected here
+   * while every new conversation skips it for up to 4 hours. An entry for a
+   * server this very run reported Connected is removed; nothing else is read
+   * from it, and the expiry is never needed. Managed account directories only:
+   * the ambient default is the person's own profile. Measured on Claude Code
+   * 2.1.283, which keeps the note in this file; a release that moves it into
+   * its key-value storage leaves no file, and nothing is cleared or claimed.
+   *
+   * What removal promises is only that new conversations try the server
+   * again: a conversation already running holds its own copy of the note and
+   * may write the entry back when it next notes another server.
    */
   async listConnectors(
     accountId: string | null,
@@ -724,28 +785,38 @@ export class ProviderAccountMcpService {
     let release: (() => void) | undefined
     try {
       release = await this.accountMaintenance.admit(accountId)
+      const account = this.resolveAccount(accountId)
       const result = await this.runCommand(
         buildClaudeMcpListCommand({
           binaryPath,
-          account: this.resolveAccount(accountId),
+          account,
           baseEnv: this.baseEnv,
           workingDirectory: this.workingDirectory(),
         }),
       )
 
+      const connectors = parseClaudeListEntries(result.stdout).map((entry) => {
+        const status = mapClaudeStatus(entry.statusLabel)
+        return {
+          name: entry.name,
+          status,
+          statusLabel: entry.statusLabel,
+          description: entry.description,
+          needsAuthorization: status === 'needs-auth',
+        }
+      })
       return {
         providerAccountId: accountId,
-        connectors: parseClaudeListEntries(result.stdout).map((entry) => {
-          const status = mapClaudeStatus(entry.statusLabel)
-          return {
-            name: entry.name,
-            status,
-            statusLabel: entry.statusLabel,
-            description: entry.description,
-            needsAuthorization: status === 'needs-auth',
-          }
-        }),
+        connectors,
         error: null,
+        clearedNeedsAuthNotes: account
+          ? await this.clearStaleNeedsAuthNotes(
+              account.configDir,
+              connectors
+                .filter((connector) => connector.status === 'ready')
+                .map((connector) => connector.name),
+            )
+          : [],
       }
     } catch (error) {
       return {
@@ -854,6 +925,33 @@ export class ProviderAccountMcpService {
     }
 
     return result
+  }
+
+  /**
+   * Removes the account's "needs sign-in" entries for servers just reported
+   * Connected, inside the same maintenance admission as the read. Best
+   * effort: a note that can't be read or replaced is left as it was, and the
+   * panel then claims nothing was cleared.
+   */
+  private async clearStaleNeedsAuthNotes(
+    configDir: string,
+    connected: string[],
+  ): Promise<string[]> {
+    if (connected.length === 0) return []
+    const path = join(configDir, CLAUDE_NEEDS_AUTH_NOTE_FILE)
+    try {
+      const raw = await this.claudeNeedsAuthNoteIo.read(path)
+      if (raw === null) return []
+      const pruned = pruneClaudeNeedsAuthNote(raw, connected)
+      if (!pruned) return []
+      // Claude Code deletes the whole note when its own sign-in completes; a
+      // note that changed since the read is theirs now, never overwritten.
+      if ((await this.claudeNeedsAuthNoteIo.read(path)) !== raw) return []
+      await this.claudeNeedsAuthNoteIo.replace(path, pruned.next)
+      return pruned.cleared
+    } catch {
+      return []
+    }
   }
 
   /**

@@ -17,6 +17,7 @@ import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
   CONFIGURED_SERVERS_SENTENCE,
   chatGptLinkCopiedMessage,
+  clearedNeedsAuthNotesMessage,
   configuredServerAction,
   configuredServerNeedsSignIn,
   chatGptManageLabel,
@@ -701,6 +702,19 @@ export function ProviderAccountsFields({
                         )
                       })
                     )}
+                    {!isLoadingConnectors &&
+                    clearedNeedsAuthNotesMessage(
+                      connectors?.clearedNeedsAuthNotes,
+                    ) ? (
+                      <p
+                        role="status"
+                        className="text-pretty text-xs text-muted-foreground"
+                      >
+                        {clearedNeedsAuthNotesMessage(
+                          connectors?.clearedNeedsAuthNotes,
+                        )}
+                      </p>
+                    ) : null}
                     {!isLoadingConnectors && connectors?.error ? (
                       <p className="text-sm text-muted-foreground">
                         {connectors.error}

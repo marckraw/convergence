@@ -950,6 +950,41 @@ describe('ProviderAccountsContainer', () => {
       )
     })
 
+    it('MAR-3517 a Claude read that cleared a stale skip-note says so; one that cleared nothing is quiet', async () => {
+      providerAccounts.listConnectors.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [
+          {
+            name: 'claude.ai Figma',
+            status: 'ready',
+            statusLabel: '✔ Connected',
+            description: 'https://mcp.figma.com/mcp',
+            needsAuthorization: false,
+          },
+        ],
+        error: null,
+        clearedNeedsAuthNotes: ['claude.ai Figma'],
+      })
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'Cleared Claude\'s "needs sign-in" note for "claude.ai Figma": it\'s connected, so new conversations on this account will try it again.',
+      )
+      cleanup()
+      providerAccounts.listConnectors.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [],
+        error: null,
+        clearedNeedsAuthNotes: [],
+      })
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+      await screen.findByText('No MCP servers are configured.')
+      expect(screen.queryByText(/needs sign-in" note/)).toBeNull()
+    })
+
     it('MAR-3185 R5 a Claude account whose linear needs authentication gets Authorize, not Connect Linear', async () => {
       render(<ProviderAccountsContainer />)
       await screen.findByText('a@example.com')

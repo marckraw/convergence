@@ -8,6 +8,7 @@ import {
   oneSignInPerAppNote,
   CHATGPT_SIGN_IN_MEMORY_MS,
   chatGptLinkCopiedMessage,
+  clearedNeedsAuthNotesMessage,
   chatGptSignInsCheckedAtMs,
   chatGptManageLabel,
   configuredServerSignInLine,
@@ -262,5 +263,28 @@ describe('MAR-3516 the panel promises only what holds', () => {
     expect(ONE_SIGN_IN_PER_APP_NOTE).toContain(
       'signing in with the same Figma user on another account signs this one out',
     )
+  })
+})
+
+describe('MAR-3517 a cleared "needs sign-in" note is said once, plainly', () => {
+  it('names the server and promises only that new conversations try it again', () => {
+    expect(clearedNeedsAuthNotesMessage(['claude.ai Figma'])).toBe(
+      'Cleared Claude\'s "needs sign-in" note for "claude.ai Figma": it\'s connected, so new conversations on this account will try it again. A conversation already running keeps the tools it started with; restart it to pick this up.',
+    )
+  })
+  it('several servers read as one sentence', () => {
+    expect(
+      clearedNeedsAuthNotesMessage(['claude.ai Figma', 'plugin:figma:figma']),
+    ).toMatch(
+      /^Cleared Claude's "needs sign-in" notes for "claude\.ai Figma" and "plugin:figma:figma": they're connected, so new conversations on this account will try them again\./,
+    )
+  })
+  it('never claims a skip it cannot know, or a use it cannot promise', () => {
+    const said = clearedNeedsAuthNotesMessage(['claude.ai Figma'])!
+    expect(said).not.toMatch(/had a note to skip|can use it/)
+  })
+  it('nothing cleared says nothing', () => {
+    expect(clearedNeedsAuthNotesMessage([])).toBeNull()
+    expect(clearedNeedsAuthNotesMessage(undefined)).toBeNull()
   })
 })
