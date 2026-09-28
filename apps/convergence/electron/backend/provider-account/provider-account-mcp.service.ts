@@ -916,11 +916,6 @@ export class ProviderAccountMcpService {
   }
 
   /**
-   * Reuses PA4's resolver, so a removed or attestation-disabled account is
-   * refused here exactly as it is at spawn — authorizing a connector for an
-   * account that cannot serve turns would write tokens nothing will ever use.
-   */
-  /**
    * Removes the account's "needs sign-in" entries for servers just reported
    * Connected, inside the same maintenance admission as the read. Best
    * effort: a note that can't be read or replaced is left as it was, and the
@@ -944,6 +939,11 @@ export class ProviderAccountMcpService {
     }
   }
 
+  /**
+   * Reuses PA4's resolver, so a removed or attestation-disabled account is
+   * refused here exactly as it is at spawn — authorizing a connector for an
+   * account that cannot serve turns would write tokens nothing will ever use.
+   */
   private resolveAccount(accountId: string | null) {
     const account = accountId ? this.repository.get(accountId) : null
     if (account && account.providerId !== 'claude-code') {
