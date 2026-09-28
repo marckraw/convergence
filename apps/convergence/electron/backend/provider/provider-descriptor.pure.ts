@@ -347,8 +347,16 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       {
         id: 'sonnet',
         label: 'Claude Sonnet',
+        description: 'Alias for the latest Sonnet (currently Sonnet 5.5).',
+        contextWindowTokens: 1_000_000,
         defaultEffort: 'medium',
-        effortOptions: buildEffortOptions(['low', 'medium', 'high']),
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ]),
       },
       {
         id: 'opus',
@@ -414,6 +422,19 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         label: 'Claude Opus 5',
         contextWindowTokens: 1_000_000,
         defaultEffort: 'high',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ]),
+      },
+      {
+        id: 'claude-sonnet-5-5',
+        label: 'Claude Sonnet 5.5',
+        contextWindowTokens: 1_000_000,
+        defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
           'low',
           'medium',
