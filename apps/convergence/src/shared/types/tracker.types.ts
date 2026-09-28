@@ -455,9 +455,10 @@ export type DispatchWord =
 /**
  * Whether a seat's account reaches Figma, by a live check (MAR-3526):
  * `reaches` only when a check answered for Figma; `cannot-reach` when the
- * check found no working Figma; `unknown` when it could not be told.
+ * check found no working Figma; `unknown` when it could not be told;
+ * `checking` while the first check for that account is still running.
  */
-export type SeatFigmaReach = 'reaches' | 'cannot-reach' | 'unknown'
+export type SeatFigmaReach = 'reaches' | 'cannot-reach' | 'unknown' | 'checking'
 
 export interface AutoDispatchRecord {
   issueId: string

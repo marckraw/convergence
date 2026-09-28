@@ -84,8 +84,9 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
       issueNeedsFigma(entry.fact) && seat?.figma?.reach !== 'reaches'
         ? {
             reach:
-              seat?.figma?.reach === 'cannot-reach'
-                ? ('cannot-reach' as const)
+              seat?.figma?.reach === 'cannot-reach' ||
+              seat?.figma?.reach === 'checking'
+                ? seat.figma.reach
                 : ('unknown' as const),
             account: seat?.figma?.account ?? null,
           }

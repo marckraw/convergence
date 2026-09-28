@@ -323,6 +323,19 @@ describe('MAR-3526 Figma access is a hard STOP for a design-sourced issue', () =
     }
   })
 
+  it('a first check still running stops, and says it is checking', () => {
+    expect(
+      plan(
+        [design('1', { figmaLinked: true })],
+        horse({ figma: { reach: 'checking', account: 'marcin@ef.design' } }),
+      ).words['1'],
+    ).toEqual({
+      kind: 'seat-no-figma',
+      reach: 'checking',
+      account: 'marcin@ef.design',
+    })
+  })
+
   it('an unanswered or unasked Figma question stops too', () => {
     expect(
       plan(

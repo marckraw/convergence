@@ -62,39 +62,58 @@ describe('MAR-3526 an OpenAI account reaches Figma only when a call said so', ()
       }),
     ).toBe('reaches')
   })
-  it('signed out, unchecked, or another app signed in is not reaching Figma', () => {
-    for (const status of ['needs-sign-in', 'failed', 'unchecked'] as const)
+  it('a Figma sign-in that needs renewing, or a full read with no Figma, cannot reach', () => {
+    expect(
+      codexFigmaReach({
+        apps,
+        signIns: signIns({
+          signIns: [
+            {
+              appId: 'asdk_app_figma',
+              status: 'needs-sign-in',
+              account: null,
+              reason: null,
+            },
+            {
+              appId: 'github',
+              status: 'signed-in',
+              account: 'm',
+              reason: null,
+            },
+          ],
+        }),
+      }),
+    ).toBe('cannot-reach')
+    expect(codexFigmaReach({ apps, signIns: signIns() })).toBe('cannot-reach')
+  })
+  it("a check that couldn't tell is unknown, never a false 'sign it in'", () => {
+    for (const status of ['failed', 'unchecked'] as const)
       expect(
         codexFigmaReach({
           apps,
           signIns: signIns({
             signIns: [
               { appId: 'asdk_app_figma', status, account: null, reason: null },
-              {
-                appId: 'github',
-                status: 'signed-in',
-                account: 'm',
-                reason: null,
-              },
-            ],
-            servers: [
-              {
-                server: 'figma',
-                status: 'unchecked',
-                account: null,
-                reason: null,
-              },
             ],
           }),
         }),
-      ).toBe('cannot-reach')
-    expect(codexFigmaReach({ apps, signIns: signIns() })).toBe('cannot-reach')
-  })
-  it('a check that failed without any answer cannot tell', () => {
+      ).toBe('unknown')
     expect(
       codexFigmaReach({
         apps,
         signIns: signIns({ error: 'Could not check sign-ins' }),
+      }),
+    ).toBe('unknown')
+    expect(
+      codexFigmaReach({
+        apps: { ...apps, error: 'Could not read ChatGPT apps' },
+        signIns: signIns(),
+      }),
+    ).toBe('unknown')
+    expect(
+      codexFigmaReach({
+        apps: { ...apps, apps: [], requiresChatGpt: true },
+        signIns: signIns(),
       }),
     ).toBe('unknown')
   })
@@ -130,6 +149,11 @@ describe("MAR-3526 a Claude account reaches Figma when Claude's own list says co
       'cannot-reach',
     )
     expect(claudeFigmaReach(list([['linear', 'ready']]))).toBe('cannot-reach')
+  })
+  it('a Figma server that failed is unknown, not a sign-in problem', () => {
+    expect(claudeFigmaReach(list([['plugin:figma:figma', 'failed']]))).toBe(
+      'unknown',
+    )
   })
   it('a list that failed cannot tell', () => {
     expect(

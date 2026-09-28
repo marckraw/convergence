@@ -567,6 +567,18 @@ describe('MAR-3526 a Figma stop says what would let the issue go', () => {
       "needs Figma · opus@icloud.com can't reach it — sign it in to Figma, or give the issue to a seat that can",
     )
   })
+  it('a first check still running says so', () => {
+    expect(
+      dispatchWordSentence(
+        {
+          kind: 'seat-no-figma',
+          reach: 'checking',
+          account: 'marcin@ef.design',
+        },
+        'astra-mac',
+      ),
+    ).toBe('needs Figma · checking whether marcin@ef.design reaches it')
+  })
   it('an unanswered question points at the check', () => {
     expect(
       dispatchWordSentence(
@@ -574,7 +586,7 @@ describe('MAR-3526 a Figma stop says what would let the issue go', () => {
         'grok-mac',
       ),
     ).toBe(
-      "needs Figma · couldn't confirm this seat's account reaches it — check it in Settings → Provider accounts",
+      "needs Figma · couldn't confirm this seat's account reaches it, so it waits",
     )
   })
 })

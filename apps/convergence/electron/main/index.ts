@@ -1026,8 +1026,8 @@ async function startApp(): Promise<void> {
     },
     listChatGptApps: (accountId) =>
       providerAccountMcpService.listChatGptApps(accountId, false),
-    checkChatGptAppSignIns: (accountId) =>
-      providerAccountMcpService.checkChatGptAppSignIns(accountId),
+    checkChatGptAppSignIns: (accountId, only) =>
+      providerAccountMcpService.checkChatGptAppSignIns(accountId, only),
     listConnectors: (accountId) =>
       providerAccountMcpService.listConnectors(accountId),
     now: () => Date.now(),

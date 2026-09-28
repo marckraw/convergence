@@ -112,7 +112,9 @@ export function dispatchWordSentence(
       // design-sourced issue, so the sentence says what would let it go.
       return word.reach === 'cannot-reach'
         ? `needs Figma · ${word.account ?? "this seat's account"} can't reach it — sign it in to Figma, or give the issue to a seat that can`
-        : `needs Figma · couldn't confirm ${word.account ?? "this seat's account"} reaches it — check it in Settings → Provider accounts`
+        : word.reach === 'checking'
+          ? `needs Figma · checking whether ${word.account ?? "this seat's account"} reaches it`
+          : `needs Figma · couldn't confirm ${word.account ?? "this seat's account"} reaches it, so it waits`
     case 'would-start':
       return 'would start now'
   }

@@ -508,7 +508,12 @@ export class TrackerWatcherService {
         groundedAt: row.groundedAt,
         read: 'summary' in row.fact,
         figmaInBody: row.fact.figmaInBody ?? null,
-        figmaRead: 'figmaInBody' in row.fact,
+        // A body this process already read counts too: a row the diff never
+        // rewrites (a verdict hold, a terminal row) would otherwise be read
+        // again every tick (MAR-3526, the blind reader's finding).
+        figmaRead:
+          'figmaInBody' in row.fact ||
+          this.lastBodyRead.has(bodyKey(crewId, row.issueId)),
       }))
       const wanted = issuesNeedingBody(memory, issues)
       const bodies =

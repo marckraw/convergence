@@ -69,13 +69,26 @@ export class AutoDispatchPlanService {
       (m) => m.role === 'mastermind' && m.sessionId,
     )
     const entries = this.deps.currentView(crewId)
+    const records = this.records(crewId)
+    // Asked only for a design issue that could otherwise start: labels set,
+    // not blocked, lap 1, not already sent. A groom-me issue with a Figma
+    // link sitting for days never costs a check (MAR-3526).
     const needFigma = new Set(
       entries
         .filter(
           (entry) =>
             entry.state === 'assigned' &&
             entry.seat !== null &&
-            issueNeedsFigma(entry.fact),
+            issueNeedsFigma(entry.fact) &&
+            entry.fact.groomed === true &&
+            entry.fact.grounded === true &&
+            entry.fact.dispatch === true &&
+            !entry.blocked &&
+            entry.lap <= 1 &&
+            !records.some(
+              (record) =>
+                record.issueId === entry.issueId && record.lap === entry.lap,
+            ),
         )
         .map((entry) => entry.seat),
     )
@@ -128,7 +141,7 @@ export class AutoDispatchPlanService {
     const plan = planAutoDispatch({
       plannedAt,
       autoDispatch: crew.trackerBinding?.autoDispatch ?? false,
-      records: this.records(crewId),
+      records,
       seats,
       entries,
       firstSeen: this.deps.firstDispatchSeenAt(crewId),

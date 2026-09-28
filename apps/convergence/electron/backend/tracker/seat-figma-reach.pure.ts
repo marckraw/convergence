@@ -11,36 +11,59 @@ import type { ProviderAccountConnectorsResult } from '../provider-account/provid
  */
 const FIGMA = /\bfigma\b/i
 
-/** An OpenAI account: its ChatGPT Figma app, or Figma configured on this Mac. */
+/** The Figma apps among an account's installed ChatGPT apps, by name or id. */
+export function figmaAppIds(apps: ProviderAccountChatGptApps): string[] {
+  return apps.apps
+    .filter((app) => FIGMA.test(app.name) || FIGMA.test(app.id))
+    .map((app) => app.id)
+}
+
+/** Whether a server name is Figma's. */
+export function isFigmaServer(name: string): boolean {
+  return FIGMA.test(name)
+}
+
+/**
+ * An OpenAI account: its ChatGPT Figma app, or Figma configured on this Mac.
+ * `cannot-reach` only on a clean answer — a sign-in that needs renewing, or a
+ * full read with no Figma in it. A check that couldn't tell (failed or
+ * unchecked calls, an apps list that failed, an account without ChatGPT
+ * apps) is `unknown`: the issue still stops, but nobody is told a false fix.
+ */
 export function codexFigmaReach(input: {
   apps: ProviderAccountChatGptApps
   signIns: ProviderAccountChatGptSignIns
 }): SeatFigmaReach {
-  const figmaApps = new Set(
-    input.apps.apps
-      .filter((app) => FIGMA.test(app.name) || FIGMA.test(app.id))
-      .map((app) => app.id),
+  const figmaApps = new Set(figmaAppIds(input.apps))
+  const answers = [
+    ...input.signIns.signIns.filter((entry) => figmaApps.has(entry.appId)),
+    ...input.signIns.servers.filter((entry) => isFigmaServer(entry.server)),
+  ].map((entry) => entry.status)
+  if (answers.includes('signed-in')) return 'reaches'
+  if (
+    input.apps.error !== null ||
+    input.apps.requiresChatGpt ||
+    input.signIns.error !== null ||
+    answers.some((status) => status !== 'needs-sign-in')
   )
-  const apps = input.signIns.signIns.filter((entry) =>
-    figmaApps.has(entry.appId),
-  )
-  const servers = input.signIns.servers.filter((entry) =>
-    FIGMA.test(entry.server),
-  )
-  if ([...apps, ...servers].some((entry) => entry.status === 'signed-in'))
-    return 'reaches'
-  // No answer at all is not a "no": the check itself failed.
-  if (input.signIns.error !== null && apps.length + servers.length === 0)
     return 'unknown'
   return 'cannot-reach'
 }
 
-/** A Claude account: a Figma server Claude's `mcp list` calls connected. */
+/**
+ * A Claude account: a Figma server Claude's `mcp list` calls connected.
+ * `cannot-reach` only when the list read cleanly and its Figma servers need
+ * authentication or there are none; a failed server or read is `unknown`.
+ */
 export function claudeFigmaReach(
   result: ProviderAccountConnectorsResult,
 ): SeatFigmaReach {
-  const figma = result.connectors.filter((entry) => FIGMA.test(entry.name))
+  const figma = result.connectors.filter((entry) => isFigmaServer(entry.name))
   if (figma.some((entry) => entry.status === 'ready')) return 'reaches'
-  if (result.error !== null && figma.length === 0) return 'unknown'
+  if (
+    result.error !== null ||
+    figma.some((entry) => entry.status !== 'needs-auth')
+  )
+    return 'unknown'
   return 'cannot-reach'
 }

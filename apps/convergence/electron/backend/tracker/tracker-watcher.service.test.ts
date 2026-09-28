@@ -7,6 +7,7 @@ import type { WorkLedgerSnapshot } from '../work-ledger/work-ledger.types'
 import {
   TRACKER_BACKGROUND_INTERVAL_MS,
   TRACKER_WATCH_INTERVAL_MS,
+  diffTrackerSnapshot,
 } from './tracker-watcher.pure'
 import { TrackerWatcherService } from './tracker-watcher.service'
 import { createLinearTrackerAdapter } from './linear-tracker.adapter'
@@ -1520,5 +1521,82 @@ describe('MAR-3236: the issues outside the loop, read beside the ledger', () => 
     expect(
       ledger.list(crewId).some((row) => row.issueIdentifier === 'EX-90'),
     ).toBe(false)
+  })
+})
+
+describe('MAR-3526 a row from before Figma links were looked for is read once, even when the diff writes nothing', () => {
+  let db: Database.Database
+  let crewId: string
+  let ledger: WorkLedgerService
+
+  beforeEach(() => {
+    db = getDatabase()
+    const crews = new CrewService(db)
+    crewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(crewId, { projectId: 'project-1' })
+    ledger = new WorkLedgerService(db)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it('a finished row now in a status the ledger does not map: one body read, not one a minute', async () => {
+    const finished = trackerIssue({
+      id: 'issue-1',
+      identifier: 'EX-1',
+      logicalStatus: 'done',
+      status: 'Done',
+      summary: 'The work',
+    })
+    // The row as a build before MAR-3526 wrote it: a summary, no Figma keys.
+    const [row] = diffTrackerSnapshot({
+      crewId,
+      current: [],
+      issues: [finished],
+      seenAt: '2026-09-17T07:00:00.000Z',
+    })
+    const oldFact = { ...row!.fact }
+    delete oldFact.figmaLinked
+    delete oldFact.figmaInBody
+    ledger.append([{ ...row!, fact: oldFact }])
+    const unmapped = {
+      ...finished,
+      logicalStatus: 'other' as const,
+      status: 'Archived-ish',
+    }
+    const readIssueBodies = vi.fn(
+      async (ids: readonly string[]) =>
+        new Map<string, string | null>(
+          ids.map((id) => [id, 'No design here.']),
+        ),
+    )
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: () => ({
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
+        listLabeledIssues: async () => [unmapped],
+        readIssueBodies,
+        listOutsideIssues: NO_OUTSIDE,
+      }),
+      broadcast: () => {},
+      now: () => new Date('2026-09-28T08:00:00.000Z'),
+      log: vi.fn(),
+    })
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(1)
+    // The diff writes no row for a finished issue in an unmapped status, so
+    // the row still lacks the key; only this process's own read can say so.
+    await service.tick()
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(1)
   })
 })
