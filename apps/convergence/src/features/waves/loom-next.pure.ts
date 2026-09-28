@@ -107,6 +107,12 @@ export function dispatchWordSentence(
       }[word.state]
     case 'queued-behind':
       return `queued behind ${word.identifier}`
+    case 'seat-no-figma':
+      // Marcin's law (MAR-3526): Figma access is a hard STOP for a
+      // design-sourced issue, so the sentence says what would let it go.
+      return word.reach === 'cannot-reach'
+        ? `needs Figma · ${word.account ?? "this seat's account"} can't reach it — sign it in to Figma, or give the issue to a seat that can`
+        : `needs Figma · couldn't confirm ${word.account ?? "this seat's account"} reaches it — check it in Settings → Provider accounts`
     case 'would-start':
       return 'would start now'
   }

@@ -169,6 +169,17 @@ function readFact(raw: string): WorkLedgerFact {
       // A row written before MAR-3304 has no key at all; absent is read as
       // "the tracker links none", so no reader downstream meets `undefined`.
       pullRequests: value?.pullRequests ?? FACT_DEFAULTS.pullRequests,
+      // Absent on rows before MAR-3526, and kept absent: `figmaInBody`'s KEY
+      // is how a later tick knows the body was read for Figma links.
+      ...(value && 'figmaLinked' in value
+        ? { figmaLinked: value.figmaLinked === true }
+        : {}),
+      ...(value && 'figmaInBody' in value
+        ? {
+            figmaInBody:
+              typeof value.figmaInBody === 'boolean' ? value.figmaInBody : null,
+          }
+        : {}),
       ...(value && 'summary' in value
         ? { summary: value.summary ?? null }
         : {}),

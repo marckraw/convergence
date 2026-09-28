@@ -507,6 +507,8 @@ export class TrackerWatcherService {
         summary: row.fact.summary ?? null,
         groundedAt: row.groundedAt,
         read: 'summary' in row.fact,
+        figmaInBody: row.fact.figmaInBody ?? null,
+        figmaRead: 'figmaInBody' in row.fact,
       }))
       const wanted = issuesNeedingBody(memory, issues)
       const bodies =

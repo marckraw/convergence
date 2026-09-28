@@ -302,3 +302,71 @@ it('MAR-3186 R1 recipes count live spawns, release ended work, and reserve WIP w
   recipe.wire = null
   expect(plan(entries, recipe).words['2'].kind).toBe('no-wire')
 })
+
+describe('MAR-3526 Figma access is a hard STOP for a design-sourced issue', () => {
+  const design = (id: string, fact: Partial<WorkLedgerRecord['fact']>) =>
+    row(id, { fact: { ...ready, ...fact } })
+  const reaches = { reach: 'reaches' as const, account: 'm@ef.com' }
+
+  it('a Figma link, attached or in the body, stops at a seat whose account cannot reach Figma', () => {
+    for (const fact of [{ figmaLinked: true }, { figmaInBody: true }]) {
+      const p = plan(
+        [design('1', fact)],
+        horse({ figma: { reach: 'cannot-reach', account: 'opus@icloud.com' } }),
+      )
+      expect(p.words['1']).toEqual({
+        kind: 'seat-no-figma',
+        reach: 'cannot-reach',
+        account: 'opus@icloud.com',
+      })
+      expect(p.order.horse ?? []).toEqual([])
+    }
+  })
+
+  it('an unanswered or unasked Figma question stops too', () => {
+    expect(
+      plan(
+        [design('1', { figmaInBody: true })],
+        horse({ figma: { reach: 'unknown', account: null } }),
+      ).words['1'],
+    ).toEqual({ kind: 'seat-no-figma', reach: 'unknown', account: null })
+    expect(
+      plan([design('1', { figmaInBody: true })], horse()).words['1'],
+    ).toEqual({ kind: 'seat-no-figma', reach: 'unknown', account: null })
+  })
+
+  it('a seat that reaches Figma starts it; an issue without a link never asks', () => {
+    expect(
+      plan([design('1', { figmaLinked: true })], horse({ figma: reaches }))
+        .words['1'].kind,
+    ).toBe('would-start')
+    expect(
+      plan(
+        [design('1', { figmaLinked: false, figmaInBody: false })],
+        horse({ figma: { reach: 'cannot-reach', account: null } }),
+      ).words['1'].kind,
+    ).toBe('would-start')
+  })
+
+  it('the stopped issue takes no place in the queue: the seat’s other work still starts', () => {
+    const p = plan(
+      [design('1', { figmaInBody: true }), row('2')],
+      horse({ figma: { reach: 'cannot-reach', account: null } }),
+    )
+    expect(p.words['1'].kind).toBe('seat-no-figma')
+    expect(p.words['2'].kind).toBe('would-start')
+    expect(p.order.horse).toEqual(['2'])
+  })
+
+  it('said even while the seat is busy, since waiting will not fix it', () => {
+    expect(
+      plan(
+        [design('1', { figmaInBody: true })],
+        horse({
+          availability: 'turn',
+          figma: { reach: 'cannot-reach', account: null },
+        }),
+      ).words['1'].kind,
+    ).toBe('seat-no-figma')
+  })
+})

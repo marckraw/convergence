@@ -260,6 +260,10 @@ function sameObservation(
     // Left off this list, the very issue this slice exists for (a Done row
     // whose PR arrives after the last status move) would never be rewritten.
     samePullRequests(previous.fact.pullRequests, next.fact.pullRequests) &&
+    // Whether the issue is design-sourced decides which seat may take it
+    // (MAR-3526), so a link added later must reach the planner.
+    (previous.fact.figmaLinked ?? false) === (next.fact.figmaLinked ?? false) &&
+    (previous.fact.figmaInBody ?? null) === (next.fact.figmaInBody ?? null) &&
     (previous.fact.summary ?? null) === (next.fact.summary ?? null)
   )
 }
@@ -284,6 +288,8 @@ function factFrom(issue: TrackerIssue): WorkLedgerFact {
     priority: issue.priority,
     labels: issue.labels,
     pullRequests: issue.pullRequests,
+    figmaLinked: issue.figmaLinked,
+    figmaInBody: issue.figmaInBody,
     summary: issue.summary,
   }
 }

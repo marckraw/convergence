@@ -110,6 +110,17 @@ export interface TrackerIssue {
    */
   pullRequests: TrackerIssuePullRequest[]
   /**
+   * A Figma link among the issue's attachments (MAR-3526): the issue is
+   * design-sourced, and a seat without Figma must not be sent it.
+   */
+  figmaLinked: boolean
+  /**
+   * A Figma link in the issue's BODY (MAR-3526) — where design handoffs keep
+   * them (MAR-3187 has 20+ links and no attachment). Null until the body has
+   * been read, like `summary`.
+   */
+  figmaInBody: boolean | null
+  /**
    * The issue's promise in a sentence, from its body (R6). Null until the
    * body has been read, and null for an issue whose body says nothing.
    */
@@ -279,6 +290,16 @@ export interface WorkLedgerFact {
    */
   pullRequests?: TrackerIssuePullRequest[]
   /**
+   * A Figma link among the attachments (MAR-3526). Absent on rows written
+   * before it, which read as "no link" -- the next body read re-writes them.
+   */
+  figmaLinked?: boolean
+  /**
+   * A Figma link in the body (MAR-3526). Like `summary`, the KEY's presence
+   * is the row's answer to "was the body read for this since MAR-3526?".
+   */
+  figmaInBody?: boolean | null
+  /**
    * The issue's promise (MAR-3190 R6) -- and the row's own answer to "has a
    * body ever been read for this issue?".
    *
@@ -419,7 +440,24 @@ export type DispatchWord =
   | { kind: 'seat-holds'; identifier: string }
   | { kind: 'lane'; state: Exclude<DispatchLane, 'clean'>; path: string | null }
   | { kind: 'queued-behind'; identifier: string }
+  /**
+   * A design-sourced issue (a Figma link in it) and a seat whose account
+   * can't be shown to reach Figma (MAR-3526): Marcin's law makes Figma
+   * access a hard STOP, so nothing is sent. `account` names it when known.
+   */
+  | {
+      kind: 'seat-no-figma'
+      reach: Exclude<SeatFigmaReach, 'reaches'>
+      account: string | null
+    }
   | { kind: 'would-start'; wire: { id: string; opener: string | null } }
+
+/**
+ * Whether a seat's account reaches Figma, by a live check (MAR-3526):
+ * `reaches` only when a check answered for Figma; `cannot-reach` when the
+ * check found no working Figma; `unknown` when it could not be told.
+ */
+export type SeatFigmaReach = 'reaches' | 'cannot-reach' | 'unknown'
 
 export interface AutoDispatchRecord {
   issueId: string

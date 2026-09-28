@@ -107,6 +107,7 @@ import { SessionForkService } from '../backend/session/fork/session-fork.service
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
 import { ProviderAccountRepository } from '../backend/provider-account/provider-account.repository'
 import { resolveAccountForAutomaticTurn } from '../backend/provider-account/provider-account-automatic-turn.pure'
+import { SeatFigmaReachService } from '../backend/tracker/seat-figma-reach.service'
 import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
 import { ClaudeCredentialHealthService } from '../backend/provider-account/provider-account-credential-health.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
@@ -877,6 +878,22 @@ async function startApp(): Promise<void> {
     appSettings: appSettingsService,
   })
   registerSessionForkIpcHandlers(sessionForkService)
+  // The account a session's next automatic turn runs on, by the rule relay
+  // hops and dispatch use; one composition for the Loom card's line
+  // (MAR-3519) and the dispatch Figma stop (MAR-3526).
+  const automaticTurnAccountFor = (sessionId: string) => {
+    const session = sessionService.getSummaryById(sessionId)
+    if (!session) return null
+    return {
+      providerId: session.providerId,
+      accountId: resolveAccountForAutomaticTurn({
+        executionHost: session.executionHost,
+        lastTurnAccountId:
+          sessionService.getLastTurnProviderAccountId(sessionId),
+        accounts: providerAccountRepository.listByProvider(session.providerId),
+      }),
+    }
+  }
   registerProviderAccountIpcHandlers({
     repository: providerAccountRepository,
     enrolment: providerAccountEnrolmentService,
@@ -886,16 +903,8 @@ async function startApp(): Promise<void> {
     // The Loom card's "what can this horse reach" names the account its next
     // automatic turn runs on, by the rule relay hops and dispatch use
     // (MAR-3519).
-    automaticTurnAccount: (sessionId) => {
-      const session = sessionService.getSummaryById(sessionId)
-      if (!session) return null
-      return resolveAccountForAutomaticTurn({
-        executionHost: session.executionHost,
-        lastTurnAccountId:
-          sessionService.getLastTurnProviderAccountId(sessionId),
-        accounts: providerAccountRepository.listByProvider(session.providerId),
-      })
-    },
+    automaticTurnAccount: (sessionId) =>
+      automaticTurnAccountFor(sessionId)?.accountId ?? null,
   })
   const stopAccountHealthMonitoring =
     providerAccountAttestationService.startMonitoring(() => {
@@ -1000,6 +1009,29 @@ async function startApp(): Promise<void> {
     { list: dispatchCrews },
     workLedgerService,
   )
+  // Figma access is a hard STOP for a design-sourced issue (MAR-3526): the
+  // planner asks, per seat account, through the Connectors panel's checks.
+  const seatFigmaReach = new SeatFigmaReachService({
+    seatAccount: (sessionId) => {
+      const seat = automaticTurnAccountFor(sessionId)
+      if (!seat) return null
+      const account = seat.accountId
+        ? providerAccountRepository.get(seat.accountId)
+        : null
+      return {
+        providerId: seat.providerId,
+        accountId: seat.accountId,
+        label: account ? (account.email ?? account.label) : null,
+      }
+    },
+    listChatGptApps: (accountId) =>
+      providerAccountMcpService.listChatGptApps(accountId, false),
+    checkChatGptAppSignIns: (accountId) =>
+      providerAccountMcpService.checkChatGptAppSignIns(accountId),
+    listConnectors: (accountId) =>
+      providerAccountMcpService.listConnectors(accountId),
+    now: () => Date.now(),
+  })
   const dispatchPlanner = new AutoDispatchPlanService(
     {
       listCrews: dispatchCrews,
@@ -1011,6 +1043,7 @@ async function startApp(): Promise<void> {
       liveSpawnCount: (crewId, seat) =>
         autoDispatcher.liveSpawnCount(crewId, seat),
       describeLane: dispatchGateway.describeLane,
+      seatFigmaReach: (sessionId) => seatFigmaReach.forSeat(sessionId),
     },
     (id) => autoDispatcher.records(id),
   )

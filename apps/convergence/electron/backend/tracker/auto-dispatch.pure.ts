@@ -4,9 +4,11 @@ import type {
   DispatchPlan,
   DispatchWord,
   SeatAvailability,
+  SeatFigmaReach,
   WorkLedgerRecord,
 } from '../../../src/shared/types/tracker.types'
 import { dispatchQueueCompare } from '../../../src/shared/lib/dispatch-order.pure'
+import { issueNeedsFigma } from '../../../src/shared/lib/figma-link.pure'
 import type { SessionCrewMember } from '../crew/crew.types'
 
 export interface DispatchSeat extends Pick<
@@ -19,6 +21,12 @@ export interface DispatchSeat extends Pick<
   lanePath: string | null
   lane: DispatchLane
   wire: { id: string; opener: string | null } | null
+  /**
+   * Whether the seat's account reaches Figma (MAR-3526), checked only for a
+   * seat with a design-sourced issue. Absent reads as `unknown`: a hard STOP
+   * never passes on a question nobody asked.
+   */
+  figma?: { reach: SeatFigmaReach; account: string | null }
 }
 export interface AutoDispatchInput {
   plannedAt: string
@@ -68,10 +76,29 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
     const sent = input.records?.find(
       (r) => r.issueId === entry.issueId && r.lap === entry.lap,
     )
-    if (missing.length === 0 && !entry.blocked && entry.lap <= 1 && !sent) {
+    const seat = seats.find((s) => s.batonName === seatName)
+    // Marcin's law (MAR-3526): a design-sourced issue never goes to a seat
+    // whose account can't be shown to reach Figma. It stops alone; it takes
+    // no place in the seat's queue, so the seat's other work still goes.
+    const figmaStop =
+      issueNeedsFigma(entry.fact) && seat?.figma?.reach !== 'reaches'
+        ? {
+            reach:
+              seat?.figma?.reach === 'cannot-reach'
+                ? ('cannot-reach' as const)
+                : ('unknown' as const),
+            account: seat?.figma?.account ?? null,
+          }
+        : null
+    if (
+      missing.length === 0 &&
+      !entry.blocked &&
+      entry.lap <= 1 &&
+      !sent &&
+      !figmaStop
+    ) {
       ;(plan.order[seatName] ??= []).push(entry.issueId)
     }
-    const seat = seats.find((s) => s.batonName === seatName)
     const held = entries.filter(
       (e) =>
         e.seat === seatName &&
@@ -98,6 +125,8 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
     else if (!seat) word = { kind: 'seat-not-in-crew' }
     else if ((!recipe && !seat.sessionId) || seat.availability === 'unknown')
       word = { kind: 'seat-no-conversation' }
+    // Structural, not a matter of timing: said even while the seat is busy.
+    else if (figmaStop) word = { kind: 'seat-no-figma', ...figmaStop }
     else if (masters.length === 0) word = { kind: 'no-mastermind' }
     else if (!seat.wire) word = { kind: 'no-wire' }
     else if (seat.paused) word = { kind: 'seat-paused' }
