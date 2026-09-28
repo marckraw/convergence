@@ -327,6 +327,12 @@ export class ProviderAccountMcpService {
    */
   async checkChatGptAppSignIns(
     accountId: string,
+    /**
+     * Narrows the calls (MAR-3526): only these installed apps, only servers
+     * whose name matches. The dispatch Figma check asks about Figma alone
+     * rather than calling who-am-I on every app every five minutes.
+     */
+    only: { appIds?: readonly string[]; servers?: RegExp } = {},
   ): Promise<ProviderAccountChatGptSignIns> {
     const empty: ProviderAccountChatGptSignIns = {
       providerAccountId: accountId,
@@ -360,7 +366,7 @@ export class ProviderAccountMcpService {
         if (installed.length === 0) installed = await readInstalled(true)
         const apps = [
           ...new Map(installed.map((app) => [app.id, app])).values(),
-        ]
+        ].filter((app) => !only.appIds || only.appIds.includes(app.id))
         const known = await this.readMcpServers(rpc, null)
         const byApp = groupCodexAppTools(
           Object.values(
@@ -369,7 +375,11 @@ export class ProviderAccountMcpService {
         )
         const configured = known
           .map((server) => server.name)
-          .filter((name) => name !== 'codex_apps')
+          .filter(
+            (name) =>
+              name !== 'codex_apps' &&
+              (!only.servers || only.servers.test(name)),
+          )
         const plans = apps.map((app) => {
           const tools = byApp.get(app.id) ?? []
           return {

@@ -32,6 +32,8 @@ export function trackerIssue(
     priority: null,
     labels: [],
     pullRequests: [],
+    figmaLinked: false,
+    figmaInBody: null,
     summary: null,
     groundedAt: null,
     branchName: null,

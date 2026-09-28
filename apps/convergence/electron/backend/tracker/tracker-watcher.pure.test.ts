@@ -875,3 +875,36 @@ describe('MAR-3236 R4: the outside read has a slow beat of its own', () => {
     expect(isOutsideReadDue({ now, lastOutsideReadAt: last, kicked })).toBe(due)
   })
 })
+
+describe('MAR-3526 a Figma link reaches the ledger, and a new one is a new row', () => {
+  it('the row carries both Figma facts as the tick saw them', () => {
+    const row = recorded(
+      issue('todo', { figmaLinked: true, figmaInBody: false }),
+    )
+    expect(row.fact).toMatchObject({ figmaLinked: true, figmaInBody: false })
+  })
+  it('a link added later is written, so the planner sees the issue is design-sourced', () => {
+    for (const change of [{ figmaLinked: true }, { figmaInBody: true }]) {
+      const before = issue('todo', { figmaLinked: false, figmaInBody: false })
+      const rows = diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [recorded(before)],
+        issues: [{ ...before, ...change }],
+        seenAt: SEEN,
+      })
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.fact).toMatchObject(change)
+    }
+  })
+  it('an unchanged issue writes nothing', () => {
+    const same = issue('todo', { figmaLinked: true, figmaInBody: true })
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [recorded(same)],
+        issues: [same],
+        seenAt: SEEN,
+      }),
+    ).toEqual([])
+  })
+})

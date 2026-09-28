@@ -551,3 +551,42 @@ describe('MAR-3204: the dispatch window reads the record, plan or no plan', () =
     expect(loomSheets([working.entry], NOW).next).toEqual([])
   })
 })
+
+describe('MAR-3526 a Figma stop says what would let the issue go', () => {
+  it('names the account that cannot reach Figma', () => {
+    expect(
+      dispatchWordSentence(
+        {
+          kind: 'seat-no-figma',
+          reach: 'cannot-reach',
+          account: 'opus@icloud.com',
+        },
+        'opus-mac',
+      ),
+    ).toBe(
+      "needs Figma · opus@icloud.com can't reach it — sign it in to Figma, or give the issue to a seat that can",
+    )
+  })
+  it('a first check still running says so', () => {
+    expect(
+      dispatchWordSentence(
+        {
+          kind: 'seat-no-figma',
+          reach: 'checking',
+          account: 'marcin@ef.design',
+        },
+        'astra-mac',
+      ),
+    ).toBe('needs Figma · checking whether marcin@ef.design reaches it')
+  })
+  it('an unanswered question points at the check', () => {
+    expect(
+      dispatchWordSentence(
+        { kind: 'seat-no-figma', reach: 'unknown', account: null },
+        'grok-mac',
+      ),
+    ).toBe(
+      "needs Figma · couldn't confirm this seat's account reaches it, so it waits",
+    )
+  })
+})

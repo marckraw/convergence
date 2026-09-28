@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyIssueBodies,
+  readIssueFigmaLinked,
   BLOCKED_LABEL_NAME,
   childOfLabelGroup,
   classifyLinearReply,
@@ -122,6 +123,9 @@ describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
             labels: ['grounded', 'horse › opus', 'wave › loom-p2'],
             // The recorded page carries no link list; absent reads as none.
             pullRequests: [],
+            figmaLinked: false,
+            // Body facts wait for the body read (MAR-3526), like summary.
+            figmaInBody: null,
             summary: null,
             groundedAt: null,
             branchName: 'example/ex-1-work',
@@ -450,6 +454,20 @@ describe('MAR-3190 R3: priority is Linear’s number or null, never a default', 
   })
 })
 
+describe('MAR-3526 the page says which issues carry a Figma attachment', () => {
+  it('the recorded page: a Figma file beside a pull request, a GitHub issue, no list', () => {
+    const page = parseLinearIssuesPage(RECORDED_ATTACHMENT_PAGE, READ)
+    if (!page.ok) throw new Error('expected a page')
+    expect(
+      page.page.issues.map((issue) => [issue.identifier, issue.figmaLinked]),
+    ).toEqual([
+      ['EX-50', true],
+      ['EX-51', false],
+      ['EX-52', false],
+    ])
+  })
+})
+
 describe('MAR-3304 R1: the port reads the pull requests the tracker links', () => {
   it('keeps the pull request links only, with their numbers, in order', () => {
     const page = parseLinearIssuesPage(RECORDED_ATTACHMENT_PAGE, READ)
@@ -757,6 +775,8 @@ describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
     summary: 'The work',
     groundedAt: '2026-09-17',
     read: true,
+    figmaInBody: false,
+    figmaRead: true,
     ...overrides,
   })
 
@@ -786,6 +806,61 @@ describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
     // Mutation: drop the `read` half -> 'known-unread' never gets a body and
     // stays summary-less forever, red.
     expect(issuesNeedingBody(rows, [issues[0]!])).toEqual([])
+  })
+
+  it('MAR-3526 a row read before Figma links were looked for is read once more', () => {
+    const still = trackerIssue({ id: 'known-still' })
+    expect(
+      issuesNeedingBody(
+        [
+          memory({
+            issueId: 'known-still',
+            figmaInBody: null,
+            figmaRead: false,
+          }),
+        ],
+        [still],
+      ),
+    ).toEqual(['known-still'])
+    expect(
+      issuesNeedingBody(
+        [
+          memory({
+            issueId: 'known-still',
+            figmaInBody: false,
+            figmaRead: true,
+          }),
+        ],
+        [still],
+      ),
+    ).toEqual([])
+  })
+
+  it('MAR-3526 a body read looks for Figma links; an unread body keeps the last answer', () => {
+    const issues = [
+      trackerIssue({ id: 'handoff' }),
+      trackerIssue({ id: 'plain' }),
+      trackerIssue({ id: 'carried' }),
+    ]
+    const bodies = new Map<string, string | null>([
+      [
+        'handoff',
+        '[Open the handoff](<https://www.figma.com/design/x?node-id=508-362>)',
+      ],
+      ['plain', 'No design here.'],
+    ])
+    const applied = applyIssueBodies({
+      issues,
+      bodies,
+      memory: [memory({ issueId: 'carried', figmaInBody: true })],
+      asked: ['handoff', 'plain'],
+      today: '2026-09-28',
+    })
+    expect(applied.map((issue) => [issue.id, issue.figmaInBody])).toEqual([
+      ['handoff', true],
+      ['plain', false],
+      ['carried', true],
+    ])
   })
 
   it('carries what it did not ask for, parses what it did', () => {
@@ -983,5 +1058,33 @@ describe('MAR-3236 R2: open only, light only', () => {
       { seatGroup: 'horse', waveGroup: 'wave' },
     )
     expect(read.ok).toBe(false)
+  })
+})
+
+describe('MAR-3526 a Figma attachment makes the issue design-sourced', () => {
+  it('by URL, whatever the integration calls itself', () => {
+    expect(
+      readIssueFigmaLinked({
+        nodes: [
+          { url: 'https://github.com/o/r/pull/1', sourceType: 'github' },
+          {
+            url: ' https://www.figma.com/file/abc/Screen ',
+            sourceType: 'link',
+          },
+        ],
+      }),
+    ).toBe(true)
+    expect(
+      readIssueFigmaLinked({
+        nodes: [{ url: 'https://github.com/o/r/pull/1', sourceType: 'figma' }],
+      }),
+    ).toBe(false)
+  })
+  it('no list, or a malformed one, is no link', () => {
+    expect(readIssueFigmaLinked(undefined)).toBe(false)
+    expect(readIssueFigmaLinked({ nodes: 'nope' })).toBe(false)
+    expect(readIssueFigmaLinked({ nodes: [{ title: 'no url' }, null] })).toBe(
+      false,
+    )
   })
 })

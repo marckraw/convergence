@@ -246,6 +246,10 @@ it('R9 reader keys are exactly the approved capability surface', () => {
     | 'describeSeatAvailability'
     | 'findWire'
     | 'describeLane'
+    // MAR-3526: sends, steers and queues nothing. Its checks do take the
+    // account's lease, start a throwaway Codex thread, and may prune a stale
+    // needs-auth note (MAR-3517) — the Connectors panel's own side effects.
+    | 'seatFigmaReach'
   >()
   expect(Object.keys(bench().deps).sort()).toEqual([
     'currentView',
@@ -405,4 +409,65 @@ it('Item A judges the configured lane in two real repos and never substitutes an
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+describe('MAR-3526 the planner asks a seat about Figma only for a design-sourced issue', () => {
+  const design = trackerIssue({
+    id: 'd',
+    identifier: 'MAR-9',
+    logicalStatus: 'todo',
+    status: 'Todo',
+    groomed: true,
+    grounded: true,
+    dispatch: true,
+    figmaInBody: true,
+  })
+  const planWith = async (
+    issues: ReturnType<typeof trackerIssue>[],
+    reach: 'reaches' | 'cannot-reach' | 'unknown',
+  ) => {
+    const { deps, crewId, planner } = bench()
+    deps.currentView = () =>
+      diffTrackerSnapshot({
+        crewId,
+        current: [],
+        issues,
+        seenAt: at(1),
+      }).map((row, index) => ({ id: `row-${index}`, ...row }))
+    const seatFigmaReach = vi.fn(async () => ({
+      reach,
+      account: 'opus@icloud.com',
+    }))
+    deps.seatFigmaReach = seatFigmaReach
+    return { plan: await planner.refresh(crewId, at(2)), seatFigmaReach }
+  }
+
+  it('asks the design issue’s seat once, and stops the issue when it cannot reach Figma', async () => {
+    const { plan, seatFigmaReach } = await planWith([design], 'cannot-reach')
+    expect(seatFigmaReach).toHaveBeenCalledExactlyOnceWith('s')
+    expect(plan.words.d).toEqual({
+      kind: 'seat-no-figma',
+      reach: 'cannot-reach',
+      account: 'opus@icloud.com',
+    })
+  })
+
+  it('lets it start when the seat reaches Figma', async () => {
+    const { plan } = await planWith([design], 'reaches')
+    expect(plan.words.d?.kind).toBe('would-start')
+  })
+
+  it('never asks for a design issue that could not start anyway', async () => {
+    const { seatFigmaReach } = await planWith(
+      [{ ...design, groomed: false, groomMe: true }],
+      'cannot-reach',
+    )
+    expect(seatFigmaReach).not.toHaveBeenCalled()
+  })
+
+  it('never asks for an issue without a Figma link', async () => {
+    const { plan, seatFigmaReach } = await planWith([issue], 'cannot-reach')
+    expect(seatFigmaReach).not.toHaveBeenCalled()
+    expect(plan.words.i?.kind).toBe('would-start')
+  })
 })

@@ -542,3 +542,36 @@ describe('MAR-3470 checking each ChatGPT app by using it', () => {
     expect(b.calls).toEqual([])
   })
 })
+
+describe('MAR-3526 a narrowed check calls only the apps and servers it was asked about', () => {
+  it('Figma alone: no who-am-I for GitHub, no Linear server call', async () => {
+    const b = bench(undefined, {
+      configured: (threadId) => [
+        {
+          name: 'linear',
+          runtimeStatus: threadId ? 'connected' : null,
+          authStatus: 'oAuth',
+          tools: {},
+        },
+        {
+          name: 'figma',
+          runtimeStatus: threadId ? 'authenticationRequired' : null,
+          authStatus: 'oAuth',
+          tools: {},
+        },
+      ],
+    })
+    const result = await b.service.checkChatGptAppSignIns('a', {
+      appIds: ['figma'],
+      servers: /\bfigma\b/i,
+    })
+    expect(b.toolCalls()).toEqual(['figma.whoami'])
+    expect(result.signIns.map((entry) => entry.appId)).toEqual(['figma'])
+    expect(result.servers.map((entry) => entry.server)).toEqual(['figma'])
+  })
+  it('asked about nothing in particular, it checks everything as before', async () => {
+    const b = bench()
+    await b.service.checkChatGptAppSignIns('a')
+    expect(b.toolCalls()).toEqual(['figma.whoami', 'github.get_profile'])
+  })
+})

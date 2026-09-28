@@ -348,3 +348,29 @@ describe('MAR-3084 lap 2, B: the identifier matches as a token', () => {
     ).toBe(carries)
   })
 })
+
+describe('MAR-3526 the Figma facts read back as written, and stay absent when never written', () => {
+  it('a row from before MAR-3526 carries neither key, so its body is read again', () => {
+    const fact = workLedgerRecordFromRow(
+      joined({ fact_json: '{"summary":"x"}' }),
+    ).fact
+    expect('figmaLinked' in fact).toBe(false)
+    expect('figmaInBody' in fact).toBe(false)
+  })
+  it('written keys come back, a null body answer included; junk reads as no link', () => {
+    const fact = (json: object) =>
+      workLedgerRecordFromRow(joined({ fact_json: JSON.stringify(json) })).fact
+    expect(fact({ figmaLinked: true, figmaInBody: false })).toMatchObject({
+      figmaLinked: true,
+      figmaInBody: false,
+    })
+    expect(fact({ figmaLinked: false, figmaInBody: null })).toMatchObject({
+      figmaLinked: false,
+      figmaInBody: null,
+    })
+    expect(fact({ figmaLinked: 'yes', figmaInBody: 'yes' })).toMatchObject({
+      figmaLinked: false,
+      figmaInBody: null,
+    })
+  })
+})

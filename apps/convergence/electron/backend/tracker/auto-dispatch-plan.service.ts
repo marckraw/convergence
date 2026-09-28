@@ -8,7 +8,9 @@ import type {
 } from '../../../src/shared/types/tracker.types'
 import type { SessionCrewMember } from '../crew/crew.types'
 import type { RelayService } from '../relay/relay.service'
+import { issueNeedsFigma } from '../../../src/shared/lib/figma-link.pure'
 import { planAutoDispatch } from './auto-dispatch.pure'
+import type { SeatFigmaAnswer } from './seat-figma-reach.service'
 
 /** The crew read includes each resident conversation's local lane; remote or missing is null. */
 export interface DispatchCrew {
@@ -29,6 +31,12 @@ export interface AutoDispatchPlanDeps {
     targetSessionId: string,
   ): { id: string; opener: string | null } | null
   describeLane(path: string): Promise<DispatchLane>
+  /**
+   * Whether a resident seat's account reaches Figma (MAR-3526); asked only
+   * for a seat with a design-sourced issue assigned. Absent: never asked,
+   * and such an issue stops.
+   */
+  seatFigmaReach?(sessionId: string): Promise<SeatFigmaAnswer>
 }
 
 /** Optional recipe readers keep the resident-only planner usable without a spawn door. */
@@ -59,6 +67,30 @@ export class AutoDispatchPlanService {
     if (!crew) throw new Error(`Crew not found: ${crewId}`)
     const master = crew.members.find(
       (m) => m.role === 'mastermind' && m.sessionId,
+    )
+    const entries = this.deps.currentView(crewId)
+    const records = this.records(crewId)
+    // Asked only for a design issue that could otherwise start: labels set,
+    // not blocked, lap 1, not already sent. A groom-me issue with a Figma
+    // link sitting for days never costs a check (MAR-3526).
+    const needFigma = new Set(
+      entries
+        .filter(
+          (entry) =>
+            entry.state === 'assigned' &&
+            entry.seat !== null &&
+            issueNeedsFigma(entry.fact) &&
+            entry.fact.groomed === true &&
+            entry.fact.grounded === true &&
+            entry.fact.dispatch === true &&
+            !entry.blocked &&
+            entry.lap <= 1 &&
+            !records.some(
+              (record) =>
+                record.issueId === entry.issueId && record.lap === entry.lap,
+            ),
+        )
+        .map((entry) => entry.seat),
     )
     const seats = await Promise.all(
       crew.members.map(async (member) => {
@@ -95,15 +127,23 @@ export class AutoDispatchPlanService {
               : master?.sessionId && member.sessionId
                 ? this.deps.findWire(crewId, master.sessionId, member.sessionId)
                 : null,
+          // A recipe seat's spawn has no account yet: left unasked (unknown).
+          ...(!recipe &&
+          member.sessionId &&
+          member.batonName &&
+          needFigma.has(member.batonName) &&
+          this.deps.seatFigmaReach
+            ? { figma: await this.deps.seatFigmaReach(member.sessionId) }
+            : {}),
         }
       }),
     )
     const plan = planAutoDispatch({
       plannedAt,
       autoDispatch: crew.trackerBinding?.autoDispatch ?? false,
-      records: this.records(crewId),
+      records,
       seats,
-      entries: this.deps.currentView(crewId),
+      entries,
       firstSeen: this.deps.firstDispatchSeenAt(crewId),
     })
     this.plans.set(crewId, plan)

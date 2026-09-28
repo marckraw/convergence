@@ -1,4 +1,5 @@
 import { trackerLabelGroupName } from './tracker-binding.pure'
+import { containsFigmaLink } from '../../../src/shared/lib/figma-link.pure'
 import type { LinearProjectReference } from '../../../src/shared/lib/linear-project-reference.pure'
 import type {
   TrackerIssue,
@@ -429,6 +430,20 @@ export function readIssuePullRequests(
 }
 
 /**
+ * A Figma link among the issue's attachments (MAR-3526). By URL, like the
+ * pull requests above: `sourceType` is the integration's word for itself.
+ */
+export function readIssueFigmaLinked(value: unknown): boolean {
+  const nodes = isRecord(value) && Array.isArray(value.nodes) ? value.nodes : []
+  return nodes.some(
+    (node) =>
+      isRecord(node) &&
+      typeof node.url === 'string' &&
+      containsFigmaLink(node.url.trim()),
+  )
+}
+
+/**
  * One page of the response, parsed. An issue carrying no Loom label at all is
  * dropped here, whatever the server-side filter let through (R1).
  */
@@ -490,9 +505,11 @@ export function parseLinearIssuesPage(
       priority: readIssuePriority(node.priority),
       labels: readIssueLabels(labelNodes),
       pullRequests: readIssuePullRequests(node.attachments),
-      // Both come from the issue's BODY, which this query does not carry
+      figmaLinked: readIssueFigmaLinked(node.attachments),
+      // These come from the issue's BODY, which this query does not carry
       // (R4): `applyIssueBodies` fills them in, from a fresh read for the
       // issues that changed and from the ledger's own last row for the rest.
+      figmaInBody: null,
       summary: null,
       groundedAt: null,
       branchName: typeof node.branchName === 'string' ? node.branchName : null,
@@ -989,6 +1006,10 @@ export interface IssueBodyMemory {
   groundedAt: string | null
   /** Whether a body has ever been read for this row (the `summary` KEY). */
   read: boolean
+  /** A Figma link in the body when last read (MAR-3526); null if unknown. */
+  figmaInBody: boolean | null
+  /** Whether the body was read since MAR-3526 (the `figmaInBody` KEY). */
+  figmaRead: boolean
 }
 
 /**
@@ -1011,7 +1032,9 @@ export function issuesNeedingBody(
   return issues
     .filter((issue) => {
       const row = known.get(issue.id)
-      if (!row || !row.read) return true
+      // A row read before MAR-3526 never looked for Figma links: one more
+      // read, once, rather than a design issue that never says so.
+      if (!row || !row.read || !row.figmaRead) return true
       return row.updatedAt !== issue.updatedAt
     })
     .map((issue) => issue.id)
@@ -1049,6 +1072,7 @@ export function applyIssueBodies(input: {
       const body = bodies.get(issue.id) ?? null
       return {
         ...issue,
+        figmaInBody: containsFigmaLink(body),
         summary: readIssueSummary(body),
         groundedAt: readGroundedAt(body, today),
       }
@@ -1056,6 +1080,7 @@ export function applyIssueBodies(input: {
     const row = known.get(issue.id)
     return {
       ...issue,
+      figmaInBody: row?.figmaInBody ?? null,
       summary: row?.summary ?? null,
       groundedAt: row?.groundedAt ?? null,
     }
