@@ -234,6 +234,50 @@ describe('context-window.pure', () => {
     })
   })
 
+  it('estimates the 1M context window for claude-sonnet-5-5', () => {
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        {
+          message: {
+            model: 'claude-sonnet-5-5',
+            usage: {
+              input_tokens: 1200,
+              cache_creation_input_tokens: 300,
+              cache_read_input_tokens: 8500,
+            },
+          },
+        },
+        'sonnet',
+      ),
+    ).toEqual({
+      availability: 'available',
+      source: 'estimated',
+      usedTokens: 10000,
+      windowTokens: 1_000_000,
+      usedPercentage: 1,
+      remainingPercentage: 99,
+    })
+  })
+
+  it('reads the bare sonnet alias as the current 1M Sonnet, and keeps pinned pre-5 sonnets on 200k (MAR-3539)', () => {
+    const usage = {
+      usage: {
+        input_tokens: 1200,
+        cache_creation_input_tokens: 300,
+        cache_read_input_tokens: 8500,
+      },
+    }
+    expect(deriveClaudeEstimatedContextWindow(usage, 'sonnet')).toMatchObject({
+      windowTokens: 1_000_000,
+    })
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        { message: { model: 'claude-sonnet-4-5', ...usage } },
+        'sonnet',
+      ),
+    ).toMatchObject({ windowTokens: 200_000 })
+  })
+
   it('estimates current 1M-capable claude model context windows', () => {
     expect(
       deriveClaudeEstimatedContextWindow(

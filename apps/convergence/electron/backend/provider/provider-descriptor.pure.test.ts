@@ -121,6 +121,7 @@ describe('provider-descriptor', () => {
       'claude-fable-5',
       'claude-opus-5-5',
       'claude-opus-5',
+      'claude-sonnet-5-5',
       'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-sonnet-4-6',
@@ -214,6 +215,40 @@ describe('provider-descriptor', () => {
       label: 'Claude Sonnet 5',
       contextWindowTokens: 1_000_000,
       defaultEffort: 'medium',
+    })
+  })
+
+  it('offers Claude Sonnet 5.5 pinned and as what the sonnet alias means (MAR-3539)', () => {
+    const descriptor = buildClaudeDescriptor()
+    // Claude Code 2.1.284's own catalog: native 1M, effort low through max,
+    // default medium; `latest_per_family.sonnet` is claude-sonnet-5-5.
+    const fullLadder = [
+      { id: 'low', label: 'Low' },
+      { id: 'medium', label: 'Medium' },
+      { id: 'high', label: 'High' },
+      { id: 'xhigh', label: 'Very High' },
+      { id: 'max', label: 'Max' },
+    ]
+    expect(
+      descriptor.modelOptions.find(
+        (option) => option.id === 'claude-sonnet-5-5',
+      ),
+    ).toEqual({
+      id: 'claude-sonnet-5-5',
+      label: 'Claude Sonnet 5.5',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'medium',
+      effortOptions: fullLadder,
+    })
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'sonnet'),
+    ).toEqual({
+      id: 'sonnet',
+      label: 'Claude Sonnet',
+      description: 'Alias for the latest Sonnet (currently Sonnet 5.5).',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'medium',
+      effortOptions: fullLadder,
     })
   })
 

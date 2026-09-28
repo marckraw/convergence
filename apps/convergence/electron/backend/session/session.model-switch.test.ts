@@ -348,9 +348,11 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
       windowTokens: 1_000_000,
     })
 
+    // `haiku`, not `sonnet`: the switch must cross tiers for the meter to
+    // show it followed, and the `sonnet` alias is 1M since Sonnet 5 (MAR-3539).
     await service.setModelSelection(session.id, {
       providerId: 'claude-code',
-      model: 'sonnet',
+      model: 'haiku',
       effort: 'medium',
     })
 
