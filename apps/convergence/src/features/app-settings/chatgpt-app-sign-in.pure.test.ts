@@ -173,17 +173,21 @@ describe('MAR-3486 where a ChatGPT link goes', () => {
 })
 
 describe('MAR-3517 a cleared "needs sign-in" note is said once, plainly', () => {
-  it('names the server and what changes for conversations', () => {
+  it('names the server and promises only that new conversations try it again', () => {
     expect(clearedNeedsAuthNotesMessage(['claude.ai Figma'])).toBe(
-      '"claude.ai Figma" is connected, but Claude had a note to skip it in new conversations. The note is cleared: conversations started from now on can use it; running ones need a restart.',
+      'Cleared Claude\'s "needs sign-in" note for "claude.ai Figma": it\'s connected, so new conversations on this account will try it again. A conversation already running keeps the tools it started with; restart it to pick this up.',
     )
   })
   it('several servers read as one sentence', () => {
     expect(
       clearedNeedsAuthNotesMessage(['claude.ai Figma', 'plugin:figma:figma']),
     ).toMatch(
-      /^"claude\.ai Figma" and "plugin:figma:figma" are connected, .* skip them .* can use them;/,
+      /^Cleared Claude's "needs sign-in" notes for "claude\.ai Figma" and "plugin:figma:figma": they're connected, so new conversations on this account will try them again\./,
     )
+  })
+  it('never claims a skip it cannot know, or a use it cannot promise', () => {
+    const said = clearedNeedsAuthNotesMessage(['claude.ai Figma'])!
+    expect(said).not.toMatch(/had a note to skip|can use it/)
   })
   it('nothing cleared says nothing', () => {
     expect(clearedNeedsAuthNotesMessage([])).toBeNull()

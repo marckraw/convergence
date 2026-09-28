@@ -30,10 +30,15 @@ export type {
  * `.claude.json` carries identity, the organization caches whose cross-account
  * pollution this whole design exists to prevent, and the per-slot `mcpOAuth`
  * tokens. `backups/` holds rewrites of that same file.
+ * `mcp-needs-auth-cache.json` records which servers *this account's* tokens
+ * failed to reach (MAR-3517): shared, one account's "needs sign-in" would make
+ * every other account skip the server. Claude Code writes it as a real file in
+ * each account directory, so it is expected there, not private history.
  */
 export const CLAUDE_ACCOUNT_PRIVATE_ENTRIES: readonly string[] = [
   '.claude.json',
   'backups',
+  'mcp-needs-auth-cache.json',
 ]
 
 /**

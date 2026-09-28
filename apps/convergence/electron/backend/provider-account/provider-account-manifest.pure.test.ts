@@ -113,3 +113,9 @@ describe('detectAccountDirDrift', () => {
     expect(drift.unknownEntries).toEqual([])
   })
 })
+
+it('MAR-3517 the needs-auth note stays per account: never linked, never private history', () => {
+  const plan = planAccountDirEntries(['skills', 'mcp-needs-auth-cache.json'])
+  expect(plan.shared).toEqual(['skills'])
+  expect(plan.private).toEqual(['mcp-needs-auth-cache.json'])
+})

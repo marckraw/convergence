@@ -149,15 +149,20 @@ export interface ProviderAccountMcpDeps {
 
 /** The file seam for Claude Code's needs-auth note; tests pass a fake. */
 export interface ClaudeNeedsAuthNoteIo {
-  /** The note's text, or null when the account has none. */
+  /**
+   * The account's own note, or null when there is none to edit: missing, or
+   * not a regular file of this account (a symlink points somewhere shared).
+   */
   read: (path: string) => Promise<string | null>
-  /** Replaces the note in one step, owner-only like Claude Code's own file. */
+  /** Replaces the note in one step, keeping the file's permissions. */
   replace: (path: string, contents: string) => Promise<void>
 }
 
-const defaultNeedsAuthNoteIo: ClaudeNeedsAuthNoteIo = {
+/** The real-filesystem note IO; exported for its own tests only. */
+export const defaultClaudeNeedsAuthNoteIo: ClaudeNeedsAuthNoteIo = {
   read: async (path) => {
     try {
+      if (!(await nodeFs.lstat(path)).isFile()) return null
       return await nodeFs.readFile(path, 'utf8')
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
@@ -165,9 +170,10 @@ const defaultNeedsAuthNoteIo: ClaudeNeedsAuthNoteIo = {
     }
   },
   replace: async (path, contents) => {
+    const mode = (await nodeFs.lstat(path)).mode & 0o777
     const temp = join(dirname(path), `.${basename(path)}.tmp-${randomUUID()}`)
-    await nodeFs.writeFile(temp, contents, { encoding: 'utf8', mode: 0o600 })
     try {
+      await nodeFs.writeFile(temp, contents, { encoding: 'utf8', mode })
       await nodeFs.rename(temp, path)
     } catch (error) {
       await nodeFs.rm(temp, { force: true }).catch(() => {})
@@ -193,7 +199,7 @@ export class ProviderAccountMcpService {
 
   constructor(deps: ProviderAccountMcpDeps) {
     this.claudeNeedsAuthNoteIo =
-      deps.claudeNeedsAuthNoteIo ?? defaultNeedsAuthNoteIo
+      deps.claudeNeedsAuthNoteIo ?? defaultClaudeNeedsAuthNoteIo
     this.codexServerHosts = deps.codexServerHosts
     this.homeDir = deps.homeDir
     this.claudeConfigIo = deps.claudeConfigIo
@@ -738,7 +744,13 @@ export class ProviderAccountMcpService {
    * while every new conversation skips it for up to 4 hours. An entry for a
    * server this very run reported Connected is removed; nothing else is read
    * from it, and the expiry is never needed. Managed account directories only:
-   * the ambient default is the person's own profile.
+   * the ambient default is the person's own profile. Measured on Claude Code
+   * 2.1.283, which keeps the note in this file; a release that moves it into
+   * its key-value storage leaves no file, and nothing is cleared or claimed.
+   *
+   * What removal promises is only that new conversations try the server
+   * again: a conversation already running holds its own copy of the note and
+   * may write the entry back when it next notes another server.
    */
   async listConnectors(
     accountId: string | null,
@@ -932,6 +944,9 @@ export class ProviderAccountMcpService {
       if (raw === null) return []
       const pruned = pruneClaudeNeedsAuthNote(raw, connected)
       if (!pruned) return []
+      // Claude Code deletes the whole note when its own sign-in completes; a
+      // note that changed since the read is theirs now, never overwritten.
+      if ((await this.claudeNeedsAuthNoteIo.read(path)) !== raw) return []
       await this.claudeNeedsAuthNoteIo.replace(path, pruned.next)
       return pruned.cleared
     } catch {

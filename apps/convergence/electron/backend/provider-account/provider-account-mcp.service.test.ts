@@ -534,7 +534,8 @@ describe('ProviderAccountMcpService', () => {
           noteIo: notes.io,
         }).listConnectors('acct-a')
 
-        expect(notes.io.read).toHaveBeenCalledExactlyOnceWith(NOTE_PATH)
+        // Read, then read again just before the write.
+        expect(notes.io.read.mock.calls).toEqual([[NOTE_PATH], [NOTE_PATH]])
         expect(notes.io.replace).toHaveBeenCalledOnce()
         expect(notes.io.replace.mock.calls[0][0]).toBe(NOTE_PATH)
         // The server still needing sign-in keeps its entry: that note is true.
@@ -559,6 +560,19 @@ describe('ProviderAccountMcpService', () => {
         }).listConnectors('acct-a')
         expect(notes.io.replace).not.toHaveBeenCalled()
         expect(result.clearedNeedsAuthNotes).toEqual([])
+      })
+
+      it('a note Claude Code changed or deleted since the read is never overwritten', async () => {
+        for (const later of [null, JSON.stringify({})]) {
+          const notes = fakeNoteIo(note)
+          notes.io.read.mockResolvedValueOnce(note).mockResolvedValueOnce(later)
+          const result = await service({
+            run: fakeRunner(stdout).run,
+            noteIo: notes.io,
+          }).listConnectors('acct-a')
+          expect(notes.io.replace).not.toHaveBeenCalled()
+          expect(result.clearedNeedsAuthNotes).toEqual([])
+        }
       })
 
       it("never reads the ambient profile: that is the person's own ~/.claude", async () => {

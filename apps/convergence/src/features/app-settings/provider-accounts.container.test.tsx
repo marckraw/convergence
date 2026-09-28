@@ -922,7 +922,7 @@ describe('ProviderAccountsContainer', () => {
       await screen.findByText('a@example.com')
       fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
       expect(await screen.findByRole('status')).toHaveTextContent(
-        '"claude.ai Figma" is connected, but Claude had a note to skip it in new conversations.',
+        'Cleared Claude\'s "needs sign-in" note for "claude.ai Figma": it\'s connected, so new conversations on this account will try it again.',
       )
       cleanup()
       providerAccounts.listConnectors.mockResolvedValue({
@@ -935,7 +935,7 @@ describe('ProviderAccountsContainer', () => {
       await screen.findByText('a@example.com')
       fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
       await screen.findByText('No MCP servers are configured.')
-      expect(screen.queryByText(/had a note to skip/)).toBeNull()
+      expect(screen.queryByText(/needs sign-in" note/)).toBeNull()
     })
 
     it('MAR-3185 R5 a Claude account whose linear needs authentication gets Authorize, not Connect Linear', async () => {

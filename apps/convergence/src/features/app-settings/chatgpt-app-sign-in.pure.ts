@@ -154,9 +154,10 @@ export function configuredServerSignInLine(input: {
 }
 
 /**
- * Said after a Claude read removed stale "needs sign-in" notes (MAR-3517):
- * the servers are connected, and new conversations stop skipping them, but a
- * conversation already running kept the tools it started with.
+ * Said after a Claude read removed "needs sign-in" notes of servers it saw
+ * connected (MAR-3517). It promises only what removal does: new
+ * conversations try the server again. A running conversation keeps the tools
+ * it started with, and may even write its old note back.
  */
 export function clearedNeedsAuthNotesMessage(
   names: readonly string[] | undefined,
@@ -166,6 +167,7 @@ export function clearedNeedsAuthNotesMessage(
     style: 'long',
     type: 'conjunction',
   }).format(names.map((name) => `"${name}"`))
-  const one = names.length === 1
-  return `${list} ${one ? 'is' : 'are'} connected, but Claude had a note to skip ${one ? 'it' : 'them'} in new conversations. The note is cleared: conversations started from now on can use ${one ? 'it' : 'them'}; running ones need a restart.`
+  return names.length === 1
+    ? `Cleared Claude's "needs sign-in" note for ${list}: it's connected, so new conversations on this account will try it again. A conversation already running keeps the tools it started with; restart it to pick this up.`
+    : `Cleared Claude's "needs sign-in" notes for ${list}: they're connected, so new conversations on this account will try them again. A conversation already running keeps the tools it started with; restart it to pick these up.`
 }
