@@ -40,6 +40,26 @@ const line = (
 ) => loomHorseAccessLine({ remote, accountId, rows })
 
 describe("MAR-3519 a horse's card says what its account can reach", () => {
+  it('says when the answer was checked, so an old one never reads as live', () => {
+    expect(
+      loomHorseAccessLine({
+        remote: false,
+        accountId: 'acct-icloud',
+        rows: [row()],
+        checkedAt: '2026-09-28T09:00:00.000Z',
+      })?.text,
+    ).toMatch(
+      /^Figma works · Linear works · marckraw@icloud\.com · checked \d{1,2}:\d{2}/,
+    )
+    expect(
+      loomHorseAccessLine({
+        remote: false,
+        accountId: 'acct-icloud',
+        rows: [row()],
+        checkedAt: 'not a date',
+      })?.text,
+    ).toBe('Figma works · Linear works · marckraw@icloud.com')
+  })
   it("the account's best path per service, and whose account it is", () => {
     expect(line('acct-icloud')).toEqual({
       text: 'Figma works · Linear works · marckraw@icloud.com',

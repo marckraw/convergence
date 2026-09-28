@@ -977,10 +977,6 @@ export function registerIpcHandlers(
     sessionApp.getSession(id),
   )
 
-  ipcMain.handle('session:getLastProviderAccountId', (_event, id: string) =>
-    sessionApp.getLastProviderAccountId(id),
-  )
-
   ipcMain.handle('session:getConversation', (_event, id: string) =>
     sessionApp.getConversation(id),
   )

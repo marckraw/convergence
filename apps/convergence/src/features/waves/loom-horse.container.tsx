@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { SessionAgentMeter, useAgentMeterStore } from '@/entities/agent-meter'
-import { sessionApi, useSessionStore } from '@/entities/session'
+import { useSessionStore } from '@/entities/session'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
-import { useConnectionsOverviewStore } from '@/entities/provider-account'
+import {
+  providerAccountApi,
+  useConnectionsOverviewStore,
+} from '@/entities/provider-account'
 import {
   LoomHorseCard,
   type LoomHorseCardProps,
@@ -11,11 +14,12 @@ import { loomHorseAccessLine } from './loom-horse-access.pure'
 import { LoomHorseAccessLine } from './loom-horse-access.presentational'
 
 /**
- * The account a seat's session last ran on (MAR-3519): undefined until it is
- * known, null for the ambient default. Read again when the session changes,
- * since a new turn may have moved the seat to another account.
+ * The account the seat's next automatic turn runs on (MAR-3519), resolved in
+ * the main process by the rule relay hops and dispatch use: undefined until
+ * it is known, null for the ambient default. Read again when the session
+ * changes, since a new turn may have moved the seat to another account.
  */
-function useLastProviderAccountId(
+function useAutomaticTurnAccountId(
   sessionId: string | null,
   revision: string | undefined,
   skip: boolean,
@@ -29,7 +33,7 @@ function useLastProviderAccountId(
     let live = true
     // A lookup that can't run leaves the account unknown: no line, no claim.
     Promise.resolve()
-      .then(() => sessionApi.getLastProviderAccountId(sessionId))
+      .then(() => providerAccountApi.automaticTurnAccount(sessionId))
       .then((accountId) => {
         if (live) setKnown({ sessionId, accountId })
       })
@@ -50,9 +54,12 @@ export function LoomHorseCardContainer(props: LoomHorseCardProps) {
     state.globalSessions.find((entry) => entry.id === id),
   )
   const remote = isRemoteExecutionHost(session?.executionHost)
-  const accountId = useLastProviderAccountId(id, session?.updatedAt, remote)
+  const accountId = useAutomaticTurnAccountId(id, session?.updatedAt, remote)
   const rows = useConnectionsOverviewStore((state) => state.rows)
-  const access = id ? loomHorseAccessLine({ remote, accountId, rows }) : null
+  const checkedAt = useConnectionsOverviewStore((state) => state.checkedAt)
+  const access = id
+    ? loomHorseAccessLine({ remote, accountId, rows, checkedAt })
+    : null
   return (
     <LoomHorseCard
       {...props}

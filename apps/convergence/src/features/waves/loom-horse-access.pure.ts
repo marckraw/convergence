@@ -37,6 +37,8 @@ export function loomHorseAccessLine(input: {
   accountId: string | null | undefined
   /** The last "Check all accounts": a row exists once a check has begun. */
   rows: readonly ConnectionsOverviewRow[]
+  /** When that check finished; shown, so an old answer never reads as live. */
+  checkedAt?: string | null
 }): LoomHorseAccessLine | null {
   if (input.remote)
     return muted('Figma, Linear: on another machine, not checked here')
@@ -70,8 +72,13 @@ export function loomHorseAccessLine(input: {
   const reachable = states.every(
     ([, state]) => state === 'works' || state === 'connected',
   )
+  const at = input.checkedAt ? new Date(input.checkedAt) : null
+  const when =
+    at && !Number.isNaN(at.getTime())
+      ? ` · checked ${at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      : ''
   return {
-    text: `${parts.join(' · ')} · ${row.identity}`,
+    text: `${parts.join(' · ')} · ${row.identity}${when}`,
     tone: lacking ? 'warn' : reachable ? 'good' : 'muted',
   }
 }

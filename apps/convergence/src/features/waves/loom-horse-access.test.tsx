@@ -15,12 +15,12 @@ const horse = () =>
     sheets: loomSheets([], 0),
     hostLabelOf: () => 'This Mac',
   })[0]
-const getLastProviderAccountId = vi.fn(async (_id: string) => 'acct-icloud')
+const automaticTurnAccount = vi.fn(async (_id: string) => 'acct-icloud')
 
 beforeEach(() => {
-  getLastProviderAccountId.mockClear()
+  automaticTurnAccount.mockClear()
   ;(window as unknown as { electronAPI: unknown }).electronAPI = {
-    session: { getLastProviderAccountId },
+    providerAccounts: { automaticTurnAccount },
   }
   useSessionStore.setState({
     globalSessions: [
@@ -60,12 +60,14 @@ beforeEach(() => {
   })
 })
 
-it("MAR-3519 a horse card shows its session's account's Figma and Linear reach", async () => {
+it('MAR-3519 a horse card shows the Figma and Linear reach of the account its next automatic turn runs on', async () => {
   render(<LoomHorseCardContainer horse={horse()} />)
   expect(
-    await screen.findByText('Figma works · Linear works · marckraw@icloud.com'),
+    await screen.findByText(
+      /^Figma works · Linear works · marckraw@icloud\.com · checked /,
+    ),
   ).toHaveClass('text-success-ink')
-  expect(getLastProviderAccountId).toHaveBeenCalledWith(id)
+  expect(automaticTurnAccount).toHaveBeenCalledWith(id)
 })
 
 it('MAR-3519 a remote horse is not looked up here, and says so', async () => {
@@ -84,7 +86,7 @@ it('MAR-3519 a remote horse is not looked up here, and says so', async () => {
   ).toBeInTheDocument()
   // The lookup would run a tick later; give it the chance before denying it.
   await new Promise((resolve) => setTimeout(resolve, 0))
-  expect(getLastProviderAccountId).not.toHaveBeenCalled()
+  expect(automaticTurnAccount).not.toHaveBeenCalled()
 })
 
 it('MAR-3519 a lookup that cannot run shows no line rather than a guess', async () => {

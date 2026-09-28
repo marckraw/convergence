@@ -44,7 +44,6 @@ function createSessionBackend(
     getAllSummaries: vi.fn(() => []),
     getGlobalSummaries: vi.fn(() => []),
     getSummaryById: vi.fn(() => null),
-    getLastTurnProviderAccountId: vi.fn(() => null),
     getConversation: vi.fn(() => []),
     archive: vi.fn(),
     unarchive: vi.fn(),
@@ -74,21 +73,6 @@ function createSessionBackend(
 describe('SessionAppService', () => {
   const relays = { removeForSession: vi.fn(() => 0) }
   const crews = { removeMembershipsForSession: vi.fn(() => 0) }
-
-  it("MAR-3519 names the account a session's last turn ran on, and null for the ambient default", () => {
-    const getLastTurnProviderAccountId = vi.fn((id: string) =>
-      id === 'on-icloud' ? 'acct-icloud' : null,
-    )
-    const service = new SessionAppService(
-      createSessionBackend({ getLastTurnProviderAccountId }),
-      { resolve: vi.fn() } as never,
-      relays,
-      crews,
-    )
-    expect(service.getLastProviderAccountId('on-icloud')).toBe('acct-icloud')
-    expect(service.getLastProviderAccountId('ambient')).toBeNull()
-    expect(getLastTurnProviderAccountId).toHaveBeenCalledWith('on-icloud')
-  })
 
   afterEach(() => {
     closeDatabase()

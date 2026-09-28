@@ -2086,7 +2086,6 @@ interface ElectronAPI {
     getAllSummaries: () => Promise<SessionSummaryData[]>
     getGlobalSummaries: () => Promise<SessionSummaryData[]>
     getSummaryById: (id: string) => Promise<SessionSummaryData | null>
-    getLastProviderAccountId: (id: string) => Promise<string | null>
     resyncConversation: (
       id: string,
       generation: number,
@@ -2256,6 +2255,7 @@ interface ElectronAPI {
       accountId: string
       appId?: string | null
     }) => Promise<void>
+    automaticTurnAccount: (sessionId: string) => Promise<string | null>
     listConnectors: (
       accountId: string | null,
     ) => Promise<ProviderAccountConnectorsData>

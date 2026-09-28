@@ -159,3 +159,19 @@ it('MAR-3486 Copy link copies the same link Open would open, and opens nothing',
   expect(writeText).not.toHaveBeenCalled()
   expect(openExternal).not.toHaveBeenCalled()
 })
+
+it("MAR-3519 names the account a session's next automatic turn runs on, and nothing for bad input", async () => {
+  const automaticTurnAccount = vi.fn((sessionId: string) =>
+    sessionId === 'astra' ? 'acct-icloud' : null,
+  )
+  registerProviderAccountIpcHandlers({
+    repository: { get: () => null },
+    mcp: {},
+    automaticTurnAccount,
+  } as unknown as Parameters<typeof registerProviderAccountIpcHandlers>[0])
+  const handler = handlers.get('providerAccounts:automaticTurnAccount')!
+  expect(await handler(null, 'astra')).toBe('acct-icloud')
+  expect(await handler(null, 'ambient')).toBeNull()
+  expect(await handler(null, { sessionId: 'astra' })).toBeNull()
+  expect(automaticTurnAccount.mock.calls).toEqual([['astra'], ['ambient']])
+})

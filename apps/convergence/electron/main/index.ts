@@ -106,6 +106,7 @@ import { SessionNamingService } from '../backend/session/naming/session-naming.s
 import { SessionForkService } from '../backend/session/fork/session-fork.service'
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
 import { ProviderAccountRepository } from '../backend/provider-account/provider-account.repository'
+import { resolveAccountForAutomaticTurn } from '../backend/provider-account/provider-account-automatic-turn.pure'
 import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
 import { ClaudeCredentialHealthService } from '../backend/provider-account/provider-account-credential-health.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
@@ -882,6 +883,19 @@ async function startApp(): Promise<void> {
     attestation: providerAccountAttestationService,
     login: providerAccountLoginService,
     mcp: providerAccountMcpService,
+    // The Loom card's "what can this horse reach" names the account its next
+    // automatic turn runs on, by the rule relay hops and dispatch use
+    // (MAR-3519).
+    automaticTurnAccount: (sessionId) => {
+      const session = sessionService.getSummaryById(sessionId)
+      if (!session) return null
+      return resolveAccountForAutomaticTurn({
+        executionHost: session.executionHost,
+        lastTurnAccountId:
+          sessionService.getLastTurnProviderAccountId(sessionId),
+        accounts: providerAccountRepository.listByProvider(session.providerId),
+      })
+    },
   })
   const stopAccountHealthMonitoring =
     providerAccountAttestationService.startMonitoring(() => {
