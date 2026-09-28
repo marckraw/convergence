@@ -2,7 +2,7 @@ import type {
   ProviderAccountChatGptApps,
   ProviderAccountChatGptSignIns,
   ProviderAccountConnector,
-} from '@/entities/provider-account'
+} from './provider-account.types'
 
 /**
  * One view of which account can reach Figma, Linear and GitHub, and through

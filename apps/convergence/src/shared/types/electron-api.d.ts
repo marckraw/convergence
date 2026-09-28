@@ -2086,6 +2086,7 @@ interface ElectronAPI {
     getAllSummaries: () => Promise<SessionSummaryData[]>
     getGlobalSummaries: () => Promise<SessionSummaryData[]>
     getSummaryById: (id: string) => Promise<SessionSummaryData | null>
+    getLastProviderAccountId: (id: string) => Promise<string | null>
     resyncConversation: (
       id: string,
       generation: number,

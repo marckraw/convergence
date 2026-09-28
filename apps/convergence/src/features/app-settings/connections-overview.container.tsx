@@ -4,16 +4,12 @@ import {
   providerAccountApi,
   type ProviderAccount,
   type ProviderAccountChatGptSignIns,
-} from '@/entities/provider-account'
-import {
   claudeConnectionPaths,
   codexConnectionPaths,
   type ConnectionPath,
-} from './connections-overview.pure'
-import {
   useConnectionsOverviewStore,
   type ConnectionsOverviewRow,
-} from './connections-overview.model'
+} from '@/entities/provider-account'
 import { useChatGptSignInsStore } from './chatgpt-sign-ins.model'
 import { ConnectionsOverview } from './connections-overview.presentational'
 

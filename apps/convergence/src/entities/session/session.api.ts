@@ -53,6 +53,10 @@ export const sessionApi = {
   getSummaryById: (id: string): Promise<SessionSummary | null> =>
     window.electronAPI.session.getSummaryById(id),
 
+  /** The account the session's last turn ran on; null is the ambient default. */
+  getLastProviderAccountId: (id: string): Promise<string | null> =>
+    window.electronAPI.session.getLastProviderAccountId(id),
+
   resyncConversation: (
     id: string,
     generation: number,

@@ -465,6 +465,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getGlobalSummaries: () => ipcRenderer.invoke('session:getGlobalSummaries'),
     getSummaryById: (id: string) =>
       ipcRenderer.invoke('session:getSummaryById', id),
+    getLastProviderAccountId: (id: string) =>
+      ipcRenderer.invoke('session:getLastProviderAccountId', id),
     resyncConversation: (
       id: string,
       generation: number,

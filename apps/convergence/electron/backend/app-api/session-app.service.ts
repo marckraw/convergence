@@ -25,6 +25,7 @@ export type SessionAppBackend = Pick<
   | 'getAllSummaries'
   | 'getGlobalSummaries'
   | 'getSummaryById'
+  | 'getLastTurnProviderAccountId'
   | 'getConversation'
   | 'archive'
   | 'unarchive'
@@ -80,6 +81,15 @@ export class SessionAppService {
 
   getSession(sessionId: string): SessionSummary | null {
     return this.sessions.getSummaryById(sessionId)
+  }
+
+  /**
+   * The provider account the session's last turn ran on, or null for the
+   * ambient default (MAR-3519): the account a horse's next turn continues on,
+   * so its Figma and Linear reach is that account's.
+   */
+  getLastProviderAccountId(sessionId: string): string | null {
+    return this.sessions.getLastTurnProviderAccountId(sessionId)
   }
 
   getConversation(sessionId: string): ConversationItem[] {
