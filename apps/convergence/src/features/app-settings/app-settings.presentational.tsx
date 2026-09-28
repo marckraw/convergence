@@ -44,6 +44,7 @@ import { DebugLoggingFields } from './debug-logging-fields.presentational'
 import { SwitchRow } from '@/shared/ui/switch'
 import { PiModelVisibilityContainer } from './pi-model-visibility.container'
 import { ProviderAccountsContainer } from './provider-accounts.container'
+import { ConnectionsOverviewContainer } from './connections-overview.container'
 import { ProviderCredentialsContainer } from './provider-credentials.container'
 import { ProviderUsageContainer } from './provider-usage.container'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
@@ -368,7 +369,12 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       case 'credentials':
         return <ProviderCredentialsContainer />
       case 'provider-accounts':
-        return <ProviderAccountsContainer />
+        return (
+          <div className="space-y-6">
+            <ConnectionsOverviewContainer />
+            <ProviderAccountsContainer />
+          </div>
+        )
       case 'usage':
         return <ProviderUsageContainer />
       case 'notifications':
