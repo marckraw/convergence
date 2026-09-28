@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CONFIGURED_SERVERS_SENTENCE,
+  ONE_SIGN_IN_PER_APP_NOTE,
   CHATGPT_LINK_ACTION_LABEL,
+  configuredServerAction,
+  configuredServerNeedsSignIn,
+  oneSignInPerAppNote,
   CHATGPT_SIGN_IN_MEMORY_MS,
   chatGptLinkCopiedMessage,
   clearedNeedsAuthNotesMessage,
@@ -134,7 +139,7 @@ describe('MAR-3470 the live line of a server configured on this Mac', () => {
   })
   it('a stored sign-in that stopped working points at Authorize', () => {
     expect(line(server('needs-sign-in'))).toEqual({
-      text: 'Needs sign-in again: press Authorize',
+      text: 'Needs sign-in again: press "Sign in again"',
       tone: 'warn',
     })
   })
@@ -168,6 +173,95 @@ describe('MAR-3486 where a ChatGPT link goes', () => {
   it('an account without a name still gets a sentence', () => {
     expect(chatGptLinkCopiedMessage('  ')).toContain(
       'signed in as this account;',
+    )
+  })
+})
+
+describe('MAR-3516 the panel promises only what holds', () => {
+  it('no longer claims a sign-in outlives every other account', () => {
+    expect(CONFIGURED_SERVERS_SENTENCE).not.toMatch(
+      /authorizes a connector once/,
+    )
+    expect(CONFIGURED_SERVERS_SENTENCE).toMatch(
+      /Some services, like Figma, keep one sign-in per app for each of their users: signing in with the same user on another account signs this one out\.$/,
+    )
+  })
+  it('the Figma rule sits under a Figma row that needs signing in, whatever the app', () => {
+    for (const name of [
+      'Figma',
+      'figma',
+      'claude.ai Figma',
+      'plugin:figma:figma',
+    ]) {
+      expect(oneSignInPerAppNote({ name, needsSignIn: true })).toBe(
+        ONE_SIGN_IN_PER_APP_NOTE,
+      )
+      expect(oneSignInPerAppNote({ name, needsSignIn: false })).toBeNull()
+    }
+  })
+  it('only Figma is measured, so nothing else claims it', () => {
+    expect(
+      oneSignInPerAppNote({ name: 'linear', needsSignIn: true }),
+    ).toBeNull()
+    expect(
+      oneSignInPerAppNote({ name: 'figmatic', needsSignIn: true }),
+    ).toBeNull()
+  })
+  it('a stored sign-in is signed in again, never authorized as if it had none', () => {
+    expect(
+      configuredServerAction({ needsAuthorization: true, liveStatus: null }),
+    ).toEqual({ label: 'Authorize', emphasis: 'primary' })
+    expect(
+      configuredServerAction({
+        needsAuthorization: false,
+        liveStatus: 'signed-in',
+      }),
+    ).toEqual({ label: 'Sign in again', emphasis: 'secondary' })
+    expect(
+      configuredServerAction({
+        needsAuthorization: false,
+        liveStatus: 'needs-sign-in',
+      }),
+    ).toEqual({ label: 'Sign in again', emphasis: 'primary' })
+    for (const liveStatus of ['failed', 'unchecked', null] as const) {
+      expect(
+        configuredServerAction({ needsAuthorization: false, liveStatus }),
+      ).toEqual({ label: 'Sign in again', emphasis: 'secondary' })
+    }
+  })
+  it('what the check observed outranks the saved flag, for the button and the note', () => {
+    // The saved list still says unauthorized; the check just saw it work.
+    expect(
+      configuredServerAction({
+        needsAuthorization: true,
+        liveStatus: 'signed-in',
+      }),
+    ).toEqual({ label: 'Sign in again', emphasis: 'secondary' })
+    expect(
+      configuredServerNeedsSignIn({
+        needsAuthorization: true,
+        liveStatus: 'signed-in',
+      }),
+    ).toBe(false)
+    expect(
+      configuredServerNeedsSignIn({
+        needsAuthorization: false,
+        liveStatus: 'needs-sign-in',
+      }),
+    ).toBe(true)
+    // Without an answer, the saved flag decides.
+    for (const liveStatus of ['failed', 'unchecked', null] as const) {
+      expect(
+        configuredServerNeedsSignIn({ needsAuthorization: true, liveStatus }),
+      ).toBe(true)
+      expect(
+        configuredServerNeedsSignIn({ needsAuthorization: false, liveStatus }),
+      ).toBe(false)
+    }
+  })
+  it('the rule is about the same user, not any other account', () => {
+    expect(ONE_SIGN_IN_PER_APP_NOTE).toContain(
+      'signing in with the same Figma user on another account signs this one out',
     )
   })
 })

@@ -15,12 +15,16 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
+  CONFIGURED_SERVERS_SENTENCE,
   chatGptLinkCopiedMessage,
   clearedNeedsAuthNotesMessage,
+  configuredServerAction,
+  configuredServerNeedsSignIn,
   chatGptManageLabel,
   chatGptSignInLine,
   configuredServerSignInLine,
   describeChatGptSignInsCheckedAt,
+  oneSignInPerAppNote,
   type ChatGptLinkAction,
 } from './chatgpt-app-sign-in.pure'
 import { CHATGPT_SIGN_IN_TONE } from './chatgpt-app-sign-in.styles'
@@ -42,6 +46,14 @@ const CLAUDE_CONNECTORS_VIEW_SENTENCE =
  */
 const CLAUDE_LINEAR_HOMES_SENTENCE =
   'Linear is added for every Claude account on this Mac; authorization is per account.'
+
+/** The Figma rule under a row that needs signing in (MAR-3516). */
+function OneSignInPerAppNote(props: { name: string; needsSignIn: boolean }) {
+  const note = oneSignInPerAppNote(props)
+  return note ? (
+    <p className="text-pretty text-xs text-muted-foreground">{note}</p>
+  ) : null
+}
 
 const STATUS_TONE: Record<
   ProviderAccountSettingsRow['status']['tone'],
@@ -539,6 +551,13 @@ export function ProviderAccountsFields({
                                     {line.text}
                                   </p>
                                 ) : null}
+                                <OneSignInPerAppNote
+                                  name={app.name}
+                                  needsSignIn={
+                                    !isCheckingChatGptSignIns &&
+                                    signIn?.status === 'needs-sign-in'
+                                  }
+                                />
                               </div>
                               <ChatGptLinkMenu
                                 label={chatGptManageLabel(signIn)}
@@ -596,9 +615,7 @@ export function ProviderAccountsFields({
                       </h4>
                     ) : null}
                     <p className="text-xs leading-relaxed text-muted-foreground">
-                      MCP tokens are stored per account, so each account
-                      authorizes a connector once — and keeps it across every
-                      later swap.
+                      {CONFIGURED_SERVERS_SENTENCE}
                     </p>
                     {isLoadingConnectors ? (
                       <p className="text-sm text-muted-foreground">
@@ -613,14 +630,24 @@ export function ProviderAccountsFields({
                       (connectors?.connectors ?? []).map((connector) => {
                         // A Codex account's saved "Authorized" gives way to
                         // what the sign-in check observed (MAR-3470).
+                        const liveSignIn = isCodex
+                          ? chatGptSignIns?.servers.find(
+                              (entry) => entry.server === connector.name,
+                            )
+                          : undefined
                         const live = isCodex
                           ? configuredServerSignInLine({
-                              signIn: chatGptSignIns?.servers.find(
-                                (entry) => entry.server === connector.name,
-                              ),
+                              signIn: liveSignIn,
                               checking: isCheckingChatGptSignIns,
                             })
                           : null
+                        const observed = {
+                          needsAuthorization: connector.needsAuthorization,
+                          liveStatus: isCheckingChatGptSignIns
+                            ? null
+                            : (liveSignIn?.status ?? null),
+                        }
+                        const action = configuredServerAction(observed)
                         return (
                           <div
                             key={connector.name}
@@ -644,12 +671,23 @@ export function ProviderAccountsFields({
                                   {connector.statusLabel}
                                 </p>
                               )}
+                              <OneSignInPerAppNote
+                                name={connector.name}
+                                needsSignIn={configuredServerNeedsSignIn(
+                                  observed,
+                                )}
+                              />
                             </div>
                             {connector.needsAuthorization ||
                             (isCodex && connector.status === 'ready') ? (
                               <Button
                                 type="button"
                                 size="sm"
+                                variant={
+                                  action.emphasis === 'primary'
+                                    ? 'default'
+                                    : 'outline'
+                                }
                                 disabled={authorizingServerName !== null}
                                 onClick={() =>
                                   onAuthorizeConnector(row.id, connector.name)
@@ -657,7 +695,7 @@ export function ProviderAccountsFields({
                               >
                                 {authorizingServerName === connector.name
                                   ? 'Waiting for browser...'
-                                  : 'Authorize'}
+                                  : action.label}
                               </Button>
                             ) : null}
                           </div>
