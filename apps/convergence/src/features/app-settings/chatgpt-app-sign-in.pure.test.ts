@@ -3,6 +3,7 @@ import {
   CHATGPT_LINK_ACTION_LABEL,
   CHATGPT_SIGN_IN_MEMORY_MS,
   chatGptLinkCopiedMessage,
+  clearedNeedsAuthNotesMessage,
   chatGptSignInsCheckedAtMs,
   chatGptManageLabel,
   configuredServerSignInLine,
@@ -168,5 +169,24 @@ describe('MAR-3486 where a ChatGPT link goes', () => {
     expect(chatGptLinkCopiedMessage('  ')).toContain(
       'signed in as this account;',
     )
+  })
+})
+
+describe('MAR-3517 a cleared "needs sign-in" note is said once, plainly', () => {
+  it('names the server and what changes for conversations', () => {
+    expect(clearedNeedsAuthNotesMessage(['claude.ai Figma'])).toBe(
+      '"claude.ai Figma" is connected, but Claude had a note to skip it in new conversations. The note is cleared: conversations started from now on can use it; running ones need a restart.',
+    )
+  })
+  it('several servers read as one sentence', () => {
+    expect(
+      clearedNeedsAuthNotesMessage(['claude.ai Figma', 'plugin:figma:figma']),
+    ).toMatch(
+      /^"claude\.ai Figma" and "plugin:figma:figma" are connected, .* skip them .* can use them;/,
+    )
+  })
+  it('nothing cleared says nothing', () => {
+    expect(clearedNeedsAuthNotesMessage([])).toBeNull()
+    expect(clearedNeedsAuthNotesMessage(undefined)).toBeNull()
   })
 })

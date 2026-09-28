@@ -16,6 +16,7 @@ import { Input } from '@/shared/ui/input'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
   chatGptLinkCopiedMessage,
+  clearedNeedsAuthNotesMessage,
   chatGptManageLabel,
   chatGptSignInLine,
   configuredServerSignInLine,
@@ -663,6 +664,19 @@ export function ProviderAccountsFields({
                         )
                       })
                     )}
+                    {!isLoadingConnectors &&
+                    clearedNeedsAuthNotesMessage(
+                      connectors?.clearedNeedsAuthNotes,
+                    ) ? (
+                      <p
+                        role="status"
+                        className="text-pretty text-xs text-muted-foreground"
+                      >
+                        {clearedNeedsAuthNotesMessage(
+                          connectors?.clearedNeedsAuthNotes,
+                        )}
+                      </p>
+                    ) : null}
                     {!isLoadingConnectors && connectors?.error ? (
                       <p className="text-sm text-muted-foreground">
                         {connectors.error}

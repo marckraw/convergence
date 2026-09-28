@@ -152,3 +152,20 @@ export function configuredServerSignInLine(input: {
       return null
   }
 }
+
+/**
+ * Said after a Claude read removed stale "needs sign-in" notes (MAR-3517):
+ * the servers are connected, and new conversations stop skipping them, but a
+ * conversation already running kept the tools it started with.
+ */
+export function clearedNeedsAuthNotesMessage(
+  names: readonly string[] | undefined,
+): string | null {
+  if (!names || names.length === 0) return null
+  const list = new Intl.ListFormat('en', {
+    style: 'long',
+    type: 'conjunction',
+  }).format(names.map((name) => `"${name}"`))
+  const one = names.length === 1
+  return `${list} ${one ? 'is' : 'are'} connected, but Claude had a note to skip ${one ? 'it' : 'them'} in new conversations. The note is cleared: conversations started from now on can use ${one ? 'it' : 'them'}; running ones need a restart.`
+}

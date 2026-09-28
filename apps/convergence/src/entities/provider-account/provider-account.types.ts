@@ -78,6 +78,8 @@ export interface ProviderAccountConnectors {
   providerAccountId: string | null
   connectors: ProviderAccountConnector[]
   error: string | null
+  /** Claude servers whose stale "needs sign-in" note was removed (MAR-3517). */
+  clearedNeedsAuthNotes?: string[]
 }
 
 /** One app's sign-in, observed by a read-only call (MAR-3470). */

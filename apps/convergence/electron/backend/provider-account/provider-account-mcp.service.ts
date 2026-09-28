@@ -1,6 +1,13 @@
 import type { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
 import type { JsonRpcClient } from '../provider/codex/jsonrpc'
 import { tmpdir } from 'os'
+import { promises as nodeFs } from 'fs'
+import { randomUUID } from 'crypto'
+import { basename, dirname, join } from 'path'
+import {
+  CLAUDE_NEEDS_AUTH_NOTE_FILE,
+  pruneClaudeNeedsAuthNote,
+} from './claude-needs-auth-note.pure'
 import {
   buildCodexOneShotThreadParams,
   readCodexOneShotThreadId,
@@ -136,6 +143,37 @@ export interface ProviderAccountMcpDeps {
    */
   homeDir?: string
   claudeConfigIo?: ClaudeConfigIo
+  /** How a Claude account's "needs sign-in" note is read and replaced (MAR-3517). */
+  claudeNeedsAuthNoteIo?: ClaudeNeedsAuthNoteIo
+}
+
+/** The file seam for Claude Code's needs-auth note; tests pass a fake. */
+export interface ClaudeNeedsAuthNoteIo {
+  /** The note's text, or null when the account has none. */
+  read: (path: string) => Promise<string | null>
+  /** Replaces the note in one step, owner-only like Claude Code's own file. */
+  replace: (path: string, contents: string) => Promise<void>
+}
+
+const defaultNeedsAuthNoteIo: ClaudeNeedsAuthNoteIo = {
+  read: async (path) => {
+    try {
+      return await nodeFs.readFile(path, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
+    }
+  },
+  replace: async (path, contents) => {
+    const temp = join(dirname(path), `.${basename(path)}.tmp-${randomUUID()}`)
+    await nodeFs.writeFile(temp, contents, { encoding: 'utf8', mode: 0o600 })
+    try {
+      await nodeFs.rename(temp, path)
+    } catch (error) {
+      await nodeFs.rm(temp, { force: true }).catch(() => {})
+      throw error
+    }
+  },
 }
 
 export class ProviderAccountMcpService {
@@ -151,8 +189,11 @@ export class ProviderAccountMcpService {
   private readonly codexMaintenance: ProviderAccountMcpDeps['codexMaintenance']
   private readonly homeDir: string | undefined
   private readonly claudeConfigIo: ClaudeConfigIo | undefined
+  private readonly claudeNeedsAuthNoteIo: ClaudeNeedsAuthNoteIo
 
   constructor(deps: ProviderAccountMcpDeps) {
+    this.claudeNeedsAuthNoteIo =
+      deps.claudeNeedsAuthNoteIo ?? defaultNeedsAuthNoteIo
     this.codexServerHosts = deps.codexServerHosts
     this.homeDir = deps.homeDir
     this.claudeConfigIo = deps.claudeConfigIo
@@ -690,6 +731,14 @@ export class ProviderAccountMcpService {
    * inside `.claude.json`. Both of those are undocumented internal shapes whose
    * expiry semantics Convergence would have to guess at; `mcp list` is the
    * answer Claude itself gives, and Convergence already parses it.
+   *
+   * The note is still touched once, and only where it contradicts that answer
+   * (MAR-3517): `mcp list` writes it on "Needs authentication" and never
+   * clears it on "Connected", so a server fixed elsewhere reads Connected here
+   * while every new conversation skips it for up to 4 hours. An entry for a
+   * server this very run reported Connected is removed; nothing else is read
+   * from it, and the expiry is never needed. Managed account directories only:
+   * the ambient default is the person's own profile.
    */
   async listConnectors(
     accountId: string | null,
@@ -724,28 +773,38 @@ export class ProviderAccountMcpService {
     let release: (() => void) | undefined
     try {
       release = await this.accountMaintenance.admit(accountId)
+      const account = this.resolveAccount(accountId)
       const result = await this.runCommand(
         buildClaudeMcpListCommand({
           binaryPath,
-          account: this.resolveAccount(accountId),
+          account,
           baseEnv: this.baseEnv,
           workingDirectory: this.workingDirectory(),
         }),
       )
 
+      const connectors = parseClaudeListEntries(result.stdout).map((entry) => {
+        const status = mapClaudeStatus(entry.statusLabel)
+        return {
+          name: entry.name,
+          status,
+          statusLabel: entry.statusLabel,
+          description: entry.description,
+          needsAuthorization: status === 'needs-auth',
+        }
+      })
       return {
         providerAccountId: accountId,
-        connectors: parseClaudeListEntries(result.stdout).map((entry) => {
-          const status = mapClaudeStatus(entry.statusLabel)
-          return {
-            name: entry.name,
-            status,
-            statusLabel: entry.statusLabel,
-            description: entry.description,
-            needsAuthorization: status === 'needs-auth',
-          }
-        }),
+        connectors,
         error: null,
+        clearedNeedsAuthNotes: account
+          ? await this.clearStaleNeedsAuthNotes(
+              account.configDir,
+              connectors
+                .filter((connector) => connector.status === 'ready')
+                .map((connector) => connector.name),
+            )
+          : [],
       }
     } catch (error) {
       return {
@@ -861,6 +920,30 @@ export class ProviderAccountMcpService {
    * refused here exactly as it is at spawn — authorizing a connector for an
    * account that cannot serve turns would write tokens nothing will ever use.
    */
+  /**
+   * Removes the account's "needs sign-in" entries for servers just reported
+   * Connected, inside the same maintenance admission as the read. Best
+   * effort: a note that can't be read or replaced is left as it was, and the
+   * panel then claims nothing was cleared.
+   */
+  private async clearStaleNeedsAuthNotes(
+    configDir: string,
+    connected: string[],
+  ): Promise<string[]> {
+    if (connected.length === 0) return []
+    const path = join(configDir, CLAUDE_NEEDS_AUTH_NOTE_FILE)
+    try {
+      const raw = await this.claudeNeedsAuthNoteIo.read(path)
+      if (raw === null) return []
+      const pruned = pruneClaudeNeedsAuthNote(raw, connected)
+      if (!pruned) return []
+      await this.claudeNeedsAuthNoteIo.replace(path, pruned.next)
+      return pruned.cleared
+    } catch {
+      return []
+    }
+  }
+
   private resolveAccount(accountId: string | null) {
     const account = accountId ? this.repository.get(accountId) : null
     if (account && account.providerId !== 'claude-code') {

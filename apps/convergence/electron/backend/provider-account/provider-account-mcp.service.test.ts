@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
-import { ProviderAccountMcpService } from './provider-account-mcp.service'
+import {
+  ProviderAccountMcpService,
+  type ClaudeNeedsAuthNoteIo,
+} from './provider-account-mcp.service'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
@@ -366,6 +369,15 @@ function fakeRunner(stdout = LIST_OUTPUT, code = 0, stderr = '') {
   return { run, calls }
 }
 
+/** The needs-auth note seam (MAR-3517): an in-memory file, or none. */
+function fakeNoteIo(contents: string | null) {
+  const io = {
+    read: vi.fn(async (_path: string): Promise<string | null> => contents),
+    replace: vi.fn(async (_path: string, _next: string): Promise<void> => {}),
+  }
+  return { io }
+}
+
 /** The fake PTY seam, one level up: a terminal-shaped runner, no node-pty. */
 function fakeInteractiveRunner(output = '', code = 0) {
   const calls: ProviderAccountCommand[] = []
@@ -450,9 +462,11 @@ describe('ProviderAccountMcpService', () => {
     run: ReturnType<typeof fakeRunner>['run']
     runInteractive?: ReturnType<typeof fakeInteractiveRunner>['run']
     binaryPath?: string | null
+    noteIo?: ClaudeNeedsAuthNoteIo
   }) {
     return new ProviderAccountMcpService({
       repository,
+      claudeNeedsAuthNoteIo: options.noteIo ?? fakeNoteIo(null).io,
       runCommand: options.run,
       runInteractiveCommand:
         options.runInteractive ??
@@ -501,6 +515,79 @@ describe('ProviderAccountMcpService', () => {
   )
 
   describe('listConnectors', () => {
+    describe('MAR-3517 a stale "needs sign-in" note for a Connected server', () => {
+      const NOTE_PATH = `${CONFIG_DIR}/mcp-needs-auth-cache.json`
+      const stdout = [
+        'claude.ai Figma: https://mcp.figma.com/mcp - ✔ Connected',
+        'plugin:figma:figma: https://mcp.figma.com/mcp (HTTP) - ! Needs authentication',
+      ].join('\n')
+      const note = JSON.stringify({
+        sentry: { timestamp: 1 },
+        'plugin:figma:figma': { timestamp: 2 },
+        'claude.ai Figma': { timestamp: 3, id: 'mcpsrv_x' },
+      })
+
+      it("is removed, alone, from this account's note, and the read says so", async () => {
+        const notes = fakeNoteIo(note)
+        const result = await service({
+          run: fakeRunner(stdout).run,
+          noteIo: notes.io,
+        }).listConnectors('acct-a')
+
+        expect(notes.io.read).toHaveBeenCalledExactlyOnceWith(NOTE_PATH)
+        expect(notes.io.replace).toHaveBeenCalledOnce()
+        expect(notes.io.replace.mock.calls[0][0]).toBe(NOTE_PATH)
+        // The server still needing sign-in keeps its entry: that note is true.
+        expect(JSON.parse(notes.io.replace.mock.calls[0][1])).toEqual({
+          sentry: { timestamp: 1 },
+          'plugin:figma:figma': { timestamp: 2 },
+        })
+        expect(result.clearedNeedsAuthNotes).toEqual(['claude.ai Figma'])
+        expect(result.connectors.map((c) => [c.name, c.status])).toEqual([
+          ['claude.ai Figma', 'ready'],
+          ['plugin:figma:figma', 'needs-auth'],
+        ])
+      })
+
+      it('leaves a note with nothing to clear untouched', async () => {
+        const notes = fakeNoteIo(
+          JSON.stringify({ 'plugin:figma:figma': { timestamp: 2 } }),
+        )
+        const result = await service({
+          run: fakeRunner(stdout).run,
+          noteIo: notes.io,
+        }).listConnectors('acct-a')
+        expect(notes.io.replace).not.toHaveBeenCalled()
+        expect(result.clearedNeedsAuthNotes).toEqual([])
+      })
+
+      it("never reads the ambient profile: that is the person's own ~/.claude", async () => {
+        const notes = fakeNoteIo(note)
+        const result = await service({
+          run: fakeRunner(stdout).run,
+          noteIo: notes.io,
+        }).listConnectors(null)
+        expect(notes.io.read).not.toHaveBeenCalled()
+        expect(result.clearedNeedsAuthNotes).toEqual([])
+      })
+
+      it('a note that cannot be read or replaced changes nothing and claims nothing', async () => {
+        const unreadable = fakeNoteIo(note)
+        unreadable.io.read.mockRejectedValue(new Error('EACCES'))
+        const refused = fakeNoteIo(note)
+        refused.io.replace.mockRejectedValue(new Error('EROFS'))
+        for (const notes of [unreadable, refused]) {
+          const result = await service({
+            run: fakeRunner(stdout).run,
+            noteIo: notes.io,
+          }).listConnectors('acct-a')
+          expect(result.error).toBeNull()
+          expect(result.connectors).toHaveLength(2)
+          expect(result.clearedNeedsAuthNotes).toEqual([])
+        }
+      })
+    })
+
     it('asks the account about itself, not the ambient credential', async () => {
       // `mcp list` reports whichever slot the environment points at, so the
       // ambient answer says nothing about what this account authorized.
