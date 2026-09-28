@@ -3,6 +3,7 @@ import {
   describeProviderAccountIdentity,
   providerAccountApi,
   type ProviderAccount,
+  type ProviderAccountChatGptSignIns,
 } from '@/entities/provider-account'
 import {
   claudeConnectionPaths,
@@ -30,9 +31,22 @@ async function readCodexPaths(
     providerAccountApi.listChatGptApps({ accountId, forceRefetch: false }),
     providerAccountApi.listConnectors(accountId),
   ])
+  // Begun here, settled always: a check left in flight would stop the
+  // account's own Connectors panel from ever checking by itself.
   const signInsStore = useChatGptSignInsStore.getState()
   const check = signInsStore.begin(accountId)
-  const signIns = await providerAccountApi.checkChatGptAppSignIns({ accountId })
+  let signIns: ProviderAccountChatGptSignIns
+  try {
+    signIns = await providerAccountApi.checkChatGptAppSignIns({ accountId })
+  } catch {
+    signIns = {
+      providerAccountId: accountId,
+      checkedAt: null,
+      signIns: [],
+      servers: [],
+      error: 'Could not check sign-ins. Try Refresh.',
+    }
+  }
   signInsStore.settle(accountId, check, signIns)
   return {
     paths: codexConnectionPaths({

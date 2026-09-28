@@ -115,7 +115,7 @@ describe("MAR-3518 an OpenAI account's paths say what each check observed", () =
       },
     ])
   })
-  it('without a check, an app is only connected and a server says what Codex saved', () => {
+  it('without an answer, an app or a saved token is only unchecked, never connected', () => {
     expect(
       codexConnectionPaths({
         apps: [apps[0]],
@@ -123,22 +123,74 @@ describe("MAR-3518 an OpenAI account's paths say what each check observed", () =
         connectors: [
           connector('linear', 'ready'),
           connector('figma', 'disabled'),
+          connector('github', 'needs-auth'),
         ],
       }),
     ).toEqual([
       {
         service: 'figma',
         via: VIA_CHATGPT_APP,
-        state: 'connected',
+        state: 'unchecked',
         account: null,
       },
       {
         service: 'linear',
         via: VIA_CODEX_ON_THIS_MAC,
-        state: 'connected',
+        state: 'unchecked',
+        account: null,
+      },
+      // Nothing stored is known without a call: it needs signing in.
+      {
+        service: 'github',
+        via: VIA_CODEX_ON_THIS_MAC,
+        state: 'needs-sign-in',
         account: null,
       },
     ])
+  })
+  it('an app with no who-am-I is unchecked; a server running with its token but no who-am-I is connected', () => {
+    expect(
+      codexConnectionPaths({
+        apps: [apps[0]],
+        signIns: {
+          providerAccountId: 'a',
+          checkedAt: null,
+          error: null,
+          signIns: [
+            {
+              appId: 'figma',
+              status: 'unchecked',
+              account: null,
+              reason: null,
+            },
+          ],
+          servers: [
+            {
+              server: 'linear',
+              status: 'unchecked',
+              account: null,
+              reason: null,
+            },
+          ],
+        },
+        connectors: [connector('linear', 'ready')],
+      }).map((path) => path.state),
+    ).toEqual(['unchecked', 'connected'])
+  })
+  it('a failed check leaves every unanswered path unchecked', () => {
+    expect(
+      codexConnectionPaths({
+        apps: [apps[0]],
+        signIns: {
+          providerAccountId: 'a',
+          checkedAt: null,
+          error: 'Could not check sign-ins. Try Refresh.',
+          signIns: [],
+          servers: [],
+        },
+        connectors: [connector('linear', 'ready')],
+      }).map((path) => path.state),
+    ).toEqual(['unchecked', 'unchecked'])
   })
 })
 
@@ -211,6 +263,14 @@ describe('MAR-3518 one cell per service', () => {
       }).text,
     ).toBe('Works · ChatGPT app')
     expect(connectionPathLine(paths[1]).text).toBe('Connected · claude.ai')
+    expect(
+      connectionPathLine({
+        service: 'figma',
+        via: VIA_CHATGPT_APP,
+        state: 'unchecked',
+        account: null,
+      }),
+    ).toEqual({ text: 'Sign-in not checked · ChatGPT app', tone: 'muted' })
     expect(connectionPathLine(paths[0])).toEqual({
       text: 'Needs sign-in again · Claude Code plugin',
       tone: 'warn',

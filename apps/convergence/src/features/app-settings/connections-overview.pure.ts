@@ -27,12 +27,14 @@ export const CONNECTION_SERVICES: ReadonlyArray<{
 
 /**
  * What a path's own check observed, best first: a call answered (`works`),
- * the provider reports it connected without a call (`connected`), it needs
- * signing in again, or it could not be used.
+ * the provider reports it connected without a call (`connected`), nothing
+ * answered for its sign-in (`unchecked`: a listed app or a saved token is
+ * presence, not health), it needs signing in again, or it could not be used.
  */
 export type ConnectionPathState =
   | 'works'
   | 'connected'
+  | 'unchecked'
   | 'needs-sign-in'
   | 'failed'
 
@@ -97,10 +99,11 @@ function fromSaved(
 }
 
 /**
- * An OpenAI account's paths: its ChatGPT apps (with the sign-in check's
- * answer), and its servers configured on this Mac (the check's answer, else
- * what Codex saved). An app turned off is no path; an app whose tools Codex
- * cannot use is a path that failed.
+ * An OpenAI account's paths: its ChatGPT apps and its servers configured on
+ * this Mac, each by the sign-in check's answer. Without one — the app has no
+ * who-am-I, or the check failed — an app or a saved token is only
+ * `unchecked`, never connected (MAR-3470: presence is not health). An app
+ * turned off is no path; an app whose tools Codex cannot use failed.
  */
 export function codexConnectionPaths(input: {
   apps: ProviderAccountChatGptApps['apps']
@@ -126,7 +129,10 @@ export function codexConnectionPaths(input: {
     paths.push({
       service,
       via: VIA_CHATGPT_APP,
-      state: signIn ? fromLive(signIn.status) : 'connected',
+      state:
+        !signIn || signIn.status === 'unchecked'
+          ? 'unchecked'
+          : fromLive(signIn.status),
       account: signIn?.account ?? null,
     })
   }
@@ -136,7 +142,12 @@ export function codexConnectionPaths(input: {
     const live = input.signIns?.servers.find(
       (entry) => entry.server === connector.name,
     )
-    const state = live ? fromLive(live.status) : fromSaved(connector)
+    const saved = fromSaved(connector)
+    const state = live
+      ? fromLive(live.status)
+      : saved === 'connected'
+        ? 'unchecked'
+        : saved
     if (!state) continue
     paths.push({
       service,
@@ -178,8 +189,9 @@ export function claudeConnectionPaths(
 const RANK: Record<ConnectionPathState, number> = {
   works: 0,
   connected: 1,
-  'needs-sign-in': 2,
-  failed: 3,
+  unchecked: 2,
+  'needs-sign-in': 3,
+  failed: 4,
 }
 
 /** One service's cell: its paths, best first, and the best state, or none. */
@@ -208,6 +220,8 @@ export function connectionPathLine(path: ConnectionPath): {
       }
     case 'connected':
       return { text: `Connected · ${path.via}`, tone: 'muted' }
+    case 'unchecked':
+      return { text: `Sign-in not checked · ${path.via}`, tone: 'muted' }
     case 'needs-sign-in':
       return { text: `Needs sign-in again · ${path.via}`, tone: 'warn' }
     case 'failed':

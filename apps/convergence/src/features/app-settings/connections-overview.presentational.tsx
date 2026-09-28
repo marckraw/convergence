@@ -42,11 +42,11 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
   onCheckAll,
 }) => (
   <section
-    aria-label="Who can reach Figma, Linear and GitHub"
+    aria-labelledby="connections-overview-heading"
     className="space-y-3 rounded-xl border border-border bg-card/45 px-4 py-4"
   >
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h3 className="text-sm font-semibold">
+      <h3 id="connections-overview-heading" className="text-sm font-semibold">
         Who can reach Figma, Linear and GitHub
       </h3>
       <Button

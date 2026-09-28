@@ -212,6 +212,25 @@ describe('MAR-3518 Check all accounts', () => {
     ).toHaveTextContent('Connected · claude.ai')
   })
 
+  it("a sign-in check that throws still settles the panel's memory, and nothing reads as connected", async () => {
+    providerAccounts.checkChatGptAppSignIns.mockRejectedValue(
+      new Error('ipc gone'),
+    )
+    render(<ConnectionsOverviewContainer />)
+    fireEvent.click(screen.getByRole('button', { name: 'Check all accounts' }))
+    await screen.findByText(/^Checked at /)
+    // In flight forever would stop the account's own panel from checking.
+    expect(useChatGptSignInsStore.getState().inFlight['openai-ef']).toBeNull()
+    const openai = rowOf('marcin@ef.design')
+    expect(openai).toHaveTextContent('Could not check sign-ins. Try Refresh.')
+    const cells = within(openai).getAllByRole('cell')
+    expect(cells[0]).toHaveTextContent('Sign-in not checked · ChatGPT app')
+    expect(cells[1]).toHaveTextContent(
+      'Sign-in not checked · Codex on this Mac',
+    )
+    expect(openai.textContent).not.toMatch(/Connected|Signed in/)
+  })
+
   it('the answer outlives the section until the next check', async () => {
     const first = render(<ConnectionsOverviewContainer />)
     fireEvent.click(screen.getByRole('button', { name: 'Check all accounts' }))
