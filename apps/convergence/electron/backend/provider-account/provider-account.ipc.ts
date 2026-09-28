@@ -20,6 +20,12 @@ export function registerProviderAccountIpcHandlers(deps: {
   enrolment: ProviderAccountEnrolmentService
   attestation: ProviderAccountAttestationService
   mcp: ProviderAccountMcpService
+  /**
+   * The account a session's next automatic turn runs on (MAR-3519), by
+   * `resolveAccountForAutomaticTurn`, the rule relay hops and auto-dispatch
+   * use; null is the ambient default. Absent in tests that don't need it.
+   */
+  automaticTurnAccount?: (sessionId: string) => string | null
 }): void {
   ipcMain.handle('providerAccounts:list', () => deps.repository.list())
 
@@ -130,6 +136,14 @@ export function registerProviderAccountIpcHandlers(deps: {
           : CHATGPT_APPS_BROWSE_URL
       clipboard.writeText(link)
     },
+  )
+
+  ipcMain.handle(
+    'providerAccounts:automaticTurnAccount',
+    (_event, sessionId: string) =>
+      typeof sessionId === 'string'
+        ? (deps.automaticTurnAccount?.(sessionId) ?? null)
+        : null,
   )
 
   ipcMain.handle(

@@ -86,6 +86,12 @@ export const providerAccountApi = {
     appId?: string | null
   }): Promise<void> =>
     window.electronAPI.providerAccounts.copyChatGptLink(input),
+  /**
+   * The account a session's next automatic turn (a relay hop, a dispatch)
+   * runs on, resolved by the rule those use; null is the ambient default.
+   */
+  automaticTurnAccount: (sessionId: string): Promise<string | null> =>
+    window.electronAPI.providerAccounts.automaticTurnAccount(sessionId),
   listConnectors: (
     accountId: string | null,
   ): Promise<ProviderAccountConnectors> =>

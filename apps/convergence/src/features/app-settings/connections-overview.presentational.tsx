@@ -7,8 +7,8 @@ import {
   connectionCell,
   connectionPathLine,
   describeConnectionsCheckedAt,
-} from './connections-overview.pure'
-import type { ConnectionsOverviewRow } from './connections-overview.model'
+  type ConnectionsOverviewRow,
+} from '@/entities/provider-account'
 import { CHATGPT_SIGN_IN_TONE } from './chatgpt-app-sign-in.styles'
 
 interface ConnectionsOverviewProps {

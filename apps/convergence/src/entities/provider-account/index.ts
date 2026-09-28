@@ -38,3 +38,25 @@ export type {
   ProviderAccountSettingsWarning,
   ProviderAccountStatus,
 } from './provider-account.types'
+export {
+  CONNECTION_SERVICES,
+  VIA_CHATGPT_APP,
+  VIA_CLAUDE_AI,
+  VIA_CLAUDE_CODE_PLUGIN,
+  VIA_CLAUDE_ON_THIS_MAC,
+  VIA_CODEX_ON_THIS_MAC,
+  claudeConnectionPaths,
+  codexConnectionPaths,
+  connectionCell,
+  connectionPathLine,
+  connectionServiceOf,
+  describeConnectionsCheckedAt,
+} from './connections-overview.pure'
+export type {
+  ConnectionPath,
+  ConnectionPathState,
+  ConnectionService,
+  ConnectionTone,
+} from './connections-overview.pure'
+export { useConnectionsOverviewStore } from './connections-overview.model'
+export type { ConnectionsOverviewRow } from './connections-overview.model'

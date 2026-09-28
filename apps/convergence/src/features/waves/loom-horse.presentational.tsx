@@ -25,6 +25,8 @@ const RUNTIME_ICON: Readonly<Record<LoomHorseRuntime, typeof Circle>> = {
 
 export interface LoomHorseCardProps {
   meterSlot?: ReactNode
+  /** What the seat's account can reach, Figma and Linear (MAR-3519). */
+  accessSlot?: ReactNode
   horse: LoomHorse
   /** Opens the seat's conversation; absent when there is none to open. */
   onOpenSeat?: (sessionId: string) => void
@@ -60,6 +62,7 @@ function idBaseFor(key: string): string {
  */
 export const LoomHorseCard: FC<LoomHorseCardProps> = ({
   meterSlot,
+  accessSlot,
   horse,
   onOpenSeat,
   onShowNext,
@@ -134,6 +137,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           </span>
         </span>
         {meterSlot}
+        {accessSlot}
         {ticketDoor ? (
           <Button
             type="button"

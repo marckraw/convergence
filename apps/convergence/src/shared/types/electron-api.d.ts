@@ -2255,6 +2255,7 @@ interface ElectronAPI {
       accountId: string
       appId?: string | null
     }) => Promise<void>
+    automaticTurnAccount: (sessionId: string) => Promise<string | null>
     listConnectors: (
       accountId: string | null,
     ) => Promise<ProviderAccountConnectorsData>

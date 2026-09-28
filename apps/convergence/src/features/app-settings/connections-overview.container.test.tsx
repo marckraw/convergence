@@ -7,9 +7,11 @@ import {
   within,
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProviderAccount } from '@/entities/provider-account'
+import {
+  type ProviderAccount,
+  useConnectionsOverviewStore,
+} from '@/entities/provider-account'
 import { ConnectionsOverviewContainer } from './connections-overview.container'
-import { useConnectionsOverviewStore } from './connections-overview.model'
 import { useChatGptSignInsStore } from './chatgpt-sign-ins.model'
 
 function account(overrides: Partial<ProviderAccount>): ProviderAccount {

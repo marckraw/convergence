@@ -703,6 +703,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('providerAccounts:browseChatGptApps'),
     copyChatGptLink: (input: { accountId: string; appId?: string | null }) =>
       ipcRenderer.invoke('providerAccounts:copyChatGptLink', input),
+    automaticTurnAccount: (sessionId: string) =>
+      ipcRenderer.invoke('providerAccounts:automaticTurnAccount', sessionId),
     listConnectors: (accountId: string | null) =>
       ipcRenderer.invoke('providerAccounts:listConnectors', accountId),
     connectLinear: (accountId: string) =>
