@@ -10,8 +10,10 @@ describe('session service tier (MAR-3572)', () => {
   it('accepts Codex tier ids and refuses anything else', () => {
     expect(parseServiceTierInput('fast')).toBe('fast')
     expect(parseServiceTierInput(' default ')).toBe('default')
-    expect(parseServiceTierInput('ultrafast')).toBe('ultrafast')
     for (const bad of [
+      // Real Codex tiers the switch cannot show yet (CS2 widens this).
+      'priority',
+      'ultrafast',
       '',
       '  ',
       'Fast',
@@ -63,6 +65,16 @@ describe('session service tier (MAR-3572)', () => {
         serviceTier: 'fast',
       }),
     ).toBe('fast')
+  })
+
+  it('a blank stored tier is not a tier: the start states Standard', () => {
+    expect(
+      serviceTierForProviderStart({
+        providerId: 'codex',
+        executionHost: 'local',
+        serviceTier: '  ',
+      }),
+    ).toBe(CODEX_STANDARD_SERVICE_TIER)
   })
 
   it('remote sessions and other providers carry exactly what they stored', () => {

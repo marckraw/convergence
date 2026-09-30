@@ -1,21 +1,32 @@
 import { isRemoteExecutionHost } from '../execution-host-endpoint/execution-host-endpoint.pure'
 
 /**
- * Codex's explicit "standard speed" tier id (codex-cli 0.159.2:
- * `turn/start.serviceTierForTurn` — "Use \"default\" for standard speed").
+ * Codex's explicit "standard speed" tier id. The schema names it ("Use
+ * \"default\" for standard speed", codex-cli 0.159.2), a throwaway
+ * `thread/start {serviceTier:"default"}` answered `"default"` (measured
+ * 2026-09-30), and the composer has sent it for new Off conversations since
+ * July.
  */
 export const CODEX_STANDARD_SERVICE_TIER = 'default'
 
+/** What the Fast switch writes when it is on. Codex answers it as `priority`. */
+export const CODEX_FAST_SERVICE_TIER = 'fast'
+
 /**
- * A tier id as Codex spells them (`default`, `fast`, `priority`, `ultrafast`):
- * one lowercase token. The shape is checked here; which tiers a model offers is
- * Codex's to answer, and it refuses one it does not serve.
+ * Exactly the tiers the switch can show. A stored tier it cannot display --
+ * `priority` would read as Off while the next turn ran Fast -- is the lie this
+ * slice exists to end, so the door refuses it. CS2 (MAR-3574) widens this to
+ * the tiers Codex's own model list offers, together with the picker that can
+ * show them.
  */
-const SERVICE_TIER_ID = /^[a-z][a-z0-9_-]{0,31}$/
+const SERVICE_TIERS_THE_SWITCH_CAN_SHOW: ReadonlySet<string> = new Set([
+  CODEX_STANDARD_SERVICE_TIER,
+  CODEX_FAST_SERVICE_TIER,
+])
 
 export function parseServiceTierInput(value: unknown): string {
   const tier = typeof value === 'string' ? value.trim() : ''
-  if (!SERVICE_TIER_ID.test(tier)) {
+  if (!SERVICE_TIERS_THE_SWITCH_CAN_SHOW.has(tier)) {
     throw new Error(`Unknown speed tier: ${String(value)}`)
   }
   return tier
@@ -58,5 +69,7 @@ export function serviceTierForProviderStart(session: {
   if (describeServiceTierRefusal(session) !== null) {
     return session.serviceTier ?? null
   }
-  return session.serviceTier ?? CODEX_STANDARD_SERVICE_TIER
+  // `||`, not `??`: a blank stored tier would be dropped by the provider's
+  // own truthiness check and inherit the account default all the same.
+  return session.serviceTier?.trim() || CODEX_STANDARD_SERVICE_TIER
 }

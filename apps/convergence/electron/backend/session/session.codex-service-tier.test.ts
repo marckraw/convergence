@@ -1,7 +1,16 @@
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { CodexProvider } from '../provider/codex/codex-provider'
 import { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
@@ -25,11 +34,13 @@ isolateAmbientCodexHome()
 let service: SessionService
 let server: FakeCodexServer
 let cleanup: (() => Promise<void>) | undefined
+/** Turns complete on their own unless a block holds them open. */
+let autoCompleteTurns = true
 
 beforeEach(() => {
   const dir = mkdtempSync(join(tmpdir(), 'codex-service-tier-'))
   const db = getDatabase()
-  server = new FakeCodexServer()
+  server = new FakeCodexServer({ autoCompleteTurns })
   const hosts = new CodexServerHostRegistry({
     cwd: dir,
     spawnProcess: () => {
@@ -188,6 +199,50 @@ it('R5: compaction states the tier too, so no local Codex start inherits the acc
     server.requests.filter((r) => r.method === 'thread/resume').length,
   ).toBeGreaterThan(resumesBefore)
   expect(lastTier('thread/resume')).toBe('default')
+})
+
+describe('while a turn is running', () => {
+  beforeAll(() => {
+    autoCompleteTurns = false
+  })
+  afterAll(() => {
+    autoCompleteTurns = true
+  })
+
+  it('R1: the running turn keeps its tier, and the change reaches the turn after it', async () => {
+    const id = createCodexSession('default')
+    await service.start(id, { text: 'first' })
+    await vi.waitFor(() => {
+      expect(server.methodsCalled()).toContain('turn/start')
+      expect(service.getById(id)?.status).toBe('running')
+    })
+    const running = server.requests.filter((r) => r.method === 'turn/start')
+    expect(running).toHaveLength(1)
+
+    service.setServiceTier(id, { serviceTier: 'fast' })
+    expect(storedTier(id)).toBe('fast')
+    // Nothing reaches the turn in flight: no second turn/start, and the one
+    // already sent still says what it started with.
+    expect(
+      server.requests.filter((r) => r.method === 'turn/start'),
+    ).toHaveLength(1)
+    expect(running[0]?.params?.serviceTier).toBe('default')
+
+    running[0]!.connection.notify('turn/completed', {
+      turn: { id: 'turn-1', status: 'completed' },
+    })
+    await vi.waitFor(() =>
+      expect(service.getById(id)?.status).toBe('completed'),
+    )
+
+    await service.sendMessage(id, { text: 'second' })
+    await vi.waitFor(() =>
+      expect(
+        server.requests.filter((r) => r.method === 'turn/start'),
+      ).toHaveLength(2),
+    )
+    expect(lastTier('turn/start')).toBe('fast')
+  })
 })
 
 it(CODEX_HOME_RESTORED_TEST, () => {
