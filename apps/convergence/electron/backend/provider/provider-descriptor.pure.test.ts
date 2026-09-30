@@ -342,14 +342,14 @@ describe('provider-descriptor', () => {
     ])
   })
 
-  // Fixture: `model/list` tape probed from codex-cli 0.156.0 on 2026-09-22
-  // (MAR-3320, `includeHidden: false`, `limit: 100`). No row advertises `none`.
-  // The tape has no context-window field; retain the 272k convention pending
-  // live-turn measurement in MAR-3330.
-  it('mirrors the live codex 0.156.0 model/list tape in the fallback catalog', () => {
+  // Fixture: `model/list` tape probed from codex-cli 0.159.0 on 2026-09-30
+  // (MAR-3569, `includeHidden: false`, `limit: 100`; confirmed on 0.159.2).
+  // No row advertises `none`. The tape has no context-window field; Codex's own
+  // model cache gives every row here context_window 272000.
+  it('mirrors the live codex 0.159.0 model/list tape in the fallback catalog', () => {
     const descriptor = buildFallbackCodexDescriptor()
 
-    expect(descriptor.defaultModelId).toBe('gpt-6-astra')
+    expect(descriptor.defaultModelId).toBe('gpt-6.1-sol')
     expect(descriptor.fastModelId).toBe('gpt-6-luna')
     expect(
       descriptor.modelOptions.map((option) => ({
@@ -360,6 +360,13 @@ describe('provider-descriptor', () => {
         contextWindowTokens: option.contextWindowTokens,
       })),
     ).toEqual([
+      {
+        id: 'gpt-6.1-sol',
+        defaultEffort: 'low',
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
       {
         id: 'gpt-6-astra',
         defaultEffort: 'medium',
@@ -415,18 +422,21 @@ describe('provider-descriptor', () => {
         option.effortOptions.some((effort) => effort.id === 'none'),
       ),
     ).toBe(false)
-    expect(descriptor.modelOptions[0]).toMatchObject({
-      label: 'GPT-6 Astra',
-      description: 'Our most capable model for complex, demanding work.',
-    })
-    expect(descriptor.modelOptions[1]).toMatchObject({
-      label: 'GPT-6 Sol',
-      description: 'Built to power complex coding and agentic workflows.',
-    })
-    expect(descriptor.modelOptions[2]).toMatchObject({
-      label: 'GPT-6 Luna',
-      description: 'Our most efficient model for focused, high-volume tasks.',
-    })
+    expect(
+      descriptor.modelOptions.map((option) => [
+        option.label,
+        option.description,
+      ]),
+    ).toEqual([
+      ['GPT-6.1 Sol', 'Latest workhorse model for coding and everyday work.'],
+      ['GPT-6 Astra', 'Frontier intelligence for the most demanding work.'],
+      ['GPT-6 Sol', 'Previous generation workhorse model.'],
+      ['GPT-6 Luna', 'Fast and affordable model for easier tasks.'],
+      ['GPT-5.6 Sol', 'Older generation workhorse model.'],
+      ['GPT-5.6 Terra', 'Older balanced model for straightforward work.'],
+      ['GPT-5.6 Luna', 'Older fast and efficient model.'],
+      ['GPT-5.5', 'Legacy coding model.'],
+    ])
   })
 
   it('exposes Antigravity official models as model + effort options', () => {
