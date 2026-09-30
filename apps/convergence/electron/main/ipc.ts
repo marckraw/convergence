@@ -1188,6 +1188,12 @@ export function registerIpcHandlers(
     ) => sessionApp.setSessionModelSelection(id, input),
   )
 
+  ipcMain.handle(
+    'session:setServiceTier',
+    (_event, id: string, input: { serviceTier: unknown }) =>
+      sessionApp.setSessionServiceTier(id, input),
+  )
+
   // Provider handlers
   async function loadProviderDescriptors() {
     return Promise.all(providerRegistry.getAll().map((p) => p.describe()))

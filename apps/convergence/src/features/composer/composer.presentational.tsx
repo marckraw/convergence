@@ -914,7 +914,10 @@ export const Composer: FC<ComposerProps> = ({
                     Gone on a daemon, not disabled: Fast mode writes
                     `serviceTier`, which has no home on the wire, so the switch
                     there would set a field the machine below never receives
-                    (MAR-2682).
+                    (MAR-2682). Locked like the model and effort, not like the
+                    provider: a speed change reaches the conversation's next
+                    turn, so it is only held while a turn is in flight
+                    (MAR-3572).
                   */}
                   {codexBillingControlsAvailable ? (
                     <Button
@@ -927,10 +930,10 @@ export const Composer: FC<ComposerProps> = ({
                       title={
                         codexFastMode
                           ? 'Fast mode is on'
-                          : 'Fast mode is off; Codex will use the default service tier.'
+                          : 'Fast mode is off: Codex runs at standard speed.'
                       }
                       onClick={() => onCodexFastModeChange(!codexFastMode)}
-                      disabled={disabled || selectionDisabled}
+                      disabled={disabled || modelSelectionDisabled}
                       className={cn(
                         'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
                         codexFastMode && 'bg-secondary text-foreground',

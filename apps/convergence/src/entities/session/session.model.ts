@@ -244,6 +244,11 @@ interface SessionActions {
       effort: ReasoningEffort | null
     },
   ) => Promise<SessionSummary>
+  /** The Codex speed tier the conversation's next turn starts with (MAR-3572). */
+  setSessionServiceTier: (
+    id: string,
+    input: { serviceTier: string },
+  ) => Promise<SessionSummary>
   clearError: () => void
 }
 
@@ -1591,6 +1596,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({ error: null })
     try {
       const updated = await sessionApi.setModelSelection(id, input)
+      get().handleSessionSummaryUpdate(updated)
+      return updated
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      set({ error: error.message })
+      throw error
+    }
+  },
+
+  setSessionServiceTier: async (id, input) => {
+    set({ error: null })
+    try {
+      const updated = await sessionApi.setServiceTier(id, input)
       get().handleSessionSummaryUpdate(updated)
       return updated
     } catch (err) {

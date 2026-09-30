@@ -147,6 +147,15 @@ export const sessionApi = {
       input,
     ) as Promise<SessionSummary>,
 
+  setServiceTier: (
+    id: string,
+    input: { serviceTier: string },
+  ): Promise<SessionSummary> =>
+    window.electronAPI.session.setServiceTier(
+      id,
+      input,
+    ) as Promise<SessionSummary>,
+
   getNeedsYouDismissals: (): Promise<NeedsYouDismissals> =>
     window.electronAPI.session.getNeedsYouDismissals(),
 

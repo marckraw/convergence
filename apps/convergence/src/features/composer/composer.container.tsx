@@ -346,6 +346,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
   const setSessionModelSelection = useSessionStore(
     (s) => s.setSessionModelSelection,
   )
+  const setSessionServiceTier = useSessionStore((s) => s.setSessionServiceTier)
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const redeliverQueuedInput = useSessionStore((s) => s.redeliverQueuedInput)
   const queuedInputs = useSessionStore((s) =>
@@ -1892,6 +1893,23 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     setEffortId(nextEffortId)
   }
 
+  /**
+   * Fast lives on a live conversation's row, like its model (MAR-3572). A
+   * flip used to change only this switch: the send carried no tier and the row
+   * kept the one the conversation was created with. Persist, and let the
+   * returned row re-seed the switch -- if the write is refused, the switch
+   * keeps showing the tier the next turn will actually use.
+   */
+  const handleCodexFastModeChange = (nextFastMode: boolean) => {
+    if (activeSession && selectionLocks.canContinue) {
+      void setSessionServiceTier(activeSession.id, {
+        serviceTier: nextFastMode ? 'fast' : 'default',
+      }).catch(() => {})
+      return
+    }
+    setCodexFastMode(nextFastMode)
+  }
+
   const handleSkillsBrowse = useCallback(() => {
     setSkillPickerOpen(false)
     openDialog('skills-browser')
@@ -1955,7 +1973,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
             : undefined
         }
         codexFastMode={codexFastMode}
-        onCodexFastModeChange={setCodexFastMode}
+        onCodexFastModeChange={handleCodexFastModeChange}
         codexBillingControlsAvailable={showCodexBillingControls}
         wiresSlot={wiresSlot}
         armedOutgoingRelays={armedOutgoingRelays}

@@ -42,6 +42,7 @@ export type SessionAppBackend = Pick<
   | 'regenerateName'
   | 'setPrimarySurface'
   | 'setModelSelection'
+  | 'setServiceTier'
   | 'setEvidenceUpdateListener'
   | 'setSummaryUpdateListener'
   | 'setConversationPatchListener'
@@ -179,6 +180,13 @@ export class SessionAppService {
     input: { providerId: unknown; model: string | null; effort: unknown },
   ): Promise<Session> {
     return this.sessions.setModelSelection(sessionId, input)
+  }
+
+  setSessionServiceTier(
+    sessionId: string,
+    input: { serviceTier: unknown },
+  ): Session {
+    return this.sessions.setServiceTier(sessionId, input)
   }
 
   onEvidenceUpdate(listener: (event: { sessionId: string }) => void): void {

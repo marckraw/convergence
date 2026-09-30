@@ -3889,6 +3889,7 @@ describe('ComposerContainer', () => {
         attention: string
         model: string
         providerId: string
+        serviceTier: string | null
       }>,
     ) {
       useSessionStore.setState((state) => ({
@@ -4009,6 +4010,57 @@ describe('ComposerContainer', () => {
           effort: 'high',
         })
       })
+    })
+
+    it('MAR-3572 R2: Fast on an open Codex conversation is written to its row, and the switch shows the row', async () => {
+      const setSessionServiceTier = vi.fn().mockResolvedValue(undefined)
+      useSessionStore.setState({
+        setSessionServiceTier,
+        providerCatalogs: localProviderCatalogs([
+          ...seededProviders(),
+          codexProvider,
+        ]),
+      })
+      setSessionState({
+        status: 'completed',
+        attention: 'finished',
+        providerId: 'codex',
+        model: 'gpt-5.5',
+        serviceTier: 'default',
+      })
+      renderComposer()
+
+      const fast = screen.getByRole('switch', { name: 'Fast mode' })
+      expect(fast).toHaveAttribute('aria-checked', 'false')
+      fireEvent.click(fast)
+
+      await waitFor(() => {
+        expect(setSessionServiceTier).toHaveBeenCalledWith('session-1', {
+          serviceTier: 'fast',
+        })
+      })
+      // Nothing optimistic: until the row says Fast, the switch says what the
+      // next turn will actually run on.
+      expect(fast).toHaveAttribute('aria-checked', 'false')
+
+      act(() => setSessionState({ serviceTier: 'fast' }))
+      expect(screen.getByRole('switch', { name: 'Fast mode' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
+      await waitFor(() => {
+        expect(setSessionServiceTier).toHaveBeenLastCalledWith('session-1', {
+          serviceTier: 'default',
+        })
+      })
+
+      // Held like the model while a turn runs, not like the provider for the
+      // conversation's whole life.
+      act(() => setSessionState({ status: 'running', attention: 'none' }))
+      expect(screen.getByRole('switch', { name: 'Fast mode' })).toBeDisabled()
+      expect(screen.getByRole('combobox', { name: 'GPT-5.5' })).toBeDisabled()
     })
 
     it('keeps showing the old model when the backend refuses the change', async () => {
