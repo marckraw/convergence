@@ -514,9 +514,10 @@ const CODEX_FAMILY_CONTEXT_WINDOW_TOKENS = 272_000
 /**
  * The catalog Codex falls back to when `model/list` itself fails.
  *
- * Ids, their order, the effort ladders, the default efforts and the input
- * modalities all mirror the `model/list` tape probed from codex-cli 0.156.0 on
- * 2026-09-22 (MAR-3320, `includeHidden: false`, `limit: 100`). Hidden models
+ * Ids, their order, the effort ladders, the default efforts, the descriptions
+ * and the input modalities all mirror the `model/list` tape probed from
+ * codex-cli 0.159.0 on 2026-09-30 (MAR-3569, `includeHidden: false`,
+ * `limit: 100`; MAR-3320 took the 0.156.0 tape). Hidden models
  * stay out, and so does anything OpenAI stopped serving. The effort order carries meaning: it is the ladder
  * Codex presents.
  */
@@ -532,15 +533,31 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     // fact about the provider, and a literal per builder is a literal per
     // chance to disagree the day a provider gains the ability (R8).
     supportsConversationReset: providerSupportsConversationReset('codex'),
-    // Codex moved its own default to Astra. The RPC path follows the tape's
-    // `isDefault`; this path follows the same tape, so the two agree.
-    defaultModelId: 'gpt-6-astra',
+    // Codex moved its own default to GPT-6.1 Sol. The RPC path follows the
+    // tape's `isDefault`; this path follows the same tape, so the two agree.
+    defaultModelId: 'gpt-6.1-sol',
     fastModelId: 'gpt-6-luna',
     modelOptions: [
       {
+        id: 'gpt-6.1-sol',
+        label: 'GPT-6.1 Sol',
+        description: 'Latest workhorse model for coding and everyday work.',
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
+        defaultEffort: 'low',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+          'ultra',
+        ]),
+        inputModalities: ['text', 'image'],
+      },
+      {
         id: 'gpt-6-astra',
         label: 'GPT-6 Astra',
-        description: 'Our most capable model for complex, demanding work.',
+        description: 'Frontier intelligence for the most demanding work.',
         contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
@@ -556,7 +573,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       {
         id: 'gpt-6-sol',
         label: 'GPT-6 Sol',
-        description: 'Built to power complex coding and agentic workflows.',
+        description: 'Previous generation workhorse model.',
         contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
@@ -572,7 +589,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       {
         id: 'gpt-6-luna',
         label: 'GPT-6 Luna',
-        description: 'Our most efficient model for focused, high-volume tasks.',
+        description: 'Fast and affordable model for easier tasks.',
         contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
@@ -587,7 +604,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       {
         id: 'gpt-5.6-sol',
         label: 'GPT-5.6 Sol',
-        description: 'GPT-5.6 flagship model.',
+        description: 'Older generation workhorse model.',
         contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'low',
         effortOptions: buildEffortOptions([
@@ -603,7 +620,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       {
         id: 'gpt-5.6-terra',
         label: 'GPT-5.6 Terra',
-        description: 'GPT-5.6 model that balances intelligence and cost.',
+        description: 'Older balanced model for straightforward work.',
         contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
@@ -619,7 +636,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       {
         id: 'gpt-5.6-luna',
         label: 'GPT-5.6 Luna',
-        description: 'GPT-5.6 model optimized for cost-sensitive workloads.',
+        description: 'Older fast and efficient model.',
         contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
@@ -634,6 +651,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       {
         id: 'gpt-5.5',
         label: 'GPT-5.5',
+        description: 'Legacy coding model.',
         contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
