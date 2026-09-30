@@ -2164,6 +2164,10 @@ interface ElectronAPI {
         effort: ReasoningEffort | null
       },
     ) => Promise<SessionSummaryData>
+    setServiceTier: (
+      id: string,
+      input: { serviceTier: string },
+    ) => Promise<SessionSummaryData>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
     getRecentIds: () => Promise<string[]>

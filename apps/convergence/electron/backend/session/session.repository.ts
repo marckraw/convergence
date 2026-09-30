@@ -188,6 +188,15 @@ export class SessionRepository {
       .run(model, effort, id)
   }
 
+  /** The Codex speed tier the next turn starts with (MAR-3572). */
+  setServiceTier(id: string, serviceTier: string): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET service_tier = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(serviceTier, id)
+  }
+
   isAutoNamed(id: string): boolean {
     const row = this.db
       .prepare('SELECT name_auto_generated FROM sessions WHERE id = ?')

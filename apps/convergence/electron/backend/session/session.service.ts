@@ -126,6 +126,11 @@ import {
 } from './session-dispatch-registry'
 import { SessionQueuedInputService } from './session-queued-input.service'
 import {
+  describeServiceTierRefusal,
+  parseServiceTierInput,
+  serviceTierForProviderStart,
+} from './session-service-tier.pure'
+import {
   SessionLivenessService,
   type SessionLivenessNoteKind,
 } from './session-liveness.service'
@@ -1506,6 +1511,26 @@ export class SessionService {
     } finally {
       if (controlDispatch) this.dispatches.settle(controlDispatch)
     }
+  }
+
+  /**
+   * Change the Codex speed tier of a conversation (MAR-3572).
+   *
+   * Stored on the row, and nowhere else: a Codex handle is released when its
+   * turn completes and the next send starts a fresh one from the row, so the
+   * row is the one place the next turn reads. A turn already running keeps the
+   * tier it started with. Not a model change: no divider, no dispatch window
+   * (R3) — the transcript's authorship does not move with the speed.
+   */
+  setServiceTier(id: string, input: { serviceTier: unknown }): Session {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    const refusal = describeServiceTierRefusal(session)
+    if (refusal) throw new Error(refusal)
+    const serviceTier = parseServiceTierInput(input.serviceTier)
+    this.sessionRepository.setServiceTier(id, serviceTier)
+    this.notifySessionChange(id)
+    return this.getById(id)!
   }
 
   async regenerateName(
@@ -3457,7 +3482,7 @@ export class SessionService {
           ),
           model: session.model,
           effort: session.effort,
-          serviceTier: session.serviceTier ?? null,
+          serviceTier: serviceTierForProviderStart(session),
           continuationToken,
           permissionConfig: session.permissionConfig,
           providerAccountId: this.getLastTurnProviderAccountId(id),
@@ -5307,7 +5332,7 @@ export class SessionService {
       ...this.readStartConversationFacts(session.id),
       model: session.model,
       effort: session.effort,
-      serviceTier: session.serviceTier ?? null,
+      serviceTier: serviceTierForProviderStart(session),
       continuationToken,
       permissionConfig: session.permissionConfig,
       providerAccountId: providerAccountId ?? null,
