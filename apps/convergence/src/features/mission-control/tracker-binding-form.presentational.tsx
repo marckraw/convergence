@@ -3,7 +3,7 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
-import { Button, Checkbox, Input } from '@convergence/ui'
+import { Button, Input, Switch } from '@convergence/ui'
 import {
   probeAsksForKey,
   probeTimeLabel,
@@ -85,7 +85,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           Dispatch
         </h4>
         <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-          <Checkbox
+          <Switch
             checked={autoDispatch}
             disabled={busy || !bound}
             onCheckedChange={(checked) => onAutoDispatchChange?.(checked)}

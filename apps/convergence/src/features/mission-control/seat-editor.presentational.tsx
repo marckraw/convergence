@@ -10,7 +10,14 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { Button, Checkbox, cn, IconButton, Input } from '@convergence/ui'
+import {
+  Button,
+  Checkbox,
+  cn,
+  IconButton,
+  Input,
+  Switch,
+} from '@convergence/ui'
 import {
   LOCAL_HOST_ID,
   ROLE_CARD_LIMIT,
@@ -444,7 +451,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           </div>
           {refusalFor('wipLimit')}
           <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-            <Checkbox
+            <Switch
               checked={member.paused}
               disabled={busy}
               onCheckedChange={(checked) => onSeatEdit({ paused: checked })}

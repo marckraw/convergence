@@ -409,7 +409,7 @@ it.each([
           : 'Nothing would start now',
       ),
     ).toBeTruthy()
-    const toggle = screen.getByRole('checkbox', { name: /^Auto-dispatch/ })
+    const toggle = screen.getByRole('switch', { name: /^Auto-dispatch/ })
     expect(toggle).not.toBeChecked()
     fireEvent.click(toggle)
     expect(change).toHaveBeenCalledWith(true)
