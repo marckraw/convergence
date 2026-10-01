@@ -2,14 +2,18 @@ import type { FC } from 'react'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { hasSkillSelection } from '@/entities/skill'
 import {
+  Badge,
   Button,
   cn,
-  Input,
+  EmptyState,
+  Notice,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  SearchField,
 } from '@convergence/ui'
-import { AlertTriangle, Check, Library, Loader2, Search } from 'lucide-react'
+import { AlertTriangle, Check, Library } from 'lucide-react'
+import { pickPopover, pickRowClass, pickRowDetail } from './pick-row.styles'
 
 interface SkillPickerProps {
   open: boolean
@@ -43,39 +47,32 @@ function renderSkillRow(
       type="button"
       variant="ghost"
       disabled={!canSelect}
+      aria-pressed={selected}
       onClick={() => onToggleSkill(skill)}
       size="lg"
-      className={cn(
-        'h-auto w-full justify-start rounded-lg border border-transparent px-3 text-left',
-        selected
-          ? 'border-primary/30 bg-primary/10 text-foreground'
-          : 'hover:border-border/70 hover:bg-muted/40',
-      )}
+      className={pickRowClass(selected)}
     >
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium">
             {skill.displayName}
           </span>
-          {selected ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
+          {selected ? <Check aria-hidden className="size-3.5" /> : null}
           {warningCount > 0 ? (
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-foreground" />
+            <AlertTriangle
+              aria-hidden
+              className="size-3.5 shrink-0 text-warning-ink"
+            />
           ) : null}
         </span>
-        <span className="mt-1 line-clamp-2 block whitespace-normal text-xs font-normal leading-5 text-muted-foreground">
+        <span className={pickRowDetail}>
           {skill.shortDescription || skill.description || 'No description.'}
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
-            {skill.sourceLabel}
-          </span>
-          <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
-            {skill.providerName}
-          </span>
+          <Badge className="uppercase">{skill.sourceLabel}</Badge>
+          <Badge className="uppercase">{skill.providerName}</Badge>
           {!skill.enabled ? (
-            <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
-              Disabled
-            </span>
+            <Badge className="uppercase">Disabled</Badge>
           ) : null}
         </span>
       </span>
@@ -113,9 +110,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
           <Library className="h-3.5 w-3.5" />
           Skills
           {selectedSkills.length > 0 ? (
-            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-              {selectedSkills.length}
-            </span>
+            <Badge shape="count">{selectedSkills.length}</Badge>
           ) : null}
         </Button>
       }
@@ -123,13 +118,13 @@ export const SkillPicker: FC<SkillPickerProps> = ({
     <PopoverContent
       aria-label="Skills"
       align="start"
-      className="w-[min(390px,calc(100vw-2rem))] p-0"
+      className={cn('w-96', pickPopover)}
     >
-      <div className="border-b border-border/70 p-3">
+      <div className="border-b border-line-soft p-3">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold">Skills</p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-xs text-ink-muted">
               {activeProviderLabel ?? 'Active provider'}
             </p>
           </div>
@@ -137,36 +132,35 @@ export const SkillPicker: FC<SkillPickerProps> = ({
             Browse all
           </Button>
         </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            size="lg"
-            value={query}
-            onChange={(event) => onQueryChange(event.currentTarget.value)}
-            placeholder="Search skills"
-            className="pl-8"
-          />
-        </div>
+        <SearchField
+          size="lg"
+          value={query}
+          onChange={(event) => onQueryChange(event.currentTarget.value)}
+          placeholder="Search skills"
+          aria-label="Search skills"
+        />
       </div>
 
       <div className="app-scrollbar max-h-80 overflow-y-auto p-2">
         {notice ? (
           <p
-            className="px-2 py-1.5 text-xs text-muted-foreground"
+            className="px-2 py-1.5 text-xs text-ink-muted"
             data-testid="remote-skills-notice"
           >
             {notice}
           </p>
         ) : null}
         {error ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <Notice tone="danger" title="Couldn't load skills">
             {error}
-          </div>
+          </Notice>
         ) : isLoading ? (
-          <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading skills...
-          </div>
+          <EmptyState
+            state="loading"
+            variant="plain"
+            size="compact"
+            title="Loading skills…"
+          />
         ) : skills.length > 0 ? (
           <div className="space-y-1">
             {skills.map((skill) =>
@@ -178,9 +172,11 @@ export const SkillPicker: FC<SkillPickerProps> = ({
             )}
           </div>
         ) : (
-          <p className="px-2 py-3 text-sm text-muted-foreground">
-            No skills matched this provider.
-          </p>
+          <EmptyState
+            variant="plain"
+            size="compact"
+            title="No skills match this provider"
+          />
         )}
       </div>
     </PopoverContent>

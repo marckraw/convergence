@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { PromptLibraryEntry } from '@/entities/prompt-library'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, waitFor } from 'storybook/test'
 import { ComposerPromptInjectionPicker } from './composer-prompt-injection-picker.presentational'
 
 const prompts: PromptLibraryEntry[] = [
@@ -80,7 +80,8 @@ export const Default: Story = {
 export const Busy: Story = {
   args: { items: [], isLoading: true },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Loading prompts...')).toBeVisible()
+    const words = await canvas.findByText('Loading prompts…')
+    await waitFor(() => expect(words).toBeVisible())
   },
 }
 
@@ -99,7 +100,7 @@ export const Failed: Story = {
 export const Empty: Story = {
   args: { items: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No matching prompts.')).toBeVisible()
+    await expect(canvas.getByText('No matching prompts')).toBeVisible()
   },
 }
 

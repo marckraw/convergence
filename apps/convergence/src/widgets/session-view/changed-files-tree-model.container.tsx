@@ -129,7 +129,7 @@ export const ChangedFilesTreeModel: FC<ChangedFilesTreeModelProps> = ({
                 onKeyDown={handleSearchKeyDown}
               />
               {search.value && (
-                <span className="w-10 text-right text-[10px] tabular-nums text-muted-foreground">
+                <span className="w-10 text-right text-3xs tabular-nums text-muted-foreground">
                   {search.matchingPaths.length}
                 </span>
               )}

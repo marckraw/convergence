@@ -56,11 +56,11 @@ describe('SkillPicker remote skills note', () => {
     expect(onToggleSkill).toHaveBeenCalledWith(skill)
   })
 
-  it('shows the note while skills are loading', () => {
+  it('shows the note while skills are loading', async () => {
     renderPicker({ isLoading: true, skills: [] })
 
     expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
-    expect(screen.getByText('Loading skills...')).toBeInTheDocument()
+    expect(await screen.findByText('Loading skills…')).toBeInTheDocument()
   })
 
   it('shows the note when no skills match', () => {
@@ -68,7 +68,7 @@ describe('SkillPicker remote skills note', () => {
 
     expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
     expect(
-      screen.getByText('No skills matched this provider.'),
+      screen.getByText('No skills match this provider'),
     ).toBeInTheDocument()
   })
 

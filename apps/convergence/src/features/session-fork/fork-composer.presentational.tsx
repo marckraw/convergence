@@ -106,7 +106,7 @@ export const ForkComposer: FC<ForkComposerProps> = ({
           <Paperclip className="h-3.5 w-3.5" />
           Attach
           {attachments.length > 0 ? (
-            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-3xs text-primary">
               {attachments.length}
             </span>
           ) : null}

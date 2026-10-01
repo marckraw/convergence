@@ -116,18 +116,18 @@ export const composerCardDepthClassByMode: Record<
  */
 
 /** "Runs on". */
-export const stripLabelClass = 'text-[11px] font-medium text-muted-foreground'
+export const stripLabelClass = 'text-2xs font-medium text-muted-foreground'
 
 /** The chooser, while a session is being born. */
 export const stripSelectClass =
-  'h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground'
+  'h-6 px-1.5 text-2xs text-muted-foreground hover:text-foreground'
 
 /** The machine, once the session is live and the choice is no longer one. */
 export const stripFactClass =
-  'rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] font-medium text-foreground'
+  'rounded-md border border-border/60 px-1.5 py-0.5 text-2xs font-medium text-foreground'
 
 /** A live session whose machine is gone. */
 export const stripWarningClass =
-  'flex min-w-0 items-center gap-1 text-[11px] text-warning-foreground'
+  'flex min-w-0 items-center gap-1 text-2xs text-warning-foreground'
 
 export const stripWarningIconClass = 'h-3 w-3 shrink-0'

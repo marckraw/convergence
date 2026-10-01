@@ -113,7 +113,7 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
       >
         <GitPullRequest className="h-3.5 w-3.5" />
         Pull request
-        <span className="ml-auto pl-3 text-[11px] text-muted-foreground">
+        <span className="ml-auto pl-3 text-2xs text-muted-foreground">
           {pullRequestLabel}
         </span>
       </Button>

@@ -2244,7 +2244,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
                 className="flex items-start justify-between gap-3 text-xs"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <div className="flex items-center gap-2 text-3xs uppercase tracking-wide text-muted-foreground">
                     <span>
                       {DELIVERY_MODE_LABELS[input.deliveryMode] ??
                         input.deliveryMode}

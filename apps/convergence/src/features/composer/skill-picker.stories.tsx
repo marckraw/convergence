@@ -125,23 +125,13 @@ export const Default: Story = {
 export const Busy: Story = {
   args: { open: true, skills: [], isLoading: true },
   play: async () => {
-    const shown = await screen.findByText('Loading skills...')
+    const shown = await screen.findByText('Loading skills…')
     await waitFor(() => expect(shown).toBeVisible())
   },
 }
 
 /** The catalog could not be read. */
 export const Failed: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the error is destructive text on a 10% destructive tint, under 4.5:1 — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     open: true,
     skills: [],
@@ -157,7 +147,7 @@ export const Failed: Story = {
 export const Empty: Story = {
   args: { open: true, skills: [], selectedSkills: [] },
   play: async () => {
-    const shown = await screen.findByText('No skills matched this provider.')
+    const shown = await screen.findByText('No skills match this provider')
     await waitFor(() => expect(shown).toBeVisible())
   },
 }

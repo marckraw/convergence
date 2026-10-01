@@ -137,7 +137,7 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
                     onClick={() => onToggleContextItem(item.id)}
                     aria-pressed={isSelected}
                     className={cn(
-                      'h-auto rounded-full px-2 py-0.5 text-[11px]',
+                      'h-auto rounded-full px-2 py-0.5 text-2xs',
                       isSelected && 'border-primary text-primary',
                     )}
                   >
@@ -153,7 +153,7 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
             })}
           </ul>
           {selectedContextIds.length > 0 ? (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {selectedContextIds.length} item
               {selectedContextIds.length === 1 ? '' : 's'} will be injected at
               session start.

@@ -262,18 +262,18 @@ function zIndexOf(element: HTMLElement): number {
 }
 
 /** The strip's own type scale, and the only one it is allowed to carry. */
-const STRIP_TEXT_SIZE_CLASS = 'text-[11px]'
+const STRIP_TEXT_SIZE_CLASS = 'text-2xs'
 
 /**
  * Any whole type-scale class: the named steps, and the arbitrary form with a
  * length in it. Sizes are asserted as a *set* equal to the one above rather
- * than by membership, because `text-sm` added beside `text-[11px]` wins in the
+ * than by membership, because `text-sm` added beside `text-2xs` wins in the
  * cascade while a `toContain` check stays green.
  *
  * `text-[color:...]` is a colour, not a size, and must not match here.
  */
 const TEXT_SIZE_CLASS =
-  /^text-(?:xs|sm|base|lg|xl|[2-9]xl|\[\d+(?:\.\d+)?(?:px|rem|em)\])$/
+  /^text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl|\[\d+(?:\.\d+)?(?:px|rem|em)\])$/
 
 /**
  * Weight above the strip's `font-medium`. Loud has two halves, and this is the

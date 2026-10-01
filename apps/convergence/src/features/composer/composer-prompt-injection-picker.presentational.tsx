@@ -1,7 +1,13 @@
 import type { FC } from 'react'
 import { BookOpenText } from 'lucide-react'
 import type { PromptLibraryEntry } from '@/entities/prompt-library'
-import { Button, Listbox, ListboxOption, Spinner } from '@convergence/ui'
+import { Badge, Listbox, ListboxOption } from '@convergence/ui'
+import { InlinePicker, InlinePickerState } from './inline-picker.presentational'
+import {
+  inlinePickerRow,
+  inlinePickerRowDetail,
+  inlinePickerRowLine,
+} from './inline-picker.styles'
 
 interface ComposerPromptInjectionPickerProps {
   open: boolean
@@ -38,38 +44,27 @@ export const ComposerPromptInjectionPicker: FC<
   if (!open) return null
 
   return (
-    <div
-      className="absolute right-0 bottom-full left-0 z-50 mb-2 max-h-72 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-      data-testid="composer-prompt-injection-picker"
+    <InlinePicker
+      testId="composer-prompt-injection-picker"
+      heading={{
+        icon: <BookOpenText />,
+        title: 'Prompts',
+        detail: 'Prompt library',
+      }}
+      closeLabel="Close prompt injection picker"
+      onDismiss={onDismiss}
+      tall
     >
-      <div className="border-b border-border/70 px-2 py-1.5">
-        <div className="flex items-center gap-1.5 text-xs font-medium">
-          <BookOpenText className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>Prompts</span>
-        </div>
-        <div className="truncate text-[11px] text-muted-foreground">
-          Prompt library
-        </div>
-      </div>
       {error ? (
-        <div role="alert" className="px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
+        <InlinePickerState
+          state="failed"
+          title="Couldn't load prompts"
+          detail={error}
+        />
       ) : isLoading ? (
-        <div
-          role="status"
-          className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"
-        >
-          <Spinner size="sm" />
-          Loading prompts...
-        </div>
+        <InlinePickerState state="loading" title="Loading prompts…" />
       ) : items.length === 0 ? (
-        <div
-          className="px-3 py-2 text-xs text-muted-foreground"
-          data-testid="composer-prompt-injection-empty"
-        >
-          No matching prompts.
-        </div>
+        <InlinePickerState state="empty" title="No matching prompts" />
       ) : (
         <Listbox
           id={listId}
@@ -84,15 +79,15 @@ export const ComposerPromptInjectionPicker: FC<
               onHover={() => onHover(index)}
               onPick={() => onSelect(prompt)}
               data-testid={`composer-prompt-injection-item-${prompt.id}`}
-              className="items-start rounded px-2 py-1.5 text-xs"
+              className={inlinePickerRow}
             >
-              <span className="flex w-full min-w-0 items-center gap-1.5">
+              <span className={inlinePickerRowLine}>
                 <span className="truncate font-medium">{prompt.title}</span>
-                <span className="ml-auto shrink-0 rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                <Badge shape="label" className="ml-auto uppercase">
                   {prompt.sourceLabel}
-                </span>
+                </Badge>
               </span>
-              <span className="line-clamp-2 w-full text-[11px] text-muted-foreground">
+              <span className={inlinePickerRowDetail}>
                 {prompt.shortDescription ||
                   prompt.description ||
                   prompt.relativePath}
@@ -100,12 +95,9 @@ export const ComposerPromptInjectionPicker: FC<
               {prompt.tags.length > 0 ? (
                 <span className="mt-0.5 flex w-full flex-wrap gap-1">
                   {prompt.tags.slice(0, 3).map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                    >
+                    <Badge key={tag} shape="label">
                       {tag}
-                    </span>
+                    </Badge>
                   ))}
                 </span>
               ) : null}
@@ -113,15 +105,6 @@ export const ComposerPromptInjectionPicker: FC<
           ))}
         </Listbox>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onDismiss}
-        aria-label="Close prompt injection picker"
-        className="sr-only"
-      >
-        Close
-      </Button>
-    </div>
+    </InlinePicker>
   )
 }

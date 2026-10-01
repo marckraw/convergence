@@ -175,7 +175,7 @@ export const PierreDiffViewerView = <TAnnotation,>({
       })
     : null
   const fallbackDiffContent = (
-    <div className="p-3 font-mono text-[11px] text-muted-foreground">
+    <div className="p-3 font-mono text-2xs text-muted-foreground">
       {diff.trim() || '(no diff available)'}
     </div>
   )

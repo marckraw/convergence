@@ -16,7 +16,7 @@ export const TurnFileChangeNotices: FC<TurnFileChangeNoticesProps> = ({
       {notices.map((notice) => (
         <p
           key={notice.kind}
-          className="flex items-center gap-1.5 text-[11px] text-warning-foreground"
+          className="flex items-center gap-1.5 text-2xs text-warning-foreground"
         >
           {notice.kind === 'binary' ? (
             <FileQuestion className="h-3 w-3 shrink-0" />

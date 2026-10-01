@@ -79,13 +79,13 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
     className="mx-auto mb-2 flex w-full max-w-conversation items-center gap-2"
     data-testid="annotation-tray"
   >
-    <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+    <span className="shrink-0 text-3xs uppercase tracking-wide text-muted-foreground">
       Responding to
     </span>
     {/* Live, so a removal is announced as the number it leaves behind. */}
     <span
       aria-live="polite"
-      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-3xs font-medium text-muted-foreground"
     >
       {formatAnnotationCount(annotations.length)}
     </span>

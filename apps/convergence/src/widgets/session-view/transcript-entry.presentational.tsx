@@ -709,9 +709,7 @@ function renderSkillSelections(selections: SkillSelection[] | undefined) {
       {selections.map((selection) => (
         <Chip key={selection.id} icon={<Library />}>
           {selection.displayName}
-          <span className="ml-1.5 text-3xs uppercase opacity-70">
-            {selection.status}
-          </span>
+          <span className="ml-1.5 text-3xs uppercase">{selection.status}</span>
         </Chip>
       ))}
     </div>

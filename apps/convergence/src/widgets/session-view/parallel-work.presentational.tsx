@@ -209,16 +209,16 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         >
           {workTitle(row)}
         </Button>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           {row.run
             ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
             : (row.task?.taskType ?? 'Not reported')}
         </p>
-        <p className="text-[11px]" title={time.at ?? undefined}>
+        <p className="text-2xs" title={time.at ?? undefined}>
           {workStatus(row)} · {time.label}
         </p>
         {row.run && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             Last tool: {row.run.lastToolName ?? 'Not reported'}
           </p>
         )}
@@ -257,7 +257,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
               aria-label={`${hidden ? 'Expand' : 'Collapse'} ${workTitle(row)}`}
               onClick={() => props.onToggle?.(key)}
               size="lg"
-              className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center gap-1 text-[11px] text-muted-foreground"
+              className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center gap-1 text-2xs text-muted-foreground"
             >
               {hidden ? (
                 <ChevronRight className="size-3" />
@@ -298,7 +298,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         ) : (
           <div>
             <h2 className="text-base font-semibold">Parallel work</h2>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-2xs text-muted-foreground">
               {inventoryLabel}
             </p>
           </div>

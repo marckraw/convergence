@@ -66,27 +66,27 @@ export const TurnCard: FC<TurnCardProps> = ({
         />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="font-mono text-[11px] text-muted-foreground">
+            <span className="font-mono text-2xs text-muted-foreground">
               Turn {turn.sequence}
             </span>
             {turn.status === 'running' && (
-              <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-500">
+              <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-3xs font-medium text-blue-500">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
                 in progress
               </span>
             )}
             {turn.status === 'errored' && (
-              <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
+              <span className="rounded bg-warning/10 px-1.5 py-0.5 text-3xs font-medium text-warning-foreground">
                 errored
               </span>
             )}
           </span>
           {turn.summary && (
-            <span className="mt-0.5 block truncate text-[11px] text-foreground">
+            <span className="mt-0.5 block truncate text-2xs text-foreground">
               {turn.summary}
             </span>
           )}
-          <span className="mt-1 flex items-baseline gap-2 text-[10px] text-muted-foreground">
+          <span className="mt-1 flex items-baseline gap-2 text-3xs text-muted-foreground">
             <span>{fileLabel}</span>
             {counts.additions > 0 && (
               <span className="text-green-500">+{counts.additions}</span>

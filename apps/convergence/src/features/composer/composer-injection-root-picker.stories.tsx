@@ -57,7 +57,7 @@ export const Default: Story = {
 export const Empty: Story = {
   args: { items: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No matching injections.')).toBeVisible()
+    await expect(canvas.getByText('No matching injections')).toBeVisible()
   },
 }
 

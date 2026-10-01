@@ -82,7 +82,7 @@ export const Empty: Story = {
   args: { items: [] },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByText('No matching project context items.'),
+      canvas.getByText('No matching project context items'),
     ).toBeVisible()
   },
 }
