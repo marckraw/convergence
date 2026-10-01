@@ -78,6 +78,10 @@ const config: StorybookConfig = {
         // that file on a cold cache (as in CI).
         include: [
           '@base-ui/react/button',
+          '@base-ui/react/dialog',
+          '@base-ui/react/menu',
+          '@base-ui/react/popover',
+          '@base-ui/react/select',
           '@base-ui/react/tooltip',
           '@radix-ui/react-dialog',
           '@radix-ui/react-dropdown-menu',

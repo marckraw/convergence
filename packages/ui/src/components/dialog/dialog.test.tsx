@@ -1,27 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { Dialog, DialogContent } from './dialog'
+import { Dialog, DialogContent, type DialogSize, DialogTitle } from './dialog'
 
 /**
- * The two optional props MAR-3201 added, and the promise attached to them:
- * with neither passed, the primitive renders what it always rendered.
+ * DialogContent's two choices (MAR-3616), and the promise attached to them:
+ * with neither passed, a dialog has the scrim and the ✕ every dialog has, at
+ * today's 720 px.
  */
 
-const overlay = () =>
-  document.querySelector('[data-slot="dialog-overlay"]') as HTMLElement
+const backdrop = () =>
+  document.querySelector('[data-slot="dialog-backdrop"]') as HTMLElement
 
-const content = () =>
-  document.querySelector('[data-slot="dialog-content"]') as HTMLElement
-
-const open = (
-  props: {
-    overlayClassName?: string
-    hideClose?: boolean
-  } = {},
-) =>
+const open = (props: { showClose?: boolean; size?: DialogSize } = {}) =>
   render(
     <Dialog open>
       <DialogContent {...props}>
+        <DialogTitle>Rename</DialogTitle>
         <p>body</p>
       </DialogContent>
     </Dialog>,
@@ -29,31 +23,36 @@ const open = (
 
 afterEach(cleanup)
 
-describe('MAR-3201 A: DialogContent keeps its old markup by default', () => {
-  it('no props: the app’s backdrop, and the built-in close', () => {
+describe('MAR-3616: DialogContent', () => {
+  it('no props: the scrim, the ✕ and the default width', async () => {
     open()
-    // Mutation: default `hideClose` to true -> the 27 callers that rely on
-    // the built-in close lose it, red here.
+    const dialog = await screen.findByRole('dialog', { name: 'Rename' })
+    // Mutation: default `showClose` to false -> every dialog that relies on
+    // the built-in close loses it, red here.
     expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(1)
-    expect(overlay().className).toContain('bg-black/55')
-    expect(overlay().className).toContain('backdrop-blur-sm')
+    // The scrim is the token (black at 55% over a light blur), not a colour
+    // typed at the call site.
+    expect(backdrop().className).toContain('bg-scrim')
+    expect(backdrop().className).toContain('backdrop-blur-scrim')
+    expect(dialog).toHaveAttribute('data-size', 'lg')
   })
 
-  it('overlayClassName reaches the overlay and replaces what it names', () => {
-    open({ overlayClassName: 'bg-black/[0.68] backdrop-blur-none' })
-    // Mutation: drop the className pass-through on <DialogOverlay /> -> the
-    // caller's backdrop never arrives, red.
-    expect(overlay().className).toContain('bg-black/[0.68]')
-    expect(overlay().className).toContain('backdrop-blur-none')
-    expect(overlay().className).not.toContain('bg-black/55')
-    expect(overlay().className).not.toContain('backdrop-blur-sm')
-    // It is the overlay that changed, not the box.
-    expect(content().className).not.toContain('bg-black/[0.68]')
-  })
-
-  it('hideClose: no built-in close, for a dialog that brings its own', () => {
-    open({ hideClose: true })
+  it('showClose={false}: no built-in close, for a dialog that brings its own', async () => {
+    open({ showClose: false })
+    await screen.findByRole('dialog')
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
-    expect(content().textContent).toBe('body')
+  })
+
+  it('size reaches the box, as data-size', async () => {
+    open({ size: '2xl' })
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveAttribute('data-size', '2xl')
+  })
+
+  it('the scrim and the box never drag the window (MAR-3284)', async () => {
+    open()
+    const dialog = await screen.findByRole('dialog')
+    expect(backdrop().className).toContain('app-no-drag')
+    expect(dialog.className).toContain('app-no-drag')
   })
 })

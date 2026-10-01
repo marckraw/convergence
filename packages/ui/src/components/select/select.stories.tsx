@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn, screen, waitFor } from 'storybook/test'
-import { settled } from '../../../.storybook/motion-testing'
+import { expect, fn, screen, waitFor, within } from 'storybook/test'
+import {
+  arrived,
+  snapshotWhileAnimating,
+} from '../../../.storybook/motion-testing'
 import {
   Select,
   SelectContent,
@@ -12,49 +15,81 @@ import {
   SelectValue,
 } from './select'
 
+type Model = { value: string; label: string }
+
 type ModelSelectProps = {
   onValueChange: (value: string) => void
   disabled?: boolean
-  /** The models listed, by label. */
-  models: string[]
+  invalid?: boolean
+  /** The Claude Code models listed. */
+  models: Model[]
+  /** Nothing chosen yet: the placeholder shows. */
+  empty?: boolean
+  /** Open at first. */
+  defaultOpen?: boolean
 }
 
-/** Choosing a model, as the composer's model picker does. */
-function ModelSelect({ onValueChange, disabled, models }: ModelSelectProps) {
+const codex: Model = { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
+
+/** Choosing a model, as the composer's model setting does. */
+function ModelSelect({
+  onValueChange,
+  disabled,
+  invalid,
+  models,
+  empty,
+  defaultOpen,
+}: ModelSelectProps) {
   return (
     <Select
-      defaultValue={models[0]}
+      items={[...models, codex]}
+      defaultValue={empty ? null : models[0]?.value}
       onValueChange={onValueChange}
       disabled={disabled}
+      defaultOpen={defaultOpen}
     >
-      <SelectTrigger aria-label="Model" className="w-56">
-        <SelectValue />
+      <SelectTrigger
+        aria-label="Model"
+        aria-invalid={invalid || undefined}
+        className="w-56"
+      >
+        <SelectValue placeholder="Choose a model" />
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
           <SelectLabel>Claude Code</SelectLabel>
           {models.map((model) => (
-            <SelectItem key={model} value={model}>
-              {model}
+            <SelectItem key={model.value} value={model.value}>
+              {model.label}
             </SelectItem>
           ))}
         </SelectGroup>
         <SelectSeparator />
         <SelectGroup>
           <SelectLabel>Codex</SelectLabel>
-          <SelectItem value="gpt">GPT-6.1 Sol</SelectItem>
+          <SelectItem value={codex.value}>{codex.label}</SelectItem>
         </SelectGroup>
       </SelectContent>
     </Select>
   )
 }
 
+/** The panel the list sits in: what grows in and out. */
+const panelOf = (listbox: HTMLElement): HTMLElement =>
+  listbox.closest<HTMLElement>('[data-slot="select-content"]') ?? listbox
+
+const listClosed = () =>
+  waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+
 const meta = {
   title: 'Primitives/Select',
   component: ModelSelect,
   args: {
     onValueChange: fn(),
-    models: ['Claude Opus 5.5', 'Claude Sonnet 5.5'],
+    models: [
+      { value: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+      { value: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
+    ],
   },
 } satisfies Meta<typeof ModelSelect>
 
@@ -62,56 +97,143 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
+/**
+ * The trigger shows the chosen label, never the raw value; a click picks,
+ * and the keyboard opens it, moves with the arrows and picks with Enter.
+ */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const trigger = canvas.getByRole('combobox', { name: 'Model' })
     await expect(trigger).toHaveTextContent('Claude Opus 5.5')
+    await expect(trigger).not.toHaveTextContent('claude-opus-5-5')
     await userEvent.click(trigger)
     const listbox = await screen.findByRole('listbox')
-    await settled(listbox)
-    await userEvent.click(screen.getByRole('option', { name: 'GPT-6.1 Sol' }))
-    await expect(args.onValueChange).toHaveBeenCalledWith('gpt')
+    await arrived(panelOf(listbox))
+    await userEvent.click(
+      within(listbox).getByRole('option', { name: 'GPT-6.1 Sol' }),
+    )
+    await expect(args.onValueChange).toHaveBeenLastCalledWith(
+      'gpt-6.1-sol',
+      expect.anything(),
+    )
     await waitFor(() => expect(trigger).toHaveTextContent('GPT-6.1 Sol'))
-    // The keyboard opens it too, and focus comes back to the trigger.
+    await listClosed()
     await expect(trigger).toHaveFocus()
-    await userEvent.keyboard('{Enter}')
-    await screen.findByRole('listbox')
+
+    await userEvent.keyboard('{ArrowDown}')
+    const again = await screen.findByRole('listbox')
+    await waitFor(() =>
+      expect(
+        within(again).getByRole('option', { name: 'GPT-6.1 Sol' }),
+      ).toHaveFocus(),
+    )
+    await userEvent.keyboard('{ArrowUp}{Enter}')
+    await expect(args.onValueChange).toHaveBeenLastCalledWith(
+      'claude-sonnet-5-5',
+      expect.anything(),
+    )
+    await waitFor(() => expect(trigger).toHaveTextContent('Claude Sonnet 5.5'))
+    await listClosed()
+    await expect(trigger).toHaveFocus()
+  },
+}
+
+/** Escape and a press outside close it and keep the choice. */
+export const Dismiss: Story = {
+  play: async ({ args, canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Model' })
+    await userEvent.click(trigger)
+    await arrived(panelOf(await screen.findByRole('listbox')))
     await userEvent.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+    await listClosed()
     await expect(trigger).toHaveFocus()
+    await userEvent.click(trigger)
+    await arrived(panelOf(await screen.findByRole('listbox')))
+    await userEvent.click(document.body)
+    await listClosed()
+    await expect(trigger).toHaveTextContent('Claude Opus 5.5')
+    await expect(args.onValueChange).not.toHaveBeenCalled()
+  },
+}
+
+/** Empty: nothing chosen yet, and the placeholder says what to do. */
+export const Empty: Story = {
+  args: { empty: true },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('combobox', { name: 'Model' }),
+    ).toHaveTextContent('Choose a model')
   },
 }
 
 /** Long: a long list scrolls inside the window. */
 export const Long: Story = {
   args: {
-    models: Array.from(
-      { length: 40 },
-      (_, index) => `Claude model ${index + 1}`,
-    ),
+    models: Array.from({ length: 40 }, (_, index) => ({
+      value: `claude-${index + 1}`,
+      label: `Claude model ${index + 1}`,
+    })),
   },
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('combobox', { name: 'Model' }))
-    const listbox = await screen.findByRole('listbox')
-    await settled(listbox)
-    const box = listbox.getBoundingClientRect()
+    const panel = panelOf(await screen.findByRole('listbox'))
+    await arrived(panel)
+    const box = panel.getBoundingClientRect()
     await expect(box.top).toBeGreaterThanOrEqual(0)
     await expect(box.bottom).toBeLessThanOrEqual(window.innerHeight)
     await userEvent.keyboard('{Escape}')
+    await listClosed()
   },
 }
 
+/** Disabled: it can't be opened, and the keyboard passes it by. */
 export const Disabled: Story = {
   args: { disabled: true },
   play: async ({ canvas, userEvent }) => {
     const trigger = canvas.getByRole('combobox', { name: 'Model' })
-    await expect(trigger).toBeDisabled()
+    await expect(trigger).toHaveAttribute('data-disabled')
     await userEvent.tab()
     await expect(trigger).not.toHaveFocus()
+  },
+}
+
+/** Invalid: the trigger says so, to assistive tech and in the danger border. */
+export const Invalid: Story = {
+  args: { invalid: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('combobox', { name: 'Model' })).toBeInvalid()
   },
 }
 
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
+}
+
+/** Reduced motion: dropped below its trigger it fades in, without the grow or the travel. */
+export const ReducedMotion: Story = {
+  globals: { motion: 'reduced' },
+  render: (args) => (
+    <Select items={args.models} defaultValue={args.models[0]?.value}>
+      <SelectTrigger aria-label="Model" className="w-56">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false}>
+        {args.models.map((model) => (
+          <SelectItem key={model.value} value={model.value}>
+            {model.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('combobox', { name: 'Model' }))
+    const panel = panelOf(await screen.findByRole('listbox'))
+    const opening = await snapshotWhileAnimating(panel, 'opacity')
+    await expect(opening.opacity).toBeLessThan(1)
+    await expect(opening.scale).toBe(1)
+    await expect(opening.shiftY).toBe(0)
+    await arrived(panel)
+  },
 }

@@ -1,122 +1,208 @@
-import * as React from 'react'
-import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
+import { XIcon } from 'lucide-react'
+import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
+import { fadeMotion, growMotion } from '../../motion/popup.styles'
+import { IconButton } from '../icon-button/icon-button'
 
-function Dialog({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+type DialogProps = DialogPrimitive.Root.Props
+
+/**
+ * A window over the app that asks for attention: a form, a picker, a
+ * confirmation (MAR-3616). `onOpenChange(open, { reason, event })` says why
+ * it opened or closed. A dialog inside a dialog stacks on it: Escape and the
+ * ✕ close the top one, and the focus goes back to the one underneath.
+ *
+ * How it ends (R6): a dialog that saves as you go ends in one Done
+ * (FormDialog `saves="as-you-go"`); one that saves on demand ends in Cancel,
+ * then Save (`saves="on-save"`); a dialog you pick from and leave has no
+ * footer at all.
+ */
+function Dialog(props: DialogProps) {
+  return <DialogPrimitive.Root {...props} />
 }
 
-function DialogTrigger({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
+type DialogTriggerProps = Omit<DialogPrimitive.Trigger.Props, 'className'> & {
+  className?: string
 }
 
-function DialogPortal({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
-}
-
-function DialogClose({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
-}
-
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+/** What opens the dialog. `render` makes an existing Button the trigger. */
+function DialogTrigger({ className, ...props }: DialogTriggerProps) {
   return (
-    <DialogPrimitive.Overlay
-      data-slot="dialog-overlay"
-      className={cn(
-        'fixed inset-0 z-50 bg-black/55 backdrop-blur-sm',
-        className,
-      )}
+    <DialogPrimitive.Trigger
+      data-slot="dialog-trigger"
+      className={className}
+      {...props}
+    />
+  )
+}
+
+type DialogCloseProps = Omit<DialogPrimitive.Close.Props, 'className'> & {
+  className?: string
+}
+
+/** Closes the dialog. `render` makes a Button of it: Cancel, Done. */
+function DialogClose({ className, ...props }: DialogCloseProps) {
+  return (
+    <DialogPrimitive.Close
+      data-slot="dialog-close"
+      className={className}
       {...props}
     />
   )
 }
 
 /**
- * The dialog box, its backdrop and a built-in close (MAR-3201 A).
- *
- * `overlayClassName` and `hideClose` are both optional and both default to
- * today's behaviour: with neither passed, every existing caller renders the
- * markup it rendered before. They exist because the backdrop and the close
- * were the two things a caller could not reach -- the overlay is rendered
- * here with no props, and neither it nor the portal is exported -- so a
- * design that needs a different backdrop, or supplies its own close control,
- * had no way in but forking the primitive.
+ * Widths: 420, 560, 720 (today's, the default), 960 and 1280 px, each at
+ * most the window less 1 rem a side, and nearly the whole window.
+ */
+const DIALOG_SIZES = {
+  sm: 'w-[min(420px,calc(100vw-2rem))]',
+  md: 'w-[min(560px,calc(100vw-2rem))]',
+  lg: 'w-[min(var(--layout-dialog),calc(100vw-2rem))]',
+  xl: 'w-[min(960px,calc(100vw-2rem))]',
+  '2xl': 'w-[min(1280px,calc(100vw-2rem))]',
+  full: 'w-[96vw]',
+} as const
+
+type DialogSize = keyof typeof DIALOG_SIZES
+
+/** The scrim behind a dialog: black at 55% over a light blur, in both themes. */
+const dialogBackdrop = cn(
+  'fixed inset-0 z-50 bg-scrim backdrop-blur-scrim app-no-drag',
+  fadeMotion,
+)
+
+type DialogContentProps = Omit<DialogPrimitive.Popup.Props, 'className'> & {
+  className?: string
+  /** How wide: `lg` (720 px) unless told otherwise. */
+  size?: DialogSize
+  /**
+   * The ✕ in the corner, there unless told otherwise: one way out that looks
+   * the same in every dialog. Leave it out only where the dialog brings its
+   * own close.
+   */
+  showClose?: boolean
+}
+
+/**
+ * The dialog itself: centred over a scrim, at most 80% of the window's
+ * height, scrolling inside its body when it is long. It grows in and fades
+ * in, and leaves faster; there is no trigger to grow from. Focus moves in at
+ * once (to the first control, or `initialFocus`), stays inside while it is
+ * open, and goes back to what opened it when it closes (or `finalFocus`).
+ * The scrim and the box are `app-no-drag`, so the window's title strip
+ * underneath never steals a click. It has no padding of its own: its
+ * DialogHeader, DialogBody and DialogFooter bring theirs.
  */
 function DialogContent({
   className,
-  overlayClassName,
-  hideClose,
   children,
+  size = 'lg',
+  showClose = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  overlayClassName?: string
-  hideClose?: boolean
-}) {
+}: DialogContentProps) {
   return (
-    <DialogPortal>
-      <DialogOverlay className={overlayClassName} />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          'fixed top-[50%] left-[50%] z-50 flex w-[min(720px,calc(100vw-2rem))] max-h-[min(80vh,720px)] min-h-0 translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-xl border border-white/10 bg-background/95 shadow-2xl',
-          'animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:animate-none',
-          className,
-        )}
-        {...props}
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Backdrop
+        data-slot="dialog-backdrop"
+        className={dialogBackdrop}
+      />
+      <DialogPrimitive.Viewport
+        data-slot="dialog-viewport"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 app-no-drag"
       >
-        {children}
-        {hideClose ? null : (
-          <DialogPrimitive.Close className="absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Content>
-    </DialogPortal>
+        <DialogPrimitive.Popup
+          data-slot="dialog-content"
+          data-size={size}
+          className={cn(
+            'relative flex max-h-[min(80vh,var(--layout-dialog-height))] min-h-0 flex-col overflow-hidden',
+            'rounded-xl border border-line bg-sheet text-ink shadow-overlay outline-none app-no-drag',
+            DIALOG_SIZES[size],
+            growMotion,
+            className,
+          )}
+          {...props}
+        >
+          {children}
+          {showClose ? <DialogCloseCross /> : null}
+        </DialogPrimitive.Popup>
+      </DialogPrimitive.Viewport>
+    </DialogPrimitive.Portal>
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
+/** The ✕: a quiet 24 px icon button in the top-right corner, named Close. */
+function DialogCloseCross() {
+  return (
+    <DialogPrimitive.Close
+      data-slot="dialog-close"
+      render={
+        <IconButton
+          label="Close"
+          variant="quiet"
+          size="xs"
+          className="absolute top-3 right-3"
+        />
+      }
+    >
+      <XIcon aria-hidden />
+    </DialogPrimitive.Close>
+  )
+}
+
+type DialogHeaderProps = Omit<ComponentProps<'div'>, 'className'> & {
+  className?: string
+  /**
+   * Header actions, before the ✕: Refresh, say (R6). They sit at the end of
+   * the title's row.
+   */
+  actions?: ReactNode
+}
+
+/**
+ * The title and the description, at the top, with today's padding and the
+ * line under them built in, and room for the ✕ (R0: 18 of 25 headers).
+ */
+function DialogHeader({
+  className,
+  actions,
+  children,
+  ...props
+}: DialogHeaderProps) {
   return (
     <div
       data-slot="dialog-header"
       className={cn(
-        'shrink-0 bg-background/95',
-        'flex flex-col gap-1.5',
+        'flex shrink-0 gap-3 border-b border-line-soft bg-sheet px-6 py-5 pr-14',
+        actions ? 'items-start' : 'flex-col gap-1.5',
         className,
       )}
       {...props}
-    />
-  )
-}
-
-function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="dialog-footer"
-      className={cn(
-        'shrink-0 bg-background/95',
-        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
-        className,
+    >
+      {actions ? (
+        <>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">{children}</div>
+          <div
+            data-slot="dialog-header-actions"
+            className="flex shrink-0 items-center gap-2"
+          >
+            {actions}
+          </div>
+        </>
+      ) : (
+        children
       )}
-      {...props}
-    />
+    </div>
   )
 }
 
-function DialogBody({ className, ...props }: React.ComponentProps<'div'>) {
+type DialogBodyProps = Omit<ComponentProps<'div'>, 'className'> & {
+  className?: string
+}
+
+/** What the dialog holds, between its header and its footer: it scrolls, they stay. */
+function DialogBody({ className, ...props }: DialogBodyProps) {
   return (
     <div
       data-slot="dialog-body"
@@ -126,10 +212,61 @@ function DialogBody({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-function DialogTitle({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+type DialogFooterProps = Omit<ComponentProps<'div'>, 'className'> & {
+  className?: string
+}
+
+/**
+ * The buttons, at the bottom, with today's padding and the line above them:
+ * Cancel first, the main action last (16 of 21 footers today).
+ */
+function DialogFooter({ className, ...props }: DialogFooterProps) {
+  return (
+    <div
+      data-slot="dialog-footer"
+      className={cn(
+        'flex shrink-0 flex-col-reverse gap-2 border-t border-line-soft bg-sheet px-6 py-4 sm:flex-row sm:justify-end',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+type DialogErrorProps = Omit<ComponentProps<'p'>, 'className' | 'role'> & {
+  className?: string
+}
+
+/**
+ * What went wrong when the dialog tried, above its buttons (R10: "Couldn't
+ * delete the prompt."): the danger ink, announced at once as an alert. Pass
+ * the error as it is: without one, nothing renders.
+ */
+function DialogError({ className, children, ...props }: DialogErrorProps) {
+  if (children === null || children === undefined || children === false)
+    return null
+  if (children === '') return null
+  return (
+    <p
+      data-slot="dialog-error"
+      role="alert"
+      className={cn(
+        'px-6 pb-1 text-sm wrap-anywhere text-danger-ink',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </p>
+  )
+}
+
+type DialogTitleProps = Omit<DialogPrimitive.Title.Props, 'className'> & {
+  className?: string
+}
+
+/** Names the dialog, for screen readers too. Every dialog has one. */
+function DialogTitle({ className, ...props }: DialogTitleProps) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
@@ -139,14 +276,19 @@ function DialogTitle({
   )
 }
 
-function DialogDescription({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+type DialogDescriptionProps = Omit<
+  DialogPrimitive.Description.Props,
+  'className'
+> & {
+  className?: string
+}
+
+/** What the dialog is for, in a sentence: its accessible description. */
+function DialogDescription({ className, ...props }: DialogDescriptionProps) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-sm text-ink-muted', className)}
       {...props}
     />
   )
@@ -155,11 +297,25 @@ function DialogDescription({
 export {
   Dialog,
   DialogBody,
+  type DialogBodyProps,
   DialogClose,
+  DialogCloseCross,
+  type DialogCloseProps,
   DialogContent,
+  type DialogContentProps,
   DialogDescription,
+  type DialogDescriptionProps,
+  DialogError,
+  type DialogErrorProps,
   DialogFooter,
+  type DialogFooterProps,
   DialogHeader,
+  type DialogHeaderProps,
+  type DialogProps,
+  type DialogSize,
   DialogTitle,
+  type DialogTitleProps,
   DialogTrigger,
+  type DialogTriggerProps,
+  dialogBackdrop,
 }

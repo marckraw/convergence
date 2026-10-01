@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { createElement } from 'react'
-import { render, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Dialog, DialogContent, DialogTitle } from '../components/dialog/dialog'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../components/dropdown-menu/dropdown-menu'
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
+} from '../components/menu/menu'
 import {
   Popover,
   PopoverContent,
@@ -21,190 +21,168 @@ import {
   SelectItem,
   SelectTrigger,
 } from '../components/select/select'
+import { Sheet, SheetContent } from '../components/sheet/sheet'
+import { fadeMotion, growMotion, popupMotion } from '../motion/popup.styles'
 
 const componentsRoot = resolve(__dirname, '../components')
 const stylesheet = readFileSync(join(__dirname, 'theme.css'), 'utf8')
 const tokens = readFileSync(join(__dirname, 'tokens.css'), 'utf8')
-// The tooltip moved to transitions on Base UI's starting and ending frames
-// (MAR-3616, popupMotion): its motion is pinned in the tooltip's own tests.
-const primitives = ['dropdown-menu', 'popover', 'select', 'dialog']
+const popups = ['menu', 'popover', 'select', 'dialog', 'sheet']
 const pluginTokens =
   /animate-in|animate-out|fade-in-|fade-out-|zoom-in-|zoom-out-|slide-in-from-|slide-out-to-/
 
-describe('MAR-3319: surface motion has real stylesheet definitions', () => {
-  it('every animation used by a primitive has one theme entry and matching keyframes', () => {
-    const names = new Set(
-      primitives.flatMap((name) =>
-        Array.from(
-          readFileSync(
-            join(componentsRoot, name, `${name}.tsx`),
-            'utf8',
-          ).matchAll(/\banimate-([a-z-]+)/g),
-          (match) => match[1],
-        ).filter((name) => name !== 'none'),
-      ),
-    )
-    expect([...names].sort()).toEqual([
-      'pop-in',
-      'pop-out',
-      'slide-in-bottom',
-      'slide-in-left',
-      'slide-in-right',
-      'slide-in-top',
-    ])
-    const theme = Array.from(
-      stylesheet.matchAll(/@theme(?:\s+inline)?\s*\{([^}]+)\}/g),
-      (match) => match[1],
-    ).join('\n')
-    for (const name of names) {
-      const declarations = Array.from(
-        theme.matchAll(new RegExp(`--animate-${name}:\\s*([^;]+);`, 'g')),
+describe('MAR-3616: popups move on transitions, on Base UI’s first and last frames', () => {
+  it('no popup plays a keyframe animation: closing midway reverses from where it is', () => {
+    for (const name of popups) {
+      const source = readFileSync(
+        join(componentsRoot, name, `${name}.tsx`),
+        'utf8',
       )
-      expect(declarations, `${name} theme entry`).toHaveLength(1)
-      expect(declarations[0][1]).toMatch(new RegExp(`\\b${name}\\s`))
-      expect(
-        Array.from(
-          stylesheet.matchAll(new RegExp(`@keyframes\\s+${name}\\s*\\{`, 'g')),
-        ),
-        `${name} keyframes`,
-      ).toHaveLength(1)
+      expect(source, name).not.toMatch(/\banimate-(?!none\b)[a-z]/)
+      expect(source, name).not.toMatch(pluginTokens)
     }
   })
 
-  it('the pop and the arrivals keep 150 ms in, 100 ms out, a 95% scale and 8 px of travel, as tokens (MAR-3615)', () => {
-    // The values live in tokens.css, so reduced motion can zero the travel
-    // and the scale in one place; the theme names them.
+  it('each motion starts and ends hidden, and leaves faster than it came', () => {
+    for (const motion of [popupMotion, growMotion, fadeMotion]) {
+      const classes = motion.split(' ')
+      expect(classes).toContain('data-starting-style:opacity-0')
+      expect(classes).toContain('data-ending-style:opacity-0')
+      expect(classes).toContain('duration-fast')
+      expect(classes).toContain('data-ending-style:duration-exit')
+    }
+    // The grow and the travel read the tokens reduced motion zeroes.
+    expect(popupMotion).toContain(
+      'data-starting-style:scale-(--motion-scale-from)',
+    )
+    expect(popupMotion).toContain(
+      'data-[side=bottom]:data-starting-style:-translate-y-(--motion-shift)',
+    )
+    expect(growMotion).toContain(
+      'data-starting-style:scale-(--motion-scale-from)',
+    )
+    expect(growMotion).not.toContain('translate-y')
+    expect(fadeMotion).not.toContain('scale')
+  })
+
+  it('the values are tokens: 150 ms in, 100 ms out, a 95% scale and 8 px of travel, gone under reduced motion (MAR-3615)', () => {
     expect(tokens).toMatch(/--motion-fast:\s*150ms;/)
     expect(tokens).toMatch(/--motion-exit:\s*100ms;/)
     expect(tokens).toMatch(/--motion-ease-enter:\s*ease-out;/)
     expect(tokens).toMatch(/--motion-ease-exit:\s*ease-in;/)
     expect(tokens).toMatch(/--motion-scale-from:\s*0\.95;/)
     expect(tokens).toMatch(/--motion-shift:\s*8px;/)
-
-    expect(stylesheet).toMatch(
-      /--animate-pop-in:\s*pop-in var\(--motion-fast\) var\(--motion-ease-enter\) both;/,
-    )
-    expect(stylesheet).toMatch(
-      /--animate-pop-out:\s*pop-out var\(--motion-exit\) var\(--motion-ease-exit\) both;/,
-    )
-    for (const name of ['pop-in', 'pop-out']) {
-      const body = stylesheet
-        .split(`@keyframes ${name} {`)[1]
-        .split('@keyframes')[0]
-      expect(body).toContain('scale: var(--motion-scale-from);')
-      expect(body).toContain('scale: 1;')
-      expect(body).toContain('opacity: 0;')
-      expect(body).toContain('opacity: 1;')
-      // Dialog centering uses translate; pop must not animate that property.
-      expect(body).not.toMatch(/\b(?:transform|translate):/)
-    }
-    for (const [side, travel] of [
-      ['top', 'translateY(calc(-1 * var(--motion-shift)))'],
-      ['bottom', 'translateY(var(--motion-shift))'],
-      ['left', 'translateX(calc(-1 * var(--motion-shift)))'],
-      ['right', 'translateX(var(--motion-shift))'],
+    for (const block of [
+      tokens.split('@media (prefers-reduced-motion: reduce)')[1],
+      tokens.split("[data-motion='reduced']")[1],
     ]) {
-      expect(stylesheet).toMatch(
-        new RegExp(
-          `--animate-slide-in-${side}:\\s*pop-in var\\(--motion-fast\\) var\\(--motion-ease-enter\\) both,\\s*slide-in-${side} var\\(--motion-fast\\) var\\(--motion-ease-enter\\) both;`,
+      const body = block.split('}')[0]
+      expect(body).toContain('--motion-shift: 0px;')
+      expect(body).toContain('--motion-scale-from: 1;')
+    }
+    expect(stylesheet).toMatch(
+      /--transition-duration-fast:\s*var\(--motion-fast\);/,
+    )
+    expect(stylesheet).toMatch(
+      /--transition-duration-exit:\s*var\(--motion-exit\);/,
+    )
+  })
+
+  it('the keyframes the app still plays keep their theme entries (conversation actions’ pop)', () => {
+    for (const name of ['pop-in', 'pop-out']) {
+      expect(stylesheet).toMatch(new RegExp(`--animate-${name}:\\s*${name}\\s`))
+      expect(
+        Array.from(
+          stylesheet.matchAll(new RegExp(`@keyframes\\s+${name}\\s*\\{`, 'g')),
         ),
-      )
-      const body = stylesheet
-        .split(`@keyframes slide-in-${side} {`)[1]
-        .split('@keyframes')[0]
-      expect(body).toContain(`transform: ${travel};`)
-      expect(body).toContain('transform: translate(0);')
-      expect(body).toContain('opacity: 0;')
-      expect(body).toContain('opacity: 1;')
+      ).toHaveLength(1)
     }
   })
 })
 
 const fixtures = [
   [
-    'dropdown-menu',
+    'menu',
+    popupMotion,
     createElement(
-      DropdownMenu,
+      Menu,
       { open: true },
-      createElement(DropdownMenuTrigger, null, 'Open'),
+      createElement(MenuTrigger, null, 'Open'),
       createElement(
-        DropdownMenuContent,
+        MenuContent,
         { id: 'motion-surface' },
-        createElement(DropdownMenuItem, null, 'Item'),
+        createElement(MenuItem, null, 'Item'),
       ),
     ),
   ],
   [
     'popover',
+    popupMotion,
     createElement(
       Popover,
       { open: true },
       createElement(PopoverTrigger, null, 'Open'),
-      createElement(PopoverContent, { id: 'motion-surface' }, 'Body'),
+      createElement(
+        PopoverContent,
+        { id: 'motion-surface', 'aria-label': 'Details' },
+        'Body',
+      ),
     ),
   ],
   [
     'select',
+    popupMotion,
     createElement(
       Select,
-      { open: true },
+      { open: true, items: [{ value: 'one', label: 'One' }] },
       createElement(SelectTrigger, null, 'Open'),
       createElement(
         SelectContent,
-        { id: 'motion-surface', position: 'popper' },
+        { id: 'motion-surface', alignItemWithTrigger: false },
         createElement(SelectItem, { value: 'one' }, 'One'),
       ),
     ),
   ],
   [
     'dialog',
+    growMotion,
     createElement(
       Dialog,
       { open: true },
       createElement(
         DialogContent,
-        { id: 'motion-surface', 'aria-describedby': undefined },
+        { id: 'motion-surface' },
         createElement(DialogTitle, null, 'Dialog'),
+      ),
+    ),
+  ],
+  [
+    'sheet',
+    'transition-[translate,opacity] data-starting-style:translate-x-full motion-reduce:data-starting-style:translate-x-0 motion-reduce:data-starting-style:opacity-0',
+    createElement(
+      Sheet,
+      { open: true },
+      createElement(
+        SheetContent,
+        { id: 'motion-surface' },
+        createElement(DialogTitle, null, 'Sheet'),
       ),
     ),
   ],
 ] as const
 
-describe('MAR-3319: rendered surface motion', () => {
+describe('MAR-3616: rendered popup motion', () => {
   it.each(fixtures)(
-    '%s carries app-owned motion and honours reduced motion',
-    async (_name, fixture) => {
+    '%s wears its motion, and nothing of the old keyframes',
+    async (_name, motion, fixture) => {
       render(fixture)
+      await screen.findAllByText(/Item|Body|One|Dialog|Sheet/)
       const surface = document.getElementById('motion-surface')!
       expect(surface).not.toBeNull()
       const classes = surface.className.split(/\s+/)
-      expect(classes).toContain('animate-pop-in')
-      expect(classes).toContain(
-        'motion-safe:data-[state=closed]:animate-pop-out',
-      )
-      expect(classes).toContain('motion-reduce:animate-none')
+      for (const name of motion.split(' ')) expect(classes).toContain(name)
+      expect(surface.className).not.toMatch(/\banimate-/)
       expect(surface.className).not.toMatch(pluginTokens)
-      // Radix suppresses animation inline until its popper is positioned.
-      await waitFor(() => expect(surface.style.animation).toBe(''))
-      // Attribute selectors are more specific than the reduced-motion class.
-      // Guard every conditional animation so none can override animate-none.
-      for (const token of classes.filter(
-        (token) => token.includes('data-') && token.includes(':animate-'),
-      )) {
-        expect(token).toMatch(/^motion-safe:/)
-      }
-      if (['popover', 'select'].includes(_name)) {
-        for (const [side, from] of [
-          ['bottom', 'top'],
-          ['top', 'bottom'],
-          ['left', 'right'],
-          ['right', 'left'],
-        ]) {
-          expect(classes).toContain(
-            `motion-safe:data-[side=${side}]:animate-slide-in-${from}`,
-          )
-        }
-      }
     },
   )
 })

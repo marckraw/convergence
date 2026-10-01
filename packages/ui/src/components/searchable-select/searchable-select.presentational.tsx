@@ -9,7 +9,11 @@ import { Check, ChevronDown } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
 import { cn } from '#lib/cn.pure'
 import { Button, type ButtonProps } from '../button/button'
-import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../popover/popover.radix'
 
 export interface SearchableSelectItem {
   id: string

@@ -1,10 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { RefreshCw } from 'lucide-react'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import {
-  settled,
+  arrived,
   snapshotWhileAnimating,
 } from '../../../.storybook/motion-testing'
 import { Button } from '../button/button'
+import { IconButton } from '../icon-button/icon-button'
 import { Input } from '../input/input'
 import {
   Dialog,
@@ -14,6 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  type DialogSize,
   DialogTitle,
   DialogTrigger,
 } from './dialog'
@@ -22,22 +25,25 @@ type RenameConversationProps = {
   /** What the description says. */
   description: string
   onRename: (name: string) => void
+  /** How wide it opens. */
+  size?: DialogSize
 }
 
 /**
  * Renaming a conversation: a title, a line of help, one field, Cancel and
- * Save, laid out as the app's dialogs lay themselves out.
+ * Save, in the dialog's own header, body and footer.
  */
 function RenameConversation({
   description,
   onRename,
+  size,
 }: RenameConversationProps) {
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="secondary">Rename conversation</Button>
+      <DialogTrigger render={<Button variant="secondary" />}>
+        Rename conversation
       </DialogTrigger>
-      <DialogContent className="w-[min(560px,calc(100vw-2rem))]">
+      <DialogContent size={size}>
         <form
           className="flex min-h-0 flex-col"
           onSubmit={(event) => {
@@ -47,7 +53,7 @@ function RenameConversation({
             )
           }}
         >
-          <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+          <DialogHeader>
             <DialogTitle>Rename conversation</DialogTitle>
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
@@ -58,9 +64,9 @@ function RenameConversation({
               placeholder="Untitled"
             />
           </DialogBody>
-          <DialogFooter className="border-t border-border/70 px-6 py-4">
-            <DialogClose asChild>
-              <Button variant="secondary">Cancel</Button>
+          <DialogFooter>
+            <DialogClose render={<Button variant="secondary" />}>
+              Cancel
             </DialogClose>
             <Button type="submit">Save</Button>
           </DialogFooter>
@@ -88,7 +94,7 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** Opens from its trigger, takes focus, and gives it back when it closes. */
+/** Opens from its trigger, named by its title, and takes the focus to its first field. */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const trigger = canvas.getByRole('button', { name: 'Rename conversation' })
@@ -96,30 +102,27 @@ export const Default: Story = {
     const dialog = await screen.findByRole('dialog', {
       name: 'Rename conversation',
     })
-    // It pops in: it grows from 95% as it fades in, then stands at full size.
+    // It grows in as it fades in, then stands at full size.
     const opening = await snapshotWhileAnimating(dialog, 'opacity')
     await expect(opening.scale).toBeLessThan(1)
-    await settled(dialog)
-    await expect(dialog).toBeVisible()
-    // Focus moves into the dialog and the description names it.
-    await waitFor(() =>
-      expect(dialog).toContainElement(document.activeElement as HTMLElement),
-    )
+    await arrived(dialog)
     await expect(dialog).toHaveAccessibleDescription(
       'The new name shows in the sidebar and in Mission Control.',
     )
     const field = within(dialog).getByRole('textbox', {
       name: 'Conversation name',
     })
-    await userEvent.click(field)
+    await waitFor(() => expect(field).toHaveFocus())
     await userEvent.keyboard('Release notes')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await expect(args.onRename).toHaveBeenCalledWith('Release notes')
-    await settled(dialog)
   },
 }
 
-/** Cancel, the ✕ and Escape each close it, and focus returns to the trigger. */
+/**
+ * Cancel, the ✕, Escape and a press outside each close it, and the focus
+ * goes back to the trigger.
+ */
 export const Dismiss: Story = {
   play: async ({ canvas, userEvent }) => {
     const trigger = canvas.getByRole('button', { name: 'Rename conversation' })
@@ -136,16 +139,53 @@ export const Dismiss: Story = {
     dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
     await dialogClosed()
+    await expect(trigger).toHaveFocus()
 
     await userEvent.click(trigger)
     await screen.findByRole('dialog')
     await userEvent.keyboard('{Escape}')
     await dialogClosed()
     await expect(trigger).toHaveFocus()
+
+    await userEvent.click(trigger)
+    dialog = await screen.findByRole('dialog')
+    await arrived(dialog)
+    // The scrim around the box: a press there is outside the dialog.
+    await userEvent.pointer({
+      keys: '[MouseLeft]',
+      target: document.querySelector<HTMLElement>(
+        '[data-slot="dialog-viewport"]',
+      )!,
+      coords: { clientX: 4, clientY: 4 },
+    })
+    await dialogClosed()
+    await expect(trigger).toHaveFocus()
   },
 }
 
-/** Long: content taller than the dialog scrolls inside its body. */
+/** Tab stays inside while it's open: past the last control it comes round to the first. */
+export const FocusTrap: Story = {
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Rename conversation' }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const field = within(dialog).getByRole('textbox')
+    await waitFor(() => expect(field).toHaveFocus())
+    await userEvent.tab()
+    await userEvent.tab()
+    await userEvent.tab()
+    await expect(
+      within(dialog).getByRole('button', { name: 'Close' }),
+    ).toHaveFocus()
+    // Past the last control, the trap's guard hands the focus round.
+    await userEvent.tab()
+    await waitFor(() => expect(field).toHaveFocus())
+    await arrived(dialog)
+  },
+}
+
+/** Long: the body scrolls; the header and the footer stay. */
 export const Long: Story = {
   args: {
     description: Array.from(
@@ -159,15 +199,156 @@ export const Long: Story = {
       canvas.getByRole('button', { name: 'Rename conversation' }),
     )
     const dialog = await screen.findByRole('dialog')
-    await settled(dialog)
+    await arrived(dialog)
     const box = dialog.getBoundingClientRect()
-    // The dialog stays inside the window, whatever it holds.
     await expect(box.top).toBeGreaterThanOrEqual(0)
     await expect(box.bottom).toBeLessThanOrEqual(window.innerHeight)
-    // Its actions stay reachable.
     await expect(
       within(dialog).getByRole('button', { name: 'Save' }),
     ).toBeVisible()
+  },
+}
+
+/** Every width: 420, 560, 720 (the default), 960 and 1280 px, at most the window. */
+export const Sizes: Story = {
+  args: { size: 'sm' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Rename conversation' }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await arrived(dialog)
+    await expect(dialog).toHaveAttribute('data-size', 'sm')
+    await expect(dialog.getBoundingClientRect().width).toBe(
+      Math.min(420, window.innerWidth - 32),
+    )
+  },
+}
+
+export const Medium: Story = {
+  ...Sizes,
+  args: { size: 'md' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Rename conversation' }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await arrived(dialog)
+    await expect(dialog).toHaveAttribute('data-size', 'md')
+    await expect(dialog.getBoundingClientRect().width).toBe(
+      Math.min(560, window.innerWidth - 32),
+    )
+  },
+}
+
+export const ExtraLarge: Story = {
+  args: { size: '2xl' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Rename conversation' }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await arrived(dialog)
+    await expect(dialog).toHaveAttribute('data-size', '2xl')
+    await expect(dialog.getBoundingClientRect().width).toBe(
+      Math.min(1280, window.innerWidth - 32),
+    )
+  },
+}
+
+/** A refresh in the header, before the ✕ (R6), and no footer: a dialog you look at and leave. */
+function ProviderStatus({ onRefresh }: { onRefresh: () => void }) {
+  return (
+    <Dialog defaultOpen>
+      <DialogContent size="md">
+        <DialogHeader
+          actions={
+            <IconButton label="Refresh" size="sm" onClick={onRefresh}>
+              <RefreshCw />
+            </IconButton>
+          }
+        >
+          <DialogTitle>Providers</DialogTitle>
+          <DialogDescription>
+            Which agents are installed and signed in.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <p className="text-sm">Claude Code 2.4.1 is up to date.</p>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export const HeaderActions: Story = {
+  render: () => <ProviderStatus onRefresh={fn()} />,
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: 'Providers' })
+    const buttons = within(dialog).getAllByRole('button')
+    // Refresh, then the ✕: the header's actions come before the close.
+    await expect(
+      buttons.map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Refresh', 'Close'])
+    await arrived(dialog)
+  },
+}
+
+/** A dialog over a dialog: Escape closes the top one, and the focus goes back underneath. */
+function NestedDialogs() {
+  return (
+    <Dialog>
+      <DialogTrigger render={<Button variant="secondary" />}>
+        Choose a model
+      </DialogTrigger>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>Choose a model</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <Dialog>
+            <DialogTrigger render={<Button variant="secondary" />}>
+              Filter models
+            </DialogTrigger>
+            <DialogContent size="sm">
+              <DialogHeader>
+                <DialogTitle>Filter models</DialogTitle>
+              </DialogHeader>
+              <DialogBody>
+                <Input aria-label="Provider" />
+              </DialogBody>
+            </DialogContent>
+          </Dialog>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export const Nested: Story = {
+  render: () => <NestedDialogs />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Choose a model' }),
+    )
+    const outer = await screen.findByRole('dialog', { name: 'Choose a model' })
+    const filter = within(outer).getByRole('button', { name: 'Filter models' })
+    await userEvent.click(filter)
+    const inner = await screen.findByRole('dialog', { name: 'Filter models' })
+    await waitFor(() =>
+      expect(within(inner).getByRole('textbox')).toHaveFocus(),
+    )
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Filter models' }),
+      ).toBeNull(),
+    )
+    await arrived(outer)
+    await expect(
+      screen.getByRole('dialog', { name: 'Choose a model' }),
+    ).toBeVisible()
+    await expect(filter).toHaveFocus()
   },
 }
 
@@ -176,7 +357,7 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
 }
 
-/** Reduced motion: the dialog arrives at once, with nothing to wait for. */
+/** Reduced motion: the dialog fades in where it stands, without growing. */
 export const ReducedMotion: Story = {
   globals: { motion: 'reduced' },
   play: async ({ canvas, userEvent }) => {
@@ -184,8 +365,9 @@ export const ReducedMotion: Story = {
       canvas.getByRole('button', { name: 'Rename conversation' }),
     )
     const dialog = await screen.findByRole('dialog')
-    await expect(getComputedStyle(dialog).animationName).toBe('none')
-    await expect(dialog.getAnimations()).toHaveLength(0)
-    await expect(dialog).toBeVisible()
+    const opening = await snapshotWhileAnimating(dialog, 'opacity')
+    await expect(opening.opacity).toBeLessThan(1)
+    await expect(opening.scale).toBe(1)
+    await arrived(dialog)
   },
 }
