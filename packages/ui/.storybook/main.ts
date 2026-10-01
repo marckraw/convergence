@@ -78,7 +78,17 @@ const config: StorybookConfig = {
         // that file on a cold cache (as in CI).
         include: [
           '@base-ui/react/button',
+          '@base-ui/react/checkbox',
+          '@base-ui/react/field',
+          '@base-ui/react/fieldset',
+          '@base-ui/react/input',
+          '@base-ui/react/radio',
+          '@base-ui/react/radio-group',
+          '@base-ui/react/switch',
+          '@base-ui/react/tabs',
+          '@base-ui/react/toggle',
           '@base-ui/react/tooltip',
+          '@base-ui/react/use-render',
           '@radix-ui/react-dialog',
           '@radix-ui/react-dropdown-menu',
           '@radix-ui/react-popover',

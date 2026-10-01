@@ -1,84 +1,88 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { useState, type ComponentProps } from 'react'
-import { expect, fn } from 'storybook/test'
-import { SwitchRow } from './switch'
-
-/** SwitchRow is controlled; this keeps its state the way a settings form does. */
-function ControlledSwitchRow(props: ComponentProps<typeof SwitchRow>) {
-  const [checked, setChecked] = useState(props.checked)
-  return (
-    <div className="w-96">
-      <SwitchRow
-        {...props}
-        checked={checked}
-        onChange={(next) => {
-          setChecked(next)
-          props.onChange(next)
-        }}
-      />
-    </div>
-  )
-}
+import { expect, fn, waitFor } from 'storybook/test'
+import { runningAnimations } from '../../../.storybook/motion-testing'
+import { tokenColor } from '../../../.storybook/color-testing'
+import { Switch } from './switch'
 
 const meta = {
-  title: 'Primitives/SwitchRow',
-  component: SwitchRow,
+  title: 'Primitives/Switch',
+  component: Switch,
   args: {
-    id: 'notify-when-done',
-    label: 'Notify me when an agent finishes',
-    description:
-      'A system notification, even when Convergence is in the background.',
-    checked: false,
-    onChange: fn(),
+    'aria-label': 'Check for updates automatically',
+    onCheckedChange: fn(),
   },
-  render: (args) => <ControlledSwitchRow {...args} />,
-} satisfies Meta<typeof SwitchRow>
+} satisfies Meta<typeof Switch>
 
 export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const Default: Story = {
-  play: async ({ args, canvas, userEvent }) => {
-    const toggle = canvas.getByRole('switch', { name: args.label })
-    await expect(toggle).not.toBeChecked()
-    await userEvent.click(toggle)
-    await expect(toggle).toBeChecked()
-    await expect(args.onChange).toHaveBeenLastCalledWith(true)
-    // Its label turns it too, and so does the keyboard.
-    await userEvent.click(canvas.getByText(args.label))
-    await expect(toggle).not.toBeChecked()
-    await expect(toggle).toHaveFocus()
-    await userEvent.keyboard(' ')
-    await expect(toggle).toBeChecked()
-  },
+const thumbOf = (toggle: HTMLElement): HTMLElement => {
+  const thumb = toggle.querySelector<HTMLElement>('[data-slot="switch-thumb"]')
+  if (!thumb) throw new Error('the switch has no thumb')
+  return thumb
 }
 
-/** Long: a long label and description wrap beside the switch, which keeps its size. */
-export const Long: Story = {
-  args: {
-    label:
-      'Notify me when an agent finishes, fails, asks for approval or needs an answer before it can go on',
-    description:
-      'A system notification, even when Convergence is in the background, with the conversation’s name and the provider that ran it, so you can tell at a glance which one wants you.',
-  },
-  play: async ({ args, canvas }) => {
-    const toggle = canvas.getByRole('switch', { name: args.label })
+/**
+ * A click and Space toggle it; on, the thumb slides across. Off, its edge is
+ * the control line; the keyboard's ring really draws.
+ */
+export const Default: Story = {
+  play: async ({ args, canvas, userEvent }) => {
+    const toggle = canvas.getByRole('switch', {
+      name: 'Check for updates automatically',
+    })
+    await expect(toggle).not.toBeChecked()
+    await expect(getComputedStyle(toggle).borderTopColor).toBe(
+      tokenColor('--control-line'),
+    )
+    const off = thumbOf(toggle).getBoundingClientRect().left
+    await userEvent.click(toggle)
+    await expect(toggle).toBeChecked()
+    await expect(args.onCheckedChange).toHaveBeenLastCalledWith(
+      true,
+      expect.anything(),
+    )
+    await waitFor(() =>
+      expect(thumbOf(toggle).getBoundingClientRect().left).toBe(off + 16),
+    )
+    await userEvent.tab()
+    await userEvent.tab({ shift: true })
+    await expect(toggle).toHaveFocus()
+    await expect(getComputedStyle(toggle).outlineStyle).toBe('solid')
+    await userEvent.keyboard(' ')
+    await expect(toggle).not.toBeChecked()
     const box = toggle.getBoundingClientRect()
     await expect(box.width).toBe(36)
     await expect(box.height).toBe(20)
   },
 }
 
+/** Disabled: shows how it's set and can't be changed. */
 export const Disabled: Story = {
-  args: { disabled: true, checked: true },
+  args: { disabled: true, defaultChecked: true },
   play: async ({ args, canvas, userEvent }) => {
-    const toggle = canvas.getByRole('switch', { name: args.label })
-    await expect(toggle).toBeDisabled()
+    const toggle = canvas.getByRole('switch', {
+      name: 'Check for updates automatically',
+    })
+    await expect(toggle).toHaveAttribute('aria-disabled', 'true')
     await expect(toggle).toBeChecked()
     await userEvent.tab()
     await expect(toggle).not.toHaveFocus()
-    await expect(args.onChange).not.toHaveBeenCalled()
+    await expect(args.onCheckedChange).not.toHaveBeenCalled()
+  },
+}
+
+/** Reduced motion: the thumb jumps across, nothing slides. */
+export const ReducedMotion: Story = {
+  globals: { motion: 'reduced' },
+  play: async ({ canvas, userEvent }) => {
+    const toggle = canvas.getByRole('switch', {
+      name: 'Check for updates automatically',
+    })
+    await userEvent.click(toggle)
+    await expect(runningAnimations(thumbOf(toggle))).toHaveLength(0)
+    await expect(toggle).toBeChecked()
   },
 }
 
