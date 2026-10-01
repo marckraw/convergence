@@ -12,7 +12,7 @@ import { extendTailwindMerge } from 'tailwind-merge'
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ['3xs', '2xs'],
+      text: ['3xs', '2xs', 'code'],
       leading: ['3xs', '2xs'],
       tracking: ['eyebrow'],
       shadow: [

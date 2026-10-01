@@ -20,7 +20,9 @@ import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
  * - the wrapper, which is the one place the prop is answered;
  * - `AttentionIndicator`, which draws it for a labelled attention only AFTER
  *   its own `isSessionCompacting` branch has returned, so no compacting
- *   session reaches it (pinned by the header R5 tests).
+ *   session reaches it (pinned by the header R5 tests);
+ * - the glyph's own stories, which draw it bare to show the shared part, and
+ *   are no surface.
  *
  * Test files are skipped: a test may draw the glyph directly to pin it.
  */
@@ -32,6 +34,7 @@ const ALLOWED = new Set([
   'shared/ui/session-badge.presentational.tsx',
   'entities/session/session-state-badge.presentational.tsx',
   'entities/session/attention-indicator.presentational.tsx',
+  'shared/ui/session-badge.stories.tsx',
 ])
 
 function filesNamingRawBadge(directory: string): string[] {

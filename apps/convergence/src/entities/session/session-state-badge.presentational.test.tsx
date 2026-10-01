@@ -13,8 +13,8 @@ describe('SessionStateBadge (MAR-3288 lap 2 B)', () => {
         }}
       />,
     )
-    expect(screen.getByLabelText('Compacting context…')).toBeInTheDocument()
-    expect(container.querySelector('.text-emerald-500')).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('Compacting context…')
+    expect(container.querySelector('[data-tone="success"]')).toBeNull()
   })
 
   it('draws the finished check once the compaction is over', () => {
@@ -23,13 +23,13 @@ describe('SessionStateBadge (MAR-3288 lap 2 B)', () => {
         session={{ attention: 'finished', status: 'completed', activity: null }}
       />,
     )
-    expect(screen.queryByLabelText('Compacting context…')).toBeNull()
-    expect(container.querySelector('.text-emerald-500')).not.toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(container.querySelector('[data-tone="success"]')).not.toBeNull()
   })
 
   it('draws a quiet glyph for a row with no record', () => {
     const { container } = render(<SessionStateBadge session={undefined} />)
-    expect(screen.queryByLabelText('Compacting context…')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
     expect(container.querySelector('svg')).not.toBeNull()
   })
 })

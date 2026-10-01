@@ -509,6 +509,11 @@
   --type-size-xl: 1.25rem;
   /* 24 px */
   --type-size-2xl: 1.5rem;
+  /*
+   * Code inside a sentence, a hair under the words around it, in a paragraph or a heading alike:
+   * Markdown's inline code (text-[0.92em]). Relative on purpose, so no step of the scale fits
+   */
+  --type-size-code: 0.92em;
   /* 14 px on 10 px */
   --type-leading-3xs: calc(0.875 / 0.625);
   /* 16 px on 11 px, xs's line, so an 11 px label sits on a 12 px row's baseline grid */

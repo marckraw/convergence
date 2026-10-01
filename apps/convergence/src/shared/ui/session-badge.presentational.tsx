@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   MessageSquare,
 } from 'lucide-react'
-import { cn } from '@convergence/ui'
+import { cn, Spinner, type Tone, toneInk } from '@convergence/ui'
 
 interface SessionBadgeProps {
   parallelWork?: ParallelWorkCounts
@@ -38,9 +38,10 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
   // `finished` for the whole compaction.
   if (compacting)
     return (
-      <Loader2
-        aria-label="Compacting context…"
-        className={cn(iconClassName, 'animate-spin text-muted-foreground')}
+      <Spinner
+        size="xs"
+        label="Compacting context…"
+        className={cn(className, 'text-muted-foreground')}
       />
     )
 
@@ -53,20 +54,28 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
       />
     )
 
-  switch (attention) {
-    case 'needs-approval':
-      return <AlertTriangle className={cn(iconClassName, 'text-warning')} />
-    case 'needs-input':
-      return <MessageSquare className={cn(iconClassName, 'text-blue-500')} />
-    case 'finished':
-      return <CheckCircle2 className={cn(iconClassName, 'text-emerald-500')} />
-    case 'failed':
-      return <XCircle className={cn(iconClassName, 'text-red-500')} />
-    default:
-      return (
-        <Loader2
-          className={cn(iconClassName, 'animate-spin text-muted-foreground')}
-        />
-      )
+  const settled = SETTLED[attention]
+  if (settled) {
+    const { Glyph, tone } = settled
+    return (
+      <Glyph data-tone={tone} className={cn(iconClassName, toneInk[tone])} />
+    )
   }
+  return (
+    <Spinner size="xs" className={cn(className, 'text-muted-foreground')} />
+  )
+}
+
+/**
+ * A settled state's glyph and its tone (R1): waiting on you is warning,
+ * whether for an approval or an answer; finished is success; failed is
+ * danger. Anything else is still at work: the spinner.
+ */
+const SETTLED: Partial<
+  Record<string, { Glyph: typeof CheckCircle2; tone: Tone }>
+> = {
+  'needs-approval': { Glyph: AlertTriangle, tone: 'warning' },
+  'needs-input': { Glyph: MessageSquare, tone: 'warning' },
+  finished: { Glyph: CheckCircle2, tone: 'success' },
+  failed: { Glyph: XCircle, tone: 'danger' },
 }

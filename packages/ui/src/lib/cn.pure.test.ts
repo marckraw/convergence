@@ -34,6 +34,7 @@ describe('cn with the Convergence theme', () => {
     expect(cn('text-2xs text-ink')).toBe('text-2xs text-ink')
     expect(cn('text-3xs', 'text-ink-muted')).toBe('text-3xs text-ink-muted')
     expect(cn('text-2xs', 'text-danger-ink')).toBe('text-2xs text-danger-ink')
+    expect(cn('text-code', 'text-foreground')).toBe('text-code text-foreground')
   })
 
   it('lets the last text step win', () => {

@@ -91,12 +91,28 @@ export const States: Story = {
     await expect(canvas.getAllByRole('listitem')).toHaveLength(STATES.length)
     // Compacting and background work have no word on the row, so the glyph
     // carries one.
-    await expect(
-      canvas.getByLabelText('Compacting context…'),
-    ).toBeInTheDocument()
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      'Compacting context…',
+    )
     await expect(
       canvas.getByLabelText('finished · 1 tasks running'),
     ).toBeInTheDocument()
+    // R1: the settled states wear their tones; waiting on you is warning,
+    // for an answer as for an approval.
+    const tones = canvas
+      .getAllByRole('listitem')
+      .map((item) =>
+        item.querySelector('[data-tone]')?.getAttribute('data-tone'),
+      )
+    await expect(tones).toEqual([
+      'warning',
+      'warning',
+      undefined,
+      undefined,
+      undefined,
+      'success',
+      'danger',
+    ])
   },
 }
 
@@ -115,7 +131,9 @@ export const Busy: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByLabelText('Compacting context…')).toBeVisible()
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      'Compacting context…',
+    )
   },
 }
 

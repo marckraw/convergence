@@ -221,6 +221,8 @@
   --text-xl--line-height: var(--type-leading-xl);
   --text-2xl: var(--type-size-2xl);
   --text-2xl--line-height: var(--type-leading-2xl);
+  /* text-code: inline code, relative to the words around it; it keeps their line height */
+  --text-code: var(--type-size-code);
   --leading-3xs: var(--type-leading-3xs);
   --leading-2xs: var(--type-leading-2xs);
   --tracking-eyebrow: var(--type-tracking-eyebrow);
