@@ -59,7 +59,7 @@ export function ChoiceCard<Value>({
           {icon}
         </span>
       ) : null}
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="grid min-w-0 flex-1 gap-0.5">
         <span id={titleId} className="text-sm font-medium text-ink">
           {title}
         </span>
