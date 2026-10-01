@@ -14,7 +14,6 @@ import {
   SearchableSelect,
   SwitchRow,
   Textarea,
-  Tooltip,
 } from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import type {
@@ -493,25 +492,24 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             className="flex flex-col gap-0.5"
           >
             {beforeDelivery.map((option) => (
-              <Tooltip label={option.disabled ? option.help : undefined}>
-                <Button
-                  key={option.mode}
-                  type="button"
-                  variant="ghost"
-                  aria-pressed={draft.beforeDelivery === option.mode}
-                  disabled={busy || option.disabled}
-                  onClick={() => onBeforeDeliveryChange(option.mode)}
-                  size="sm"
-                  className={cn(
-                    'justify-start rounded-md text-[11px] font-normal',
-                    draft.beforeDelivery === option.mode
-                      ? 'bg-white/10 text-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {option.label}
-                </Button>
-              </Tooltip>
+              <Button
+                key={option.mode}
+                type="button"
+                variant="ghost"
+                aria-pressed={draft.beforeDelivery === option.mode}
+                disabled={busy}
+                disabledReason={option.disabled ? option.help : undefined}
+                onClick={() => onBeforeDeliveryChange(option.mode)}
+                size="sm"
+                className={cn(
+                  'justify-start rounded-md text-[11px] font-normal',
+                  draft.beforeDelivery === option.mode
+                    ? 'bg-white/10 text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {option.label}
+              </Button>
             ))}
           </div>
           {draft.beforeDelivery === 'custom' ? (

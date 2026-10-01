@@ -115,7 +115,7 @@ export function AnalyticsInsights({
             type="button"
             variant="danger-quiet"
             onClick={onRetry}
-            className="w-fit border-destructive/40 bg-background"
+            className="w-fit border border-destructive/40 bg-background"
           >
             <RefreshCw className="size-3.5" />
             Retry

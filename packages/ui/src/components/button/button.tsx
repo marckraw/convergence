@@ -1,5 +1,5 @@
 import { Button as ButtonPrimitive } from '@base-ui/react/button'
-import { type ReactNode, useId } from 'react'
+import type { ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 import { focusRing } from '#lib/focus-ring.styles'
 import { press } from '../../motion/press/press.styles'
@@ -153,7 +153,6 @@ function ButtonBase({
   children,
   ...props
 }: ButtonBaseProps) {
-  const reasonId = useId()
   const reason = disabledReason || undefined
   const tooltip = props as TooltipData
   // With a tooltip of its own (an IconButton's label, an outer Tooltip), the
@@ -167,9 +166,6 @@ function ButtonBase({
         }
       : { 'data-tooltip': reason }
     : {}
-  const describedBy = reason
-    ? [props['aria-describedby'], reasonId].filter(Boolean).join(' ')
-    : props['aria-describedby']
   return (
     <ButtonPrimitive
       data-slot="button"
@@ -178,7 +174,9 @@ function ButtonBase({
       className={cn(buttonVariants({ variant, size, shape }), className)}
       {...props}
       {...reasonTooltip}
-      aria-describedby={describedBy}
+      // The reason is its description: an attribute, not text in the page,
+      // so it never doubles a line that says the same thing beside it.
+      aria-description={reason ?? describedAs(props)}
       disabled={disabled || Boolean(reason)}
       focusableWhenDisabled={reason ? true : focusableWhenDisabled}
     >
@@ -193,14 +191,13 @@ function ButtonBase({
           {children}
         </BusyLabel>
       )}
-      {reason ? (
-        <span hidden id={reasonId}>
-          {reason}
-        </span>
-      ) : null}
     </ButtonPrimitive>
   )
 }
+
+/** A description the caller set itself, kept when there is no reason. */
+const describedAs = (props: object): string | undefined =>
+  (props as { 'aria-description'?: string })['aria-description']
 
 /** Both looks in one grid cell, the one not shown hidden, so the wider sets the width. */
 const busyLayer =

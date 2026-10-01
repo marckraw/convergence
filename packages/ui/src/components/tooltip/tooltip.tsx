@@ -3,6 +3,8 @@ import {
   createContext,
   type ReactElement,
   type ReactNode,
+  type Ref,
+  type RefObject,
   useContext,
 } from 'react'
 import { TooltipHost } from './tooltip-host'
@@ -87,9 +89,66 @@ type TooltipProps = TooltipOptions & {
  * button uses IconButton instead, whose label is both its accessible name and
  * its tooltip. Never a native `title`.
  */
-function Tooltip({ label, children, ...options }: TooltipProps) {
-  return cloneElement(children, tooltipAttributes(label, options))
+function Tooltip({
+  label,
+  side,
+  detail,
+  shortcut,
+  when,
+  children,
+  ...passed
+}: TooltipProps) {
+  return cloneElement(children, {
+    ...mergeIntoChild(
+      passed as Record<string, unknown>,
+      children.props as Record<string, unknown>,
+    ),
+    ...tooltipAttributes(label, { side, detail, shortcut, when }),
+  })
 }
+
+/**
+ * What a trigger hands a Tooltip on its way to the element (a Radix
+ * `asChild` trigger around a Tooltip passes its handlers, its ref and its
+ * aria-expanded through it): merged into the element's own, as a slot
+ * would, so neither side's handler or ref is lost.
+ */
+function mergeIntoChild(
+  passed: Record<string, unknown>,
+  own: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...passed }
+  for (const [key, value] of Object.entries(passed)) {
+    const mine = own[key]
+    if (
+      /^on[A-Z]/.test(key) &&
+      typeof value === 'function' &&
+      typeof mine === 'function'
+    ) {
+      merged[key] = (...args: unknown[]) => {
+        const result = (mine as (...a: unknown[]) => unknown)(...args)
+        ;(value as (...a: unknown[]) => unknown)(...args)
+        return result
+      }
+    } else if (key === 'ref' && mine) {
+      merged.ref = composeRefs(value as Ref<unknown>, mine as Ref<unknown>)
+    } else if (key === 'className' && typeof mine === 'string') {
+      merged.className = [value, mine].filter(Boolean).join(' ')
+    } else if (key === 'style' && mine && typeof mine === 'object') {
+      merged.style = { ...(value as object), ...(mine as object) }
+    }
+  }
+  return merged
+}
+
+const composeRefs =
+  <T,>(...refs: Ref<T>[]) =>
+  (node: T) => {
+    for (const ref of refs) {
+      if (typeof ref === 'function') ref(node)
+      else if (ref) (ref as RefObject<T | null>).current = node
+    }
+  }
 
 export {
   Tooltip,

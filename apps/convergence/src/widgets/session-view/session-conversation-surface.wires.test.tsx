@@ -178,7 +178,7 @@ describe.each(['global', 'project'] as const)(
       useSessionRelayStore.setState({ relays })
       renderSurface()
       const trigger = screen.getByRole('button', { name: summary(relays) })
-      expect(trigger).toHaveAttribute('title', summary(relays))
+      expect(trigger).toHaveAttribute('data-tooltip', summary(relays))
       fireEvent.click(trigger)
       const popover = screen.getByRole('dialog')
       for (const relay of relays) {
@@ -211,7 +211,7 @@ describe.each(['global', 'project'] as const)(
       const trigger = screen.getByRole('button', { name: summary(relays) })
       expect(trigger.textContent?.length).toBeLessThanOrEqual(12)
       expect(trigger).toHaveTextContent('1 wire')
-      expect(trigger).toHaveClass('h-7')
+      expect(trigger).toHaveAttribute('data-size', 'sm')
     })
 
     it('updates the disclosure when a wire is disarmed without hiding it', () => {
@@ -261,7 +261,7 @@ describe.each(['global', 'project'] as const)(
         screen.queryByRole('button', { name: summary(firstWires) }),
       ).toBeNull()
       const trigger = screen.getByRole('button', { name: summary(nextWires) })
-      expect(trigger).toHaveAttribute('title', summary(nextWires))
+      expect(trigger).toHaveAttribute('data-tooltip', summary(nextWires))
       fireEvent.click(trigger)
       expect(
         within(screen.getByRole('dialog')).getByText(

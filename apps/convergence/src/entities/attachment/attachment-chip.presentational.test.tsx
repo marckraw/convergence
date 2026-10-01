@@ -66,9 +66,13 @@ describe('AttachmentChip', () => {
 
     const chip = screen.getByTestId('attachment-chip')
     expect(chip.className).toMatch(/border-destructive/)
-    expect(
-      screen.getByRole('button', { name: /Preview doc\.pdf/ }),
-    ).toHaveAttribute('title', 'Provider does not accept PDFs')
+    // The app's tooltip says why, never a native title (MAR-3616, R2).
+    const preview = screen.getByRole('button', { name: /Preview doc\.pdf/ })
+    expect(preview).not.toHaveAttribute('title')
+    expect(preview).toHaveAttribute(
+      'data-tooltip',
+      'Provider does not accept PDFs',
+    )
   })
 
   it('contains thumbnail images instead of cropping them', () => {

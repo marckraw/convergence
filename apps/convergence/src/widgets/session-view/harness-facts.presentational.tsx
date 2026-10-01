@@ -1,5 +1,5 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { Button, Tooltip } from '@convergence/ui'
+import { Button } from '@convergence/ui'
 import {
   compactionLabel,
   hiddenPluginSentence,
@@ -271,22 +271,19 @@ export function HarnessFactsSections({
                   {mcp &&
                     isMcpAlertStatus(server.status) &&
                     !server.nameTruncated && (
-                      <Tooltip label={mcp.unavailable ?? undefined}>
-                        <Button
-                          variant="ghost"
-                          disabled={
-                            mcp.unavailable !== null || mcp.pending !== null
-                          }
-                          aria-label={`Reconnect ${server.name}`}
-                          onClick={() => mcp.onReconnect(server.name)}
-                          size="xs"
-                          className="text-xs"
-                        >
-                          {mcp.pending === server.name
-                            ? 'Reconnecting…'
-                            : 'Reconnect'}
-                        </Button>
-                      </Tooltip>
+                      <Button
+                        variant="ghost"
+                        disabled={mcp.pending !== null}
+                        disabledReason={mcp.unavailable ?? undefined}
+                        aria-label={`Reconnect ${server.name}`}
+                        onClick={() => mcp.onReconnect(server.name)}
+                        size="xs"
+                        className="text-xs"
+                      >
+                        {mcp.pending === server.name
+                          ? 'Reconnecting…'
+                          : 'Reconnect'}
+                      </Button>
                     )}
                 </div>
               ))}

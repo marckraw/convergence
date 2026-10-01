@@ -97,9 +97,8 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
               </span>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {PROJECT_SCRIPT_ICON_OPTIONS.map((option) => (
-                  <Tooltip label={option.label}>
+                  <Tooltip key={option.id} label={option.label}>
                     <Button
-                      key={option.id}
                       type="button"
                       variant={icon === option.id ? 'tonal' : 'secondary'}
                       onClick={() => setIcon(option.id)}

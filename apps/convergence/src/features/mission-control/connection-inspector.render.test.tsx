@@ -189,8 +189,9 @@ describe('the connection inspector, rendered', () => {
     const clear = screen.getByRole('button', {
       name: /Clear Opus conversation/,
     })
-    expect(clear).toBeDisabled()
-    expect(clear).toHaveAttribute('title', expect.stringContaining('Codex'))
+    // Unavailable with its reason, which it announces (MAR-3616, R2).
+    expect(clear).toHaveAttribute('aria-disabled', 'true')
+    expect(clear).toHaveAccessibleDescription(expect.stringContaining('Codex'))
     // The custom first message survives on every provider (R8).
     expect(
       screen.getByRole('button', { name: 'Send a custom first message…' }),

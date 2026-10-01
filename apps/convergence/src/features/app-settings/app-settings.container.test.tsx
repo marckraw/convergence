@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import {
   localProviderCatalogs,
   offeredProviders,
@@ -1218,7 +1219,7 @@ describe('AppSettingsDialogContainer', () => {
     const remove = screen.getByRole('button', {
       name: 'Remove endpoint kuba-vps',
     })
-    expect(remove).toBeDisabled()
+    expect(isUnavailable(remove)).toBe(true)
     fireEvent.click(remove)
     expect(
       screen.getByRole('button', { name: 'Remove endpoint kuba-vps' }),

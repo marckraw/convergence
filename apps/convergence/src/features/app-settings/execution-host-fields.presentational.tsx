@@ -4,7 +4,7 @@ import type {
   ExecutionHostDaemonCredentialStatus,
   RemoteExecutionHostConnectionResult,
 } from '@/entities/app-settings'
-import { Button, cn, IconButton, Input, Tooltip } from '@convergence/ui'
+import { Button, cn, IconButton, Input } from '@convergence/ui'
 import type { ExecutionHostEndpointActionBlocks } from './execution-host-settings.pure'
 
 interface ExecutionHostFieldsProps {
@@ -142,19 +142,18 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           onChange={(event) => onLabelChange(event.target.value)}
         />
       </div>
-      <Tooltip label={removalBlock ?? undefined}>
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label={`Remove endpoint ${displayName}`}
-          onClick={onRequestRemove}
-          disabled={isRemovalPending || !!removalBlock}
-          className="mt-6 shrink-0"
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Remove
-        </Button>
-      </Tooltip>
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label={`Remove endpoint ${displayName}`}
+        onClick={onRequestRemove}
+        disabled={isRemovalPending}
+        disabledReason={removalBlock ?? undefined}
+        className="mt-6 shrink-0"
+      >
+        <Trash2 className="mr-2 h-4 w-4" />
+        Remove
+      </Button>
     </div>
 
     {isRemovalPending && (
@@ -229,22 +228,17 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <Tooltip label={actionBlocks.connection ?? undefined}>
-            <Button
-              type="button"
-              variant="secondary"
-              aria-label={`Test connection for ${displayName}`}
-              onClick={onTestDaemonConnection}
-              disabled={
-                isCredentialSaving ||
-                isConnectionTesting ||
-                !!actionBlocks.connection
-              }
-            >
-              <Wifi className="mr-2 h-4 w-4" />
-              {isConnectionTesting ? 'Testing...' : 'Test connection'}
-            </Button>
-          </Tooltip>
+          <Button
+            type="button"
+            variant="secondary"
+            aria-label={`Test connection for ${displayName}`}
+            onClick={onTestDaemonConnection}
+            disabled={isCredentialSaving || isConnectionTesting}
+            disabledReason={actionBlocks.connection ?? undefined}
+          >
+            <Wifi className="mr-2 h-4 w-4" />
+            {isConnectionTesting ? 'Testing...' : 'Test connection'}
+          </Button>
           <Button
             type="button"
             variant="ghost"

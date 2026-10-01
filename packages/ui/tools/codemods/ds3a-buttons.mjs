@@ -635,6 +635,8 @@ function migrateButton(node, sf, where, lucide, resolve, edits, add) {
       continue
     } else if (!iconOnly && name === 'title') {
       continue
+    } else if (!iconOnly && name === 'key' && attrs.has('title')) {
+      continue
     } else {
       out.push(attribute.text)
     }
@@ -720,10 +722,12 @@ function migrateButton(node, sf, where, lucide, resolve, edits, add) {
       const parent = node.parent
       if (parent && ts.isJsxElement(parent) && tagOf(parent, sf) === 'Tooltip')
         return report.refused.push(`${where}: title inside a Tooltip`)
+      // A list's key goes to the outermost element, now the Tooltip.
+      const key = attrs.get('key')
       edits.push({
         start: node.getStart(sf),
         end: node.getStart(sf),
-        text: `<Tooltip ${labelAttribute(title)}>`,
+        text: `<Tooltip${key ? ` ${key.text}` : ''} ${labelAttribute(title)}>`,
       })
       edits.push({
         start: node.getEnd(),

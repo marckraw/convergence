@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import { TooltipProvider } from '@convergence/ui'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
@@ -258,8 +259,10 @@ describe('ExecutionHostSettingsContainer', () => {
     // a refusal that reads like a broken token.
     expect(executionHostDaemon.getStatus).not.toHaveBeenCalled()
     expect(
-      screen.getByRole('button', { name: 'Test connection for kuba-vps' }),
-    ).toBeDisabled()
+      isUnavailable(
+        screen.getByRole('button', { name: 'Test connection for kuba-vps' }),
+      ),
+    ).toBe(true)
     expect(
       screen.getByRole('button', { name: 'Save token for kuba-vps' }),
     ).toBeDisabled()
@@ -272,10 +275,12 @@ describe('ExecutionHostSettingsContainer', () => {
 
     await screen.findByText('Configured in Keychain, token hidden')
     expect(
-      screen.getByRole('button', {
-        name: 'Test connection for backpack-automations',
-      }),
-    ).toBeDisabled()
+      isUnavailable(
+        screen.getByRole('button', {
+          name: 'Test connection for backpack-automations',
+        }),
+      ),
+    ).toBe(true)
     expect(
       screen.getByText(
         `Save to test the URL you typed — this endpoint still points at ${BASE_URL}.`,
@@ -343,8 +348,10 @@ describe('ExecutionHostSettingsContainer', () => {
     const remove = screen.getByRole('button', {
       name: 'Remove endpoint backpack-automations',
     })
-    expect(remove).toBeDisabled()
-    expect(remove.getAttribute('title')).toMatch(
+    // Unavailable, and it says why: focusable, its reason its description
+    // and its tooltip (MAR-3616, R2).
+    expect(remove).toHaveAttribute('aria-disabled', 'true')
+    expect(remove).toHaveAccessibleDescription(
       /Still counting the sessions that run on “backpack-automations”/,
     )
 

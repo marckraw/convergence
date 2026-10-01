@@ -5,6 +5,7 @@ import {
 import { readHarnessFactRow } from '../../../electron/backend/session/harness-fact-row.pure'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
 import { HarnessFactsSections } from './harness-facts.presentational'
@@ -595,7 +596,9 @@ it('MAR-3427 C caps an alert pill chaining every reason: it truncates and keeps 
   const label =
     'Harness · 1 integration needs sign-in · 1 integration failed · 4 more integrations need attention'
   expect(pill.alert).toBe(true)
-  expect(chip).toHaveAttribute('title', label)
+  // The full label is the app's tooltip, never a native title (MAR-3616).
+  expect(chip).toHaveAttribute('data-tooltip', label)
+  expect(chip).not.toHaveAttribute('title')
   // 15rem = 240 px, the width the header's layout test holds the chip to.
   expect(chip.className.split(/\s+/)).toContain('max-w-[15rem]')
   const text = within(chip).getByText(label)
@@ -733,7 +736,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
       expect(
         within(list)
           .queryAllByRole('button')
-          .filter((button) => !(button as HTMLButtonElement).disabled),
+          .filter((button) => !isUnavailable(button)),
       ).toEqual([])
       // The hidden-plugin sentence describes the account, which outlives
       // the process: it stays.

@@ -22,10 +22,10 @@ export function ProjectOpenMenuContainer({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Tooltip label={disabledReason ?? 'Open project'}>
+        <Tooltip label="Open project">
           <Button
             variant="ghost"
-            disabled={!!disabledReason}
+            disabledReason={disabledReason ?? undefined}
             aria-label="Open project"
             size="sm"
             className="gap-2"

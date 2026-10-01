@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Link2, Plus, Settings2, History } from 'lucide-react'
-import { Button, cn, Tooltip } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 
 interface CanvasToolbarProps {
   importCrew: ReactNode
@@ -64,29 +64,25 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
       </Button>
       {importCrew}
 
-      <Tooltip
-        label={
+      <Button
+        type="button"
+        variant="ghost"
+        aria-pressed={connecting}
+        disabledReason={
           canConnect
             ? undefined
             : 'Add a second conversation to this crew before connecting.'
         }
+        onClick={onToggleConnect}
+        size="sm"
+        className={cn(
+          'gap-1 text-[11px]',
+          connecting && 'bg-white/10 text-foreground',
+        )}
       >
-        <Button
-          type="button"
-          variant="ghost"
-          aria-pressed={connecting}
-          disabled={!canConnect}
-          onClick={onToggleConnect}
-          size="sm"
-          className={cn(
-            'gap-1 text-[11px]',
-            connecting && 'bg-white/10 text-foreground',
-          )}
-        >
-          <Link2 className="size-3" />
-          Connect
-        </Button>
-      </Tooltip>
+        <Link2 className="size-3" />
+        Connect
+      </Button>
 
       <Button
         type="button"
