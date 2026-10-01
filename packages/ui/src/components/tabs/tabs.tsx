@@ -10,6 +10,7 @@ import {
   type SegmentedSize,
 } from '../segmented-control/segmented-control.styles'
 import { truncateWords } from '../segmented-control/truncate-words'
+import { IconButton } from '../icon-button/icon-button'
 
 /**
  * `segmented`: SegmentedControl's look, a raised chip on a muted track (R7),
@@ -163,24 +164,20 @@ export function TabsTab({
             'group-hover/tab:opacity-100! group-focus-within/tab:opacity-100!',
           )}
         >
-          {/* raw-element: becomes DS3a's IconButton (xs) when it lands. */}
-          <button
-            type="button"
+          {/* The pointer's close: out of the tab order (Delete is the keyboard's). */}
+          <IconButton
+            label={closeLabel}
+            size="xs"
             tabIndex={-1}
-            aria-label={closeLabel}
             onClick={(event) => {
               event.stopPropagation()
               onClose()
             }}
-            className={cn(
-              'relative inline-flex size-4 items-center justify-center rounded-sm transition-colors',
-              'hover:bg-highlight hover:text-on-highlight',
-              'after:absolute after:-inset-1',
-              'app-no-drag',
-            )}
+            // 24 px to aim at, 16 px in the row: the chip keeps its height.
+            className="-my-1"
           >
             <XIcon aria-hidden className="size-3" />
-          </button>
+          </IconButton>
         </span>
       ) : null}
     </div>

@@ -6,7 +6,8 @@ import {
   controlHeight,
   type ControlSize,
 } from '#lib/control-frame.styles'
-import { focusRing, focusRingWithin } from '#lib/focus-ring.styles'
+import { focusRingWithin } from '#lib/focus-ring.styles'
+import { IconButton } from '../icon-button/icon-button'
 import { Input, type InputProps } from '../input/input'
 
 export type SearchFieldProps = Omit<
@@ -103,25 +104,19 @@ export function SearchField({
         </span>
       ) : null}
       {canClear ? (
-        // raw-element: becomes DS3a's IconButton (xs, label "Clear search") when it lands.
-        <button
-          type="button"
+        <IconButton
           data-slot="search-field-clear"
-          aria-label={clearLabel}
+          label={clearLabel}
+          size="xs"
           onClick={() => {
             onClear()
             ownRef.current?.focus()
           }}
-          className={cn(
-            'relative -mr-1 inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-ink-muted transition-colors',
-            'hover:bg-highlight hover:text-on-highlight',
-            focusRing,
-            'after:absolute after:-inset-0.5',
-            'app-no-drag',
-          )}
+          // Its edge near the box's, and no taller than the box's row.
+          className="-my-1 -mr-2 shrink-0 text-ink-muted"
         >
           <XIcon aria-hidden className="size-3.5" />
-        </button>
+        </IconButton>
       ) : null}
     </div>
   )

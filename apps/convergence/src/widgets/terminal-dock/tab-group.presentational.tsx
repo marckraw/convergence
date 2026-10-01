@@ -1,7 +1,14 @@
 import type { FC, ReactNode } from 'react'
 import { Plus } from 'lucide-react'
 import type { TerminalTab } from '@/entities/terminal'
-import { IconButton, Tabs, TabsList, TabsTab, ThemeScope } from '@convergence/ui'
+import {
+  IconButton,
+  Tabs,
+  TabsList,
+  TabsTab,
+  ThemeScope,
+  Tooltip,
+} from '@convergence/ui'
 
 interface TabGroupProps {
   tabs: TerminalTab[]
@@ -16,7 +23,7 @@ interface TabGroupProps {
  * The terminal's tab strip: the kit's `strip` Tabs in a dark ThemeScope, so
  * it stays dark beside the terminal in both themes (R12). Moving along the
  * tabs with the arrows switches terminals, as it did; Delete on a tab closes
- * it.
+ * it. A tab's tooltip names its folder.
  */
 export const TabGroup: FC<TabGroupProps> = ({
   tabs,
@@ -42,18 +49,22 @@ export const TabGroup: FC<TabGroupProps> = ({
           activateOnFocus
           className="min-w-0"
         >
-          {tabs.map((tab) => (
-            <TabsTab
-              key={tab.id}
-              value={tab.id}
-              className={tab.status === 'exited' ? 'opacity-60' : undefined}
-              title={tab.cwd}
-              onClose={() => onCloseTab(tab.id)}
-              closeLabel={`Close tab ${tab.title}`}
-            >
-              {tab.status === 'exited' ? `${tab.title} (exited)` : tab.title}
-            </TabsTab>
-          ))}
+          {tabs.map((tab) => {
+            const label =
+              tab.status === 'exited' ? `${tab.title} (exited)` : tab.title
+            return (
+              <Tooltip key={tab.id} label={label} detail={tab.cwd}>
+                <TabsTab
+                  value={tab.id}
+                  className={tab.status === 'exited' ? 'opacity-60' : undefined}
+                  onClose={() => onCloseTab(tab.id)}
+                  closeLabel={`Close tab ${tab.title}`}
+                >
+                  {label}
+                </TabsTab>
+              </Tooltip>
+            )
+          })}
         </TabsList>
         <IconButton
           label="New tab"
