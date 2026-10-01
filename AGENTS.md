@@ -241,7 +241,10 @@ in `packages/ui/AGENTS.md`). Before building a part, search `@convergence/ui`
 and Storybook (`npm run storybook`) for one that exists. Every new part ships
 with stories, and every story is a test with an accessibility check
 (`npm run test:stories`). Look at it in Storybook in light, dark and reduced
-motion (the toolbar) before calling it done.
+motion (the toolbar) before calling it done. The design-system drift checks
+([docs/checks/design-system-drift.md](docs/checks/design-system-drift.md))
+flag what a feature builds by hand that `@convergence/ui` already has, and
+name the token or part to use instead.
 
 ### Presentational vs container rules
 
