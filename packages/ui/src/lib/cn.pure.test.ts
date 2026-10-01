@@ -87,6 +87,10 @@ describe('cn with the Convergence theme', () => {
     expect(cn('ease-enter', 'ease-out')).toBe('ease-out')
     expect(cn('ease-in', 'ease-exit')).toBe('ease-exit')
     expect(cn('ease-guide', 'ease-linear')).toBe('ease-linear')
+    expect(cn('transition-colors', 'transition-layout')).toBe(
+      'transition-layout',
+    )
+    expect(cn('transition-layout', 'transition-none')).toBe('transition-none')
   })
 
   it('keeps motion that only applies in another state', () => {
