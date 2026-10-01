@@ -7,12 +7,26 @@
  * list of what the package promises.
  */
 export {
+  Badge,
+  type BadgeHue,
+  type BadgeProps,
+  type BadgeShape,
+} from './components/badge/badge'
+export {
   Button,
   type ButtonProps,
   type ButtonSize,
   type ButtonVariant,
   buttonVariants,
 } from './components/button/button'
+export {
+  Card,
+  CardAction,
+  type CardActionProps,
+  type CardPadding,
+  type CardProps,
+  type CardSurface,
+} from './components/card/card'
 export {
   CopyButton,
   type CopyButtonProps,
@@ -64,6 +78,15 @@ export {
   SelectTrigger,
   SelectValue,
 } from './components/select/select'
+export {
+  StatusDot,
+  type StatusDotProps,
+  type StatusDotSize,
+} from './components/status-dot/status-dot'
+export {
+  StatusPill,
+  type StatusPillProps,
+} from './components/status-pill/status-pill'
 export { SwitchRow } from './components/switch/switch'
 export { Textarea, type TextareaProps } from './components/textarea/textarea'
 export {
@@ -95,6 +118,7 @@ export {
   type AppliedTheme,
   type ThemeChoice,
 } from './lib/theme'
+export { TONES, type Tone } from './lib/tone.styles'
 export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'
 export { layoutPx } from './styles/layout.tokens'
