@@ -1,8 +1,8 @@
 import { X } from 'lucide-react'
 import { type ComponentProps, type ReactNode, useId } from 'react'
 import { cn } from '#lib/cn.pure'
-import { focusRing } from '#lib/focus-ring.styles'
 import { toneInk, toneLine, toneSoft, type Tone } from '#lib/tone.styles'
+import { IconButton } from '../icon-button/icon-button'
 
 type NoticeProps = Omit<
   ComponentProps<'div'>,
@@ -22,7 +22,7 @@ type NoticeProps = Omit<
   children?: ReactNode
   /** Its buttons, under the words. */
   actions?: ReactNode
-  /** Puts it away: a ✕ at its top right, named "Not now". */
+  /** Puts it away: a ✕ at its top right, an IconButton named and tooltipped "Not now". */
   onDismiss?: () => void
 }
 
@@ -87,18 +87,14 @@ function Notice({
         )}
       </div>
       {onDismiss ? (
-        // raw-element: DS3a's IconButton (xs, "Not now") replaces this button when it lands.
-        <button
-          type="button"
-          aria-label="Not now"
+        <IconButton
+          label="Not now"
+          size="xs"
           onClick={onDismiss}
-          className={cn(
-            'app-no-drag flex size-5 shrink-0 items-center justify-center rounded-sm opacity-70 transition-opacity hover:opacity-100',
-            focusRing,
-          )}
+          className="-my-0.5 shrink-0"
         >
           <X aria-hidden className="size-3.5" />
-        </button>
+        </IconButton>
       ) : null}
     </div>
   )

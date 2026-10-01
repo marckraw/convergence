@@ -1,7 +1,9 @@
 import type { ComponentProps } from 'react'
 import { cn } from '#lib/cn.pure'
+import { Tooltip } from '../tooltip/tooltip'
 import {
   formatTimestamp,
+  fullDateLabel,
   type TimestampFormat,
   type TimestampOptions,
   toDate,
@@ -25,9 +27,9 @@ type TimestampProps = Omit<
  * conversation writes today become one part (CONV-22). Figures keep one
  * width. A value that names no moment is shown as given.
  *
- * R2 puts the whole date in our Tooltip on hover, never a `title`;
- * `fullDateLabel` writes it, and the tooltip joins when DS3a's Tooltip lands.
- * A relative time is written when it renders: re-render to move it on.
+ * Under the pointer our Tooltip shows the whole moment ("Thursday, October
+ * 1, 2026 at 12:00 PM", `fullDateLabel`), never a native `title` (R2). A
+ * relative time is written when it renders: re-render to move it on.
  */
 function Timestamp({
   date,
@@ -47,15 +49,17 @@ function Timestamp({
     )
   }
   return (
-    <time
-      data-slot="timestamp"
-      data-format={format}
-      dateTime={moment.toISOString()}
-      className={cn('tabular-nums', className)}
-      {...props}
-    >
-      {formatTimestamp(moment, format, { now, locale, timeZone })}
-    </time>
+    <Tooltip label={fullDateLabel(moment, { locale, timeZone })}>
+      <time
+        data-slot="timestamp"
+        data-format={format}
+        dateTime={moment.toISOString()}
+        className={cn('tabular-nums', className)}
+        {...props}
+      >
+        {formatTimestamp(moment, format, { now, locale, timeZone })}
+      </time>
+    </Tooltip>
   )
 }
 

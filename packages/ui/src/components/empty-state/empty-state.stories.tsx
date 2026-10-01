@@ -111,10 +111,14 @@ export const Failed: Story = {
     )
     const retry = canvas.getByRole('button', { name: 'Try again' })
     await userEvent.click(retry)
-    await expect(retry).toHaveAttribute('aria-disabled', 'true')
-    await waitFor(() => expect(retry).toHaveAccessibleName('Trying again…'), {
-      timeout: 1000,
-    })
+    // Button's `pending`, after useDelayedLoading's 300 ms: busy, and says so.
+    await waitFor(
+      () => {
+        expect(retry).toHaveAttribute('aria-busy', 'true')
+        expect(retry).toHaveAccessibleName('Trying again…')
+      },
+      { timeout: 1000 },
+    )
   },
 }
 

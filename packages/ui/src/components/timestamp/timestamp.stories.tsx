@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect } from 'storybook/test'
+import { expect, screen } from 'storybook/test'
 import { Timestamp } from './timestamp'
 
 const now = new Date('2026-10-01T12:00:00Z')
@@ -14,7 +14,12 @@ function Moments() {
       <div className={row}>
         <dt className="text-ink-muted">relative</dt>
         <dd>
-          <Timestamp date={fourMinutesAgo} now={now} locale="en-US" />
+          <Timestamp
+            date={fourMinutesAgo}
+            now={now}
+            locale="en-US"
+            timeZone="UTC"
+          />
         </dd>
       </div>
       <div className={row}>
@@ -73,7 +78,7 @@ const plain = (text: string | null) => (text ?? '').replace(/\s/g, ' ')
  * width.
  */
 export const Default: Story = {
-  play: async ({ canvas, canvasElement }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     const relative = canvas.getByText('4 minutes ago')
     await expect(relative.tagName).toBe('TIME')
     await expect(relative).toHaveAttribute(
@@ -92,8 +97,13 @@ export const Default: Story = {
     await expect(getComputedStyle(relative).fontVariantNumeric).toBe(
       'tabular-nums',
     )
-    // R2: the whole date goes in our Tooltip (DS3a), never a native title.
+    // R2: the whole moment shows in our Tooltip, never a native title.
     await expect(relative).not.toHaveAttribute('title')
+    await userEvent.hover(relative)
+    const tooltip = await screen.findByRole('tooltip', {}, { timeout: 2000 })
+    await expect(plain(tooltip.textContent)).toBe(
+      'Thursday, October 1, 2026 at 11:56 AM',
+    )
   },
 }
 

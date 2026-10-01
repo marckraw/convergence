@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, screen } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
 import { Notice } from './notice'
 
@@ -159,6 +159,9 @@ export const Dismissible: Story = {
     await userEvent.tab()
     await expect(dismiss).toHaveFocus()
     await expect(getComputedStyle(dismiss).outlineStyle).toBe('solid')
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('Not now')
     await userEvent.keyboard('{Enter}')
     await expect(onDismiss).toHaveBeenCalledOnce()
   },

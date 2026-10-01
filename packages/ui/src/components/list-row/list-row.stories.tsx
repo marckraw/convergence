@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { expect, waitFor } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
 import { Badge } from '../badge/badge'
+import { IconButton } from '../icon-button/icon-button'
 import { StatusDot } from '../status-dot/status-dot'
 import { ListRow } from './list-row'
 
@@ -33,13 +34,13 @@ function SessionList() {
             <button type="button" onClick={() => setChosen(session.id)} />
           }
           actions={
-            <button
-              type="button"
-              aria-label={`More for ${session.title}`}
-              className="rounded-sm p-1 text-ink-muted hover:text-ink"
+            <IconButton
+              label={`More for ${session.title}`}
+              size="xs"
+              variant="quiet"
             >
               <Ellipsis className="size-3.5" />
-            </button>
+            </IconButton>
           }
         />
       ))}

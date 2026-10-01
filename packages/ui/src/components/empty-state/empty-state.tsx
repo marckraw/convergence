@@ -1,9 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
-import { focusRing } from '#lib/focus-ring.styles'
 import { useDelayedLoading } from '../../motion/delayed-loading/useDelayedLoading'
 import { Spinner } from '../../motion/spinner/spinner'
+import { Button } from '../button/button'
 
 /**
  * Its box. `dashed` is the app's most common empty box (30 of them): a dashed
@@ -165,21 +165,17 @@ function FailedState(props: EmptyStateFailedProps) {
       </div>
       {onRetry ? (
         <div className={actionRow}>
-          {/* raw-element: DS3a's Button (secondary, `pending`) replaces this button when it lands. */}
-          <button
-            type="button"
-            aria-disabled={retrying || undefined}
+          <Button
+            variant="secondary"
+            size="sm"
+            pending={busy}
+            pendingLabel="Trying again…"
             onClick={() => {
               if (!retrying) onRetry()
             }}
-            className={cn(
-              'app-no-drag inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-canvas px-3 text-xs font-medium text-ink shadow-control transition-colors hover:bg-fill-hover',
-              focusRing,
-            )}
           >
-            {busy ? <Spinner size="xs" /> : null}
-            {busy ? 'Trying again…' : 'Try again'}
-          </button>
+            Try again
+          </Button>
         </div>
       ) : null}
     </div>

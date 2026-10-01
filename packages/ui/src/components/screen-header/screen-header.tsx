@@ -1,8 +1,35 @@
-import type { ComponentProps, ReactNode } from 'react'
+import {
+  type ComponentProps,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { cn } from '#lib/cn.pure'
+import { Tooltip } from '../tooltip/tooltip'
 
 /** A slot on the strip: a row of controls that keep their clicks (app-no-drag). */
 const stripSlot = 'app-no-drag flex shrink-0 items-center gap-1'
+
+/**
+ * Whether the element's text is cut short, measured when it renders, when
+ * its words change and whenever its box changes size.
+ */
+const useCutShort = (words: unknown) => {
+  const element = useRef<HTMLHeadingElement>(null)
+  const [cutShort, setCutShort] = useState(false)
+  useLayoutEffect(() => {
+    const heading = element.current
+    if (heading === null) return
+    const measure = () => setCutShort(heading.scrollWidth > heading.clientWidth)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(heading)
+    return () => observer.disconnect()
+  }, [words])
+  return [element, cutShort] as const
+}
 
 type ScreenHeaderProps = Omit<
   ComponentProps<'header'>,
@@ -11,8 +38,13 @@ type ScreenHeaderProps = Omit<
   className?: string
   /** Before the title: a way back, a mark, the sidebar's toggle. */
   start?: ReactNode
-  /** The screen's name: its heading's words. Cut short when there's no room. */
+  /**
+   * The screen's name: its heading's words. Cut short when there's no room,
+   * and then shown whole in a tooltip.
+   */
   title?: ReactNode
+  /** The title in plain words, for that tooltip, when `title` isn't a plain string. */
+  titleLabel?: string
   /** The heading's id, for what it names (a pane's aria-labelledby). */
   titleId?: string
   /** 1 for a screen; 2 for a panel inside one. */
@@ -40,11 +72,14 @@ type ScreenHeaderProps = Omit<
  * It owns the window's drag region (R12): the strip carries `app-drag`, so
  * the window moves from any empty part of it, and its start, title-action and
  * end slots carry `app-no-drag`, so every control in them takes its click.
- * Parts in `children` carry `app-no-drag` themselves.
+ * Parts in `children` carry `app-no-drag` themselves. A title cut short shows
+ * whole in our Tooltip (R2); only then is it out of the drag region, because
+ * Electron gives a drag region's pointer to the window, not the page.
  */
 function ScreenHeader({
   start,
   title,
+  titleLabel,
   titleId,
   headingLevel = 1,
   titleAction,
@@ -57,6 +92,7 @@ function ScreenHeader({
   ...props
 }: ScreenHeaderProps) {
   const Heading = headingLevel === 2 ? 'h2' : 'h1'
+  const [heading, cutShort] = useCutShort(title)
   return (
     <header
       data-slot="screen-header"
@@ -78,12 +114,25 @@ function ScreenHeader({
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {title == null ? null : (
             <div className="flex min-w-0 flex-col">
-              <Heading
-                id={titleId}
-                className="truncate text-sm font-semibold text-ink"
+              <Tooltip
+                label={
+                  titleLabel ?? (typeof title === 'string' ? title : undefined)
+                }
+                when="truncated"
               >
-                {title}
-              </Heading>
+                <Heading
+                  ref={heading}
+                  id={titleId}
+                  className={cn(
+                    'truncate text-sm font-semibold text-ink',
+                    // A window's drag region takes the pointer from the page,
+                    // so a title cut short leaves it to show its tooltip.
+                    cutShort && 'app-no-drag',
+                  )}
+                >
+                  {title}
+                </Heading>
+              </Tooltip>
               {subtitle == null ? null : (
                 <div className="truncate text-xs text-ink-muted">
                   {subtitle}

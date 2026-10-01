@@ -1,8 +1,8 @@
 import { X } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
-import { focusRing } from '#lib/focus-ring.styles'
 import { toneInk, toneLine, toneSoft, type Tone } from '#lib/tone.styles'
+import { IconButton } from '../icon-button/icon-button'
 
 type ChipProps = Omit<ComponentProps<'span'>, 'className' | 'children'> & {
   className?: string
@@ -19,9 +19,9 @@ type ChipProps = Omit<ComponentProps<'span'>, 'className' | 'children'> & {
 /** A removable chip names its ✕ for what it removes; a fixed one has neither. */
 type ChipRemoval =
   | {
-      /** Takes the item off: a ✕ at its end. */
+      /** Takes the item off: a 24 px IconButton ✕ at its end. */
       onRemove: () => void
-      /** The ✕'s name, which says what it removes: "Remove plan.pdf". */
+      /** The ✕'s name and tooltip, which say what it removes: "Remove plan.pdf". */
       removeLabel: string
     }
   | { onRemove?: undefined; removeLabel?: undefined }
@@ -30,8 +30,10 @@ type ChipRemoval =
  * Something attached to the next message (MAR-3616): a file, a skill, a
  * project's context, an annotation, six chip shapes today, one part now
  * (CONV-15). The attachment chip's look, kept (R0): rounded-md, a hairline,
- * the muted wash and ink, in the 12 px print. Removing it is the ✕, named for
- * what it removes; the chip promises no Delete key (CONV-16).
+ * the muted wash and ink, in the 12 px print; 28 px tall, so its 24 px ✕
+ * (an IconButton, the smallest control, R3) fits inside it. Removing it is
+ * the ✕, named and tooltipped for what it removes; the chip promises no
+ * Delete key (CONV-16).
  */
 function Chip({
   children,
@@ -49,7 +51,7 @@ function Chip({
       data-tone={tone}
       data-missing={dashed ? '' : undefined}
       className={cn(
-        'inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md border pl-1.5 text-xs',
+        'inline-flex h-7 max-w-full min-w-0 items-center gap-1 rounded-md border pl-1.5 text-xs',
         onRemove ? 'pr-0.5' : 'pr-1.5',
         tone === undefined
           ? 'border-line bg-surface-muted/40 text-ink-muted'
@@ -66,21 +68,16 @@ function Chip({
       )}
       <span className="max-w-48 min-w-0 truncate">{children}</span>
       {onRemove ? (
-        // raw-element: DS3a's IconButton (xs) replaces this button when it lands.
-        <button
-          type="button"
-          aria-label={removeLabel}
+        <IconButton
+          label={removeLabel}
+          size="xs"
           onClick={(event) => {
             event.stopPropagation()
             onRemove()
           }}
-          className={cn(
-            'app-no-drag flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-highlight hover:text-on-highlight',
-            focusRing,
-          )}
         >
           <X aria-hidden className="size-3" />
-        </button>
+        </IconButton>
       ) : null}
     </span>
   )

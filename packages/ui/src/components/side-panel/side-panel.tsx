@@ -7,7 +7,8 @@ import {
   useId,
 } from 'react'
 import { cn } from '#lib/cn.pure'
-import { focusRing, focusRingInset } from '#lib/focus-ring.styles'
+import { focusRingInset } from '#lib/focus-ring.styles'
+import { IconButton } from '../icon-button/icon-button'
 
 /** The panel's width, from one token each: the PR and Space panels', or Parallel work's. */
 const WIDTHS = {
@@ -66,7 +67,7 @@ type PanelHeaderProps = Omit<
   icon?: ReactNode
   /** Its actions before the close: IconButtons of size sm (Refresh). */
   actions?: ReactNode
-  /** Closes the panel: a ✕ named "Close" at its end. */
+  /** Closes the panel: a 28 px IconButton ✕ named and tooltipped "Close" at its end. */
   onClose?: () => void
 }
 
@@ -111,18 +112,14 @@ function PanelHeader({
         <div className="app-no-drag flex shrink-0 items-center gap-1">
           {actions}
           {onClose == null ? null : (
-            // raw-element: DS3a's IconButton (sm, "Close") replaces this button when it lands.
-            <button
-              type="button"
-              aria-label="Close"
+            <IconButton
+              label="Close"
+              size="sm"
+              variant="quiet"
               onClick={onClose}
-              className={cn(
-                'flex size-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-highlight hover:text-on-highlight',
-                focusRing,
-              )}
             >
               <X aria-hidden className="size-3.5" />
-            </button>
+            </IconButton>
           )}
         </div>
       )}

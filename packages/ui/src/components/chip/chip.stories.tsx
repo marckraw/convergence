@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { FileText, Library } from 'lucide-react'
 import { useState } from 'react'
-import { expect } from 'storybook/test'
+import { expect, screen } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
 import { Chip } from './chip'
 
@@ -58,6 +58,10 @@ export const Default: Story = {
     const next = canvas.getByRole('button', { name: 'Remove tokens.css' })
     await expect(next).toHaveFocus()
     await expect(getComputedStyle(next).outlineStyle).toBe('solid')
+    // The ✕ is an IconButton: its name is its tooltip too (R2).
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('Remove tokens.css')
     await userEvent.keyboard('{Enter}')
     await expect(canvas.queryByText('tokens.css')).toBeNull()
     // No Delete-key promise: the name is the item's, nothing more.
@@ -95,7 +99,7 @@ export const Long: Story = {
     await expect(name.getBoundingClientRect().width).toBe(192)
     await expect(getComputedStyle(name).textOverflow).toBe('ellipsis')
     const remove = canvas.getByRole('button', { name: 'Remove the screenshot' })
-    await expect(remove.getBoundingClientRect().width).toBe(20)
+    await expect(remove.getBoundingClientRect().width).toBe(24)
   },
 }
 

@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { PanelLeft, Satellite, Settings } from 'lucide-react'
-import { expect } from 'storybook/test'
+import { PanelLeft, Settings } from 'lucide-react'
+import { expect, screen } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
+import { IconButton } from '../icon-button/icon-button'
 import { StatusPill } from '../status-pill/status-pill'
 import { DragRegion, ScreenHeader } from './screen-header'
 
@@ -22,29 +23,20 @@ function MissionControlTop({ title }: MissionControlTopProps) {
     <div className="w-160 max-w-full bg-canvas">
       <ScreenHeader
         start={
-          <button
-            type="button"
-            aria-label="Show the sidebar"
-            className="rounded-sm p-1 text-ink-muted hover:text-ink"
-          >
-            <PanelLeft className="size-4" />
-          </button>
+          <IconButton label="Show the sidebar" size="sm" variant="quiet">
+            <PanelLeft />
+          </IconButton>
         }
-        title={
-          <span className="flex min-w-0 items-center gap-2">
-            <Satellite aria-hidden className="size-4 shrink-0" />
-            <span className="truncate">{title}</span>
-          </span>
-        }
+        title={title}
         subtitle="3 sessions working"
         end={
-          <button
-            type="button"
-            aria-label="Mission Control settings"
-            className="rounded-sm p-1 text-ink-muted hover:text-ink"
+          <IconButton
+            label="Mission Control settings"
+            size="sm"
+            variant="quiet"
           >
-            <Settings className="size-4" />
-          </button>
+            <Settings />
+          </IconButton>
         }
       />
     </div>
@@ -81,6 +73,8 @@ export const Default: Story = {
       tokenColor('--line'),
     )
     await expect(appRegion(header)).toBe('drag')
+    // A title that fits stays part of the drag region.
+    await expect(appRegion(heading)).not.toBe('no-drag')
     for (const name of ['Show the sidebar', 'Mission Control settings']) {
       const slot = canvas.getByRole('button', { name }).parentElement as Element
       await expect(appRegion(slot)).toBe('no-drag')
@@ -98,13 +92,20 @@ export const Long: Story = {
     title:
       'Mission Control for every crew, every lane and every session this week, last week and the week before that',
   },
-  play: async ({ canvas }) => {
-    const words = canvas.getByText(/Mission Control for every crew/)
-    await expect(getComputedStyle(words).textOverflow).toBe('ellipsis')
-    await expect(words.scrollWidth).toBeGreaterThan(words.clientWidth)
+  play: async ({ args, canvas, userEvent }) => {
+    const heading = canvas.getByRole('heading', { level: 1 })
+    await expect(getComputedStyle(heading).textOverflow).toBe('ellipsis')
+    await expect(heading.scrollWidth).toBeGreaterThan(heading.clientWidth)
     await expect(
       canvas.getByRole('button', { name: 'Mission Control settings' }),
     ).toBeVisible()
+    // Cut short, it leaves the drag region so the pointer reaches it, and
+    // shows whole in our Tooltip (R2).
+    await expect(appRegion(heading)).toBe('no-drag')
+    await userEvent.hover(heading)
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent(args.title)
   },
 }
 

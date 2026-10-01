@@ -64,8 +64,10 @@ type CodeBlockProps = {
  * command, in one look for the seven `pre` styles the conversation has today
  * (CONV-32): monospace in the 12 px print, on a faint wash in a rounded-md
  * box, scrolling inside itself past its height, never the page, and focusable
- * with an inset ring while it scrolls. No highlighting: Streamdown already
- * colours code inside markdown. A figure named by `label`.
+ * with an inset ring while it scrolls; `copyable` adds a CopyButton ("Copy
+ * code", which says "Copied" for a moment) at its top right. No
+ * highlighting: Streamdown already colours code inside markdown. A figure
+ * named by `label`.
  */
 function CodeBlock({
   children,
