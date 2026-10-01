@@ -27,6 +27,7 @@ export {
   DropdownMenuTrigger,
 } from './components/dropdown-menu/dropdown-menu'
 export { Input, type InputProps } from './components/input/input'
+export { Kbd, type KbdProps } from './components/kbd/kbd'
 export {
   Popover,
   PopoverContent,
@@ -59,6 +60,12 @@ export {
   TooltipTrigger,
 } from './components/tooltip/tooltip'
 export { cn } from './lib/cn.pure'
+export {
+  focusRing,
+  focusRingField,
+  focusRingInset,
+  focusRingWithin,
+} from './lib/focus-ring.styles'
 export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from './lib/no-drag.styles'
 export {
   applyTheme,
@@ -71,3 +78,21 @@ export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'
 export { layoutPx } from './styles/layout.tokens'
 export { terminalTokens } from './styles/terminal.tokens'
+export {
+  advanceDelayedLoading,
+  type DelayedLoading,
+  type DelayedLoadingTiming,
+  idleLoading,
+  isLoadingVisible,
+  LOADING_DELAY_MS,
+  LOADING_MIN_VISIBLE_MS,
+  nextLoadingChange,
+} from './motion/delayed-loading/delayed-loading.pure'
+export { useDelayedLoading } from './motion/delayed-loading/useDelayedLoading'
+export { press } from './motion/press/press.styles'
+export { usePrefersReducedMotion } from './motion/reduced-motion'
+export {
+  Spinner,
+  type SpinnerProps,
+  type SpinnerSize,
+} from './motion/spinner/spinner'

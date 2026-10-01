@@ -499,3 +499,17 @@
  *   --color-black: #000;
  * }
  */
+
+/*
+ * Electron drag regions as classes (MAR-3616). A window strip is `app-drag`;
+ * every control and every popup layer over it is `app-no-drag`, or the OS
+ * takes the click for a window drag (MAR-3284). The parts carry
+ * `app-no-drag` themselves, so the app stops passing a style by hand.
+ */
+@utility app-drag {
+  -webkit-app-region: drag;
+}
+
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+}
