@@ -150,12 +150,12 @@ describe('GlobalChatSessionList', () => {
 
     renderList({ sessions: [baseSession], onDeleteSession })
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', {
         name: /chat session actions planning chat/i,
       }),
     )
-    fireEvent.click(await screen.findByText('Delete session'))
+    fireEvent.click(await screen.findByText('Delete session…'))
 
     expect(onDeleteSession).toHaveBeenCalledWith('global-session-1')
   })
@@ -165,12 +165,12 @@ describe('GlobalChatSessionList', () => {
 
     renderList({ sessions: [baseSession], onManageSessionSpaces })
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', {
         name: /chat session actions planning chat/i,
       }),
     )
-    fireEvent.click(await screen.findByText('Add to Space...'))
+    fireEvent.click(await screen.findByText('Add to Space…'))
 
     expect(onManageSessionSpaces).toHaveBeenCalledWith('global-session-1')
   })
@@ -219,13 +219,13 @@ describe('GlobalChatSessionList', () => {
       onUnarchiveSpace,
     })
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /space actions launch plan/i }),
     )
-    fireEvent.click(await screen.findByText('Archive Space...'))
+    fireEvent.click(await screen.findByText('Archive Space…'))
     expect(onArchiveSpace).toHaveBeenCalledWith('space-1')
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /archived space actions old plan/i }),
     )
     fireEvent.click(await screen.findByText('Unarchive Space'))
@@ -266,7 +266,7 @@ describe('GlobalChatSessionList', () => {
       onDeleteSession,
     })
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', {
         name: /space attempt actions planning chat/i,
       }),
@@ -279,7 +279,7 @@ describe('GlobalChatSessionList', () => {
       baseSession.id,
     )
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', {
         name: /space attempt actions planning chat/i,
       }),
@@ -287,12 +287,12 @@ describe('GlobalChatSessionList', () => {
     fireEvent.click(await screen.findByText('Archive session'))
     expect(onArchiveSession).toHaveBeenCalledWith(baseSession.id)
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', {
         name: /space attempt actions planning chat/i,
       }),
     )
-    fireEvent.click(await screen.findByText('Delete session'))
+    fireEvent.click(await screen.findByText('Delete session…'))
     expect(onDeleteSession).toHaveBeenCalledWith(baseSession.id)
   })
 })

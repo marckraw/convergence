@@ -33,7 +33,7 @@ import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
-import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
+import { Button, cn, IconButton, Tooltip, useConfirm } from '@convergence/ui'
 import type { AppSurface } from '@/shared/types/app-surface.types'
 import {
   BarChart3,
@@ -411,6 +411,13 @@ export const Sidebar: FC<SidebarProps> = ({
     },
   )
 
+  // Every question this sidebar asks before something it can't take back,
+  // in the app's own dialog (R5).
+  const confirm = useConfirm()
+  /** "3 attached sessions", for a question about a Space or a workspace. */
+  const attachedSessions = (count: number) =>
+    `${count} attached session${count === 1 ? '' : 's'}`
+
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
     for (const session of globalSessions) next.set(session.id, session)
@@ -545,15 +552,17 @@ export const Sidebar: FC<SidebarProps> = ({
     async (spaceId: string) => {
       const space = spaces.find((entry) => entry.id === spaceId)
       const attempts = attemptsBySpaceId[spaceId] ?? []
-      const confirmed = window.confirm(
-        `Archive Space "${space?.title ?? 'Space'}"?\n\nThis will hide the Space from the active list and archive ${attempts.length} attached session${attempts.length === 1 ? '' : 's'}.`,
-      )
+      const confirmed = await confirm({
+        title: `Archive “${space?.title ?? 'Space'}”?`,
+        description: `It leaves the active list, and its ${attachedSessions(attempts.length)} are archived with it. You can unarchive it later.`,
+        confirmLabel: 'Archive Space',
+      })
       if (!confirmed) return
       const archived = await archiveSpace(spaceId)
       if (!archived) return
       await refreshSessionsForSpace(spaceId)
     },
-    [archiveSpace, attemptsBySpaceId, refreshSessionsForSpace, spaces],
+    [archiveSpace, attemptsBySpaceId, confirm, refreshSessionsForSpace, spaces],
   )
 
   const handleUnarchiveSpace = useCallback(
@@ -565,14 +574,31 @@ export const Sidebar: FC<SidebarProps> = ({
     [refreshSessionsForSpace, unarchiveSpace],
   )
 
+  /**
+   * Deleting a conversation can't be undone, so it asks first (R5, a
+   * decided change: it used to go on one click).
+   */
+  const confirmDeleteSession = useCallback(
+    (sessionId: string) =>
+      confirm({
+        title: `Delete “${sessionLookup.get(sessionId)?.name ?? 'this session'}”?`,
+        description:
+          'Its conversation and its history are deleted for good. Files it changed stay as they are.',
+        confirmLabel: 'Delete session',
+        variant: 'danger',
+      }),
+    [confirm, sessionLookup],
+  )
+
   const handleDeleteGlobalChatSession = useCallback(
     async (sessionId: string) => {
+      if (!(await confirmDeleteSession(sessionId))) return
       await deleteSession(sessionId, null)
       for (const space of spaces) {
         void loadSpaceAttempts(space.id)
       }
     },
-    [deleteSession, loadSpaceAttempts, spaces],
+    [confirmDeleteSession, deleteSession, loadSpaceAttempts, spaces],
   )
 
   const handleArchiveWorkspace = useStableCallback(
@@ -583,17 +609,24 @@ export const Sidebar: FC<SidebarProps> = ({
 
       const workspace = workspaces.find((entry) => entry.id === workspaceId)
       const branchName = workspace?.branchName ?? 'workspace'
-      const confirmed = window.confirm(
-        `Archive workspace "${branchName}"?\n\nThis will hide the workspace from the active sidebar and archive all sessions inside it. Conversation history will be kept.`,
-      )
+      const confirmed = await confirm({
+        title: `Archive workspace “${branchName}”?`,
+        description:
+          'It leaves the sidebar, and every session inside it is archived. Their conversations are kept.',
+        confirmLabel: 'Archive workspace',
+      })
       if (!confirmed) return
 
       const pullRequest = pullRequestsByWorkspaceId[workspaceId]
       const removeWorktree =
         pullRequest?.state === 'merged'
-          ? window.confirm(
-              'This workspace PR is merged. Also remove the git worktree from disk?',
-            )
+          ? await confirm({
+              title: 'Also remove its worktree from disk?',
+              description: `The pull request for “${branchName}” is merged. Removing the worktree deletes its folder; the workspace stays archived either way.`,
+              confirmLabel: 'Remove worktree',
+              cancelLabel: 'Keep worktree',
+              variant: 'danger',
+            })
           : false
 
       await archiveWorkspace(workspaceId, activeProject.id, removeWorktree)
@@ -624,9 +657,13 @@ export const Sidebar: FC<SidebarProps> = ({
 
       const workspace = workspaces.find((entry) => entry.id === workspaceId)
       const branchName = workspace?.branchName ?? 'workspace'
-      const confirmed = window.confirm(
-        `Remove git worktree for "${branchName}" from disk?\n\nConvergence will keep the workspace and conversation history, but this workspace cannot be used for new agent work until restore support exists.`,
-      )
+      const confirmed = await confirm({
+        title: `Remove the worktree for “${branchName}” from disk?`,
+        description:
+          'The workspace and its conversations are kept, but it can’t take new agent work until worktrees can be restored.',
+        confirmLabel: 'Remove worktree',
+        variant: 'danger',
+      })
       if (!confirmed) return
 
       await removeWorkspaceWorktree(workspaceId, activeProject.id)
@@ -657,9 +694,13 @@ export const Sidebar: FC<SidebarProps> = ({
 
       const workspace = workspaces.find((entry) => entry.id === workspaceId)
       const branchName = workspace?.branchName ?? 'workspace'
-      const confirmed = window.confirm(
-        `Permanently delete workspace "${branchName}"?\n\nThis deletes the workspace and all sessions/conversations inside it. This cannot be undone.`,
-      )
+      const confirmed = await confirm({
+        title: `Delete workspace “${branchName}”?`,
+        description:
+          'The workspace and every session and conversation inside it are deleted for good.',
+        confirmLabel: 'Delete workspace',
+        variant: 'danger',
+      })
       if (!confirmed) return
 
       const deletedSessionIds = sessions
@@ -701,9 +742,11 @@ export const Sidebar: FC<SidebarProps> = ({
   const handleSelectSession = useStableCallback((id: string) =>
     onSelectSession(id),
   )
-  const handleDeleteSession = useStableCallback((sessionId: string) => {
+  const handleDeleteSession = useStableCallback(async (sessionId: string) => {
     if (!activeProject) return
-    void deleteSession(sessionId, activeProject.id)
+    const projectId = activeProject.id
+    if (!(await confirmDeleteSession(sessionId))) return
+    void deleteSession(sessionId, projectId)
   })
   const handleRenameSession = useStableCallback(
     (sessionId: string, name: string) =>

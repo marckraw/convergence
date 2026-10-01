@@ -6,7 +6,15 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
@@ -177,7 +185,7 @@ const runParallel = () =>
 
 /** Opens one of the header's groups (MAR-3429 CH4) from its trigger. */
 const openGroup = (name: 'View' | 'Details' | 'Project' | 'Session actions') =>
-  fireEvent.pointerDown(screen.getByRole('button', { name }))
+  fireEvent.click(screen.getByRole('button', { name }))
 
 describe('SessionView', () => {
   beforeEach(() => {
@@ -989,7 +997,7 @@ describe('SessionView', () => {
           <SessionView />
         </TooltipProvider>,
       )
-      fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Details' }))
 
       const panel = await screen.findByText('Works in')
       const rows = panel.closest('div')?.parentElement
@@ -1054,7 +1062,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
@@ -1110,7 +1118,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
@@ -1184,7 +1192,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
@@ -1203,7 +1211,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
 
     const branchRow = await screen.findByText('Checkout branch')
     const rows = branchRow.closest('div')?.parentElement
@@ -1231,9 +1239,9 @@ describe('SessionView', () => {
     )
     openGroup('Project')
     fireEvent.click(
-      await screen.findByRole('menuitemcheckbox', { name: /^Pull request/ }),
+      await screen.findByRole('button', { name: /^Pull request/ }),
     )
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
     await waitFor(() =>
       expect(
         screen.getAllByText('No PR for this branch').length,
@@ -1292,7 +1300,7 @@ describe('SessionView', () => {
     )
     openGroup('Project')
     fireEvent.click(
-      await screen.findByRole('menuitemcheckbox', { name: /^Pull request/ }),
+      await screen.findByRole('button', { name: /^Pull request/ }),
     )
     await screen.findByText('PR unknown — gh not found')
     expect(screen.getByText('#42 · open')).toBeInTheDocument()
@@ -1304,9 +1312,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Session actions' }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Session actions' }))
     await screen.findByText('Fork session…')
     expect(
       window.electronAPI.pullRequest.refreshForSession,
@@ -1377,7 +1383,7 @@ describe('SessionView', () => {
     })
     openGroup('Project')
     fireEvent.click(
-      await screen.findByRole('menuitem', { name: 'Open in VS Code' }),
+      await screen.findByRole('button', { name: 'Open in VS Code' }),
     )
 
     const projectOpen = (
@@ -1782,10 +1788,8 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: /session actions/i }),
-    )
-    fireEvent.click(await screen.findByText('Link to Space...'))
+    fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
+    fireEvent.click(await screen.findByText('Link to Space…'))
 
     expect(useDialogStore.getState().openDialog).toBe('space-session-link')
     expect(useDialogStore.getState().payload).toEqual({
@@ -1962,7 +1966,7 @@ describe('SessionView', () => {
 
     openGroup('Project')
     fireEvent.click(
-      await screen.findByRole('menuitemcheckbox', { name: /^Pull request/ }),
+      await screen.findByRole('button', { name: /^Pull request/ }),
     )
     await waitFor(() => expect(overlayParallel()).toBe(true))
 
@@ -2142,16 +2146,14 @@ describe('SessionView', () => {
       for (const name of ['View', 'Details', 'Project'])
         expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
 
-      fireEvent.pointerDown(
-        screen.getByRole('button', { name: 'Session actions' }),
-      )
+      fireEvent.click(screen.getByRole('button', { name: 'Session actions' }))
       for (const name of ['View', 'Details'])
         expect(
           await screen.findByRole('menuitem', { name }),
         ).toBeInTheDocument()
       fireEvent.click(await screen.findByRole('menuitem', { name: 'Project' }))
       fireEvent.click(
-        await screen.findByRole('menuitem', { name: 'Open terminal' }),
+        await screen.findByRole('button', { name: 'Open terminal' }),
       )
       expect(hydratePaneTree).toHaveBeenCalledWith({
         sessionId: 'session-1',
@@ -2190,7 +2192,7 @@ describe('SessionView', () => {
         </TooltipProvider>,
       )
     const more = () => screen.getByRole('button', { name: 'Session actions' })
-    const openMore = () => fireEvent.pointerDown(more())
+    const openMore = () => fireEvent.click(more())
     const innerTrigger = (id: string) =>
       document
         .querySelector(`[data-header-inner="${id}"]`)!
@@ -2199,6 +2201,12 @@ describe('SessionView', () => {
       useSessionStore.setState((state) => ({
         sessions: state.sessions.map((session) => ({ ...session, ...patch })),
       }))
+    /**
+     * The popup a group's trigger controls: View's menu, or the Details and
+     * Project panels, which are Popovers since MAR-3616.
+     */
+    const popupOf = (trigger: HTMLElement) =>
+      document.getElementById(trigger.getAttribute('aria-controls')!)!
 
     it.each([
       ['View', 'view'],
@@ -2218,8 +2226,11 @@ describe('SessionView', () => {
         await waitFor(() =>
           expect(trigger).toHaveAttribute('aria-expanded', 'true'),
         )
-        const opened = screen.getByRole('menu')
-        expect(opened.id).toBe(trigger.getAttribute('aria-controls'))
+        const opened = popupOf(trigger)
+        expect(opened).toBeInTheDocument()
+        expect(opened.getAttribute('role')).toBe(
+          id === 'view' ? 'menu' : 'dialog',
+        )
       },
     )
 
@@ -2233,7 +2244,7 @@ describe('SessionView', () => {
         expect(trigger).toHaveAttribute('aria-expanded', 'true'),
       )
       await act(async () =>
-        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+        fireEvent.keyDown(popupOf(trigger), { key: 'Escape' }),
       )
       await waitFor(() =>
         expect(trigger).toHaveAttribute('aria-expanded', 'false'),
@@ -2242,45 +2253,47 @@ describe('SessionView', () => {
     })
 
     /**
-     * Menus as the app draws them (MAR-3427 A): they fade out, and Radix
-     * keeps the closing content mounted -- with focus still inside -- until
-     * the animation ends. jsdom runs no animation, so the content is given its
-     * animation name here, and `finishExits` ends every fade.
+     * Popups as the app draws them (MAR-3427 A, MAR-3616): they fade out, and
+     * Base UI keeps the closing popup mounted -- with focus still inside --
+     * until its animations have finished, as `getAnimations()` reports them.
+     * jsdom has no animations, so a closing popup is given one here, and
+     * `finishExits` ends every fade.
      */
+    const exits = new Set<() => void>()
     function withExitAnimations() {
-      const real = globalThis.getComputedStyle.bind(globalThis)
-      vi.spyOn(globalThis, 'getComputedStyle').mockImplementation(
-        (element, pseudo) => {
-          const style = real(element, pseudo)
-          if (!element.matches('[role="menu"], [role="dialog"]')) return style
-          return new Proxy(style, {
-            get(target, key) {
-              if (key === 'animationName')
-                return element.getAttribute('data-state') === 'closed'
-                  ? 'pop-out'
-                  : 'pop-in'
-              const value = Reflect.get(target, key, target)
-              return typeof value === 'function' ? value.bind(target) : value
-            },
-          })
+      const playing = new WeakMap<Element, Promise<void>>()
+      Object.defineProperty(Element.prototype, 'getAnimations', {
+        configurable: true,
+        value(this: Element) {
+          if (
+            !this.matches('[role="menu"], [role="dialog"]') ||
+            !this.hasAttribute('data-ending-style')
+          )
+            return []
+          let finished = playing.get(this)
+          if (!finished) {
+            finished = new Promise<void>((resolve) => exits.add(resolve))
+            playing.set(this, finished)
+          }
+          return [{ finished, playState: 'running', pending: false }]
         },
-      )
-      if (typeof globalThis.CSS?.escape !== 'function')
-        vi.stubGlobal('CSS', {
-          ...globalThis.CSS,
-          escape: (value: string) => value,
-        })
-    }
-    const finishExits = () =>
-      act(() => {
-        for (const content of document.querySelectorAll(
-          '[role="menu"][data-state="closed"], [role="dialog"][data-state="closed"]',
-        )) {
-          const end = new Event('animationend')
-          Object.assign(end, { animationName: 'pop-out' })
-          content.dispatchEvent(end)
-        }
       })
+      onTestFinished(() => {
+        delete (Element.prototype as { getAnimations?: unknown }).getAnimations
+        exits.clear()
+      })
+    }
+    const finishExits = async () => {
+      // A closing popup asks for its animations a frame after it closes.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      await act(async () => {
+        for (const end of exits) end()
+        exits.clear()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
     /** Opens a yielded menu from More, both fades played out. */
     const openFromMore = async (name: string, id: string) => {
       openMore()
@@ -2290,12 +2303,7 @@ describe('SessionView', () => {
       await waitFor(() =>
         expect(trigger).toHaveAttribute('aria-expanded', 'true'),
       )
-      return {
-        trigger,
-        content: document.getElementById(
-          trigger.getAttribute('aria-controls')!,
-        )!,
-      }
+      return { trigger, content: popupOf(trigger) }
     }
 
     it.each([
@@ -2332,13 +2340,15 @@ describe('SessionView', () => {
       },
     )
 
-    it('A a left click outside a modal menu is not an interaction that keeps focus: More takes it, as Radix gives it to the trigger', async () => {
+    it('A a left click outside a modal menu is not an interaction that keeps focus: More takes it, as Radix gave it to the trigger', async () => {
       withExitAnimations()
       headerWidth(400)
       renderView()
       const outside = document.createElement('p')
       document.body.append(outside)
-      const { content } = await openFromMore('Details', 'details')
+      // View: the groups that are menus (Details and Project are panels
+      // since MAR-3616, which a right-click outside leaves open).
+      const { content } = await openFromMore('View', 'view')
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
       })
@@ -2355,7 +2365,7 @@ describe('SessionView', () => {
       renderView()
       const outside = document.createElement('p')
       document.body.append(outside)
-      const { content } = await openFromMore('Details', 'details')
+      const { content } = await openFromMore('View', 'view')
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
       })
@@ -2676,7 +2686,7 @@ describe('SessionView', () => {
       await waitFor(() => expect(document.activeElement).toBe(harness))
       expect(harness).toHaveTextContent('linear · failed')
       await act(async () =>
-        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+        fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' }),
       )
       await waitFor(() => expect(document.activeElement).toBe(chip))
     })
@@ -2735,7 +2745,7 @@ describe('SessionView', () => {
       })
       openGroup('Project')
       fireEvent.click(
-        await screen.findByRole('menuitem', { name: 'Open in VS Code' }),
+        await screen.findByRole('button', { name: 'Open in VS Code' }),
       )
       await waitFor(() =>
         expect(window.electronAPI.projectOpen?.open).toHaveBeenCalledWith({
@@ -2761,9 +2771,7 @@ describe('SessionView', () => {
           )
         }
         fireEvent.click(
-          await screen.findByRole('menuitemcheckbox', {
-            name: /^Pull request/,
-          }),
+          await screen.findByRole('button', { name: /^Pull request/ }),
         )
         const close = await screen.findByRole('button', {
           name: 'Close pull request panel',
@@ -2809,7 +2817,7 @@ describe('SessionView', () => {
      * of them turns exactly that row red.
      */
     const reach =
-      (role: 'menuitem' | 'menuitemcheckbox' | 'menuitemradio') =>
+      (role: 'button' | 'menuitem' | 'menuitemcheckbox' | 'menuitemradio') =>
       (name: string | RegExp) =>
       () =>
         screen.findByRole(role, { name })
@@ -2852,17 +2860,13 @@ describe('SessionView', () => {
         async () =>
           within(
             await screen.findByRole('group', { name: 'Open in' }),
-          ).findByRole('menuitem', { name: 'Open in VS Code' }),
+          ).findByRole('button', { name: 'Open in VS Code' }),
       ],
-      ['Pull request', 'Project', reach('menuitemcheckbox')(/^Pull request/)],
-      ['Terminal', 'Project', reach('menuitem')('Open terminal')],
+      ['Pull request', 'Project', reach('button')(/^Pull request/)],
+      ['Terminal', 'Project', reach('button')('Open terminal')],
       ['Pin', 'Session actions', reach('menuitemcheckbox')('Pin conversation')],
       ['Fork', 'Session actions', reach('menuitem')('Fork session…')],
-      [
-        'Link to Space',
-        'Session actions',
-        reach('menuitem')('Link to Space...'),
-      ],
+      ['Link to Space', 'Session actions', reach('menuitem')('Link to Space…')],
       ['debug log', 'Session actions', reach('menuitem')('Open debug log…')],
       [
         'Stop',
@@ -2986,9 +2990,7 @@ describe('SessionView', () => {
         expect(yielded('project')).toBe(false)
         openGroup('Project')
         fireEvent.click(
-          await screen.findByRole('menuitemcheckbox', {
-            name: /^Pull request/,
-          }),
+          await screen.findByRole('button', { name: /^Pull request/ }),
         )
         const close = await screen.findByRole('button', {
           name: 'Close pull request panel',
@@ -3066,7 +3068,7 @@ describe('SessionView', () => {
         expect(dialog.contains(document.activeElement)).toBe(true)
       })
 
-      it('C a right-click outside Details opened from the harness chip leaves focus where it is — mutation the chip branch ignores the outside interaction turns red', async () => {
+      it('C a ctrl-click outside Details opened from the harness chip leaves focus where it is — mutation the chip branch ignores the outside interaction turns red', async () => {
         harnessAlert()
         renderView()
         const outside = document.createElement('p')
@@ -3078,7 +3080,23 @@ describe('SessionView', () => {
           name: 'Harness history',
         })
         await waitFor(() => expect(document.activeElement).toBe(harness))
+        // Details is a panel (a Popover, MAR-3616): a right-click outside
+        // leaves it open, focus and all ...
         await act(async () => fireEvent.pointerDown(outside, { button: 2 }))
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(harness).toBeInTheDocument()
+        expect(document.activeElement).toBe(harness)
+        // ... and the Mac's right-click, a ctrl-click, closes it as a click
+        // does, leaving the focus where it is, not on the chip.
+        await act(async () => {
+          fireEvent.pointerDown(outside, { button: 0, ctrlKey: true })
+          fireEvent.mouseDown(outside, { button: 0, ctrlKey: true })
+          fireEvent.pointerUp(outside, { button: 0, ctrlKey: true })
+          fireEvent.mouseUp(outside, { button: 0, ctrlKey: true })
+          fireEvent.click(outside, { button: 0, ctrlKey: true, detail: 1 })
+        })
         await waitFor(() =>
           expect(
             screen.queryByRole('region', { name: 'Harness history' }),
@@ -3098,21 +3116,19 @@ describe('SessionView', () => {
         )
         const closeMenu = async () => {
           await act(async () =>
-            fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+            fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' }),
           )
-          await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+          await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
         }
         renderView()
         await act(async () => {})
         refresh.mockClear()
 
         openGroup('Project')
-        await screen.findByRole('menu')
+        await screen.findByRole('dialog')
         await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1))
         fireEvent.click(
-          await screen.findByRole('menuitemcheckbox', {
-            name: /^Pull request/,
-          }),
+          await screen.findByRole('button', { name: /^Pull request/ }),
         )
         await screen.findByRole('button', { name: 'Close pull request panel' })
         await act(async () => {})
@@ -3121,14 +3137,14 @@ describe('SessionView', () => {
         expect(refresh).toHaveBeenCalledTimes(2)
 
         openGroup('Details')
-        await screen.findByRole('menu')
+        await screen.findByRole('dialog')
         await act(async () => {})
         expect(refresh).toHaveBeenCalledTimes(3)
         await closeMenu()
         expect(refresh).toHaveBeenCalledTimes(3)
 
         openGroup('Project')
-        await screen.findByRole('menu')
+        await screen.findByRole('dialog')
         await act(async () => {})
         expect(refresh).toHaveBeenCalledTimes(4)
         await closeMenu()
@@ -3147,13 +3163,13 @@ describe('SessionView', () => {
         await act(async () => {})
         for (let open = 0; open < 2; open += 1) {
           openGroup('Project')
-          const menu = await screen.findByRole('menu')
+          const menu = await screen.findByRole('dialog')
           expect(within(menu).queryByText('Detecting apps...')).toBeNull()
           expect(
-            within(menu).getByRole('menuitem', { name: 'Open in VS Code' }),
+            within(menu).getByRole('button', { name: 'Open in VS Code' }),
           ).toBeInTheDocument()
           await act(async () => fireEvent.keyDown(menu, { key: 'Escape' }))
-          await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+          await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
         }
         expect(listApps).toHaveBeenCalledTimes(1)
       })
@@ -3167,7 +3183,7 @@ describe('SessionView', () => {
           name: 'Harness history',
         })
         expect(
-          within(screen.getByRole('menu')).getAllByRole('heading', {
+          within(screen.getByRole('dialog')).getAllByRole('heading', {
             name: /harness/i,
           }),
         ).toHaveLength(1)
@@ -3197,7 +3213,7 @@ describe('SessionView', () => {
         }))
         renderView()
         openGroup('Details')
-        await screen.findByRole('menu')
+        await screen.findByRole('dialog')
         await waitFor(() =>
           expect(refresh().mock.calls.map((call) => call[0])).toEqual([
             'session-1',
@@ -3225,7 +3241,7 @@ describe('SessionView', () => {
         }))
         renderView()
         openGroup('Project')
-        await screen.findByRole('menu')
+        await screen.findByRole('dialog')
         await waitFor(() =>
           expect(refresh().mock.calls.map((call) => call[0])).toEqual([
             'session-1',
@@ -3256,9 +3272,7 @@ describe('SessionView', () => {
         renderView()
         await act(async () => {})
         refresh().mockClear()
-        fireEvent.pointerDown(
-          screen.getByRole('button', { name: 'Session actions' }),
-        )
+        fireEvent.click(screen.getByRole('button', { name: 'Session actions' }))
         fireEvent.click(
           await screen.findByRole('menuitem', { name: 'Details' }),
         )
@@ -3271,9 +3285,7 @@ describe('SessionView', () => {
         renderView()
         await act(async () => {})
         refresh().mockClear()
-        fireEvent.pointerDown(
-          screen.getByRole('button', { name: 'Session actions' }),
-        )
+        fireEvent.click(screen.getByRole('button', { name: 'Session actions' }))
         fireEvent.click(
           await screen.findByRole('menuitem', { name: 'Project' }),
         )
@@ -3284,17 +3296,15 @@ describe('SessionView', () => {
       it('R6 closing the pull request panel with its own button while Project stays open does not refresh again — mutation showPullRequestPanel || prGroupOpen.current turns red', async () => {
         renderView()
         openGroup('Project')
-        await screen.findByRole('menu')
+        await screen.findByRole('dialog')
         await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(1))
         fireEvent.click(
-          await screen.findByRole('menuitemcheckbox', {
-            name: /^Pull request/,
-          }),
+          await screen.findByRole('button', { name: /^Pull request/ }),
         )
         await screen.findByRole('button', { name: 'Close pull request panel' })
         await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(2))
         openGroup('Project')
-        const projectMenu = await screen.findByRole('menu')
+        const projectMenu = await screen.findByRole('dialog')
         await waitFor(() => expect(refresh()).toHaveBeenCalledTimes(3))
         expect(projectMenu).toBeInTheDocument()
         fireEvent.click(

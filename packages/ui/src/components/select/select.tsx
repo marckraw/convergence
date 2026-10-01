@@ -1,189 +1,290 @@
-import * as React from 'react'
+import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
-import { Select as SelectPrimitive } from 'radix-ui'
-
+import type { ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
+import { focusRingField } from '#lib/focus-ring.styles'
+import {
+  popupItem,
+  popupItemCheck,
+  popupLabel,
+  popupMotion,
+  popupSeparator,
+  popupSurface,
+} from '../../motion/popup.styles'
 
-function Select({
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+/** One choice the trigger can show: its value, and the words it shows for it. */
+type SelectOption<Value> = { value: Value; label: ReactNode }
+
+type SelectProps<Value> = Omit<
+  SelectPrimitive.Root.Props<Value, false>,
+  'items' | 'multiple' | 'onValueChange'
+> & {
+  /**
+   * Every choice, value and label: what the trigger shows for the chosen one.
+   * Required, because without it the trigger shows the raw value ("project-1"
+   * where it should say "Project"). Build it from the same list the
+   * SelectItems map over.
+   */
+  items: ReadonlyArray<SelectOption<Value>> | Record<string, ReactNode>
+  /**
+   * The new choice. A Select of ours is never cleared: Base UI reports `null`
+   * only for an item whose value is null, which no Select here has, so that
+   * case never reaches this handler.
+   */
+  onValueChange?: (
+    value: Value,
+    eventDetails: SelectPrimitive.Root.ChangeEventDetails,
+  ) => void
 }
 
-function SelectGroup({
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Group>) {
-  return <SelectPrimitive.Group data-slot="select-group" {...props} />
+/**
+ * One choice from a short, fixed list (MAR-3616, R9): about eight options or
+ * fewer. A longer list, or one to search, is a Combobox. The list opens over
+ * the trigger with the chosen item where the value was, as a native select
+ * does (`alignItemWithTrigger`), and the trigger shows the chosen label.
+ */
+function Select<Value>({ onValueChange, ...props }: SelectProps<Value>) {
+  return (
+    <SelectPrimitive.Root<Value, false>
+      {...props}
+      onValueChange={
+        onValueChange
+          ? (value, eventDetails) => {
+              if (value !== null) onValueChange(value as Value, eventDetails)
+            }
+          : undefined
+      }
+    />
+  )
 }
 
-function SelectValue({
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Value>) {
-  return <SelectPrimitive.Value data-slot="select-value" {...props} />
+/** Heights on the one control scale (R3): 24, 28, 32 and 36 px. */
+const TRIGGER_SIZES = {
+  xs: 'h-6 px-2 text-xs',
+  sm: 'h-7 px-2.5 text-xs',
+  md: 'h-8 px-3 text-sm',
+  lg: 'h-9 px-3 text-sm',
+} as const
+
+type SelectTriggerProps = Omit<SelectPrimitive.Trigger.Props, 'className'> & {
+  className?: string
+  /** 24, 28, 32 or 36 px; `md` (32) unless told otherwise. Never a className (R3). */
+  size?: keyof typeof TRIGGER_SIZES
 }
 
+/**
+ * The field that shows the choice and opens the list. Give it a name
+ * (aria-label, or a label that points at it). It wears Input's frame: the
+ * control border, the ring over it, the danger border when `aria-invalid`.
+ * It is `app-no-drag`.
+ */
 function SelectTrigger({
   className,
-  size = 'default',
+  size = 'md',
   children,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
-  size?: 'sm' | 'default'
-}) {
+}: SelectTriggerProps) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-fit items-center justify-between gap-2 rounded-md border border-control-border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[placeholder]:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
+        'flex w-fit items-center justify-between gap-2 whitespace-nowrap rounded-md border border-control-line bg-transparent shadow-control app-no-drag',
+        'transition-colors select-none aria-invalid:border-danger-ink',
+        focusRingField,
+        'data-disabled:pointer-events-none data-disabled:opacity-50',
+        "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        TRIGGER_SIZES[size],
         className,
       )}
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-50" />
+      <SelectPrimitive.Icon className="flex text-ink-muted">
+        <ChevronDownIcon aria-hidden />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
 }
 
+type SelectValueProps = Omit<SelectPrimitive.Value.Props, 'className'> & {
+  className?: string
+}
+
+/** The chosen label, or the placeholder in muted ink. */
+function SelectValue({ className, ...props }: SelectValueProps) {
+  return (
+    <SelectPrimitive.Value
+      data-slot="select-value"
+      className={cn(
+        'flex min-w-0 flex-1 items-center gap-2 truncate text-left data-placeholder:text-ink-muted',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+type SelectContentProps = Omit<SelectPrimitive.Popup.Props, 'className'> &
+  Pick<
+    SelectPrimitive.Positioner.Props,
+    'align' | 'alignOffset' | 'side' | 'sideOffset' | 'alignItemWithTrigger'
+  > & {
+    className?: string
+  }
+
+/**
+ * The list, on the one popup surface (R8). With `alignItemWithTrigger` (the
+ * default) it opens over the trigger with the chosen item where the value
+ * was, and appears at once, as a native select does; with it off, it grows
+ * from below the trigger. It is at least as wide as the trigger and scrolls
+ * inside the window.
+ */
 function SelectContent({
   className,
   children,
-  position = 'item-aligned',
+  side = 'bottom',
+  sideOffset = 4,
   align = 'center',
+  alignOffset = 0,
+  alignItemWithTrigger = true,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: SelectContentProps) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Content
-        data-slot="select-content"
-        className={cn(
-          'relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md motion-safe:data-[side=bottom]:animate-slide-in-top motion-safe:data-[side=left]:animate-slide-in-right motion-safe:data-[side=right]:animate-slide-in-left motion-safe:data-[side=top]:animate-slide-in-bottom',
-          'animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:animate-none',
-          position === 'popper' &&
-            'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
-          className,
-        )}
-        position={position}
+      <SelectPrimitive.Positioner
+        side={side}
+        sideOffset={sideOffset}
         align={align}
-        {...props}
+        alignOffset={alignOffset}
+        alignItemWithTrigger={alignItemWithTrigger}
+        className="isolate z-50 select-none outline-none app-no-drag"
       >
-        <SelectScrollUpButton />
-        <SelectPrimitive.Viewport
+        <SelectPrimitive.Popup
+          data-slot="select-content"
           className={cn(
-            'p-1',
-            position === 'popper' &&
-              'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1',
+            popupSurface,
+            'relative max-h-(--available-height) min-w-(--anchor-width) max-w-(--available-width)',
+            'overflow-x-hidden overflow-y-auto p-1 outline-none app-no-drag',
+            popupMotion,
+            // Over the trigger there is nothing to grow from: it is there at
+            // once, like a native one.
+            'data-[side=none]:transition-none data-[side=none]:data-starting-style:scale-100 data-[side=none]:data-starting-style:opacity-100',
+            className,
           )}
+          {...props}
         >
-          {children}
-        </SelectPrimitive.Viewport>
-        <SelectScrollDownButton />
-      </SelectPrimitive.Content>
+          <SelectPrimitive.ScrollUpArrow
+            data-slot="select-scroll-up"
+            className="top-0 z-10 flex w-full items-center justify-center bg-raised py-1 [&_svg]:size-4"
+          >
+            <ChevronUpIcon aria-hidden />
+          </SelectPrimitive.ScrollUpArrow>
+          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          <SelectPrimitive.ScrollDownArrow
+            data-slot="select-scroll-down"
+            className="bottom-0 z-10 flex w-full items-center justify-center bg-raised py-1 [&_svg]:size-4"
+          >
+            <ChevronDownIcon aria-hidden />
+          </SelectPrimitive.ScrollDownArrow>
+        </SelectPrimitive.Popup>
+      </SelectPrimitive.Positioner>
     </SelectPrimitive.Portal>
   )
 }
 
-function SelectLabel({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Label>) {
+type SelectGroupProps = Omit<SelectPrimitive.Group.Props, 'className'> & {
+  className?: string
+}
+
+/** Options that belong together, named by a SelectLabel inside. */
+function SelectGroup({ className, ...props }: SelectGroupProps) {
   return (
-    <SelectPrimitive.Label
-      data-slot="select-label"
-      className={cn('px-2 py-1.5 text-xs text-muted-foreground', className)}
+    <SelectPrimitive.Group
+      data-slot="select-group"
+      className={className}
       {...props}
     />
   )
 }
 
-function SelectItem({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+type SelectLabelProps = Omit<SelectPrimitive.GroupLabel.Props, 'className'> & {
+  className?: string
+}
+
+/** Names a group of options. */
+function SelectLabel({ className, ...props }: SelectLabelProps) {
+  return (
+    <SelectPrimitive.GroupLabel
+      data-slot="select-label"
+      className={cn(popupLabel, className)}
+      {...props}
+    />
+  )
+}
+
+type SelectItemProps = Omit<SelectPrimitive.Item.Props, 'className'> & {
+  className?: string
+}
+
+/** One option, with a check when it is the chosen one. */
+function SelectItem({ className, children, ...props }: SelectItemProps) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        popupItem,
+        "w-full pr-8 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-ink-muted",
         className,
       )}
       {...props}
     >
-      <span
-        data-slot="select-item-indicator"
-        className="absolute right-2 flex size-3.5 items-center justify-center"
+      <SelectPrimitive.ItemText className="flex min-w-0 flex-1 items-center gap-2 truncate">
+        {children}
+      </SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemIndicator
+        render={<span className={popupItemCheck} />}
       >
-        <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
-        </SelectPrimitive.ItemIndicator>
-      </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+        <CheckIcon aria-hidden className="size-4" />
+      </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
   )
 }
 
-function SelectSeparator({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Separator>) {
+type SelectSeparatorProps = Omit<
+  SelectPrimitive.Separator.Props,
+  'className'
+> & {
+  className?: string
+}
+
+/** The hairline between groups of options. */
+function SelectSeparator({ className, ...props }: SelectSeparatorProps) {
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn('pointer-events-none -mx-1 my-1 h-px bg-border', className)}
+      className={cn('pointer-events-none', popupSeparator, className)}
       {...props}
     />
-  )
-}
-
-function SelectScrollUpButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.ScrollUpButton>) {
-  return (
-    <SelectPrimitive.ScrollUpButton
-      data-slot="select-scroll-up-button"
-      className={cn(
-        'flex cursor-default items-center justify-center py-1',
-        className,
-      )}
-      {...props}
-    >
-      <ChevronUpIcon className="size-4" />
-    </SelectPrimitive.ScrollUpButton>
-  )
-}
-
-function SelectScrollDownButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.ScrollDownButton>) {
-  return (
-    <SelectPrimitive.ScrollDownButton
-      data-slot="select-scroll-down-button"
-      className={cn(
-        'flex cursor-default items-center justify-center py-1',
-        className,
-      )}
-      {...props}
-    >
-      <ChevronDownIcon className="size-4" />
-    </SelectPrimitive.ScrollDownButton>
   )
 }
 
 export {
   Select,
   SelectContent,
+  type SelectContentProps,
   SelectGroup,
+  type SelectGroupProps,
   SelectItem,
+  type SelectItemProps,
   SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
+  type SelectLabelProps,
+  type SelectOption,
+  type SelectProps,
   SelectSeparator,
+  type SelectSeparatorProps,
   SelectTrigger,
+  type SelectTriggerProps,
   SelectValue,
+  type SelectValueProps,
 }

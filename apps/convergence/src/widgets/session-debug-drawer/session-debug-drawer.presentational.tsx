@@ -54,9 +54,9 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
   onOpenLogFolder,
 }) => {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(960px,calc(100vw-2rem))] p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogContent size="xl">
+        <DialogHeader>
           <DialogTitle>Provider debug log</DialogTitle>
           <DialogDescription>
             Live view of every provider event captured for this session.

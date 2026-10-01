@@ -280,7 +280,7 @@ describe('SkillsBrowserDialog', () => {
     expect(onSelectSkill).toHaveBeenCalledWith('skill-1')
   })
 
-  it('renders the detail slide-over and closes it from the scrim', () => {
+  it('renders the detail sheet and closes it from its Close', () => {
     const onCloseDetail = vi.fn()
     renderDialog({ viewMode: 'grid', isDetailOpen: true, onCloseDetail })
 
@@ -289,8 +289,7 @@ describe('SkillsBrowserDialog', () => {
       screen.getByRole('button', { name: 'Open in editor' }),
     ).toBeInTheDocument()
 
-    const closers = screen.getAllByRole('button', { name: 'Close details' })
-    fireEvent.click(closers[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
     expect(onCloseDetail).toHaveBeenCalled()
   })
 })

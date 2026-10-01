@@ -830,32 +830,42 @@ export const Composer: FC<ComposerProps> = ({
           </div>
           <div className="mt-2 flex items-center justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="quiet"
-                    aria-label="Add composer resources"
-                    disabled={disabled}
-                    size="sm"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add
-                    {resourceCount > 0 ? (
-                      <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-                        {resourceCount}
-                      </span>
-                    ) : null}
-                  </Button>
-                </PopoverTrigger>
+              <Popover
+                onOpenChange={(open, details) => {
+                  // A picker opened from here lives in its own popover: a
+                  // press inside it is outside this one, and must not close
+                  // it underneath the picker.
+                  if (
+                    !open &&
+                    details.reason === 'outside-press' &&
+                    (skillPickerOpen || contextPickerOpen)
+                  )
+                    details.cancel()
+                }}
+              >
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="quiet"
+                      aria-label="Add composer resources"
+                      disabled={disabled}
+                      size="sm"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add
+                      {resourceCount > 0 ? (
+                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                          {resourceCount}
+                        </span>
+                      ) : null}
+                    </Button>
+                  }
+                />
                 <PopoverContent
+                  aria-label="Resources"
                   align="start"
                   className="w-56 p-1"
-                  onInteractOutside={(event) => {
-                    if (skillPickerOpen || contextPickerOpen) {
-                      event.preventDefault()
-                    }
-                  }}
                 >
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                     Resources

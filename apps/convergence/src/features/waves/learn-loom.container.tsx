@@ -29,7 +29,7 @@ export const LearnLoomGuide: FC<{ open: boolean; onClose: () => void }> = ({
    * view simply SURVIVE -- a guide left on the quick reference reopens on
    * the quick reference, permanently, until something remounts it. (The
    * sharper claim that a passive effect leaves a stale title committed for
-   * one frame did not reproduce: React flushes the effect before Radix
+   * one frame did not reproduce: React flushes the effect before the dialog
    * mounts the content, so the old name never reaches the document.)
    * The panel gives this component a key that changes when the guide closes,
    * so every session starts from a fresh mount -- including the sessions the

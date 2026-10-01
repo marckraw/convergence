@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FC, ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react'
+import type { FC } from 'react'
 import { BookOpenText } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import { usePromptLibraryStore } from '@/entities/prompt-library'
-import { Button } from '@convergence/ui'
+import { Button, useConfirm } from '@convergence/ui'
 import {
   collectPromptTags,
   filterPromptLibraryCatalog,
@@ -26,7 +32,7 @@ const DEFAULT_FILTERS: PromptLibraryBrowserFilters = {
 }
 
 interface PromptLibraryBrowserDialogContainerProps {
-  trigger?: ReactNode
+  trigger?: ReactElement
 }
 
 export const PromptLibraryBrowserDialogContainer: FC<
@@ -55,6 +61,8 @@ export const PromptLibraryBrowserDialogContainer: FC<
   const createPrompt = usePromptLibraryStore((s) => s.createPrompt)
   const updatePrompt = usePromptLibraryStore((s) => s.updatePrompt)
   const deletePrompt = usePromptLibraryStore((s) => s.deletePrompt)
+  // Deleting a prompt asks first, in the app's dialog (R5).
+  const confirm = useConfirm()
   const isMutating = usePromptLibraryStore((s) => s.isMutating)
   const mutationError = usePromptLibraryStore((s) => s.mutationError)
   const resetPrompts = usePromptLibraryStore((s) => s.reset)
@@ -272,9 +280,13 @@ export const PromptLibraryBrowserDialogContainer: FC<
         return
       }
 
-      const confirmed = window.confirm(
-        `Delete prompt "${prompt.title}"?\n\nThis removes the prompt file from disk and deletes its Convergence metadata.`,
-      )
+      const confirmed = await confirm({
+        title: `Delete prompt “${prompt.title}”?`,
+        description:
+          'Its file is removed from disk and its Convergence details are deleted, for good.',
+        confirmLabel: 'Delete prompt',
+        variant: 'danger',
+      })
       if (!confirmed) {
         return
       }
@@ -285,7 +297,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
         path: prompt.path,
       })
     },
-    [deletePrompt, projectId],
+    [confirm, deletePrompt, projectId],
   )
 
   return (

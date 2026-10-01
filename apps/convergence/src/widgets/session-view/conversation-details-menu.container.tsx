@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useRef,
   type FC,
   type ReactNode,
@@ -9,9 +8,9 @@ import {
 import { ChevronDown } from 'lucide-react'
 import {
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Tooltip,
 } from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
@@ -43,7 +42,9 @@ interface ConversationDetailsMenuProps {
 /**
  * The header's Details group (MAR-3429 CH4 R3): one place for what the
  * conversation is -- its session rows, the harness history, the agent's CPU
- * and memory -- none of which holds a place in the row any more.
+ * and memory -- none of which holds a place in the row any more. A panel of
+ * readings and a few buttons, so a Popover, not a menu: a menu reaches only
+ * its items by keyboard (MAR-3616, DLG-23).
  */
 export const ConversationDetailsMenu: FC<ConversationDetailsMenuProps> = ({
   open,
@@ -54,60 +55,65 @@ export const ConversationDetailsMenu: FC<ConversationDetailsMenuProps> = ({
   contentFocus,
   children,
 }) => {
-  // Focuses the section the menu opens at. A ref runs at commit, before
-  // Radix's focus scope moves focus into the menu -- and the scope leaves a
-  // focus that is already inside alone. Keyed on the section, so it runs
-  // again only when the section asked for changes.
-  const openAtRef = useCallback(
-    (marker: HTMLSpanElement | null) => {
-      if (!marker || !openAt) return
-      const target = marker.parentElement?.querySelector<HTMLElement>(
-        `[${DETAILS_SECTION}="${openAt}"]`,
-      )
-      target?.focus()
-      target?.scrollIntoView?.({ block: 'start' })
-    },
-    [openAt],
-  )
-  // A right-click outside leaves focus where it is, whoever opened the menu:
+  const panelRef = useRef<HTMLDivElement>(null)
+  // A right-click outside leaves focus where it is, whoever opened the panel:
   // the chip's way back obeys the same rule as the trigger's (lap 2 C).
   const keptOutside = useRef(false)
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <Tooltip label="Session details, harness history, CPU and memory">
-          <Button
-            ref={triggerRef}
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1"
-          >
-            Details
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-        </Tooltip>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
+    <Popover
+      open={open}
+      onOpenChange={(next, details) => {
+        contentFocus?.onOpenChange(next, details)
+        if (!next && interactionKeepsFocusWhereItIs(details))
+          keptOutside.current = true
+        onOpenChange(next)
+      }}
+    >
+      <Tooltip label="Session details, harness history, CPU and memory">
+        <PopoverTrigger
+          render={
+            <Button
+              ref={triggerRef}
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+            />
+          }
+        >
+          Details
+          <ChevronDown className="h-3 w-3" />
+        </PopoverTrigger>
+      </Tooltip>
+      <PopoverContent
+        ref={panelRef}
+        aria-label="Details"
         align="end"
-        className="max-h-[70vh] w-96 max-w-[calc(100vw-2rem)] overflow-auto p-2 text-xs"
-        onInteractOutside={(event) => {
-          contentFocus?.onInteractOutside(event)
-          if (interactionKeepsFocusWhereItIs(event)) keptOutside.current = true
+        className="max-h-[min(70vh,var(--available-height))] w-96 max-w-[calc(100vw-2rem)] overflow-auto p-2 text-xs"
+        // The panel takes the focus, so it reads as one place; opened at a
+        // section (the harness, from its alert chip), that section does.
+        initialFocus={() => {
+          const target = openAt
+            ? panelRef.current?.querySelector<HTMLElement>(
+                `[${DETAILS_SECTION}="${openAt}"]`,
+              )
+            : null
+          target?.scrollIntoView?.({ block: 'start' })
+          return target ?? panelRef.current ?? true
         }}
-        onCloseAutoFocus={(event) => {
-          contentFocus?.onCloseAutoFocus(event)
+        finalFocus={(closeType) => {
+          const headerFocus = contentFocus
+            ? contentFocus.finalFocus(closeType)
+            : true
           const outside = keptOutside.current
           keptOutside.current = false
           const target = invoker.current
-          if (!target?.isConnected) return
-          event.preventDefault()
-          if (!outside) target.focus()
+          if (!target?.isConnected) return headerFocus
+          return outside ? false : target
         }}
       >
-        <span ref={openAtRef} hidden />
         {children}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   )
 }

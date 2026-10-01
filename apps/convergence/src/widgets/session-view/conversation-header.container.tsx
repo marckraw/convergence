@@ -11,12 +11,15 @@ import {
 import { MoreVertical, Pin } from 'lucide-react'
 import {
   cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
   IconButton,
+  Menu,
+  MenuCheckboxItem,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  type PopupFinalFocus,
+  type PopupOpenChangeDetails,
 } from '@convergence/ui'
 import { useElementWidth } from '@/shared/hooks/use-element-width'
 import {
@@ -68,14 +71,17 @@ export type HeaderMenuEntry =
   | { kind: 'text'; key: string; name: string; label: string }
 
 /**
- * What a control that is a menu spreads on its Radix content, so
- * that its close-autofocus -- which runs after the exit animation, when the
- * content has unmounted -- hands focus to More while the control is yielded
- * (MAR-3427 A).
+ * How a header control that opens a popup (a Menu or a Popover) hands the
+ * focus on when it closes (MAR-3427 A, MAR-3616): provider-neutral, in the
+ * popup parts' own words. `finalFocus` goes on the popup's content and runs
+ * once it has gone, its exit animation included: it gives the focus to More
+ * while the control is yielded. `onOpenChange` is called from the popup
+ * root's own, so the header hears why it closed: a right-click outside
+ * leaves the focus where it is.
  */
 export interface HeaderMenuFocus {
-  onCloseAutoFocus: (event: Event) => void
-  onInteractOutside: (event: CustomEvent<{ originalEvent: Event }>) => void
+  finalFocus: PopupFinalFocus
+  onOpenChange: (open: boolean, details: PopupOpenChangeDetails) => void
 }
 
 export interface HeaderSlot {
@@ -374,20 +380,20 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
 
   /**
    * A yielded menu's trigger is inert, so the menu's own focus return lands
-   * nowhere. At its close-autofocus -- after the exit animation, once the
-   * content has unmounted -- More takes the trigger's place, by Radix's own
-   * rule for when the trigger would have been focused (MAR-3427 A).
+   * nowhere. Once it has closed -- after the exit animation, once the content
+   * has unmounted -- More takes the trigger's place. A right-click outside
+   * leaves the focus where it is, yielded or not (MAR-3427 A).
    */
   const menuFocus = (id: string): HeaderMenuFocus => ({
-    onInteractOutside: (event) => {
-      if (interactionKeepsFocusWhereItIs(event))
+    onOpenChange: (open, details) => {
+      if (!open && interactionKeepsFocusWhereItIs(details))
         interactedOutside.current.add(id)
     },
-    onCloseAutoFocus: (event) => {
+    finalFocus: () => {
       const outside = interactedOutside.current.delete(id)
-      if (!isYielded(id)) return
-      event.preventDefault()
-      if (!outside) moreRef.current?.focus()
+      if (outside) return false
+      if (!isYielded(id)) return true
+      return moreRef.current ?? false
     },
   })
 
@@ -571,75 +577,84 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
             .filter((slot) => slot.side === 'right' && inRow1(slot))
             .map(renderSlot)}
           {moreShown && (
-            <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-              <DropdownMenuTrigger asChild>
-                <IconButton
-                  ref={moreRef}
-                  data-header-more
-                  label="Session actions"
-                  variant="ghost"
-                  size="sm"
-                >
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </IconButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
+            <Menu open={moreOpen} onOpenChange={(open) => setMoreOpen(open)}>
+              <MenuTrigger
+                render={
+                  <IconButton
+                    ref={moreRef}
+                    data-header-more
+                    label="Session actions"
+                    variant="ghost"
+                    size="sm"
+                  />
+                }
+              >
+                <MoreVertical className="h-3.5 w-3.5" />
+              </MenuTrigger>
+              <MenuContent
                 align="end"
-                onCloseAutoFocus={(event) => {
+                // A yielded menu chosen here opens once More has gone, and
+                // takes the focus itself (MAR-3429 CH4).
+                finalFocus={() => {
                   const open = pendingOpen.current
-                  if (!open) return
+                  if (!open) return true
                   pendingOpen.current = null
-                  event.preventDefault()
                   open()
+                  return false
                 }}
               >
                 {yieldedEntries.map(({ slot, entry }) =>
                   entry.kind === 'action' ? (
-                    <DropdownMenuItem
-                      key={entry.key}
-                      data-yielded-entry={slot.id}
-                      // A toggle reads out its state; a plain action keeps
-                      // Radix's own menuitem role.
-                      {...(entry.checked === undefined
-                        ? {}
-                        : {
-                            role: 'menuitemcheckbox',
-                            'aria-checked': entry.checked,
-                          })}
-                      onSelect={entry.onSelect}
-                    >
-                      {entry.label}
-                    </DropdownMenuItem>
+                    entry.checked === undefined ? (
+                      <MenuItem
+                        key={entry.key}
+                        data-yielded-entry={slot.id}
+                        onClick={entry.onSelect}
+                      >
+                        {entry.label}
+                      </MenuItem>
+                    ) : (
+                      // A toggle reads out its state.
+                      <MenuCheckboxItem
+                        key={entry.key}
+                        data-yielded-entry={slot.id}
+                        checked={entry.checked}
+                        onCheckedChange={entry.onSelect}
+                        closeOnClick
+                      >
+                        {entry.label}
+                      </MenuCheckboxItem>
+                    )
                   ) : entry.kind === 'opens' ? (
-                    <DropdownMenuItem
+                    <MenuItem
                       key={entry.key}
                       data-yielded-entry={slot.id}
                       disabled={triggers[slot.id]?.disabled ?? true}
-                      onSelect={() => {
+                      onClick={() => {
                         pendingOpen.current = entry.onOpen
                       }}
                     >
                       {triggers[slot.id]?.name}
-                    </DropdownMenuItem>
+                    </MenuItem>
                   ) : (
-                    <DropdownMenuItem
+                    <MenuItem
                       key={entry.key}
                       data-yielded-entry={slot.id}
                       aria-label={`${entry.name}: ${entry.label}`}
                       className="text-xs tabular-nums text-muted-foreground"
                       // A reading: choosing it keeps More open.
-                      onSelect={(event) => event.preventDefault()}
+                      closeOnClick={false}
                     >
                       {entry.label}
-                    </DropdownMenuItem>
+                    </MenuItem>
                   ),
                 )}
                 {yieldedEntries.length > 0 && moreContent !== null && (
-                  <DropdownMenuSeparator />
+                  <MenuSeparator />
                 )}
                 {moreContent}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </MenuContent>
+            </Menu>
           )}
         </div>
       </div>

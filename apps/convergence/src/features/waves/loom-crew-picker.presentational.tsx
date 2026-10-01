@@ -29,30 +29,34 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
   const { options, selectedId, onSelect, follow } = subline.picker
   return (
     <span className="inline-flex max-w-full min-w-0 items-center gap-1">
-      <Select value={selectedId} onValueChange={onSelect}>
+      <Select
+        items={options.map((option) => ({
+          value: option.id,
+          label: option.name,
+        }))}
+        value={selectedId}
+        onValueChange={(id) => onSelect(id)}
+      >
         <SelectTrigger
           aria-label="Crew"
+          // Expanded Loom's header is the window's drag strip (MAR-3284 R1):
+          // the trigger, like every control of the kit, is app-no-drag.
           size="sm"
-          className="inline-flex h-7 max-w-full gap-1 px-2 text-xs"
-          // Expanded Loom's header is the window's drag strip (MAR-3284 R1),
-          // so the trigger has to say it is not.
-          style={NO_DRAG_STYLE}
+          className="inline-flex max-w-full gap-1 px-2"
         >
           <SelectValue />
         </SelectTrigger>
         <SelectContent
-          position="popper"
+          alignItemWithTrigger={false}
           align="start"
           // The list is portalled to the body, so it inherits none of Loom's
           // no-drag cover and opens exactly where a covered view's own drag
-          // strip lies (MAR-3284 R2). Without this the items nearest the header
-          // are the window's, not the list's -- what
-          // `@convergence/ui`'s `dropdown-menu.tsx` already does for menus.
-          style={NO_DRAG_STYLE}
+          // strip lies (MAR-3284 R2): every popup layer of the kit is
+          // app-no-drag, so the items nearest the header are the list's.
           // The list is portalled, but React bubbles its keydown through the
           // React tree -- into the shells' Escape handlers, which fold Loom
           // or close a detail. Escape here is the list's own: it closes the
-          // list (Radix listens on the document) and nothing else.
+          // list (Base UI listens on the document) and nothing else.
           onKeyDown={(event) => {
             if (event.key === 'Escape') event.stopPropagation()
           }}

@@ -325,19 +325,20 @@ export function parallelWorkInRow(
 }
 
 /**
- * Radix's own rule for when an interaction outside a closing menu means focus
- * does not go back to where the menu came from: for a modal menu (every
- * header group is one) only a right-click outside, or a ctrl-click, which is
- * the Mac's right-click. The header keeps it with More standing in for a
+ * When a popup closing from a press outside it leaves the focus where it is,
+ * instead of handing it back to where the popup came from: a right-click
+ * outside, or a ctrl-click, which is the Mac's right-click. Radix kept this
+ * rule for its modal menus; Base UI returns focus on every outside press, so
+ * the header keeps the rule itself (MAR-3616), with More standing in for a
  * yielded trigger (MAR-3427 A), and Details keeps it for the harness chip it
- * was opened from (MAR-3429 CH4 lap 2 C).
+ * was opened from (MAR-3429 CH4 lap 2 C). Read from the popup's
+ * `onOpenChange(open, { reason, event })`.
  */
-export function interactionKeepsFocusWhereItIs(event: {
-  detail: { originalEvent: Event }
+export function interactionKeepsFocusWhereItIs(details: {
+  reason: string
+  event: Event
 }): boolean {
-  const original = event.detail.originalEvent as Partial<MouseEvent>
-  return (
-    original.button === 2 ||
-    (original.button === 0 && original.ctrlKey === true)
-  )
+  if (details.reason !== 'outside-press') return false
+  const press = details.event as Partial<MouseEvent>
+  return press.button === 2 || (press.button === 0 && press.ctrlKey === true)
 }

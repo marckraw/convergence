@@ -21,6 +21,7 @@ import {
   type ExecutionHostEndpointDraft,
   type ExecutionHostSessionCounts,
 } from './execution-host-settings.pure'
+import { useConfirm } from '@convergence/ui'
 
 interface ExecutionHostSettingsContainerProps {
   draft: ExecutionHostEndpointDraft
@@ -53,6 +54,8 @@ export const ExecutionHostSettingsContainer: FC<
 }) => {
   const [credentialStatus, setCredentialStatus] =
     useState<ExecutionHostDaemonCredentialStatus | null>(null)
+  // What can't be taken back asks first, in the app's own dialog (R5).
+  const confirm = useConfirm()
   const [daemonTokenDraft, setDaemonTokenDraft] = useState('')
   const [showDaemonToken, setShowDaemonToken] = useState(false)
   const [isCredentialSaving, setIsCredentialSaving] = useState(false)
@@ -152,6 +155,14 @@ export const ExecutionHostSettingsContainer: FC<
   }, [daemonTokenDraft, endpointId])
 
   const handleDeleteToken = useCallback(async () => {
+    const confirmed = await confirm({
+      title: 'Remove this daemon’s API token?',
+      description:
+        'It is deleted from the macOS keychain, and Convergence can’t reach the daemon until a token is saved again.',
+      confirmLabel: 'Remove token',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     setIsCredentialSaving(true)
     setCredentialError(null)
     setCredentialMessage(null)
@@ -171,7 +182,7 @@ export const ExecutionHostSettingsContainer: FC<
     } finally {
       setIsCredentialSaving(false)
     }
-  }, [endpointId])
+  }, [confirm, endpointId])
 
   const handleTestConnection = useCallback(async () => {
     setIsConnectionTesting(true)

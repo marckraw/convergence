@@ -70,7 +70,7 @@ describe('SessionWiresContainer', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('A ignores summary traffic but updates referenced names and missing endpoints', () => {
+  it('A ignores summary traffic but updates referenced names and missing endpoints', async () => {
     useSessionRelayStore.setState({ relays: [hail('r1', 's1', 's2')] })
     const onRender = vi.fn()
     render(
@@ -83,6 +83,11 @@ describe('SessionWiresContainer', () => {
         name: '1 wire fires when this session finishes.',
       }),
     )
+    // Base UI places the popover once floating-ui has measured (a promise),
+    // and shows it from then: let that land before counting renders.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
     onRender.mockClear()
 
     act(() =>

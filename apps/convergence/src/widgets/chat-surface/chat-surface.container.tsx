@@ -26,7 +26,7 @@ import {
   ParallelWork,
   useParallelWork,
 } from '@/widgets/session-view'
-import { Button, Checkbox, IconButton } from '@convergence/ui'
+import { Button, Checkbox, IconButton, useConfirm } from '@convergence/ui'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
   SpaceHome,
@@ -95,6 +95,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const archiveSpace = useSpaceStore((state) => state.archiveSpace)
   const unarchiveSpace = useSpaceStore((state) => state.unarchiveSpace)
   const deleteSpace = useSpaceStore((state) => state.deleteSpace)
+  // Deleting or archiving a Space asks first, in the app's dialog (R5).
+  const confirm = useConfirm()
   const activeSessionId = useSessionStore(
     (state) => state.activeGlobalSessionId,
   )
@@ -439,9 +441,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       .map(({ session }) => session)
       .filter((entry): entry is SessionSummary => entry !== null)
     const sessionCount = linkedSessions.length
-    const confirmed = window.confirm(
-      `Delete Space "${selectedSpace.title}"?\n\nThis will permanently delete the Space and ${sessionCount} attached session${sessionCount === 1 ? '' : 's'}. This cannot be undone.`,
-    )
+    const confirmed = await confirm({
+      title: `Delete Space “${selectedSpace.title}”?`,
+      description: `The Space and its ${sessionCount} attached session${sessionCount === 1 ? '' : 's'} are deleted for good.`,
+      confirmLabel: 'Delete Space',
+      variant: 'danger',
+    })
     if (!confirmed) return
 
     for (const linkedSession of linkedSessions) {
@@ -451,6 +456,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     onSpaceDeleted?.(selectedSpaceId)
   }, [
     attemptViews,
+    confirm,
     deleteSession,
     deleteSpace,
     onSpaceDeleted,
@@ -482,9 +488,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     if (!selectedSpaceId || !selectedSpace) return
 
     const sessionCount = attemptViews.filter(({ session }) => session).length
-    const confirmed = window.confirm(
-      `Archive Space "${selectedSpace.title}"?\n\nThis will hide the Space from the active list and archive ${sessionCount} attached session${sessionCount === 1 ? '' : 's'}.`,
-    )
+    const confirmed = await confirm({
+      title: `Archive Space “${selectedSpace.title}”?`,
+      description: `It leaves the active list, and its ${sessionCount} attached session${sessionCount === 1 ? '' : 's'} are archived with it. You can unarchive it later.`,
+      confirmLabel: 'Archive Space',
+    })
     if (!confirmed) return
 
     const archived = await archiveSpace(selectedSpaceId)
@@ -494,6 +502,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   }, [
     archiveSpace,
     attemptViews,
+    confirm,
     onSpaceDeleted,
     refreshLinkedSessions,
     selectedSpace,

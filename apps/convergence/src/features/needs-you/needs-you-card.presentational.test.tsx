@@ -98,10 +98,7 @@ it.each(['open', 'merged'] as const)(
         {...handlers}
       />,
     )
-    fireEvent.keyDown(
-      screen.getByRole('button', { name: 'Actions for Horse' }),
-      { key: 'Enter' },
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Horse' }))
     if (kind === 'merged') {
       fireEvent.click(screen.getByRole('menuitem', { name: 'Archive' }))
       expect(handlers.onArchive).toHaveBeenCalledWith('merged')
@@ -116,9 +113,7 @@ it('dismisses a review item without selecting it (mutation: route dismiss to onS
   const handlers = actions()
   const card = needsYouCardModel(cardFixtures.noPr, cardContext)
   render(<NeedsYouCard card={card} {...handlers} />)
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Horse' }), {
-    key: 'Enter',
-  })
+  fireEvent.click(screen.getByRole('button', { name: 'Actions for Horse' }))
   fireEvent.click(screen.getByRole('menuitem', { name: card.dismissLabel! }))
   expect(handlers.onDismiss).toHaveBeenCalledExactlyOnceWith('no-pr')
   expect(handlers.onSelect).not.toHaveBeenCalled()
@@ -218,9 +213,7 @@ it('retains Snooze in the waiting card menu', () => {
       {...handlers}
     />,
   )
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Horse' }), {
-    key: 'Enter',
-  })
+  fireEvent.click(screen.getByRole('button', { name: 'Actions for Horse' }))
   fireEvent.click(screen.getByRole('menuitem', { name: 'Snooze' }))
   expect(handlers.onDismiss).toHaveBeenCalledExactlyOnceWith('waiting')
   expect(handlers.onSelect).not.toHaveBeenCalled()

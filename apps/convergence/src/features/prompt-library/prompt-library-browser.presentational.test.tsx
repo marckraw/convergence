@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Button } from '@convergence/ui'
+import { pressOption } from '@/shared/testing/select-option'
 import type {
   PromptLibraryCatalog,
   PromptLibraryDetails,
@@ -126,9 +127,9 @@ describe('PromptLibraryBrowserDialog', () => {
       target: { value: 'review' },
     })
     fireEvent.click(screen.getByRole('combobox', { name: 'Scope' }))
-    fireEvent.click(screen.getByRole('option', { name: 'Project' }))
+    pressOption(screen.getByRole('option', { name: 'Project' }))
     fireEvent.click(screen.getByRole('combobox', { name: 'Tag' }))
-    fireEvent.click(screen.getByRole('option', { name: 'github' }))
+    pressOption(screen.getByRole('option', { name: 'github' }))
 
     expect(onFiltersChange).toHaveBeenCalledWith({ query: 'review' })
     expect(onFiltersChange).toHaveBeenCalledWith({ scope: 'project' })

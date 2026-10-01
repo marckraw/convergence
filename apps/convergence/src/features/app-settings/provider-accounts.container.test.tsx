@@ -23,7 +23,7 @@ async function chooseChatGptLink(
   trigger: HTMLElement,
   choice: 'Open in default browser' | 'Copy link',
 ) {
-  fireEvent.pointerDown(trigger)
+  fireEvent.click(trigger)
   fireEvent.click(await screen.findByRole('menuitem', { name: choice }))
 }
 import { ProviderAccountMcpService } from '../../../electron/backend/provider-account/provider-account-mcp.service'

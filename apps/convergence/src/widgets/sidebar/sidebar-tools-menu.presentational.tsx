@@ -2,11 +2,11 @@ import type { FC } from 'react'
 import type { DialogKind, DialogPayload } from '@/entities/dialog'
 import {
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
   IconButton,
   Tooltip,
 } from '@convergence/ui'
@@ -41,92 +41,81 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
   }
 
   return (
-    <DropdownMenu>
+    <Menu>
       <Tooltip label={OPEN_SIDEBAR_TOOLS} side="bottom">
-        <DropdownMenuTrigger asChild>
-          {iconOnly ? (
-            <IconButton
-              label={OPEN_SIDEBAR_TOOLS}
-              type="button"
-              variant="ghost"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </IconButton>
-          ) : (
-            <Button
-              type="button"
-              variant="quiet"
-              className="w-full justify-between px-2"
-              aria-label={OPEN_SIDEBAR_TOOLS}
-            >
-              <span className="flex items-center gap-2">
-                <MoreHorizontal className="h-3.5 w-3.5" />
-                Tools
-              </span>
-              <span className="text-[11px] text-muted-foreground/80">
-                Dialogs
-              </span>
-            </Button>
-          )}
-        </DropdownMenuTrigger>
+        <MenuTrigger
+          render={
+            iconOnly ? (
+              <IconButton
+                label={OPEN_SIDEBAR_TOOLS}
+                type="button"
+                variant="ghost"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </IconButton>
+            ) : (
+              <Button
+                type="button"
+                variant="quiet"
+                className="w-full justify-between px-2"
+                aria-label={OPEN_SIDEBAR_TOOLS}
+              >
+                <span className="flex items-center gap-2">
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  Tools
+                </span>
+                <span className="text-[11px] text-muted-foreground/80">
+                  Dialogs
+                </span>
+              </Button>
+            )
+          }
+        />
       </Tooltip>
-      <DropdownMenuContent align={iconOnly ? 'start' : 'end'} side="bottom">
-        <DropdownMenuItem
-          className="gap-2"
-          onSelect={() => openDialog('space-workboard')}
-        >
+      <MenuContent align={iconOnly ? 'start' : 'end'} side="bottom">
+        <MenuItem onClick={() => openDialog('space-workboard')}>
           <GitBranch className="h-3.5 w-3.5" />
           <span>Spaces</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="gap-2"
+        </MenuItem>
+        <MenuItem
           disabled={activeSurface !== 'code' || !hasActiveProject}
-          onSelect={() => openDialog('project-settings')}
+          onClick={() => openDialog('project-settings')}
         >
           <Settings2 className="h-3.5 w-3.5" />
           <span>Project Settings</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2"
-          onSelect={() => openDialog('providers')}
-        >
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem onClick={() => openDialog('providers')}>
           <Bot className="h-3.5 w-3.5" />
           <span>Providers</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="gap-2"
+        </MenuItem>
+        <MenuItem
           disabled={activeSurface === 'code' && !hasActiveProject}
-          onSelect={() => openDialog('mcp-servers')}
+          onClick={() => openDialog('mcp-servers')}
         >
           <Cable className="h-3.5 w-3.5" />
           <span>MCP Servers</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="gap-2"
+        </MenuItem>
+        <MenuItem
           disabled={!hasActiveProject}
-          onSelect={() => openDialog('skills-browser')}
+          onClick={() => openDialog('skills-browser')}
         >
           <Library className="h-3.5 w-3.5" />
           <span>Skills</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="gap-2"
+        </MenuItem>
+        <MenuItem
           disabled={!hasActiveProject}
-          onSelect={() => openDialog('prompt-library')}
+          onClick={() => openDialog('prompt-library')}
         >
           <BookOpenText className="h-3.5 w-3.5" />
           <span>Prompt Library</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2"
-          onSelect={() => openDialog('release-notes')}
-        >
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem onClick={() => openDialog('release-notes')}>
           <Info className="h-3.5 w-3.5" />
           <span>What&apos;s New</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </MenuItem>
+      </MenuContent>
+    </Menu>
   )
 }

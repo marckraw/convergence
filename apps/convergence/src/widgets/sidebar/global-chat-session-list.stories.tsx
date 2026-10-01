@@ -165,10 +165,10 @@ export const Default: Story = {
     )
     await screen.findByRole('menu')
     await expect(
-      screen.getByRole('menuitem', { name: 'Add to Space...' }),
+      screen.getByRole('menuitem', { name: 'Add to Space…' }),
     ).toBeInTheDocument()
     await expect(
-      screen.getByRole('menuitem', { name: 'Delete session' }),
+      screen.getByRole('menuitem', { name: 'Delete session…' }),
     ).toBeInTheDocument()
     await userEvent.click(
       screen.getByRole('menuitem', { name: 'Archive session' }),

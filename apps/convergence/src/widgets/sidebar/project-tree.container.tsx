@@ -18,11 +18,11 @@ import {
 import {
   Button,
   cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
   IconButton,
   Input,
   Tooltip,
@@ -174,27 +174,28 @@ export const ProjectTree = memo(function ProjectTree({
     const canRegenerateName = session.providerId !== 'shell'
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <IconButton
-            label={`Session actions ${session.name}`}
-            tooltipSide="left"
-            type="button"
-            variant="ghost"
-            size={card ? 'lg' : 'xs'}
-            className={
-              card
-                ? 'shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
-                : 'shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
-            }
-            onClick={(event) => event.stopPropagation()}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            className="gap-2"
+      <Menu>
+        <MenuTrigger
+          render={
+            <IconButton
+              label={`Session actions ${session.name}`}
+              tooltipSide="left"
+              type="button"
+              variant="ghost"
+              size={card ? 'lg' : 'xs'}
+              className={
+                card
+                  ? 'shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
+                  : 'shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
+              }
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </IconButton>
+          }
+        />
+        <MenuContent align="end">
+          <MenuItem
             onClick={() => {
               setRenamingSessionId(session.id)
               setRenameDraft(session.name)
@@ -202,11 +203,10 @@ export const ProjectTree = memo(function ProjectTree({
           >
             <Pencil className="h-3.5 w-3.5" />
             <span>Rename</span>
-          </DropdownMenuItem>
+          </MenuItem>
           {canRegenerateName ? (
             <>
-              <DropdownMenuItem
-                className="gap-2"
+              <MenuItem
                 disabled={isRegeneratingName}
                 onClick={() => onRegenerateSessionName(session.id)}
               >
@@ -220,37 +220,31 @@ export const ProjectTree = memo(function ProjectTree({
                     ? 'Regenerating name…'
                     : 'Regenerate name'}
                 </span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              </MenuItem>
+              <MenuSeparator />
             </>
           ) : null}
           {isArchived ? (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onUnarchiveSession(session.id)}
-            >
+            <MenuItem onClick={() => onUnarchiveSession(session.id)}>
               <Undo2 className="h-3.5 w-3.5" />
               <span>Unarchive session</span>
-            </DropdownMenuItem>
+            </MenuItem>
           ) : (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onArchiveSession(session.id)}
-            >
+            <MenuItem onClick={() => onArchiveSession(session.id)}>
               <Archive className="h-3.5 w-3.5" />
               <span>Archive session</span>
-            </DropdownMenuItem>
+            </MenuItem>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="gap-2 text-destructive focus:text-destructive"
+          <MenuSeparator />
+          <MenuItem
+            variant="danger"
             onClick={() => onDeleteSession(session.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete session</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <span>Delete session…</span>
+          </MenuItem>
+        </MenuContent>
+      </Menu>
     )
   }
 
@@ -258,67 +252,59 @@ export const ProjectTree = memo(function ProjectTree({
     const isArchived = !!workspace.archivedAt
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <IconButton
-            label={`Workspace actions ${workspace.branchName}`}
-            type="button"
-            variant="quiet"
-            onClick={(event) => event.stopPropagation()}
-            tooltipSide="left"
-            size="xs"
-            className="shrink-0 opacity-0 transition-opacity group-hover/workspace:opacity-100 focus-visible:opacity-100"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </IconButton>
-        </DropdownMenuTrigger>
-
-        <DropdownMenuContent align="end">
-          {isArchived ? (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onUnarchiveWorkspace?.(workspace.id)}
+      <Menu>
+        <MenuTrigger
+          render={
+            <IconButton
+              label={`Workspace actions ${workspace.branchName}`}
+              type="button"
+              variant="quiet"
+              onClick={(event) => event.stopPropagation()}
+              tooltipSide="left"
+              size="xs"
+              className="shrink-0 opacity-0 transition-opacity group-hover/workspace:opacity-100 focus-visible:opacity-100"
             >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </IconButton>
+          }
+        />
+
+        <MenuContent align="end">
+          {isArchived ? (
+            <MenuItem onClick={() => onUnarchiveWorkspace?.(workspace.id)}>
               <Undo2 className="h-3.5 w-3.5" />
               <span>Unarchive workspace</span>
-            </DropdownMenuItem>
+            </MenuItem>
           ) : (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onArchiveWorkspace?.(workspace.id)}
-            >
+            <MenuItem onClick={() => onArchiveWorkspace?.(workspace.id)}>
               <Archive className="h-3.5 w-3.5" />
-              <span>Archive workspace...</span>
-            </DropdownMenuItem>
+              <span>Archive workspace…</span>
+            </MenuItem>
           )}
           {!workspace.worktreeRemovedAt ? (
             <>
-              <DropdownMenuItem
-                className="gap-2"
-                onClick={() => onSyncWorkspaceEnvFiles?.(workspace.id)}
-              >
+              <MenuItem onClick={() => onSyncWorkspaceEnvFiles?.(workspace.id)}>
                 <RefreshCw className="h-3.5 w-3.5" />
                 <span>Sync env files</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2"
+              </MenuItem>
+              <MenuItem
                 onClick={() => onRemoveWorkspaceWorktree?.(workspace.id)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                <span>Remove worktree from disk...</span>
-              </DropdownMenuItem>
+                <span>Remove worktree from disk…</span>
+              </MenuItem>
             </>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="gap-2 text-destructive focus:text-destructive"
+          <MenuSeparator />
+          <MenuItem
+            variant="danger"
             onClick={() => onDeleteWorkspace(workspace.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete permanently...</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <span>Delete permanently…</span>
+          </MenuItem>
+        </MenuContent>
+      </Menu>
     )
   }
 

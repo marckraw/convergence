@@ -1,10 +1,10 @@
 import { useProjectOpenApps } from './use-project-open-apps'
 import {
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   Tooltip,
 } from '@convergence/ui'
 import { ChevronDown, Code2, Folder } from 'lucide-react'
@@ -20,41 +20,39 @@ export function ProjectOpenMenuContainer({
     useProjectOpenApps(targetPath)
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Tooltip label="Open project">
-          <Button
-            variant="ghost"
-            disabledReason={disabledReason ?? undefined}
-            aria-label="Open project"
-            size="sm"
-            className="gap-2"
-          >
-            <Code2 className="h-3.5 w-3.5" />
-            Open
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-        </Tooltip>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-40">
+    <Menu>
+      <Tooltip label="Open project">
+        <MenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              disabledReason={disabledReason ?? undefined}
+              aria-label="Open project"
+              size="sm"
+              className="gap-2"
+            />
+          }
+        >
+          <Code2 className="h-3.5 w-3.5" />
+          Open
+          <ChevronDown className="h-3 w-3" />
+        </MenuTrigger>
+      </Tooltip>
+      <MenuContent align="end" className="min-w-40">
         {loading ? (
-          <DropdownMenuItem disabled>Detecting apps...</DropdownMenuItem>
+          <MenuItem disabled>Detecting apps…</MenuItem>
         ) : (
           apps.map((app) => {
             const Icon = app.kind === 'file-manager' ? Folder : Code2
             return (
-              <DropdownMenuItem
-                key={app.id}
-                onClick={() => openIn(app)}
-                className="gap-2"
-              >
+              <MenuItem key={app.id} onClick={() => openIn(app)}>
                 <Icon className="h-3.5 w-3.5" />
                 {app.label}
-              </DropdownMenuItem>
+              </MenuItem>
             )
           })
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </MenuContent>
+    </Menu>
   )
 }

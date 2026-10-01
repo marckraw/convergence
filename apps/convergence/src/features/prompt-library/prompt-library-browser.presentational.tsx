@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react'
+import type { FC, ReactElement } from 'react'
 import {
   BookOpenText,
   FileText,
@@ -54,7 +54,7 @@ export interface PromptLibraryFormDraft {
 interface PromptLibraryBrowserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactNode
+  trigger: ReactElement
   projectName: string | null
   catalog: PromptLibraryCatalog | null
   prompts: PromptLibraryEntry[]
@@ -106,9 +106,13 @@ function renderSelectControl({
   return (
     <label className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>{label}</span>
-      <Select value={value} onValueChange={onChange}>
+      <Select
+        items={options}
+        value={value}
+        onValueChange={(next) => onChange(next)}
+      >
         <SelectTrigger
-          size="sm"
+          size="md"
           aria-label={label}
           className="mt-1 w-full normal-case tracking-normal"
         >
@@ -435,13 +439,14 @@ function renderPromptForm({
           <label className="text-xs font-medium text-muted-foreground">
             Scope
             <Select
+              items={SCOPE_LABELS}
               value={draft.scope}
               onValueChange={(scope) =>
                 onChange({ scope: scope as PromptLibraryScope })
               }
               disabled={draft.mode === 'edit'}
             >
-              <SelectTrigger className="mt-1 w-full">
+              <SelectTrigger size="lg" className="mt-1 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -453,6 +458,7 @@ function renderPromptForm({
           <label className="text-xs font-medium text-muted-foreground">
             File Kind
             <Select
+              items={KIND_LABELS}
               value={draft.kind}
               onValueChange={(kind) =>
                 onChange({
@@ -461,7 +467,7 @@ function renderPromptForm({
               }
               disabled={draft.mode === 'edit'}
             >
-              <SelectTrigger className="mt-1 w-full">
+              <SelectTrigger size="lg" className="mt-1 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -557,10 +563,10 @@ export const PromptLibraryBrowserDialog: FC<
   const hasCatalog = Boolean(catalog)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[min(1180px,calc(100vw-2rem))] max-h-[min(86vh,820px)] p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogTrigger render={trigger} />
+      <DialogContent className="w-[min(1180px,calc(100vw-2rem))] max-h-[min(86vh,820px)]">
+        <DialogHeader>
           <div className="flex items-center gap-2">
             <BookOpenText className="h-5 w-5 text-muted-foreground" />
             <DialogTitle>Prompt Library</DialogTitle>
@@ -697,7 +703,7 @@ export const PromptLibraryBrowserDialog: FC<
           })}
         </div>
 
-        <DialogFooter className="border-t border-border/70 px-6 py-4">
+        <DialogFooter>
           <Button
             type="button"
             variant="secondary"

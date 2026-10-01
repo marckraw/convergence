@@ -53,6 +53,18 @@ export {
   type ComboboxSingleProps,
 } from './components/combobox/combobox'
 export {
+  ConfirmDialog,
+  type ConfirmDialogProps,
+  type ConfirmVariant,
+} from './components/confirm-dialog/confirm-dialog'
+export {
+  type Confirm,
+  ConfirmHost,
+  type ConfirmHostProps,
+  type ConfirmOptions,
+  useConfirm,
+} from './components/confirm-dialog/confirm-host'
+export {
   CopyButton,
   type CopyButtonProps,
 } from './components/copy-button/copy-button'
@@ -67,22 +79,32 @@ export {
 export {
   Dialog,
   DialogBody,
+  type DialogBodyProps,
   DialogClose,
+  type DialogCloseProps,
   DialogContent,
+  type DialogContentProps,
   DialogDescription,
+  type DialogDescriptionProps,
+  DialogError,
+  type DialogErrorProps,
   DialogFooter,
+  type DialogFooterProps,
   DialogHeader,
+  type DialogHeaderProps,
+  type DialogProps,
+  type DialogSize,
   DialogTitle,
+  type DialogTitleProps,
   DialogTrigger,
+  type DialogTriggerProps,
 } from './components/dialog/dialog'
 export { Divider, type DividerProps } from './components/divider/divider'
 export {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './components/dropdown-menu/dropdown-menu'
+  FormDialog,
+  type FormDialogProps,
+  type FormDialogSaves,
+} from './components/form-dialog/form-dialog'
 export {
   Field,
   FieldDescription,
@@ -150,9 +172,50 @@ export {
 } from './components/meter/meter'
 export { Notice, type NoticeProps } from './components/notice/notice'
 export {
+  Menu,
+  MenuCheckboxItem,
+  type MenuCheckboxItemProps,
+  MenuContent,
+  type MenuContentProps,
+  MenuGroup,
+  type MenuGroupProps,
+  MenuItem,
+  type MenuItemProps,
+  MenuItemValue,
+  type MenuItemValueProps,
+  MenuLabel,
+  type MenuLabelProps,
+  type MenuProps,
+  MenuRadioGroup,
+  type MenuRadioGroupProps,
+  MenuRadioItem,
+  type MenuRadioItemProps,
+  MenuSeparator,
+  type MenuSeparatorProps,
+  MenuShortcut,
+  type MenuShortcutProps,
+  MenuSub,
+  MenuSubContent,
+  type MenuSubContentProps,
+  type MenuSubProps,
+  MenuSubTrigger,
+  type MenuSubTriggerProps,
+  MenuTrigger,
+  type MenuTriggerProps,
+} from './components/menu/menu'
+export {
   Popover,
   PopoverContent,
+  type PopoverContentProps,
+  PopoverDescription,
+  type PopoverDescriptionProps,
+  PopoverHeader,
+  type PopoverHeaderProps,
+  type PopoverProps,
+  PopoverTitle,
+  type PopoverTitleProps,
   PopoverTrigger,
+  type PopoverTriggerProps,
 } from './components/popover/popover'
 export {
   RadioGroup,
@@ -186,14 +249,21 @@ export {
 export {
   Select,
   SelectContent,
+  type SelectContentProps,
   SelectGroup,
+  type SelectGroupProps,
   SelectItem,
+  type SelectItemProps,
   SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
+  type SelectLabelProps,
+  type SelectOption,
+  type SelectProps,
   SelectSeparator,
+  type SelectSeparatorProps,
   SelectTrigger,
+  type SelectTriggerProps,
   SelectValue,
+  type SelectValueProps,
 } from './components/select/select'
 export {
   SegmentedControl,
@@ -228,6 +298,12 @@ export {
   SettingsSection,
   type SettingsSectionProps,
 } from './components/settings-section/settings-section'
+export {
+  Sheet,
+  SheetContent,
+  type SheetContentProps,
+  type SheetProps,
+} from './components/sheet/sheet'
 export {
   PanelHeader,
   type PanelHeaderProps,
@@ -280,6 +356,11 @@ export {
   focusRingWithin,
 } from './lib/focus-ring.styles'
 export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from './lib/no-drag.styles'
+export type {
+  PopupCloseType,
+  PopupFinalFocus,
+  PopupOpenChangeDetails,
+} from './lib/popup-focus.types'
 export {
   applyTheme,
   readAppliedTheme,
@@ -311,7 +392,16 @@ export {
   nextLoadingChange,
 } from './motion/delayed-loading/delayed-loading.pure'
 export { useDelayedLoading } from './motion/delayed-loading/useDelayedLoading'
-export { popupMotion } from './motion/popup.styles'
+export {
+  fadeMotion,
+  growMotion,
+  popupItem,
+  popupItemCheck,
+  popupLabel,
+  popupMotion,
+  popupSeparator,
+  popupSurface,
+} from './motion/popup.styles'
 export { press } from './motion/press/press.styles'
 export { usePrefersReducedMotion } from './motion/reduced-motion'
 export {

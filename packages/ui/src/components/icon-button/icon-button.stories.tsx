@@ -10,12 +10,7 @@ import {
 import { expect, fn, screen, waitFor } from 'storybook/test'
 import { settled } from '../../../.storybook/motion-testing'
 import type { ButtonSize } from '../button/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../dropdown-menu/dropdown-menu'
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '../menu/menu'
 import { IconButton } from './icon-button'
 
 type ToolbarProps = {
@@ -175,17 +170,15 @@ export const Busy: Story = {
 /** As a menu's trigger: it opens the menu, and its tooltip gets out of the way. */
 export const AsMenuTrigger: Story = {
   render: () => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <IconButton label="More actions">
-          <Ellipsis aria-hidden />
-        </IconButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuItem>Rename…</DropdownMenuItem>
-        <DropdownMenuItem>Archive</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Menu>
+      <MenuTrigger render={<IconButton label="More actions" />}>
+        <Ellipsis aria-hidden />
+      </MenuTrigger>
+      <MenuContent>
+        <MenuItem>Rename…</MenuItem>
+        <MenuItem>Archive</MenuItem>
+      </MenuContent>
+    </Menu>
   ),
   play: async ({ canvas, userEvent }) => {
     const more = canvas.getByRole('button', { name: 'More actions' })

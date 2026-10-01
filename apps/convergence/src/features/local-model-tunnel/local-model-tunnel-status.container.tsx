@@ -23,6 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   Tooltip,
+  useConfirm,
 } from '@convergence/ui'
 import { Pencil, Plus } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
@@ -45,6 +46,8 @@ const NEW_PROFILE_INPUT: LocalModelTunnelProfileInput = {
 }
 
 export const LocalModelTunnelStatusContainer: FC = () => {
+  // What can't be taken back asks first, in the app's own dialog (R5).
+  const confirm = useConfirm()
   const snapshot = useLocalModelTunnelStore((s) => s.snapshot)
   const isLoading = useLocalModelTunnelStore((s) => s.isLoading)
   const isMutatingProfileId = useLocalModelTunnelStore(
@@ -132,6 +135,14 @@ export const LocalModelTunnelStatusContainer: FC = () => {
 
   const handleDeleteProfile = async () => {
     if (!selected) return
+    const confirmed = await confirm({
+      title: `Delete tunnel profile “${selected.profile.name}”?`,
+      description:
+        'The profile and its routes are deleted for good. A tunnel it runs is stopped.',
+      confirmLabel: 'Delete profile',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     await deleteProfile(selected.profile.id)
     setSelectedProfileId(null)
   }
@@ -143,24 +154,27 @@ export const LocalModelTunnelStatusContainer: FC = () => {
           label="Local model tunnels. Click to view status and controls."
           side="top"
         >
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              data-testid="local-model-tunnel-pill"
-              className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
-            >
-              <StatusDot state={aggregate.state} />
-              <span className="min-w-0 truncate text-foreground">
-                {aggregate.label}
-              </span>
-              <span className="truncate text-muted-foreground/85">
-                {aggregate.detail}
-              </span>
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="local-model-tunnel-pill"
+                className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
+              >
+                <StatusDot state={aggregate.state} />
+                <span className="min-w-0 truncate text-foreground">
+                  {aggregate.label}
+                </span>
+                <span className="truncate text-muted-foreground/85">
+                  {aggregate.detail}
+                </span>
+              </Button>
+            }
+          />
         </Tooltip>
         <PopoverContent
+          aria-label="Local model tunnels"
           align="start"
           side="top"
           className="w-[min(420px,calc(100vw-2rem))] p-0"
@@ -206,9 +220,9 @@ export const LocalModelTunnelStatusContainer: FC = () => {
         </PopoverContent>
       </Popover>
 
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-        <DialogContent className="h-[min(88vh,780px)] w-[min(980px,calc(100vw-2rem))] max-h-[min(88vh,780px)] p-0">
-          <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+      <Dialog open={manageOpen} onOpenChange={(open) => setManageOpen(open)}>
+        <DialogContent className="h-[min(88vh,780px)] w-[min(980px,calc(100vw-2rem))] max-h-[min(88vh,780px)]">
+          <DialogHeader>
             <DialogTitle>Local model tunnels</DialogTitle>
             <DialogDescription>
               Manage SSH forwards for local or remote model runtimes.
@@ -282,7 +296,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
               </div>
             </div>
           </DialogBody>
-          <DialogFooter className="border-t border-border/70 px-6 py-4">
+          <DialogFooter>
             <Button
               type="button"
               variant="secondary"

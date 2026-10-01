@@ -14,12 +14,10 @@ import {
 } from '@/shared/lib/parallel-work.pure'
 import { useElementWidth } from '@/shared/hooks/use-element-width'
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
+  ConfirmDialog,
   DialogTitle,
+  Sheet,
+  SheetContent,
 } from '@convergence/ui'
 import { ConversationItem } from './conversation-item.container'
 import { ParallelWorkPanel } from './parallel-work.presentational'
@@ -56,10 +54,11 @@ import {
 
 const itemOf = (item: Item) => item
 /**
- * Radix calls the overlay's close-focus on a later task, and also when the
- * instance unmounts rather than closes -- a conversation switch remounts this
- * panel by key, and by then the next conversation may already hold focus.
- * Focus goes back to the invoker only when nothing holds it (MAR-3426 lap 2).
+ * The overlay's way back runs once it has gone, and also when the instance
+ * unmounts rather than closes -- a conversation switch remounts this panel by
+ * key, and by then the next conversation may already hold focus. Focus goes
+ * back to the invoker only when nothing holds it, looked at on a later task
+ * (MAR-3426 lap 2).
  */
 const focusIsLost = () => {
   const active = document.activeElement
@@ -437,24 +436,28 @@ export const ParallelWork: FC<Props> = ({
   return (
     <>
       {overlay ? (
-        <Dialog
+        <Sheet
           open={open}
           onOpenChange={(value) => {
             if (!value) close()
           }}
         >
-          <DialogContent
-            onCloseAutoFocus={(event) => {
-              event.preventDefault()
-              if (focusIsLost()) onReturnFocus()
+          <SheetContent
+            side="right"
+            size="sm"
+            // The panel brings its own close.
+            showClose={false}
+            finalFocus={() => {
+              setTimeout(() => {
+                if (focusIsLost()) onReturnFocus()
+              }, 0)
+              return false
             }}
-            className="left-auto right-0 top-0 h-full max-h-none w-[min(420px,100vw)] translate-x-0 translate-y-0 rounded-none p-0 [&>button]:hidden"
-            aria-describedby={undefined}
           >
             <DialogTitle className="sr-only">Parallel work</DialogTitle>
             {panel}
-          </DialogContent>
-        </Dialog>
+          </SheetContent>
+        </Sheet>
       ) : (
         open && (
           <div
@@ -465,53 +468,33 @@ export const ParallelWork: FC<Props> = ({
           </div>
         )
       )}
-      <Dialog
+      <ConfirmDialog
         open={Boolean(confirm)}
         onOpenChange={(value) => {
           if (!value) setConfirmId(null)
         }}
-      >
-        <DialogContent className="p-6">
-          <DialogTitle>
-            Stop {confirm ? workTitle(confirm) : 'task'}?
-          </DialogTitle>
-          <DialogDescription>
-            Only this task receives the stop request. The main conversation
-            stays open.
-          </DialogDescription>
-          <DialogFooter className="mt-4">
-            <Button
-              variant="secondary"
-              onClick={() => setConfirmId(null)}
-              size="lg"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (!confirmId || !confirm) return
-                const id = confirmId
-                setConfirmId(null)
-                setStopStates((current) =>
-                  new Map(current).set(id, { pending: true }),
-                )
-                void parallelWorkApi
-                  .stop(session.id, parallelWorkRowState(confirm).stopId)
-                  .catch((failure) =>
-                    setStopStates((current) =>
-                      new Map(current).set(id, {
-                        error: parallelWorkRefusal(failure),
-                      }),
-                    ),
-                  )
-              }}
-              size="lg"
-            >
-              Stop task
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={`Stop ${confirm ? workTitle(confirm) : 'task'}?`}
+        description="Only this task receives the stop request. The main conversation stays open."
+        confirmLabel="Stop task"
+        variant="danger"
+        onConfirm={() => {
+          if (!confirmId || !confirm) return
+          const id = confirmId
+          setConfirmId(null)
+          setStopStates((current) =>
+            new Map(current).set(id, { pending: true }),
+          )
+          void parallelWorkApi
+            .stop(session.id, parallelWorkRowState(confirm).stopId)
+            .catch((failure) =>
+              setStopStates((current) =>
+                new Map(current).set(id, {
+                  error: parallelWorkRefusal(failure),
+                }),
+              ),
+            )
+        }}
+      />
     </>
   )
 }

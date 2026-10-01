@@ -2,12 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRef } from 'react'
 import { popupMotion } from '../../motion/popup.styles'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../dropdown-menu/dropdown-menu'
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '../menu/menu'
 import { Tooltip, TooltipProvider } from './tooltip'
 import { TOOLTIP_DELAY_MS } from './tooltip-host.pure'
 
@@ -163,25 +158,26 @@ describe('the tooltip host (MAR-3616)', () => {
     const ref = createRef<HTMLButtonElement>()
     const ownClick = vi.fn()
     render(
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Tooltip label="Session details">
-            <button ref={ref} type="button" onClick={ownClick}>
-              Details
-            </button>
-          </Tooltip>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuItem>Harness history</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>,
+      <Menu>
+        <MenuTrigger
+          render={
+            <Tooltip label="Session details">
+              <button ref={ref} type="button" onClick={ownClick}>
+                Details
+              </button>
+            </Tooltip>
+          }
+        />
+        <MenuContent>
+          <MenuItem>Harness history</MenuItem>
+        </MenuContent>
+      </Menu>,
     )
     const trigger = screen.getByRole('button', { name: 'Details' })
     expect(ref.current).toBe(trigger)
     expect(trigger).toHaveAttribute('data-tooltip', 'Session details')
     fireEvent.click(trigger)
     expect(ownClick).toHaveBeenCalledOnce()
-    fireEvent.pointerDown(trigger)
     expect(await screen.findByRole('menu')).toBeInTheDocument()
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
   })

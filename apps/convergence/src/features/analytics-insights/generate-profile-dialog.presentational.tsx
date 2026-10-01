@@ -43,9 +43,9 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
   onModelChange,
   onConfirm,
 }) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="w-[min(560px,calc(100vw-2rem))]">
-      <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+  <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+    <DialogContent size="md">
+      <DialogHeader>
         <DialogTitle>Generate work profile</DialogTitle>
         <DialogDescription>
           Create an optional profile from local aggregate usage data.
@@ -109,7 +109,7 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
         </div>
       </div>
 
-      <DialogFooter className="border-t border-border/70 px-6 py-4">
+      <DialogFooter>
         <Button
           type="button"
           variant="secondary"

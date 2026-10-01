@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react'
+import type { FC, ReactElement } from 'react'
 import type { AppSettingsDialogSection } from '@/entities/dialog'
 import type {
   CommandCenterShortcutPrefs,
@@ -55,7 +55,7 @@ export type AppSettingsSectionId = AppSettingsDialogSection
 interface AppSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactNode
+  trigger: ReactElement
   providers: ProviderInfo[]
   allProviders: ProviderInfo[]
   selection: ResolvedProviderSelection
@@ -445,11 +445,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
     currentSection.navLabel.trim().toLowerCase()
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="h-[min(92vh,960px)] w-[min(1280px,calc(100vw-2rem))] max-h-[min(92vh,960px)] p-0">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogTrigger render={trigger} />
+      <DialogContent
+        size="2xl"
+        className="h-[min(92vh,960px)] max-h-[min(92vh,960px)]"
+      >
         <>
-          <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+          <DialogHeader>
             <DialogTitle>Settings</DialogTitle>
             <DialogDescription>
               App-wide defaults used every time you start a new session.
@@ -556,16 +559,18 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             </div>
 
             <div className="flex items-center justify-end gap-2">
-              <DialogClose asChild>
-                <Button
-                  type="button"
-                  variant={usesIndependentSave ? 'primary' : 'secondary'}
-                  onClick={onCancel}
-                  disabled={isSaving}
-                >
-                  {usesIndependentSave ? 'Done' : 'Cancel'}
-                </Button>
-              </DialogClose>
+              <DialogClose
+                render={
+                  <Button
+                    type="button"
+                    variant={usesIndependentSave ? 'primary' : 'secondary'}
+                    onClick={onCancel}
+                    disabled={isSaving}
+                  >
+                    {usesIndependentSave ? 'Done' : 'Cancel'}
+                  </Button>
+                }
+              />
               {usesIndependentSave ? null : (
                 <Button
                   type="button"

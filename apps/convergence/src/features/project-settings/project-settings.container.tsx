@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react'
 import type { FC, ReactNode } from 'react'
 import { GitBranch, Settings2 } from 'lucide-react'
 import {
@@ -13,7 +19,7 @@ import { ProjectSettingsDialog } from './project-settings.presentational'
 
 interface ProjectSettingsDialogContainerProps {
   contextSection?: (projectId: string) => ReactNode
-  trigger?: ReactNode
+  trigger?: ReactElement
 }
 
 export const ProjectSettingsDialogContainer: FC<

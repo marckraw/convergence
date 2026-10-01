@@ -2,10 +2,10 @@ import type { FC } from 'react'
 import { ChevronDown, Copy, ExternalLink } from 'lucide-react'
 import {
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
 } from '@convergence/ui'
 import {
   CHATGPT_LINK_ACTION_LABEL,
@@ -26,22 +26,24 @@ export const ChatGptLinkMenu: FC<ChatGptLinkMenuProps> = ({
   label,
   onChoose,
 }) => (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button type="button" variant="secondary" className="min-h-10">
-        {label}
-        <ChevronDown className="ml-1.5 size-3.5" aria-hidden="true" />
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end">
-      <DropdownMenuItem onSelect={() => onChoose('open')}>
+  <Menu>
+    <MenuTrigger
+      render={
+        <Button type="button" variant="secondary" className="min-h-10">
+          {label}
+          <ChevronDown className="ml-1.5 size-3.5" aria-hidden="true" />
+        </Button>
+      }
+    />
+    <MenuContent align="end">
+      <MenuItem onClick={() => onChoose('open')}>
         <ExternalLink className="mr-2 size-3.5" aria-hidden="true" />
         {CHATGPT_LINK_ACTION_LABEL.open}
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => onChoose('copy')}>
+      </MenuItem>
+      <MenuItem onClick={() => onChoose('copy')}>
         <Copy className="mr-2 size-3.5" aria-hidden="true" />
         {CHATGPT_LINK_ACTION_LABEL.copy}
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
+      </MenuItem>
+    </MenuContent>
+  </Menu>
 )

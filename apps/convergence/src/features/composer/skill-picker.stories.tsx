@@ -60,9 +60,6 @@ function HeldPicker(props: ComponentProps<typeof SkillPicker>) {
   )
 }
 
-// a11y-known: the open popover is a dialog with no accessible name — fixed by the sweep (DS4)
-const unnamedDialog = { id: 'aria-dialog-name', enabled: false }
-
 const meta = {
   title: 'Features/Composer/SkillPicker',
   component: SkillPicker,
@@ -126,7 +123,6 @@ export const Default: Story = {
 
 /** Reading the catalog. */
 export const Busy: Story = {
-  parameters: { a11y: { config: { rules: [unnamedDialog] } } },
   args: { open: true, skills: [], isLoading: true },
   play: async () => {
     const shown = await screen.findByText('Loading skills...')
@@ -140,7 +136,6 @@ export const Failed: Story = {
     a11y: {
       config: {
         rules: [
-          unnamedDialog,
           // a11y-known: the error is destructive text on a 10% destructive tint, under 4.5:1 — fixed by the sweep (DS4)
           { id: 'color-contrast', enabled: false },
         ],
@@ -160,7 +155,6 @@ export const Failed: Story = {
 
 /** Nothing for this provider. */
 export const Empty: Story = {
-  parameters: { a11y: { config: { rules: [unnamedDialog] } } },
   args: { open: true, skills: [], selectedSkills: [] },
   play: async () => {
     const shown = await screen.findByText('No skills matched this provider.')
@@ -170,7 +164,6 @@ export const Empty: Story = {
 
 /** Read for another machine: the list says so. */
 export const Remote: Story = {
-  parameters: { a11y: { config: { rules: [unnamedDialog] } } },
   args: {
     open: true,
     notice: 'Skills on grok-mac, read when this session started.',

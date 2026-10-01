@@ -56,9 +56,9 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
     !isCloning
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogContent>
-        <DialogHeader className="border-b border-white/10 px-6 py-5">
+        <DialogHeader>
           <DialogTitle>Open a project</DialogTitle>
           <DialogDescription>
             Select a local repository or clone one from Git.
@@ -195,7 +195,7 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
           ) : null}
         </div>
 
-        <DialogFooter className="border-t border-white/10 px-6 py-4">
+        <DialogFooter>
           <Button
             type="button"
             variant="secondary"

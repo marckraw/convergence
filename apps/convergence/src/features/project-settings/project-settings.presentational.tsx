@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react'
+import type { FC, ReactNode, ReactElement } from 'react'
 import {
   Button,
   ChoiceField,
@@ -32,7 +32,7 @@ interface ProjectSettingsDialogProps {
   onEnvOverwriteChange: (enabled: boolean) => void
   onEnvPatternsTextChange: (value: string) => void
   onSave: () => void
-  trigger: ReactNode
+  trigger: ReactElement
   contextSection?: ReactNode
 }
 
@@ -57,10 +57,10 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
   contextSection,
 }) => {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogTrigger render={trigger} />
       <DialogContent>
-        <DialogHeader className="border-b border-white/10 px-6 py-5">
+        <DialogHeader>
           <DialogTitle>Project Settings</DialogTitle>
           <DialogDescription>
             Configure how new workspaces branch for {projectName}.
@@ -209,7 +209,7 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
           ) : null}
         </div>
 
-        <DialogFooter className="border-t border-white/10 px-6 py-4">
+        <DialogFooter>
           <Button
             type="button"
             variant="secondary"

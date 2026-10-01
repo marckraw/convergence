@@ -19,7 +19,7 @@ import {
  */
 function renderSelect() {
   render(
-    <Select defaultValue="one">
+    <Select items={[{ value: 'one', label: 'One' }]} defaultValue="one">
       <SelectTrigger aria-label="Pick">
         <SelectValue />
       </SelectTrigger>
@@ -35,15 +35,16 @@ const classes = (element: HTMLElement): string[] =>
   element.className.split(/\s+/)
 
 describe('shared field controls use the theme roles', () => {
-  it('the Select focus ring is the full ring, with no opacity modifier', () => {
+  it('the Select focus ring is the field ring over its border (MAR-3616), drawn in the full ring colour', () => {
     const trigger = classes(renderSelect())
-    expect(trigger).toContain('focus-visible:ring-ring')
+    for (const name of focusRingField.split(' '))
+      expect(trigger).toContain(name)
     expect(trigger.filter((name) => name.includes('ring-ring/'))).toEqual([])
   })
 
-  it('the Select outline is the control border', () => {
+  it('the Select outline is the control line', () => {
     const trigger = classes(renderSelect())
-    expect(trigger).toContain('border-control-border')
+    expect(trigger).toContain('border-control-line')
     expect(trigger).not.toContain('border-input')
   })
 

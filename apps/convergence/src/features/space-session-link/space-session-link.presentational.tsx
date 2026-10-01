@@ -83,9 +83,9 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
     selectedSpaceId.length === 0 || isLinking || linkableSpaces.length === 0
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogContent>
+        <DialogHeader>
           <DialogTitle>Session Space</DialogTitle>
           <DialogDescription>
             Link this session as an Attempt in a global Space.
@@ -139,6 +139,15 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
             </div>
             <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto]">
               <Select
+                items={{
+                  [SELECT_EMPTY_VALUE]:
+                    linkableSpaces.length === 0
+                      ? 'No linkable Spaces'
+                      : 'Select Space',
+                  ...Object.fromEntries(
+                    linkableSpaces.map((space) => [space.id, space.title]),
+                  ),
+                }}
                 value={toSelectValue(selectedSpaceId)}
                 onValueChange={(spaceId) =>
                   onSelectedSpaceChange(fromSelectValue(spaceId))
@@ -146,6 +155,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                 disabled={linkableSpaces.length === 0 || isLinking}
               >
                 <SelectTrigger
+                  size="lg"
                   className="min-w-0 w-full"
                   aria-label="Existing Space"
                 >
@@ -171,13 +181,14 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                 </SelectContent>
               </Select>
               <Select
+                items={spaceAttemptRoleLabels}
                 value={selectedRole}
                 onValueChange={(role) =>
                   onSelectedRoleChange(role as SpaceAttemptRole)
                 }
                 disabled={isLinking}
               >
-                <SelectTrigger aria-label="Attempt role">
+                <SelectTrigger size="lg" aria-label="Attempt role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -251,7 +262,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
           </div>
         ) : null}
 
-        <DialogFooter className="border-t border-border/70 px-6 py-4">
+        <DialogFooter>
           <Button
             type="button"
             variant="secondary"

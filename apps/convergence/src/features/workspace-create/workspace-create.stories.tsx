@@ -113,8 +113,13 @@ export const LoadingBranches: Story = {
     await userEvent.click(
       within(dialog).getByRole('combobox', { name: 'Use project default' }),
     )
-    await screen.findByRole('combobox', { name: 'Loading branches...' })
+    const search = await screen.findByRole('combobox', {
+      name: 'Loading branches...',
+    })
     await expect(screen.getAllByRole('option')).toHaveLength(1)
+    // The list has settled with the focus in its search before Escape, as
+    // a person's would (the list opens into a Base UI dialog since MAR-3616).
+    await waitFor(() => expect(search).toHaveFocus())
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
     await expect(args.onOpenChange).not.toHaveBeenCalled()

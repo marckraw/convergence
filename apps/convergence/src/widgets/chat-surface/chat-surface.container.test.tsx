@@ -1,4 +1,12 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
+import { UiProvider } from '@convergence/ui'
 import type { ComponentProps } from 'react'
 import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
@@ -789,11 +797,11 @@ describe('ChatSurface', () => {
     expect(loadAttempts).toHaveBeenCalledWith('space-1')
   })
 
-  it('deletes a Space and its attached sessions after confirmation', async () => {
+  it('deletes a Space and its attached sessions after confirmation, asked in the app’s own dialog (R5)', async () => {
     const deleteSpace = vi.fn().mockResolvedValue(undefined)
     const deleteSession = vi.fn().mockResolvedValue(undefined)
     const onSpaceDeleted = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const nativeConfirm = vi.spyOn(window, 'confirm')
     useSpaceStore.setState({
       spaces: [
         {
@@ -832,15 +840,31 @@ describe('ChatSurface', () => {
     })
 
     render(
-      <ChatSurface selectedSpaceId="space-1" onSpaceDeleted={onSpaceDeleted} />,
+      <UiProvider>
+        <ChatSurface
+          selectedSpaceId="space-1"
+          onSpaceDeleted={onSpaceDeleted}
+        />
+      </UiProvider>,
     )
     fireEvent.click(screen.getByRole('button', { name: /delete space/i }))
+
+    const question = await screen.findByRole('alertdialog', {
+      name: 'Delete Space “Launch plan”?',
+    })
+    expect(question).toHaveTextContent('1 attached session')
+    // Nothing goes before the answer.
+    expect(deleteSpace).not.toHaveBeenCalled()
+    fireEvent.click(
+      within(question).getByRole('button', { name: 'Delete Space' }),
+    )
 
     await waitFor(() => {
       expect(deleteSession).toHaveBeenCalledWith('global-session-1', null)
       expect(deleteSpace).toHaveBeenCalledWith('space-1')
       expect(onSpaceDeleted).toHaveBeenCalledWith('space-1')
     })
+    expect(nativeConfirm).not.toHaveBeenCalled()
   })
   afterEach(() => vi.restoreAllMocks())
   it('L8/T10 global navigation advances within one millisecond and closing restores focus — mutations Date.now nonce or omit focus turn red', () => {
@@ -971,7 +995,7 @@ describe('ChatSurface', () => {
     const more = () => screen.getByRole('button', { name: 'Session actions' })
     /** Opens View from More, where it has yielded, both fades played out. */
     const openViewFromMore = async () => {
-      fireEvent.pointerDown(more())
+      fireEvent.click(more())
       fireEvent.click(await screen.findByRole('menuitem', { name: 'View' }))
       return screen.findByRole('menuitem', { name: 'Parallel work history' })
     }
@@ -1067,7 +1091,7 @@ describe('ChatSurface', () => {
       })
       headerWidth(560)
       render(<ChatSurface selectedSpaceId={null} />)
-      fireEvent.pointerDown(more())
+      fireEvent.click(more())
       expect(await screen.findByRole('menu')).toBeInTheDocument()
       act(() =>
         useSessionStore.setState({ globalChatSessions: [globalSession] }),

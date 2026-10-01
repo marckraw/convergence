@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react'
+import type { FC, ReactNode, ReactElement } from 'react'
 import type {
   McpServerStatus,
   McpServerSummary,
@@ -31,7 +31,7 @@ import { getMcpStatusBadgeClassName } from './mcp-servers.pure'
 interface McpServersDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactNode
+  trigger: ReactElement
   projectName: string | null
   snapshot: ProjectMcpVisibility | null
   isLoading: boolean
@@ -235,10 +235,10 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
   onRefresh,
 }) => {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogTrigger render={trigger} />
+      <DialogContent>
+        <DialogHeader>
           <DialogTitle>MCP Servers</DialogTitle>
           <DialogDescription>
             {projectName
@@ -273,7 +273,7 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
           )}
         </div>
 
-        <DialogFooter className="border-t border-border/70 px-6 py-4">
+        <DialogFooter>
           <Button
             type="button"
             variant="secondary"

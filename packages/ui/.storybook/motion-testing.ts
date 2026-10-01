@@ -21,6 +21,19 @@ export const runningAnimations = (element: Element): Animation[] =>
 export const settled = (element: Element) =>
   waitFor(() => expect(runningAnimations(element)).toHaveLength(0))
 
+/**
+ * Resolves once a Base UI popup has arrived: its first frame is over (no
+ * `data-starting-style`, so its transition has begun) and nothing animates
+ * on it any more. `settled` alone can resolve before the transition starts,
+ * while the popup still stands at its first frame, faded and small.
+ */
+export const arrived = async (element: Element) => {
+  await waitFor(() =>
+    expect(element.hasAttribute('data-starting-style')).toBe(false),
+  )
+  await settled(element)
+}
+
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
 
 /** Finite animations started from script (the Web Animations API). */

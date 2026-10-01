@@ -37,9 +37,9 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
   const canSubmit = title.trim().length > 0 && !isSubmitting
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogContent>
-        <DialogHeader className="border-b border-white/10 px-6 py-5">
+        <DialogHeader>
           <DialogTitle>New Space</DialogTitle>
           <DialogDescription>
             Create a durable Chat context for related attempts.
@@ -89,7 +89,7 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
             ) : null}
           </div>
 
-          <DialogFooter className="border-t border-white/10 px-6 py-4">
+          <DialogFooter>
             <Button
               type="button"
               variant="secondary"

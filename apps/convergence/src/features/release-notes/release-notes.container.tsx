@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { FC, ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactElement } from 'react'
+import type { FC } from 'react'
 import { Info } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import releaseNotesBundle from '@/shared/generated/release-notes.generated.json'
@@ -11,7 +11,7 @@ const bundle = releaseNotesBundle as ReleaseNotesBundle
 const HISTORY_PAGE_SIZE = 5
 
 interface ReleaseNotesDialogContainerProps {
-  trigger?: ReactNode
+  trigger?: ReactElement
 }
 
 export const ReleaseNotesDialogContainer: FC<

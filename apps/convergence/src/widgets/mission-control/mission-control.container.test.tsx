@@ -15,6 +15,8 @@ import {
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isUnavailable } from '@/shared/testing/unavailable'
+import { answerConfirm } from '@/shared/testing/confirm'
+import { UiProvider } from '@convergence/ui'
 import { useProjectStore } from '@/entities/project'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import { useSessionRelayStore } from '@/entities/session-relay'
@@ -1716,7 +1718,12 @@ describe('MissionControl', () => {
         listCrews.mockResolvedValue([updated])
         return updated
       })
-      render(<MissionControl />)
+      // The app's root providers: a removal asks through its host (R5).
+      render(
+        <UiProvider>
+          <MissionControl />
+        </UiProvider>,
+      )
       await switchToCanvas()
       fireEvent.click(
         await screen.findByRole('button', { name: 'Crew settings' }),
@@ -2197,6 +2204,9 @@ describe('MissionControl', () => {
       expect(await screen.findByText(refused)).toBeInTheDocument()
 
       fireEvent.click(screen.getByRole('button', { name: 'Remove from crew' }))
+      // Removing a seat asks first (R5, MC-22).
+      expect(api.removeMember).not.toHaveBeenCalled()
+      await answerConfirm('Remove seat')
       await waitFor(() =>
         expect(screen.queryByRole('button', { name: /^opus — / })).toBeNull(),
       )

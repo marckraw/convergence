@@ -31,7 +31,6 @@ import {
   LEARN_LOOM_KEY_EXPLANATION_CLASS,
   LEARN_LOOM_KEY_HEADLINE_CLASS,
   LEARN_LOOM_MAIN_CLASS,
-  LEARN_LOOM_OVERLAY_CLASS,
   LEARN_LOOM_PRIMARY_CLASS,
   LEARN_LOOM_REFERENCE_CONTROL_CLASS,
   LEARN_LOOM_REFERENCE_PRIMARY_CLASS,
@@ -56,11 +55,11 @@ export interface LearnLoomViewProps {
 /**
  * The guide itself (MAR-3201).
  *
- * The shared dialog is composed, not forked: `hideClose` turns off the
- * primitive's own corner close so the guide's own close control is the only
- * one, and `overlayClassName` carries the backdrop the handoff specifies. The
- * body is the only region allowed to grow, which is what keeps the footer
- * from moving between steps (R10).
+ * The shared dialog is composed, not forked: `showClose={false}` turns off
+ * the primitive's own corner close so the guide's own close control is the
+ * only one. Its backdrop is the dialogs' one scrim: the handoff's 68% takes
+ * the nearest token (R11, DS2). The body is the only region allowed to grow,
+ * which is what keeps the footer from moving between steps (R10).
  */
 export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
   open,
@@ -81,20 +80,18 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
   >
     <DialogContent
       data-learn-loom
-      hideClose
-      overlayClassName={LEARN_LOOM_OVERLAY_CLASS}
+      showClose={false}
       className={LEARN_LOOM_DIALOG_CLASS}
-      aria-describedby={undefined}
-      // Said outright (R7): this Radix version traps focus and hides the
-      // rest of the page from assistive tech, but does not put the word on
-      // the element, and the rule asks for the word.
+      // Said outright (R7): the dialog traps focus and hides the rest of the
+      // page from assistive tech, and the rule asks for the word on the
+      // element too.
       aria-modal
-      // Radix's own restore aims at the trigger it never had, and its
+      // The dialog's own way back aims at the trigger it never had, and its
       // fallback is whatever held focus before the dialog -- `<body>` when
       // the opener was clicked. Refused here; the panel puts the keyboard
-      // back on the control that opened the guide, after this scope has
+      // back on the control that opened the guide, after this dialog has
       // let go of it (R6).
-      onCloseAutoFocus={(event) => event.preventDefault()}
+      finalFocus={false}
     >
       <DialogHeader className={LEARN_LOOM_HEADER_CLASS}>
         <DialogTitle className={LEARN_LOOM_DIALOG_TITLE_CLASS}>

@@ -1,41 +1,75 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, screen, waitFor, within } from 'storybook/test'
-import { settled } from '../../../.storybook/motion-testing'
+import { useRef } from 'react'
+import { expect, fn, screen, waitFor, within } from 'storybook/test'
+import {
+  arrived,
+  snapshotWhileAnimating,
+} from '../../../.storybook/motion-testing'
 import { Button } from '../button/button'
-import { Popover, PopoverContent, PopoverTrigger } from './popover'
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from './popover'
 
 type UsagePopoverProps = {
   /** The lines the popover lists. */
   lines: string[]
+  onCompact: () => void
+  /** Focus the Compact button when it opens, not the first control. */
+  focusCompact?: boolean
 }
 
-/** The context-usage details behind a status-bar button. */
-function UsagePopover({ lines }: UsagePopoverProps) {
+/** The context-usage details behind a composer pill. */
+function UsagePopover({ lines, onCompact, focusCompact }: UsagePopoverProps) {
+  const compactRef = useRef<HTMLButtonElement>(null)
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="secondary">Context 42%</Button>
+      <PopoverTrigger render={<Button variant="secondary" />}>
+        Context 42%
       </PopoverTrigger>
-      <PopoverContent className="w-72" aria-label="Context usage">
-        <h2 className="mb-2 text-sm font-semibold">Context usage</h2>
+      <PopoverContent
+        className="flex max-h-(--available-height) w-72 flex-col gap-3 overflow-y-auto"
+        initialFocus={focusCompact ? compactRef : undefined}
+      >
+        <PopoverHeader>
+          <PopoverTitle>Context usage</PopoverTitle>
+          <PopoverDescription>
+            What fills the context window.
+          </PopoverDescription>
+        </PopoverHeader>
         <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
           {lines.map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>
-        <Button className="mt-3" variant="secondary" size="sm">
-          Compact now
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm">
+            Details
+          </Button>
+          <Button ref={compactRef} size="sm" onClick={onCompact}>
+            Compact now
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   )
 }
+
+const popoverClosed = () =>
+  waitFor(() =>
+    expect(document.querySelector('[data-slot="popover-content"]')).toBeNull(),
+  )
 
 const meta = {
   title: 'Primitives/Popover',
   component: UsagePopover,
   args: {
     lines: ['84k of 200k tokens', 'System prompt: 12k', 'Conversation: 72k'],
+    onCompact: fn(),
   },
 } satisfies Meta<typeof UsagePopover>
 
@@ -43,43 +77,95 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** Opens from its trigger with focus inside, and Escape gives focus back. */
+/**
+ * Opens from its trigger, named by its title, with focus on its first
+ * control; Escape closes it and gives focus back to the trigger.
+ */
 export const Default: Story = {
   play: async ({ canvas, userEvent }) => {
     const trigger = canvas.getByRole('button', { name: 'Context 42%' })
     await userEvent.click(trigger)
     await expect(trigger).toHaveAttribute('aria-expanded', 'true')
     const popover = await screen.findByRole('dialog', { name: 'Context usage' })
-    await settled(popover)
-    await expect(popover).toBeVisible()
-    await expect(
-      within(popover).getByRole('button', { name: 'Compact now' }),
-    ).toBeVisible()
+    await expect(popover).toHaveAccessibleDescription(
+      'What fills the context window.',
+    )
+    // It grows from the trigger, travelling in from its side.
+    const opening = await snapshotWhileAnimating(popover, 'opacity')
+    await expect(opening.scale).toBeLessThan(1)
+    await arrived(popover)
+    await waitFor(() =>
+      expect(
+        within(popover).getByRole('button', { name: 'Details' }),
+      ).toHaveFocus(),
+    )
     await userEvent.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await popoverClosed()
     await expect(trigger).toHaveFocus()
   },
 }
 
-/** Long: more lines than fit grow the popover, which stays on screen. */
+/** A press outside closes it; what was pressed keeps the click. */
+export const OutsideClick: Story = {
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: 'Context 42%' })
+    await userEvent.click(trigger)
+    const popover = await screen.findByRole('dialog', { name: 'Context usage' })
+    await arrived(popover)
+    await userEvent.click(document.body)
+    await popoverClosed()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  },
+}
+
+/** `initialFocus` puts the focus where the popover asks for it. */
+export const InitialFocus: Story = {
+  args: { focusCompact: true },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Context 42%' }))
+    const popover = await screen.findByRole('dialog', { name: 'Context usage' })
+    const compact = within(popover).getByRole('button', { name: 'Compact now' })
+    await waitFor(() => expect(compact).toHaveFocus())
+    await userEvent.keyboard('{Enter}')
+    await expect(args.onCompact).toHaveBeenCalledOnce()
+    await arrived(popover)
+  },
+}
+
+/** Long: more lines than fit scroll inside the popover, which stays on screen. */
 export const Long: Story = {
   args: {
     lines: Array.from(
-      { length: 18 },
+      { length: 60 },
       (_, index) => `Tool result ${index + 1}: 3.2k tokens`,
     ),
   },
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Context 42%' }))
     const popover = await screen.findByRole('dialog', { name: 'Context usage' })
-    await settled(popover)
+    await arrived(popover)
     const box = popover.getBoundingClientRect()
     await expect(box.top).toBeGreaterThanOrEqual(0)
     await expect(box.bottom).toBeLessThanOrEqual(window.innerHeight)
+    await expect(popover.scrollHeight).toBeGreaterThan(popover.clientHeight)
   },
 }
 
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
+}
+
+/** Reduced motion: it fades in where it stands, without the grow or the travel. */
+export const ReducedMotion: Story = {
+  globals: { motion: 'reduced' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Context 42%' }))
+    const popover = await screen.findByRole('dialog', { name: 'Context usage' })
+    const opening = await snapshotWhileAnimating(popover, 'opacity')
+    await expect(opening.opacity).toBeLessThan(1)
+    await expect(opening.scale).toBe(1)
+    await expect(opening.shiftY).toBe(0)
+    await arrived(popover)
+  },
 }

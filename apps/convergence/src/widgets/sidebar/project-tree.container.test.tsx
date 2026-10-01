@@ -186,7 +186,7 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /session actions hey there/i }),
     )
     fireEvent.click(
@@ -238,7 +238,7 @@ describe('ProjectTree', () => {
         name: /expand archived workspaces and sessions/i,
       }),
     )
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /session actions archived note/i }),
     )
     fireEvent.click(
@@ -326,7 +326,7 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', {
         name: /session actions conversation note/i,
       }),
@@ -412,7 +412,7 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /session actions terminal note/i }),
     )
 
@@ -503,7 +503,7 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /workspace actions feature-branch/i }),
     )
     fireEvent.click(
@@ -568,7 +568,7 @@ describe('ProjectTree', () => {
     expect(screen.getByText('feature-branch')).toBeInTheDocument()
     expect(screen.getByText('Worktree removed')).toBeInTheDocument()
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /workspace actions feature-branch/i }),
     )
     fireEvent.click(
@@ -617,7 +617,7 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /workspace actions feature-branch/i }),
     )
     fireEvent.click(
@@ -667,7 +667,7 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(
+    fireEvent.click(
       screen.getByRole('button', { name: /workspace actions feature-branch/i }),
     )
     fireEvent.click(

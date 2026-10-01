@@ -1,10 +1,10 @@
 import { Archive, CheckCheck, MoreHorizontal } from 'lucide-react'
 import {
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   IconButton,
 } from '@convergence/ui'
 import { SessionActivityCard } from './session-activity-card.presentational'
@@ -69,36 +69,34 @@ export function NeedsYouCard({
         )
       }
       actions={
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <IconButton
-              label={`Actions for ${session.name}`}
-              type="button"
-              variant="ghost"
-              size="lg"
-              className="w-10 shrink-0 rounded-lg"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </IconButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={() => onPin(session.id, !session.pinnedAt)}
-            >
+        <Menu>
+          <MenuTrigger
+            render={
+              <IconButton
+                label={`Actions for ${session.name}`}
+                type="button"
+                variant="ghost"
+                size="lg"
+                className="w-10 shrink-0 rounded-lg"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </IconButton>
+            }
+          />
+          <MenuContent align="end">
+            <MenuItem onClick={() => onPin(session.id, !session.pinnedAt)}>
               {session.pinnedAt ? 'Unpin' : 'Pin'}
-            </DropdownMenuItem>
+            </MenuItem>
             {card.dismissLabel && !card.dismissed && (
-              <DropdownMenuItem onSelect={() => onDismiss(session.id)}>
+              <MenuItem onClick={() => onDismiss(session.id)}>
                 {card.dismissLabel}
-              </DropdownMenuItem>
+              </MenuItem>
             )}
             {card.canArchive && (
-              <DropdownMenuItem onSelect={() => onArchive(session.id)}>
-                Archive
-              </DropdownMenuItem>
+              <MenuItem onClick={() => onArchive(session.id)}>Archive</MenuItem>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </MenuContent>
+        </Menu>
       }
     />
   )

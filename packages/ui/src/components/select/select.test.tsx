@@ -8,20 +8,32 @@ import {
   SelectValue,
 } from './select'
 
+const scopes = [
+  { value: 'all', label: 'All scopes' },
+  { value: 'project-1', label: 'Project' },
+]
+
 describe('Select', () => {
-  it('renders a combobox trigger with options', () => {
+  it('renders a named combobox that shows the chosen label, not its value', () => {
     render(
-      <Select defaultValue="project">
+      <Select items={scopes} defaultValue="project-1">
         <SelectTrigger aria-label="Scope">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All scopes</SelectItem>
-          <SelectItem value="project">Project</SelectItem>
+          {scopes.map((scope) => (
+            <SelectItem key={scope.value} value={scope.value}>
+              {scope.label}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>,
     )
 
-    expect(screen.getByRole('combobox', { name: 'Scope' })).toBeInTheDocument()
+    const trigger = screen.getByRole('combobox', { name: 'Scope' })
+    // MAR-3616 #4: without `items`, Base UI's trigger shows "project-1".
+    expect(trigger).toHaveTextContent('Project')
+    expect(trigger).not.toHaveTextContent('project-1')
+    expect(trigger).toHaveAttribute('data-size', 'md')
   })
 })

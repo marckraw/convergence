@@ -102,7 +102,7 @@ import type {
   SessionCard,
   SessionCrewGroup,
 } from '@/features/mission-control'
-import { Button } from '@convergence/ui'
+import { Button, useConfirm } from '@convergence/ui'
 import { SessionCanvas } from './session-canvas.container'
 import type { SessionCanvasAuthoring } from './session-canvas.container'
 
@@ -255,6 +255,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const createRelay = useSessionRelayStore((state) => state.createRelay)
   const updateRelay = useSessionRelayStore((state) => state.updateRelay)
   const deleteRelay = useSessionRelayStore((state) => state.deleteRelay)
+  // Deleting a connection or a seat asks first, in the app's dialog (R5, MC-22).
+  const confirm = useConfirm()
   const crewError = useSessionCrewStore((state) => state.error)
   const allCrews = useSessionCrewStore((state) => state.crews)
   const clearCrewError = useSessionCrewStore((state) => state.clearError)
@@ -670,11 +672,19 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
 
   const remove = useCallback(async () => {
     if (panel.kind !== 'connection' || panel.relayId === null) return
+    const confirmed = await confirm({
+      title: 'Delete this connection?',
+      description:
+        'The wire is deleted, and nothing travels along it again. Its past hops stay in the history.',
+      confirmLabel: 'Delete connection',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     setBusy(true)
     await deleteRelay(panel.relayId)
     setBusy(false)
     closePanel()
-  }, [panel, deleteRelay, closePanel])
+  }, [panel, confirm, deleteRelay, closePanel])
 
   const moveCard = useCallback(
     (input: { sessionId: string; x: number; y: number }) => {
@@ -1047,6 +1057,25 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const removeMember = useCallback(
     async (member: CrewMemberRef) => {
       if (!crew) return
+      const recipe = 'batonName' in member
+      const confirmed = await confirm(
+        recipe
+          ? {
+              title: `Delete the recipe “${member.batonName}”?`,
+              description:
+                'Its role card goes with it, for good. Wires that reached it have nobody to wake.',
+              confirmLabel: 'Delete recipe',
+              variant: 'danger',
+            }
+          : {
+              title: 'Remove this seat from the crew?',
+              description:
+                'Its role and its wires’ ends go with it. The conversation itself stays.',
+              confirmLabel: 'Remove seat',
+              variant: 'danger',
+            },
+      )
+      if (!confirmed) return
       setBusy(true)
       try {
         await sessionCrewApi.removeMember(crew.id, member)
@@ -1082,7 +1111,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       }
       setBusy(false)
     },
-    [crew, loadCrews, keyForRef],
+    [confirm, crew, loadCrews, keyForRef],
   )
 
   const projectOptions = useMemo(

@@ -14,11 +14,9 @@ import type { LearnLoomEmphasis } from './learn-loom.pure'
 export const LEARN_LOOM_DIALOG_CLASS =
   'w-[min(1000px,calc(100vw-48px))] h-[840px] max-h-[calc(100vh-48px)] bg-background rounded-[20px] gap-0 px-8 pt-7 pb-6'
 
-/** Black at 68 %, and no blur — the contract is explicit about both. */
-export const LEARN_LOOM_OVERLAY_CLASS = 'bg-black/[0.68] backdrop-blur-none'
-
+/** The guide pads itself: the shared header's padding and line give way. */
 export const LEARN_LOOM_HEADER_CLASS =
-  'flex h-11 shrink-0 flex-row items-center justify-between gap-4 space-y-0 bg-transparent'
+  'flex h-11 shrink-0 flex-row items-center justify-between gap-4 space-y-0 border-b-0 bg-transparent p-0'
 
 export const LEARN_LOOM_DIALOG_TITLE_CLASS = 'text-[22px] font-semibold'
 

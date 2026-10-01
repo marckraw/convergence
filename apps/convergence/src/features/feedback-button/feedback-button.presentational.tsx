@@ -81,7 +81,7 @@ export function FeedbackButton({
         <MessageSquarePlus className="h-5 w-5 stroke-[2.25]" />
       </IconButton>
 
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
         <DialogContent className="w-[min(520px,calc(100vw-2rem))]">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
             <DialogHeader className="border-b border-border/60 px-5 py-4">

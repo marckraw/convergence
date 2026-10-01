@@ -23,10 +23,10 @@ import {
   Button,
   cn,
   CopyButton,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   IconButton,
   Tooltip,
 } from '@convergence/ui'
@@ -190,48 +190,41 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
           <div className="flex shrink-0 items-center gap-1.5">
             {withTooltip(
               'Copy name, path, or invocation',
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label="Copy"
-                    size="sm"
-                    className="gap-1"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copy
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-44">
-                  <DropdownMenuItem
-                    className="gap-2"
-                    onClick={() => copy(selectedSkill.name)}
-                  >
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      aria-label="Copy"
+                      size="sm"
+                      className="gap-1"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  }
+                />
+                <MenuContent align="end" className="min-w-44">
+                  <MenuItem onClick={() => copy(selectedSkill.name)}>
                     <Copy className="h-3.5 w-3.5" />
                     Copy name
-                  </DropdownMenuItem>
+                  </MenuItem>
                   {selectedSkill.path ? (
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onClick={() => copy(selectedSkill.path ?? '')}
-                    >
+                    <MenuItem onClick={() => copy(selectedSkill.path ?? '')}>
                       <FileText className="h-3.5 w-3.5" />
                       Copy SKILL.md path
-                    </DropdownMenuItem>
+                    </MenuItem>
                   ) : null}
                   {nativeInvocation ? (
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onClick={() => copy(nativeInvocation)}
-                    >
+                    <MenuItem onClick={() => copy(nativeInvocation)}>
                       <Code2 className="h-3.5 w-3.5" />
                       Copy invocation
-                    </DropdownMenuItem>
+                    </MenuItem>
                   ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>,
+                </MenuContent>
+              </Menu>,
             )}
             {selectedSkill.path && onReveal
               ? withTooltip(
@@ -255,47 +248,44 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
             {selectedSkill.path && onOpenInEditor
               ? withTooltip(
                   'Open the skill folder in an editor',
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        aria-label="Open in editor"
-                        size="sm"
-                        className="gap-1"
-                      >
-                        <Code2 className="h-3.5 w-3.5" />
-                        Open
-                        <ChevronDown className="h-3 w-3" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-40">
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          aria-label="Open in editor"
+                          size="sm"
+                          className="gap-1"
+                        >
+                          <Code2 className="h-3.5 w-3.5" />
+                          Open
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      }
+                    />
+                    <MenuContent align="end" className="min-w-40">
                       {editorAppsLoading ? (
-                        <DropdownMenuItem disabled>
-                          Detecting apps...
-                        </DropdownMenuItem>
+                        <MenuItem disabled>Detecting apps...</MenuItem>
                       ) : (editorApps?.length ?? 0) === 0 ? (
-                        <DropdownMenuItem disabled>
-                          No editors found
-                        </DropdownMenuItem>
+                        <MenuItem disabled>No editors found</MenuItem>
                       ) : (
                         editorApps?.map((app) => {
                           const Icon =
                             app.kind === 'file-manager' ? Folder : Code2
                           return (
-                            <DropdownMenuItem
+                            <MenuItem
                               key={app.id}
                               onClick={() => onOpenInEditor(app.id)}
-                              className="gap-2"
                             >
                               <Icon className="h-3.5 w-3.5" />
                               {app.label}
-                            </DropdownMenuItem>
+                            </MenuItem>
                           )
                         })
                       )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>,
+                    </MenuContent>
+                  </Menu>,
                 )
               : null}
             {selectedSkill.path && onOpenFile

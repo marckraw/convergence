@@ -2,11 +2,11 @@ import { useRef, type FC, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
 import {
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
   Tooltip,
 } from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
@@ -50,45 +50,54 @@ export const ConversationViewMenu: FC<ConversationViewMenuProps> = ({
   // dialog mounts after this and moves focus inside itself.
   const openParallel = useRef(false)
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <Tooltip label="How the conversation is drawn, and parallel work">
-          <Button
-            ref={triggerRef}
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1"
-          >
-            View
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-        </Tooltip>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
+    <Menu
+      open={open}
+      onOpenChange={(next, details) => {
+        contentFocus?.onOpenChange(next, details)
+        onOpenChange(next)
+      }}
+    >
+      <Tooltip label="How the conversation is drawn, and parallel work">
+        <MenuTrigger
+          render={
+            <Button
+              ref={triggerRef}
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+            />
+          }
+        >
+          View
+          <ChevronDown className="h-3 w-3" />
+        </MenuTrigger>
+      </Tooltip>
+      <MenuContent
         align="end"
         className="min-w-48"
-        onInteractOutside={contentFocus?.onInteractOutside}
-        onCloseAutoFocus={(event) => {
-          contentFocus?.onCloseAutoFocus(event)
-          if (!openParallel.current) return
-          openParallel.current = false
-          onOpenParallelWork()
+        finalFocus={(closeType) => {
+          const focus = contentFocus ? contentFocus.finalFocus(closeType) : true
+          if (openParallel.current) {
+            openParallel.current = false
+            onOpenParallelWork()
+          }
+          return focus
         }}
       >
         <TranscriptViewMenuItems
           mode={mode}
           onChange={(next) => setMode(sessionId, next)}
         />
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => {
+        <MenuSeparator />
+        <MenuItem
+          onClick={() => {
             openParallel.current = true
           }}
         >
           Parallel work history
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </MenuItem>
+      </MenuContent>
+    </Menu>
   )
 }

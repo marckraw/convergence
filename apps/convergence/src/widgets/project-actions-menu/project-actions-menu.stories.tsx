@@ -5,7 +5,7 @@ import type {
   ProjectScriptRun,
   ProjectScriptRunOutput,
 } from '@/entities/project-script'
-import { DropdownMenu, DropdownMenuTrigger } from '@convergence/ui'
+import { Popover, PopoverTrigger } from '@convergence/ui'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import { ProjectActionsMenuPresentational } from './project-actions-menu.presentational'
 import { ProjectActionsTrigger } from './project-actions-trigger.presentational'
@@ -87,9 +87,6 @@ const liveOutput: ProjectScriptRunOutput[] = [
 /*
  * Known gaps, each switched off only on the stories that draw it.
  */
-// a11y-known: the panel is role="menu" but holds plain buttons, not menu
-// items — fixed by the sweep (DS4)
-const menuOfButtons = { id: 'aria-required-children', enabled: false }
 // a11y-known: the running status (emerald-300) and the error banner
 // (destructive on its own tint) are below 4.5:1 on the light theme — fixed by
 // the sweep (DS4)
@@ -100,15 +97,18 @@ const knownGaps = (...rules: Array<{ id: string; enabled: boolean }>) => ({
 
 type MenuProps = ComponentProps<typeof ProjectActionsMenuPresentational>
 
-/** The menu open under its trigger, as the header draws it. */
+/**
+ * The panel open under its trigger, as the header draws it: a Popover of
+ * plain buttons since MAR-3616, so every one of them is reachable by Tab.
+ */
 function OpenMenu(props: MenuProps) {
   return (
-    <DropdownMenu open modal={false}>
-      <DropdownMenuTrigger asChild>
-        <ProjectActionsTrigger selectedScript={tests} running />
-      </DropdownMenuTrigger>
+    <Popover open>
+      <PopoverTrigger
+        render={<ProjectActionsTrigger selectedScript={tests} running />}
+      />
       <ProjectActionsMenuPresentational {...props} />
-    </DropdownMenu>
+    </Popover>
   )
 }
 
@@ -150,9 +150,9 @@ type Story = StoryObj<typeof meta>
  * one, edit or delete each, add another, and make a lane.
  */
 export const Default: Story = {
-  parameters: knownGaps(menuOfButtons, lightStatusContrast),
+  parameters: knownGaps(lightStatusContrast),
   play: async ({ args, userEvent }) => {
-    const menu = await screen.findByRole('menu')
+    const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await waitFor(() => expect(menu).toBeVisible())
     await userEvent.click(
       within(menu).getByRole('button', { name: 'Stop Run tests' }),
@@ -189,16 +189,15 @@ export const Default: Story = {
 
 export const Dark: Story = {
   ...Default,
-  parameters: knownGaps(menuOfButtons),
   globals: { theme: 'dark' },
 }
 
 /** A run's output opens under it: where it ran, when, and what it said. */
 export const Output: Story = {
-  parameters: knownGaps(menuOfButtons, lightStatusContrast),
+  parameters: knownGaps(lightStatusContrast),
   args: { expandedRunIds: new Set(['run-build', 'run-tests']) },
   play: async ({ args, userEvent }) => {
-    const menu = await screen.findByRole('menu')
+    const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await waitFor(() =>
       expect(
         within(menu).getByText(/error TS2307: Cannot find module/),
@@ -219,10 +218,10 @@ export const Output: Story = {
 
 /** A lane offers a sibling lane and a way to its folder. */
 export const Lane: Story = {
-  parameters: knownGaps(menuOfButtons, lightStatusContrast),
+  parameters: knownGaps(lightStatusContrast),
   args: { isLane: true },
   play: async ({ args, userEvent }) => {
-    const menu = await screen.findByRole('menu')
+    const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await userEvent.click(
       await within(menu).findByRole('button', {
         name: /^Reveal lane in Finder/,
@@ -234,12 +233,12 @@ export const Lane: Story = {
 
 /** An action that could not start says why at the top. */
 export const Failed: Story = {
-  parameters: knownGaps(menuOfButtons, lightStatusContrast),
+  parameters: knownGaps(lightStatusContrast),
   args: {
     error: 'Could not start "Build": npm was not found on PATH.',
   },
   play: async () => {
-    const menu = await screen.findByRole('menu')
+    const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await waitFor(() =>
       expect(
         within(menu).getByText(
@@ -252,10 +251,9 @@ export const Failed: Story = {
 
 /** No actions yet: only the way to add one, and lanes. */
 export const Empty: Story = {
-  parameters: knownGaps(menuOfButtons),
   args: { items: [] },
   play: async () => {
-    const menu = await screen.findByRole('menu')
+    const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await expect(
       within(menu).queryByRole('button', { name: 'Edit action' }),
     ).toBeNull()
@@ -267,7 +265,6 @@ export const Empty: Story = {
 
 /** Long names and commands are cut short in their rows. */
 export const Long: Story = {
-  parameters: knownGaps(menuOfButtons),
   args: {
     projectName: 'a-project-with-a-rather-long-name-that-will-not-fit',
     items: Array.from({ length: 8 }, (_, index) => ({
@@ -282,7 +279,7 @@ export const Long: Story = {
     })),
   },
   play: async () => {
-    const menu = await screen.findByRole('menu')
+    const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await expect(
       within(menu).getAllByRole('button', { name: /^Run Build, sign/ }),
     ).toHaveLength(8)

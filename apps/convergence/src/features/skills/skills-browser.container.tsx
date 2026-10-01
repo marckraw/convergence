@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FC, ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react'
+import type { FC } from 'react'
 import { Library } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
@@ -43,7 +49,7 @@ const DEFAULT_VIEW_MODE: SkillsViewMode = 'overview'
 const DEFAULT_GROUP_BY: SkillGroupBy = 'provider'
 
 interface SkillsBrowserDialogContainerProps {
-  trigger?: ReactNode
+  trigger?: ReactElement
 }
 
 export const SkillsBrowserDialogContainer: FC<

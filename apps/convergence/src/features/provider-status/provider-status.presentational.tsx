@@ -1,5 +1,5 @@
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
-import type { FC, ReactNode } from 'react'
+import type { FC, ReactElement } from 'react'
 import type {
   ProviderRuntimeInfo,
   ProviderStatusInfo,
@@ -33,7 +33,7 @@ import {
 interface ProviderStatusDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactNode
+  trigger: ReactElement
   statuses: ProviderStatusInfo[]
   runtimeInfo: ProviderRuntimeInfo | null
   providerAccounts: ProviderAccount[]
@@ -444,10 +444,10 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
   ).length
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogTrigger render={trigger} />
+      <DialogContent>
+        <DialogHeader>
           <DialogTitle>Providers</DialogTitle>
           <DialogDescription>
             Availability and update status for local AI CLIs. Convergence uses
@@ -500,7 +500,7 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
           )}
         </div>
 
-        <DialogFooter className="border-t border-border/70 px-6 py-4">
+        <DialogFooter>
           <Button
             type="button"
             variant="secondary"

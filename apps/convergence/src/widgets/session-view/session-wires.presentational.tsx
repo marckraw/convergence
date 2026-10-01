@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, FC } from 'react'
+import type { FC } from 'react'
 import { Waypoints } from 'lucide-react'
 import {
   Button,
@@ -6,6 +6,8 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  type PopupFinalFocus,
+  type PopupOpenChangeDetails,
   Tooltip,
 } from '@convergence/ui'
 import { formatSessionWireCount } from './session-wires.pure'
@@ -17,11 +19,15 @@ export interface SessionWireLine {
   text: string
 }
 
-/** Focus props for the popover's content (MAR-3427 A). */
-export type SessionWiresContentFocus = Pick<
-  ComponentPropsWithoutRef<typeof PopoverContent>,
-  'onCloseAutoFocus' | 'onInteractOutside'
->
+/**
+ * How the popover hands the focus on when it closes, from a header that may
+ * have moved the chip into More (MAR-3427 A, MAR-3616): `finalFocus` on the
+ * content, `onOpenChange` heard from the popover's own.
+ */
+export interface SessionWiresContentFocus {
+  finalFocus: PopupFinalFocus
+  onOpenChange: (open: boolean, details: PopupOpenChangeDetails) => void
+}
 
 interface SessionWiresProps {
   lines: SessionWireLine[]
@@ -57,25 +63,34 @@ export const SessionWires: FC<SessionWiresProps> = ({
   if (lines.length === 0) return null
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Tooltip label={summary}>
-          <Button
-            type="button"
-            variant="ghost"
-            aria-label={summary}
-            size="sm"
-            className={cn(
-              'rounded-full border border-border/70 text-[11px]',
-              armedCount === 0 ? 'text-muted-foreground/60' : 'text-foreground',
-            )}
-          >
-            <Waypoints className="h-3.5 w-3.5" />
-            {formatSessionWireCount(lines.length)}
-          </Button>
-        </Tooltip>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-96 p-2" {...contentFocus}>
+    <Popover onOpenChange={contentFocus?.onOpenChange}>
+      <PopoverTrigger
+        render={
+          <Tooltip label={summary}>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={summary}
+              size="sm"
+              className={cn(
+                'rounded-full border border-border/70 text-[11px]',
+                armedCount === 0
+                  ? 'text-muted-foreground/60'
+                  : 'text-foreground',
+              )}
+            >
+              <Waypoints className="h-3.5 w-3.5" />
+              {formatSessionWireCount(lines.length)}
+            </Button>
+          </Tooltip>
+        }
+      />
+      <PopoverContent
+        aria-label={summary}
+        align="start"
+        className="w-96 p-2"
+        finalFocus={contentFocus?.finalFocus}
+      >
         <ul className="flex flex-col gap-1">
           {lines.map((line) => (
             <li

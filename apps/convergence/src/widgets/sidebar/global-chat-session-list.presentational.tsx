@@ -11,10 +11,10 @@ import type { SpaceAttemptRole } from '@/entities/space'
 import {
   Button,
   cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   IconButton,
   Tooltip,
 } from '@convergence/ui'
@@ -166,57 +166,50 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
         </Button>
       </Tooltip>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <IconButton
-            label={`Chat session actions ${session.name}`}
-            type="button"
-            variant="quiet"
-            onClick={(event) => event.stopPropagation()}
-            tooltipSide="left"
-            size="xs"
-            className="shrink-0 opacity-0 transition-opacity group-hover/session:opacity-100 focus-visible:opacity-100"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </IconButton>
-        </DropdownMenuTrigger>
-
-        <DropdownMenuContent align="end">
-          {!session.archivedAt ? (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onManageSessionSpaces(session.id)}
+      <Menu>
+        <MenuTrigger
+          render={
+            <IconButton
+              label={`Chat session actions ${session.name}`}
+              type="button"
+              variant="quiet"
+              onClick={(event) => event.stopPropagation()}
+              tooltipSide="left"
+              size="xs"
+              className="shrink-0 opacity-0 transition-opacity group-hover/session:opacity-100 focus-visible:opacity-100"
             >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </IconButton>
+          }
+        />
+
+        <MenuContent align="end">
+          {!session.archivedAt ? (
+            <MenuItem onClick={() => onManageSessionSpaces(session.id)}>
               <Link2 className="h-3.5 w-3.5" />
-              <span>Add to Space...</span>
-            </DropdownMenuItem>
+              <span>Add to Space…</span>
+            </MenuItem>
           ) : null}
           {session.archivedAt ? (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onUnarchiveSession(session.id)}
-            >
+            <MenuItem onClick={() => onUnarchiveSession(session.id)}>
               <Undo2 className="h-3.5 w-3.5" />
               <span>Unarchive session</span>
-            </DropdownMenuItem>
+            </MenuItem>
           ) : (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onArchiveSession(session.id)}
-            >
+            <MenuItem onClick={() => onArchiveSession(session.id)}>
               <Archive className="h-3.5 w-3.5" />
               <span>Archive session</span>
-            </DropdownMenuItem>
+            </MenuItem>
           )}
-          <DropdownMenuItem
-            className="gap-2 text-destructive focus:text-destructive"
+          <MenuItem
+            variant="danger"
             onClick={() => onDeleteSession(session.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete session</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <span>Delete session…</span>
+          </MenuItem>
+        </MenuContent>
+      </Menu>
     </div>
   )
 
@@ -304,31 +297,30 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                             ) : null}
                           </Button>
                         </Tooltip>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <IconButton
-                              label={`Space actions ${space.title}`}
-                              type="button"
-                              variant="quiet"
-                              onClick={(event) => event.stopPropagation()}
-                              tooltipSide="left"
-                              size="xs"
-                              className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
-                            >
-                              <MoreHorizontal className="h-3.5 w-3.5" />
-                            </IconButton>
-                          </DropdownMenuTrigger>
+                        <Menu>
+                          <MenuTrigger
+                            render={
+                              <IconButton
+                                label={`Space actions ${space.title}`}
+                                type="button"
+                                variant="quiet"
+                                onClick={(event) => event.stopPropagation()}
+                                tooltipSide="left"
+                                size="xs"
+                                className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
+                              >
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </IconButton>
+                            }
+                          />
 
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              className="gap-2"
-                              onClick={() => onArchiveSpace(space.id)}
-                            >
+                          <MenuContent align="end">
+                            <MenuItem onClick={() => onArchiveSpace(space.id)}>
                               <Archive className="h-3.5 w-3.5" />
-                              <span>Archive Space...</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              <span>Archive Space…</span>
+                            </MenuItem>
+                          </MenuContent>
+                        </Menu>
                       </div>
 
                       {expanded ? (
@@ -374,37 +366,37 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                   </Button>
                                 </Tooltip>
 
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <IconButton
-                                      label={`Space attempt actions ${attempt.sessionName}`}
-                                      type="button"
-                                      variant="quiet"
-                                      onClick={(event) =>
-                                        event.stopPropagation()
-                                      }
-                                      tooltipSide="left"
-                                      size="xs"
-                                      className="shrink-0 opacity-0 transition-opacity group-hover/attempt:opacity-100 focus-visible:opacity-100"
-                                    >
-                                      <MoreHorizontal className="h-3.5 w-3.5" />
-                                    </IconButton>
-                                  </DropdownMenuTrigger>
+                                <Menu>
+                                  <MenuTrigger
+                                    render={
+                                      <IconButton
+                                        label={`Space attempt actions ${attempt.sessionName}`}
+                                        type="button"
+                                        variant="quiet"
+                                        onClick={(event) =>
+                                          event.stopPropagation()
+                                        }
+                                        tooltipSide="left"
+                                        size="xs"
+                                        className="shrink-0 opacity-0 transition-opacity group-hover/attempt:opacity-100 focus-visible:opacity-100"
+                                      >
+                                        <MoreHorizontal className="h-3.5 w-3.5" />
+                                      </IconButton>
+                                    }
+                                  />
 
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      className="gap-2"
+                                  <MenuContent align="end">
+                                    <MenuItem
                                       onClick={() =>
                                         onManageSessionSpaces(attempt.sessionId)
                                       }
                                     >
                                       <Link2 className="h-3.5 w-3.5" />
-                                      <span>Manage Spaces...</span>
-                                    </DropdownMenuItem>
+                                      <span>Manage Spaces…</span>
+                                    </MenuItem>
                                     {attempt.session ? (
                                       attempt.session.archivedAt ? (
-                                        <DropdownMenuItem
-                                          className="gap-2"
+                                        <MenuItem
                                           onClick={() =>
                                             onUnarchiveSession(
                                               attempt.sessionId,
@@ -413,21 +405,19 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                         >
                                           <Undo2 className="h-3.5 w-3.5" />
                                           <span>Unarchive session</span>
-                                        </DropdownMenuItem>
+                                        </MenuItem>
                                       ) : (
-                                        <DropdownMenuItem
-                                          className="gap-2"
+                                        <MenuItem
                                           onClick={() =>
                                             onArchiveSession(attempt.sessionId)
                                           }
                                         >
                                           <Archive className="h-3.5 w-3.5" />
                                           <span>Archive session</span>
-                                        </DropdownMenuItem>
+                                        </MenuItem>
                                       )
                                     ) : null}
-                                    <DropdownMenuItem
-                                      className="gap-2"
+                                    <MenuItem
                                       onClick={() =>
                                         onDetachSpaceAttempt(
                                           attempt.attemptId,
@@ -438,20 +428,20 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                     >
                                       <Unlink className="h-3.5 w-3.5" />
                                       <span>Detach from Space</span>
-                                    </DropdownMenuItem>
+                                    </MenuItem>
                                     {attempt.session ? (
-                                      <DropdownMenuItem
-                                        className="gap-2 text-destructive focus:text-destructive"
+                                      <MenuItem
+                                        variant="danger"
                                         onClick={() =>
                                           onDeleteSession(attempt.sessionId)
                                         }
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
-                                        <span>Delete session</span>
-                                      </DropdownMenuItem>
+                                        <span>Delete session…</span>
+                                      </MenuItem>
                                     ) : null}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                  </MenuContent>
+                                </Menu>
                               </div>
                             ))
                           ) : (
@@ -527,31 +517,30 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           <span className="truncate">{space.title}</span>
                         </Button>
                       </Tooltip>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <IconButton
-                            label={`Archived Space actions ${space.title}`}
-                            type="button"
-                            variant="quiet"
-                            onClick={(event) => event.stopPropagation()}
-                            tooltipSide="left"
-                            size="xs"
-                            className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
-                          >
-                            <MoreHorizontal className="h-3.5 w-3.5" />
-                          </IconButton>
-                        </DropdownMenuTrigger>
+                      <Menu>
+                        <MenuTrigger
+                          render={
+                            <IconButton
+                              label={`Archived Space actions ${space.title}`}
+                              type="button"
+                              variant="quiet"
+                              onClick={(event) => event.stopPropagation()}
+                              tooltipSide="left"
+                              size="xs"
+                              className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </IconButton>
+                          }
+                        />
 
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="gap-2"
-                            onClick={() => onUnarchiveSpace(space.id)}
-                          >
+                        <MenuContent align="end">
+                          <MenuItem onClick={() => onUnarchiveSpace(space.id)}>
                             <Undo2 className="h-3.5 w-3.5" />
                             <span>Unarchive Space</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                          </MenuItem>
+                        </MenuContent>
+                      </Menu>
                     </div>
                   ))}
                 </div>
