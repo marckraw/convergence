@@ -67,16 +67,8 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** The current release, then the history; Close is the one ending. */
+/** The current release, then the history; the ✕ is the one way out. */
 export const Default: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the notes' scroll area takes no keyboard focus, so it cannot be scrolled without a pointer — fixed by the sweep (DS4)
-        rules: [{ id: 'scrollable-region-focusable', enabled: false }],
-      },
-    },
-  },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
     await expect(dialog).toHaveAccessibleDescription(
@@ -88,24 +80,19 @@ export const Default: Story = {
         name: 'Release history pagination',
       }),
     ).toBeNull()
-    const close = within(dialog)
-      .getAllByRole('button', { name: 'Close' })
-      .find((button) => button.textContent === 'Close')
-    await userEvent.click(close as HTMLElement)
+    // The notes take the keyboard's focus, so they scroll without a pointer.
+    await expect(
+      within(dialog).getByRole('region', { name: 'Release notes' }),
+    ).toHaveAttribute('tabindex', '0')
+    // No footer: the ✕ is the way out (R6).
+    await expect(dialog.querySelector('[data-slot="dialog-footer"]')).toBeNull()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
     await expect(args.onOpenChange).toHaveBeenCalledWith(false)
   },
 }
 
 /** Long: many releases, paged; Previous and Next walk the pages. */
 export const Long: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the notes' scroll area takes no keyboard focus, so it cannot be scrolled without a pointer — fixed by the sweep (DS4)
-        rules: [{ id: 'scrollable-region-focusable', enabled: false }],
-      },
-    },
-  },
   args: {
     bundle: {
       currentVersion: '0.98.0',
@@ -141,14 +128,6 @@ export const Long: Story = {
 
 /** The first page: Previous has nowhere to go. */
 export const FirstPage: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the notes' scroll area takes no keyboard focus, so it cannot be scrolled without a pointer — fixed by the sweep (DS4)
-        rules: [{ id: 'scrollable-region-focusable', enabled: false }],
-      },
-    },
-  },
   args: { historyPage: 1, historyTotalPages: 3 },
   play: async () => {
     const dialog = await openDialog()
