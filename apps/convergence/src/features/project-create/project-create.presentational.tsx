@@ -4,14 +4,14 @@ import { Plus } from 'lucide-react'
 
 interface ProjectCreateButtonProps {
   onClick: () => void
-  variant?: 'default' | 'outline' | 'ghost'
-  size?: 'default' | 'sm'
+  variant?: 'primary' | 'secondary' | 'ghost'
+  size?: 'lg' | 'md'
 }
 
 export const ProjectCreateButton: FC<ProjectCreateButtonProps> = ({
   onClick,
-  variant = 'default',
-  size = 'default',
+  variant = 'primary',
+  size = 'lg',
 }) => (
   <Button variant={variant} size={size} onClick={onClick}>
     <Plus className="h-4 w-4" />

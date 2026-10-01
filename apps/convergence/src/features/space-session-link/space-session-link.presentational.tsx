@@ -125,7 +125,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                 aria-label="Space title from session"
                 disabled={isCreating}
               />
-              <Button type="submit" disabled={createDisabled} size="sm">
+              <Button type="submit" disabled={createDisabled}>
                 <Plus className="h-4 w-4" />
                 Create
               </Button>
@@ -191,7 +191,6 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                 type="button"
                 onClick={onAttachToSpace}
                 disabled={attachDisabled}
-                size="sm"
               >
                 <Link2 className="h-4 w-4" />
                 Attach
@@ -229,8 +228,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                     </div>
                     <Button
                       type="button"
-                      variant="outline"
-                      size="sm"
+                      variant="secondary"
                       onClick={() =>
                         onDetachAttempt(attempt.id, attempt.spaceId)
                       }
@@ -255,8 +253,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
         <DialogFooter className="border-t border-border/70 px-6 py-4">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={() => onOpenChange(false)}
           >
             Close

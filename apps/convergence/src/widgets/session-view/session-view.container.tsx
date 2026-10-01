@@ -39,7 +39,7 @@ import {
 } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
-import { Button, DropdownMenuItem } from '@convergence/ui'
+import { Button, DropdownMenuItem, IconButton } from '@convergence/ui'
 import {
   Archive,
   ArrowLeftRight,
@@ -503,9 +503,8 @@ export const SessionView: FC = () => {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
                       onClick={() => beginSessionDraft(null)}
-                      className="ml-1 h-auto px-2 py-0 text-xs"
+                      className="ml-1 h-auto px-2"
                     >
                       Use main repo
                     </Button>
@@ -611,10 +610,9 @@ export const SessionView: FC = () => {
                       <Button
                         ref={parallelButton}
                         variant="ghost"
-                        size="sm"
-                        className="h-7 px-2"
                         aria-expanded={parallelOpen}
                         onClick={toggleParallel}
+                        size="sm"
                       >
                         {parallelLabel}
                       </Button>
@@ -745,12 +743,11 @@ export const SessionView: FC = () => {
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
                           onClick={() =>
                             session.parentSessionId &&
                             setActiveSession(session.parentSessionId)
                           }
-                          className="h-auto justify-start gap-2 px-2 py-1.5 text-xs"
+                          className="h-auto justify-start px-2 py-1.5"
                         >
                           <GitFork className="h-3.5 w-3.5" />
                           Forked from:{' '}
@@ -927,16 +924,14 @@ export const SessionView: FC = () => {
                     side: 'right' as const,
                     group: 'stop' as const,
                     node: (
-                      <Button
+                      <IconButton
+                        label={`Stop ${session.name}`}
                         variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        aria-label={`Stop ${session.name}`}
-                        title={`Stop ${session.name}`}
                         onClick={() => stopSession(session.id)}
+                        size="sm"
                       >
                         <Square className="h-3 w-3" />
-                      </Button>
+                      </IconButton>
                     ),
                   },
                 ]

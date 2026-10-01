@@ -27,8 +27,7 @@ export function ProviderUsageFields({
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onRefresh}
             disabled={isLoading}
           >

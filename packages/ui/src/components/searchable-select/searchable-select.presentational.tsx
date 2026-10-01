@@ -245,7 +245,6 @@ export function SearchableSelectPresentational({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               className="h-auto w-full justify-start px-2 py-2 text-sm"
               onClick={onActionSelect}
             >

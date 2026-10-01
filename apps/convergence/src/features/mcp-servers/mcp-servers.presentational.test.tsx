@@ -9,7 +9,11 @@ describe('McpServersDialog', () => {
       <McpServersDialog
         open
         onOpenChange={() => {}}
-        trigger={<Button type="button">Open</Button>}
+        trigger={
+          <Button type="button" size="lg">
+            Open
+          </Button>
+        }
         projectName="convergence"
         isLoading={false}
         error={null}
@@ -70,7 +74,11 @@ describe('McpServersDialog', () => {
       <McpServersDialog
         open
         onOpenChange={() => {}}
-        trigger={<Button type="button">Open</Button>}
+        trigger={
+          <Button type="button" size="lg">
+            Open
+          </Button>
+        }
         projectName="convergence"
         isLoading={false}
         error={null}
@@ -104,7 +112,11 @@ describe('McpServersDialog', () => {
       <McpServersDialog
         open
         onOpenChange={() => {}}
-        trigger={<Button type="button">Open</Button>}
+        trigger={
+          <Button type="button" size="lg">
+            Open
+          </Button>
+        }
         projectName="Global chat"
         isLoading={false}
         error={null}

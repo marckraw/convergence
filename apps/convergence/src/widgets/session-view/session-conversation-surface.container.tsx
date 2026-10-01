@@ -100,8 +100,9 @@ export const SessionConversationSurface: FC<
           <Button
             type="button"
             variant="link"
-            className="h-auto p-0"
             onClick={onParallelRetry}
+            size="lg"
+            className="text-sm"
           >
             Retry
           </Button>

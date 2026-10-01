@@ -9,7 +9,7 @@ import {
   NotebookPen,
   PanelLeftOpen,
 } from 'lucide-react'
-import { Button, cn, Tooltip } from '@convergence/ui'
+import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
 import {
@@ -148,20 +148,20 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
     className={cn(WAVE_RAIL_CLASS, className)}
     style={NO_DRAG_STYLE}
   >
-    <Tooltip label={OPEN_LOOM} side="right">
-      <Button
-        ref={openRef}
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label={OPEN_LOOM}
-        className={LOOM_STRIP_BUTTON_CLASS}
-        style={NO_DRAG_STYLE}
-        onClick={onOpen}
-      >
-        <PanelLeftOpen className="size-3.5" />
-      </Button>
-    </Tooltip>
+    <IconButton
+      label={OPEN_LOOM}
+      ref={openRef}
+      type="button"
+      variant="ghost"
+      style={NO_DRAG_STYLE}
+      onClick={onOpen}
+      tooltipSide="right"
+      size="sm"
+      className={LOOM_STRIP_BUTTON_CLASS}
+    >
+      <PanelLeftOpen className="size-3.5" />
+    </IconButton>
+
     {outage ? (
       <span
         role="status"
@@ -180,12 +180,11 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             data-loom-strip-sheet={sheet}
             aria-label={name}
-            className={LOOM_STRIP_SHEET_CLASS}
             style={NO_DRAG_STYLE}
             onClick={() => onSelectSheet(sheet)}
+            className={LOOM_STRIP_SHEET_CLASS}
           >
             <Icon className="size-3.5" />
             <span data-wave-count={sheet} className={LOOM_STRIP_COUNT_CLASS}>
@@ -201,18 +200,17 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
         nothing. Expand puts Loom in the content area instead -- there is no
         width left to refuse, so refusing would be the strip claiming a limit
         the mechanism no longer has. */}
-    <Tooltip label={EXPAND_LOOM} side="right">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label={EXPAND_LOOM}
-        className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
-        style={NO_DRAG_STYLE}
-        onClick={onExpand}
-      >
-        <Maximize2 className="size-3.5" />
-      </Button>
-    </Tooltip>
+    <IconButton
+      label={EXPAND_LOOM}
+      tooltipSide="right"
+      type="button"
+      variant="ghost"
+      size="sm"
+      className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
+      style={NO_DRAG_STYLE}
+      onClick={onExpand}
+    >
+      <Maximize2 className="size-3.5" />
+    </IconButton>
   </aside>
 )

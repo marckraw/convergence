@@ -1,6 +1,6 @@
 import type { CSSProperties, FC } from 'react'
 import { Users } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import type { SessionCardCrewFacetOption } from './session-card-facets.pure'
 
 interface SessionCrewChipsProps {
@@ -50,12 +50,12 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
             key={option.id}
             type="button"
             variant="ghost"
-            size="sm"
             aria-pressed={active}
             onClick={() => onToggle(option.id)}
             style={accentStyle(option.accentColor, active)}
+            size="sm"
             className={cn(
-              'h-7 max-w-44 gap-1.5 rounded-full border px-2.5 text-[11px] font-normal',
+              'max-w-44 rounded-full border px-2.5 text-[11px] font-normal',
               active
                 ? 'text-foreground'
                 : 'border-white/10 text-muted-foreground hover:border-white/20',
@@ -79,8 +79,8 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
         <Button
           type="button"
           variant="link"
-          size="sm"
           onClick={onClear}
+          size="sm"
           className="h-7 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
         >
           Clear

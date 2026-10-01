@@ -36,6 +36,7 @@ export const ConversationActionsRoutines: FC<ConversationActionsViewProps> = ({
     </div>
     {routines.running ? (
       <Button
+        size="lg"
         type="button"
         variant="ghost"
         role="menuitem"

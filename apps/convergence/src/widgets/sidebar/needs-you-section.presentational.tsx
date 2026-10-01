@@ -6,7 +6,7 @@ import {
   type NeedsYouCardModel,
   type NeedsYouCardProps,
 } from '@/features/needs-you'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import { FoldedGlyphs } from './needs-you-fold-glyphs.presentational'
 import { FoldedLine } from './needs-you-fold-line.presentational'
 export interface NeedsYouSectionProps {
@@ -56,6 +56,7 @@ export function NeedsYouSection({
             variant="ghost"
             aria-expanded={!folded}
             onClick={() => onToggleFold?.(title)}
+            size="lg"
             className="h-auto shrink-0 gap-1 rounded-sm p-0 text-[11px] font-medium hover:bg-transparent hover:text-foreground"
           >
             <ChevronRight

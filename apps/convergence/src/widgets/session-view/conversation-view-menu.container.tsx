@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Tooltip,
 } from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
 import { TranscriptViewMenuItems } from './transcript-view-switch.presentational'
@@ -51,17 +52,18 @@ export const ConversationViewMenu: FC<ConversationViewMenuProps> = ({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button
-          ref={triggerRef}
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          title="How the conversation is drawn, and parallel work"
-        >
-          View
-          <ChevronDown className="h-3 w-3" />
-        </Button>
+        <Tooltip label="How the conversation is drawn, and parallel work">
+          <Button
+            ref={triggerRef}
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+          >
+            View
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </Tooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

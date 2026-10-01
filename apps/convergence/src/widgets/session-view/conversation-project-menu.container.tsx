@@ -7,13 +7,14 @@ import {
 } from '@/features/project-open-menu'
 import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
 import {
-  cn,
   Button,
+  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Tooltip,
 } from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
 
@@ -60,24 +61,28 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
   // Read once while the header lives, not on each open (lap 2 D).
   const openApps = useProjectOpenApps(openPath)
   const trigger = (running: boolean) => (
-    <Button
-      ref={triggerRef}
-      type="button"
-      variant="ghost"
-      size="sm"
-      className={cn(
-        'h-7 gap-1 px-2 text-xs',
-        running && 'text-emerald-600 dark:text-emerald-300',
-      )}
-      title="Project actions, Open in, pull request and terminal"
-    >
-      {running && (
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-      )}
-      Project
-      {running && <span className="sr-only">, an action is running</span>}
-      <ChevronDown className="h-3 w-3" />
-    </Button>
+    <Tooltip label="Project actions, Open in, pull request and terminal">
+      <Button
+        ref={triggerRef}
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(
+          'gap-1',
+          running && 'text-emerald-600 dark:text-emerald-300',
+        )}
+      >
+        {running && (
+          <span
+            aria-hidden
+            className="h-1.5 w-1.5 rounded-full bg-emerald-500"
+          />
+        )}
+        Project
+        {running && <span className="sr-only">, an action is running</span>}
+        <ChevronDown className="h-3 w-3" />
+      </Button>
+    </Tooltip>
   )
   const tools = (afterActions: boolean) => (
     <>

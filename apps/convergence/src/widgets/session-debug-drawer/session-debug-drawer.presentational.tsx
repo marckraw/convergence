@@ -74,19 +74,13 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  variant="secondary"
                   onClick={onCopyAll}
                   disabled={entries.length === 0}
                 >
                   Copy all
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={onOpenLogFolder}
-                >
+                <Button type="button" variant="ghost" onClick={onOpenLogFolder}>
                   Open log folder
                 </Button>
               </div>

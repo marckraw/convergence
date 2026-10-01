@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { ArrowRight, ChevronDown, ChevronRight } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { cn, IconButton } from '@convergence/ui'
 import type { RelayHopLine, RelayHopTone } from './relay-hop.pure'
 
 const TONE_TEXT: Record<RelayHopTone, string> = {
@@ -114,23 +114,23 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
         </span>
 
         {canExpand ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={
+          <IconButton
+            label={
               expanded ? 'Hide the message carried' : 'Show the message carried'
             }
+            type="button"
+            variant="quiet"
             aria-expanded={expanded}
             onClick={onToggle}
-            className="size-5 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+            size="xs"
+            className="shrink-0"
           >
             {expanded ? (
               <ChevronDown className="size-3" />
             ) : (
               <ChevronRight className="size-3" />
             )}
-          </Button>
+          </IconButton>
         ) : null}
       </div>
 

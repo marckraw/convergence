@@ -1,6 +1,6 @@
 import type { FC, FormEvent } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
-import { Button, Input } from '@convergence/ui'
+import { IconButton, Input } from '@convergence/ui'
 import { Check, Pencil, X } from 'lucide-react'
 import { toChipExcerpt } from './annotation-selection.pure'
 
@@ -63,15 +63,15 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
           aria-label={`Edit response to “${excerpt}”`}
           className="h-6 w-40 text-xs"
         />
-        <Button
+        <IconButton
+          label="Save response"
           type="submit"
-          variant="ghost"
-          size="icon"
-          className="h-4 w-4 rounded-full text-muted-foreground hover:text-foreground"
-          aria-label="Save response"
+          variant="quiet"
+          size="xs"
+          className="rounded-full"
         >
           <Check className="h-3 w-3" />
-        </Button>
+        </IconButton>
       </form>
     )
   }
@@ -88,26 +88,26 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
         →
       </span>
       <span className="min-w-0 max-w-[12rem] truncate">{annotation.body}</span>
-      <Button
+      <IconButton
+        label={`Edit response to “${excerpt}”`}
         type="button"
-        variant="ghost"
-        size="icon"
-        className="h-4 w-4 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
-        aria-label={`Edit response to “${excerpt}”`}
+        variant="quiet"
         onClick={onStartEdit}
+        size="xs"
+        className="shrink-0 rounded-full"
       >
         <Pencil className="h-3 w-3" />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
+        label={`Remove response to “${excerpt}”`}
         type="button"
-        variant="ghost"
-        size="icon"
-        className="h-4 w-4 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
-        aria-label={`Remove response to “${excerpt}”`}
+        variant="quiet"
         onClick={onRemove}
+        size="xs"
+        className="shrink-0 rounded-full"
       >
         <X className="h-3 w-3" />
-      </Button>
+      </IconButton>
     </span>
   )
 }

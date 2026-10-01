@@ -72,8 +72,8 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
               disabled={isGenerating || providerItems.length === 0}
               searchPlaceholder="Search providers..."
               emptyMessage="No providers available."
-              triggerVariant="outline"
-              triggerSize="sm"
+              triggerVariant="secondary"
+              triggerSize="md"
               triggerClassName="w-full justify-between px-2 text-xs"
             />
           </div>
@@ -91,8 +91,8 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
                 onModelChange(nextModelId, nextProviderId)
               }
               disabled={isGenerating || providers.length === 0}
-              triggerVariant="outline"
-              triggerSize="sm"
+              triggerVariant="secondary"
+              triggerSize="md"
               triggerClassName="w-full justify-between px-2 text-xs"
             />
           </div>
@@ -113,9 +113,10 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
       <DialogFooter className="border-t border-border/70 px-6 py-4">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           onClick={() => onOpenChange(false)}
           disabled={isGenerating}
+          size="lg"
         >
           Cancel
         </Button>
@@ -123,6 +124,7 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
           type="button"
           onClick={onConfirm}
           disabled={isGenerating || !providerId || !modelId}
+          size="lg"
         >
           <Sparkles className="size-4" />
           {isGenerating ? 'Generating...' : 'Generate'}

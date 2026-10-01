@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Maximize2, PanelLeftClose } from 'lucide-react'
-import { Button, cn, Tooltip } from '@convergence/ui'
+import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -59,10 +59,10 @@ export const LoomCompactView: FC<
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             aria-label={EXPAND_LOOM}
-            className="h-10 gap-2 px-2 text-xs"
             onClick={onExpand}
+            size="lg"
+            className="px-2 text-xs py-0"
           >
             Expand <Maximize2 className="size-3.5" />
           </Button>
@@ -74,19 +74,19 @@ export const LoomCompactView: FC<
             because a control inside a drag strip is not a control -- the
             column declares no region of its own, so this says it for
             itself rather than inheriting whatever is above it. */}
-        <Tooltip label={COLLAPSE_LOOM} side="bottom">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={COLLAPSE_LOOM}
-            className={LOOM_COLLAPSE_BUTTON_CLASS}
-            style={NO_DRAG_STYLE}
-            onClick={onCollapse}
-          >
-            <PanelLeftClose className="size-3.5" />
-          </Button>
-        </Tooltip>
+
+        <IconButton
+          label={COLLAPSE_LOOM}
+          type="button"
+          variant="ghost"
+          style={NO_DRAG_STYLE}
+          onClick={onCollapse}
+          tooltipSide="bottom"
+          size="sm"
+          className={LOOM_COLLAPSE_BUTTON_CLASS}
+        >
+          <PanelLeftClose className="size-3.5" />
+        </IconButton>
       </div>
     </div>
     <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
@@ -120,10 +120,10 @@ export const LoomCompactView: FC<
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         ref={props.guideRef}
-        className="h-10 w-full justify-start px-2 text-xs"
         onClick={props.onOpenGuide}
+        size="lg"
+        className="w-full justify-start px-2 text-xs py-0"
       >
         {LEARN_LOOM_ENTRY}
       </Button>

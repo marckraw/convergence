@@ -1,12 +1,12 @@
 import type { FC } from 'react'
 import { MessageSquare, TerminalSquare } from 'lucide-react'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  Button,
 } from '@convergence/ui'
 
 export interface SessionIntentDialogProps {
@@ -36,10 +36,11 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
       >
         <Button
           type="button"
-          variant="outline"
-          className="flex h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal rounded-xl p-5 text-left"
+          variant="secondary"
           onClick={onSelectConversation}
           data-testid="session-intent-conversation"
+          size="lg"
+          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-xl p-5 text-left"
         >
           <span className="flex items-center gap-2 text-sm font-medium text-foreground">
             <MessageSquare className="h-4 w-4" />
@@ -51,10 +52,11 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
         </Button>
         <Button
           type="button"
-          variant="outline"
-          className="flex h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal rounded-xl p-5 text-left"
+          variant="secondary"
           onClick={onSelectTerminal}
           data-testid="session-intent-terminal"
+          size="lg"
+          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-xl p-5 text-left"
         >
           <span className="flex items-center gap-2 text-sm font-medium text-foreground">
             <TerminalSquare className="h-4 w-4" />

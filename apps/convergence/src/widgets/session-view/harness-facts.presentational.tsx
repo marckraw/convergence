@@ -1,5 +1,5 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { Button } from '@convergence/ui'
+import { Button, Tooltip } from '@convergence/ui'
 import {
   compactionLabel,
   hiddenPluginSentence,
@@ -64,7 +64,7 @@ export function HarnessFactsSections({
       {error ? (
         <div role="alert">
           {error}{' '}
-          <Button variant="ghost" size="sm" onClick={onRetry}>
+          <Button variant="ghost" onClick={onRetry}>
             Retry
           </Button>
         </div>
@@ -271,21 +271,22 @@ export function HarnessFactsSections({
                   {mcp &&
                     isMcpAlertStatus(server.status) &&
                     !server.nameTruncated && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        disabled={
-                          mcp.unavailable !== null || mcp.pending !== null
-                        }
-                        title={mcp.unavailable ?? undefined}
-                        aria-label={`Reconnect ${server.name}`}
-                        onClick={() => mcp.onReconnect(server.name)}
-                      >
-                        {mcp.pending === server.name
-                          ? 'Reconnecting…'
-                          : 'Reconnect'}
-                      </Button>
+                      <Tooltip label={mcp.unavailable ?? undefined}>
+                        <Button
+                          variant="ghost"
+                          disabled={
+                            mcp.unavailable !== null || mcp.pending !== null
+                          }
+                          aria-label={`Reconnect ${server.name}`}
+                          onClick={() => mcp.onReconnect(server.name)}
+                          size="xs"
+                          className="text-xs"
+                        >
+                          {mcp.pending === server.name
+                            ? 'Reconnecting…'
+                            : 'Reconnect'}
+                        </Button>
+                      </Tooltip>
                     )}
                 </div>
               ))}

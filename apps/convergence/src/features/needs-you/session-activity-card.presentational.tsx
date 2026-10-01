@@ -9,7 +9,7 @@ import {
   Server,
 } from 'lucide-react'
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
@@ -67,12 +67,8 @@ export function SessionActivityCard({
       )}
     >
       <div className="min-w-0 flex-1 p-2 text-left">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => onSelect(session.id)}
-          onDoubleClick={onRename}
-          title={[
+        <Tooltip
+          label={[
             session.name,
             regeneratingName ? 'Regenerating name…' : null,
             card.summary,
@@ -80,59 +76,69 @@ export function SessionActivityCard({
           ]
             .filter(Boolean)
             .join('\n')}
-          aria-label={
-            selectionLabel ??
-            [session.name, card.summary, card.projectName]
-              .filter(Boolean)
-              .join(', ')
-          }
-          aria-current={active ? 'true' : undefined}
-          className={cn(
-            'static h-auto min-w-0 w-full items-start justify-start whitespace-normal rounded-lg p-0 text-left after:absolute after:inset-0 after:rounded-lg hover:bg-transparent hover:text-foreground',
-            compact && 'flex',
-          )}
         >
-          <span className="block min-w-0 w-full space-y-1">
-            <span className="flex items-start gap-1 text-xs font-medium">
-              {compact && !card.hostUnreachable && (
-                <SessionStateBadge session={session} className="mt-0.5" />
-              )}
-              <span
-                className={compact ? 'min-w-0 truncate' : 'min-w-0 break-words'}
-              >
-                {session.name}
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onSelect(session.id)}
+            onDoubleClick={onRename}
+            aria-label={
+              selectionLabel ??
+              [session.name, card.summary, card.projectName]
+                .filter(Boolean)
+                .join(', ')
+            }
+            aria-current={active ? 'true' : undefined}
+            size="lg"
+            className={cn(
+              'static h-auto min-w-0 w-full items-start justify-start whitespace-normal rounded-lg p-0 text-left after:absolute after:inset-0 after:rounded-lg hover:bg-transparent hover:text-foreground',
+              compact && 'flex',
+            )}
+          >
+            <span className="block min-w-0 w-full space-y-1">
+              <span className="flex items-start gap-1 text-xs font-medium">
+                {compact && !card.hostUnreachable && (
+                  <SessionStateBadge session={session} className="mt-0.5" />
+                )}
+                <span
+                  className={
+                    compact ? 'min-w-0 truncate' : 'min-w-0 break-words'
+                  }
+                >
+                  {session.name}
+                </span>
+                {session.pinnedAt && (
+                  <Pin
+                    aria-label="Pinned"
+                    className={compact ? 'size-3 shrink-0' : 'h-3 w-3 shrink-0'}
+                  />
+                )}
+                {regeneratingName && (
+                  <Loader2
+                    aria-label="Regenerating name"
+                    className="size-3 shrink-0 animate-spin motion-reduce:animate-none"
+                  />
+                )}
               </span>
-              {session.pinnedAt && (
-                <Pin
-                  aria-label="Pinned"
-                  className={compact ? 'size-3 shrink-0' : 'h-3 w-3 shrink-0'}
-                />
+              {!compact && (
+                <span
+                  className="block truncate text-[11px] text-muted-foreground"
+                  title={card.projectName}
+                >
+                  {card.projectName}
+                </span>
               )}
-              {regeneratingName && (
-                <Loader2
-                  aria-label="Regenerating name"
-                  className="size-3 shrink-0 animate-spin motion-reduce:animate-none"
-                />
+              {!compact && (
+                <span
+                  className="block break-words text-[11px] text-foreground"
+                  title={session.model || 'Model not recorded'}
+                >
+                  {session.model || 'Model not recorded'}
+                </span>
               )}
             </span>
-            {!compact && (
-              <span
-                className="block truncate text-[11px] text-muted-foreground"
-                title={card.projectName}
-              >
-                {card.projectName}
-              </span>
-            )}
-            {!compact && (
-              <span
-                className="block break-words text-[11px] text-foreground"
-                title={session.model || 'Model not recorded'}
-              >
-                {session.model || 'Model not recorded'}
-              </span>
-            )}
-          </span>
-        </Button>
+          </Button>
+        </Tooltip>
         {compact && (
           <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-normal leading-3 text-muted-foreground">
             <NeedsYouCardIcon label={provider.label} compact>

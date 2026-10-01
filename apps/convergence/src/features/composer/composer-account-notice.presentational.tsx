@@ -44,8 +44,9 @@ export function ComposerAccountNotice({
               <Button
                 type="button"
                 variant="link"
-                className="h-auto p-0 text-xs"
                 onClick={onManageAccounts}
+                size="lg"
+                className="text-xs"
               >
                 Manage accounts
               </Button>

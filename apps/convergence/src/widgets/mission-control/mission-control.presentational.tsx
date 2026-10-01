@@ -9,8 +9,8 @@ import type {
   SessionCardOrderPreset,
 } from '@/features/mission-control'
 import {
-  cn,
   Button,
+  cn,
   Input,
   Select,
   SelectContent,
@@ -93,11 +93,11 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
                 key={entry.value}
                 type="button"
                 variant="ghost"
-                size="sm"
                 aria-pressed={mode === entry.value}
                 onClick={() => onModeChange(entry.value)}
+                size="sm"
                 className={cn(
-                  'h-7 rounded-full px-3 text-[11px] font-normal',
+                  'rounded-full px-3 text-[11px] font-normal',
                   mode === entry.value
                     ? 'bg-white/10 text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
@@ -183,9 +183,9 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
               <Button
                 type="button"
                 variant="link"
-                size="sm"
                 onClick={onClearFilter}
-                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground hover:text-foreground px-3"
               >
                 Show the whole room
               </Button>

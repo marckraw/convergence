@@ -49,15 +49,16 @@ export const CloseConfirmDialog: FC<CloseConfirmDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type="button" variant="ghost" onClick={onCancel}>
+          <Button type="button" variant="ghost" onClick={onCancel} size="lg">
             Cancel
           </Button>
           <Button
             type="button"
-            variant="destructive"
+            variant="danger"
             onClick={() => {
               if (request) onConfirm(request)
             }}
+            size="lg"
           >
             Close anyway
           </Button>

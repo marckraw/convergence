@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Circle, CircleHelp, CircleX, LoaderCircle } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomHorseTicketLine,
@@ -115,8 +115,9 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
             ]
               .filter((id): id is string => id !== null)
               .join(' ')}
-            className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
             onClick={() => onOpenSeat?.(horse.sessionId!)}
+            size="lg"
+            className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
           />
         ) : null}
         <span className="flex w-full items-baseline gap-1.5">
@@ -141,11 +142,10 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           <Button
             type="button"
             variant="ghost"
-            // Its own mark, so focus can come back HERE when the detail it
-            // opened closes (MAR-3195 lap 2, E).
             data-loom-horse-ticket={horse.key}
-            className={LOOM_HORSE_TICKET_DOOR_CLASS}
             onClick={onShowDetail}
+            size="lg"
+            className={LOOM_HORSE_TICKET_DOOR_CLASS}
           >
             <span id={`${ids}-ticket`} className="line-clamp-2 min-w-0">
               {ticket}
@@ -187,12 +187,10 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          // Its own mark, so focus can come back HERE and not to the card's
-          // first button (MAR-3195 lap 2, E).
           data-loom-horse-details={horse.key}
-          className="h-6 px-1 text-[11px] text-muted-foreground"
           onClick={onShowDetail}
+          size="xs"
+          className="px-1 text-muted-foreground"
         >
           Details
         </Button>
@@ -201,9 +199,9 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="h-6 px-1 text-[11px] text-muted-foreground"
           onClick={onShowNext}
+          size="xs"
+          className="px-1 text-muted-foreground"
         >
           View next work →
         </Button>

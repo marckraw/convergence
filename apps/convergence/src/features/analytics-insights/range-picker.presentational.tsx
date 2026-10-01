@@ -27,15 +27,15 @@ export const RangePicker: FC<RangePickerProps> = ({
           <Button
             key={preset}
             type="button"
-            variant={selected ? 'secondary' : 'ghost'}
-            size="sm"
+            variant={selected ? 'tonal' : 'ghost'}
             aria-pressed={selected}
-            className={cn(
-              'h-7 rounded-md px-2.5 text-[11px]',
-              selected && 'shadow-none ring-1 ring-ring',
-            )}
             disabled={disabled}
             onClick={() => onChange(preset)}
+            size="sm"
+            className={cn(
+              'rounded-md px-2.5 text-[11px]',
+              selected && 'shadow-none ring-1 ring-ring',
+            )}
           >
             {getRangeLabel(preset)}
           </Button>

@@ -142,10 +142,9 @@ export const NeedsYou = memo(function NeedsYou({
       {pendingOrder && (
         <Button
           variant="ghost"
-          size="sm"
           type="button"
-          className="mx-3 text-[11px] text-muted-foreground underline"
           onClick={() => setHeldOrder(null)}
+          className="mx-3 text-[11px] text-muted-foreground underline"
         >
           Order paused · Update order
         </Button>

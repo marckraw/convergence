@@ -5,6 +5,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  IconButton,
 } from '@convergence/ui'
 import { SessionActivityCard } from './session-activity-card.presentational'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
@@ -45,10 +46,9 @@ export function NeedsYouCard({
             {card.dismissLabel && !card.dismissed && (
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                variant="secondary"
                 onClick={() => onDismiss(session.id)}
+                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
               >
                 <CheckCheck aria-hidden="true" className="size-3.5" />
                 {card.dismissLabel}
@@ -57,10 +57,9 @@ export function NeedsYouCard({
             {card.canArchive && (
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                variant="secondary"
                 onClick={() => onArchive(session.id)}
+                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
               >
                 <Archive aria-hidden="true" className="size-3.5" />
                 Archive
@@ -72,15 +71,15 @@ export function NeedsYouCard({
       actions={
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
+            <IconButton
+              label={`Actions for ${session.name}`}
               type="button"
               variant="ghost"
-              size="icon"
-              className="h-10 w-10 shrink-0 rounded-lg"
-              aria-label={`Actions for ${session.name}`}
+              size="lg"
+              className="w-10 shrink-0 rounded-lg"
             >
               <MoreHorizontal className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem

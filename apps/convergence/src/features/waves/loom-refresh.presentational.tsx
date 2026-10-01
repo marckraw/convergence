@@ -15,10 +15,10 @@ export const LoomRefreshView: FC<{
     <Button
       type="button"
       variant="ghost"
-      size="sm"
-      className="h-6 px-1.5 text-[11px]"
       disabled={blocked}
       onClick={onRefresh}
+      size="xs"
+      className="px-1.5"
     >
       Refresh
     </Button>

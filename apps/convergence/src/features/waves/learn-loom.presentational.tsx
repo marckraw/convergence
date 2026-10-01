@@ -103,9 +103,8 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className={LEARN_LOOM_CLOSE_CLASS}
           onClick={onClose}
+          className={LEARN_LOOM_CLOSE_CLASS}
         >
           {LEARN_LOOM_CONTROLS.close}
         </Button>
@@ -167,17 +166,15 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className={LEARN_LOOM_REFERENCE_CONTROL_CLASS}
               onClick={onRestart}
+              className={LEARN_LOOM_REFERENCE_CONTROL_CLASS}
             >
               {LEARN_LOOM_CONTROLS.restart}
             </Button>
             <Button
               type="button"
-              size="sm"
-              className={LEARN_LOOM_REFERENCE_PRIMARY_CLASS}
               onClick={onClose}
+              className={LEARN_LOOM_REFERENCE_PRIMARY_CLASS}
             >
               {LEARN_LOOM_CONTROLS.backToLoom}
             </Button>
@@ -187,9 +184,8 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className={LEARN_LOOM_CONTROL_CLASS}
               onClick={onOpenReference}
+              className={LEARN_LOOM_CONTROL_CLASS}
             >
               {LEARN_LOOM_CONTROLS.reference}
             </Button>
@@ -199,7 +195,6 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               aria-disabled={step.backDisabled || undefined}
               className={
                 step.backDisabled
@@ -217,9 +212,8 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
                 control leaves the guide instead (R5). */}
             <Button
               type="button"
-              size="sm"
-              className={LEARN_LOOM_PRIMARY_CLASS}
               onClick={step.isLast ? onClose : onNext}
+              className={LEARN_LOOM_PRIMARY_CLASS}
             >
               {step.copy.primary}
             </Button>

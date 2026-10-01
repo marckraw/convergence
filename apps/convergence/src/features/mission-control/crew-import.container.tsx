@@ -72,7 +72,6 @@ export function CrewImport({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           disabled={busy}
           onClick={() => void run(() => replan(undefined, {}, true))}
         >

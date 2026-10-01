@@ -1,5 +1,5 @@
 import { ExternalLink, X } from 'lucide-react'
-import { Button } from '@convergence/ui'
+import { Button, IconButton } from '@convergence/ui'
 import type { LoomIssueDetail } from './loom-detail.pure'
 import {
   LOOM_DETAIL_CHIP_CLASS,
@@ -45,17 +45,17 @@ export const LoomDetailView = <TSession,>({
         </h4>
       </div>
       <span className="flex-1" />
-      <Button
+      <IconButton
+        label="Close the issue detail"
         ref={closeRef}
         type="button"
         variant="ghost"
-        size="sm"
-        aria-label="Close the issue detail"
-        className="size-6 shrink-0 p-0"
         onClick={onClose}
+        size="xs"
+        className="shrink-0"
       >
         <X className="size-3.5" />
-      </Button>
+      </IconButton>
     </div>
 
     <p className={LOOM_DETAIL_MUTED_CLASS}>{detail.statusLine}</p>
@@ -106,13 +106,13 @@ export const LoomDetailView = <TSession,>({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-6 justify-start px-1 text-[11px]"
             onClick={() => {
               if (detail.conversation.canOpen) {
                 onOpenConversation(detail.conversation.session)
               }
             }}
+            size="xs"
+            className="justify-start px-1"
           >
             Open conversation →
           </Button>

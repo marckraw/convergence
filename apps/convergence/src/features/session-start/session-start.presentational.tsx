@@ -8,7 +8,7 @@ import type {
 import { getProviderLifecycleBadge } from '@/entities/session'
 import type { ProjectContextItem } from '@/entities/project-context'
 import { ModelPickerDialog } from '@/features/model-picker'
-import { Button, Input, cn } from '@convergence/ui'
+import { Button, cn, Input } from '@convergence/ui'
 import { Play, Repeat } from 'lucide-react'
 import { SessionStartSelect } from './session-start-select.presentational'
 
@@ -111,11 +111,7 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
           placeholder="Initial message for the agent..."
           className="flex-1"
         />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={!name.trim() || !message.trim()}
-        >
+        <Button type="submit" disabled={!name.trim() || !message.trim()}>
           <Play className="h-4 w-4" />
           Start
         </Button>
@@ -135,8 +131,7 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
                 <li key={item.id}>
                   <Button
                     type="button"
-                    size="sm"
-                    variant={isSelected ? 'secondary' : 'outline'}
+                    variant={isSelected ? 'tonal' : 'secondary'}
                     onClick={() => onToggleContextItem(item.id)}
                     aria-pressed={isSelected}
                     className={cn(

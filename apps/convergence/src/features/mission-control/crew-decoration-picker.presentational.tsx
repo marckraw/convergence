@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Ban } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { cn, IconButton } from '@convergence/ui'
 import {
   CREW_ACCENT_COLORS,
   CREW_EMOJI_CHOICES,
@@ -35,23 +35,23 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
         className="flex flex-wrap items-center gap-1"
       >
         {CREW_EMOJI_CHOICES.map((choice) => (
-          <Button
+          <IconButton
+            label={`Emoji ${choice}`}
             key={choice}
             type="button"
             variant="ghost"
-            size="icon"
-            aria-label={`Emoji ${choice}`}
             aria-pressed={emoji === choice}
             onClick={() => onEmojiChange(emoji === choice ? null : choice)}
+            size="xs"
             className={cn(
-              'size-6 rounded-md border p-0 text-xs leading-none',
+              'rounded-md border text-xs leading-none',
               emoji === choice
                 ? 'border-white/40 bg-white/10'
                 : 'border-transparent hover:border-white/20',
             )}
           >
             {choice}
-          </Button>
+          </IconButton>
         ))}
       </div>
 
@@ -61,39 +61,39 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
         className="flex flex-wrap items-center gap-1"
       >
         {CREW_ACCENT_COLORS.map((choice) => (
-          <Button
+          <IconButton
+            label={choice.label}
             key={choice.value}
             type="button"
             variant="ghost"
-            size="icon"
-            aria-label={choice.label}
             aria-pressed={accentColor === choice.value}
             onClick={() =>
               onAccentColorChange(
                 accentColor === choice.value ? null : choice.value,
               )
             }
+            style={{ backgroundColor: choice.value }}
+            size="xs"
             className={cn(
-              'size-5 rounded-full border-2 p-0 transition-transform hover:bg-transparent',
+              'rounded-full border-2 transition-transform hover:bg-transparent',
               accentColor === choice.value
                 ? 'scale-110 border-white/70'
                 : 'border-transparent hover:border-white/30',
             )}
-            style={{ backgroundColor: choice.value }}
           />
         ))}
 
         {accentColor ? (
-          <Button
+          <IconButton
+            label="No accent color"
             type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="No accent color"
+            variant="quiet"
             onClick={() => onAccentColorChange(null)}
-            className="size-5 rounded-full border border-white/15 p-0 text-muted-foreground hover:text-foreground"
+            size="xs"
+            className="rounded-full border border-white/15"
           >
             <Ban className="size-3" />
-          </Button>
+          </IconButton>
         ) : null}
       </div>
     </div>

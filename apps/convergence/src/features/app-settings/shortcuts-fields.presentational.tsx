@@ -42,8 +42,7 @@ export const ShortcutsFields: FC<ShortcutsFieldsProps> = ({
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            variant="secondary"
-            size="sm"
+            variant="tonal"
             disabled={isSaving || isRecording}
             onClick={onStartRecord}
           >
@@ -52,7 +51,6 @@ export const ShortcutsFields: FC<ShortcutsFieldsProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             disabled={
               isSaving ||
               isRecording ||

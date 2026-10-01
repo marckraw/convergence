@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { Theme } from '@/shared/lib/theme'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 import { Sun, Moon, Monitor } from 'lucide-react'
 
 interface ThemeToggleProps {
@@ -9,15 +9,9 @@ interface ThemeToggleProps {
 }
 
 export const ThemeToggle: FC<ThemeToggleProps> = ({ theme, onToggle }) => (
-  <Button
-    variant="ghost"
-    size="icon"
-    onClick={onToggle}
-    className="h-8 w-8"
-    title={`Theme: ${theme}`}
-  >
+  <IconButton label={`Theme: ${theme}`} variant="ghost" onClick={onToggle}>
     {theme === 'light' && <Sun className="h-4 w-4" />}
     {theme === 'dark' && <Moon className="h-4 w-4" />}
     {theme === 'system' && <Monitor className="h-4 w-4" />}
-  </Button>
+  </IconButton>
 )

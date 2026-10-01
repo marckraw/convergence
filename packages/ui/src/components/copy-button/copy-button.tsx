@@ -1,41 +1,55 @@
-import { useCallback, useEffect, useRef, useState, type FC } from 'react'
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { Check, Copy } from 'lucide-react'
-import { cn } from '#lib/cn.pure'
+import { Button } from '../button/button'
+import { IconButton } from '../icon-button/icon-button'
 
-interface CopyButtonProps {
+type CopyButtonProps = {
+  /** What lands on the clipboard. */
   text: string
+  /** Its name and tooltip; "Copy" unless told otherwise. */
   label?: string
   className?: string
+  /** `icon`: a 24 px bordered square; `button`: the words beside the icon. */
   variant?: 'icon' | 'button'
 }
 
-export const CopyButton: FC<CopyButtonProps> = ({
+const COPIED = 'Copied'
+
+/**
+ * Copies a string (MAR-3616, rebuilt on IconButton and Button). It says
+ * "Copied" for a moment, in its name, its tooltip and a polite live region,
+ * then goes back to its own name. When the clipboard refuses, it keeps its
+ * own name. A click on it never reaches a row underneath.
+ */
+function CopyButton({
   text,
   label = 'Copy',
   className,
   variant = 'icon',
-}) => {
+}: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
   }, [])
 
   const handleClick = useCallback(
-    async (event: React.MouseEvent<HTMLButtonElement>) => {
+    async (event: MouseEvent<HTMLElement>) => {
       event.preventDefault()
       event.stopPropagation()
       try {
         await navigator.clipboard.writeText(text)
         setCopied(true)
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current)
-        }
+        if (timeoutRef.current) clearTimeout(timeoutRef.current)
         timeoutRef.current = setTimeout(() => setCopied(false), 1500)
       } catch {
         setCopied(false)
@@ -44,47 +58,46 @@ export const CopyButton: FC<CopyButtonProps> = ({
     [text],
   )
 
-  const copiedLabel = 'Copied'
-  const actionLabel = copied ? copiedLabel : label
+  const actionLabel = copied ? COPIED : label
+  const glyph = copied ? (
+    <Check aria-hidden className="h-3.5 w-3.5 text-success-ink" />
+  ) : (
+    <Copy aria-hidden className="h-3.5 w-3.5" />
+  )
+  const announcement = (
+    <span className="sr-only" aria-live="polite">
+      {copied ? COPIED : ''}
+    </span>
+  )
 
   if (variant === 'button') {
     return (
-      <button
-        type="button"
-        onClick={handleClick}
-        aria-label={actionLabel}
-        title={actionLabel}
-        className={cn(
-          'inline-flex h-8 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-          className,
-        )}
-      >
-        {copied ? (
-          <Check className="h-3.5 w-3.5 text-emerald-500" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" />
-        )}
-        {actionLabel}
-      </button>
+      <>
+        <Button variant="secondary" onClick={handleClick} className={className}>
+          {glyph}
+          {actionLabel}
+        </Button>
+        {announcement}
+      </>
     )
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      aria-label={actionLabel}
-      title={actionLabel}
-      className={cn(
-        'inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-        className,
-      )}
-    >
-      {copied ? (
-        <Check className="h-3.5 w-3.5 text-emerald-500" />
-      ) : (
-        <Copy className="h-3.5 w-3.5" />
-      )}
-    </button>
+    <>
+      <IconButton
+        variant="secondary"
+        size="xs"
+        label={actionLabel}
+        onClick={handleClick}
+        className={['text-muted-foreground hover:text-foreground', className]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {glyph}
+      </IconButton>
+      {announcement}
+    </>
   )
 }
+
+export { CopyButton, type CopyButtonProps }

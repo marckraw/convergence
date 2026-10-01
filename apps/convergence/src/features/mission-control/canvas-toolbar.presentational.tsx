@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Link2, Plus, Settings2, History } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 
 interface CanvasToolbarProps {
   importCrew: ReactNode
@@ -54,44 +54,47 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         disabled={!hasCrew}
         onClick={onAddConversation}
-        className="h-7 gap-1 px-2 text-[11px]"
+        size="sm"
+        className="gap-1 text-[11px]"
       >
         <Plus className="size-3" />
         Add conversation
       </Button>
       {importCrew}
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-pressed={connecting}
-        disabled={!canConnect}
-        title={
+      <Tooltip
+        label={
           canConnect
             ? undefined
             : 'Add a second conversation to this crew before connecting.'
         }
-        onClick={onToggleConnect}
-        className={cn(
-          'h-7 gap-1 px-2 text-[11px]',
-          connecting && 'bg-white/10 text-foreground',
-        )}
       >
-        <Link2 className="size-3" />
-        Connect
-      </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-pressed={connecting}
+          disabled={!canConnect}
+          onClick={onToggleConnect}
+          size="sm"
+          className={cn(
+            'gap-1 text-[11px]',
+            connecting && 'bg-white/10 text-foreground',
+          )}
+        >
+          <Link2 className="size-3" />
+          Connect
+        </Button>
+      </Tooltip>
 
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         disabled={!hasCrew}
         onClick={onCrewSettings}
-        className="h-7 gap-1 px-2 text-[11px]"
+        size="sm"
+        className="gap-1 text-[11px]"
       >
         <Settings2 className="size-3" />
         Crew settings
@@ -100,10 +103,10 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         disabled={!hasCrew}
         onClick={onHistory}
-        className="h-7 gap-1 px-2 text-[11px]"
+        size="sm"
+        className="gap-1 text-[11px]"
       >
         <History className="size-3" />
         History

@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 import { ArrowUpRight } from 'lucide-react'
 
 export interface SeatFact {
@@ -31,16 +31,16 @@ export const SeatFacts: FC<SeatFactsProps> = ({ heading, facts }) => (
           <dd className="flex min-w-0 items-center gap-1 text-foreground">
             <span className="min-w-0 flex-1 truncate">{fact.value}</span>
             {fact.open ? (
-              <Button
+              <IconButton
+                label={fact.open.label}
                 type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={fact.open.label}
+                variant="quiet"
                 onClick={fact.open.onOpen}
-                className="size-5 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+                size="xs"
+                className="shrink-0"
               >
                 <ArrowUpRight aria-hidden className="size-3.5" />
-              </Button>
+              </IconButton>
             ) : null}
           </dd>
         </div>

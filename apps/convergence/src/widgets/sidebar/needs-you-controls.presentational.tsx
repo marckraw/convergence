@@ -80,10 +80,10 @@ export function NeedsYouControls({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             onClick={onReset}
             aria-label="Clear activity filters"
-            className="h-7 gap-1 px-1.5 text-[11px] font-normal"
+            size="sm"
+            className="gap-1 px-1.5 text-[11px] font-normal"
           >
             <X aria-hidden="true" className="size-3" /> Clear
           </Button>
@@ -97,7 +97,8 @@ export function NeedsYouControls({
         aria-expanded={expanded}
         aria-controls={controlsId}
         aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
-        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 py-2 text-left text-[11px] font-normal"
+        size="lg"
+        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 text-left text-[11px] font-normal"
       >
         <SlidersHorizontal
           aria-hidden="true"
@@ -271,7 +272,6 @@ export function NeedsYouControls({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             onClick={onCollapse}
             className="text-[11px] font-normal"
           >

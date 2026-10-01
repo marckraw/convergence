@@ -10,13 +10,13 @@ import {
 } from 'react'
 import { MoreVertical, Pin } from 'lucide-react'
 import {
-  Button,
+  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  cn,
+  IconButton,
 } from '@convergence/ui'
 import { useElementWidth } from '@/shared/hooks/use-element-width'
 import {
@@ -573,17 +573,15 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
           {moreShown && (
             <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
               <DropdownMenuTrigger asChild>
-                <Button
+                <IconButton
                   ref={moreRef}
                   data-header-more
+                  label="Session actions"
                   variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  title="More actions"
-                  aria-label="Session actions"
+                  size="sm"
                 >
                   <MoreVertical className="h-3.5 w-3.5" />
-                </Button>
+                </IconButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"

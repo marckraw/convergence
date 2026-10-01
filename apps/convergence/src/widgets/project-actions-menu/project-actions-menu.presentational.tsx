@@ -5,7 +5,7 @@ import type {
   ProjectScriptRunOutput,
 } from '@/entities/project-script'
 import { ProjectScriptIcon } from '@/entities/project-script'
-import { Button, DropdownMenuContent, cn } from '@convergence/ui'
+import { Button, cn, DropdownMenuContent, IconButton } from '@convergence/ui'
 import {
   ChevronDown,
   ChevronRight,
@@ -97,24 +97,22 @@ export const ProjectActionsMenuPresentational: FC<
               >
                 <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5">
                   {running && run ? (
-                    <Button
+                    <IconButton
+                      label={`Stop ${script.name}`}
                       type="button"
                       variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15 hover:text-emerald-200"
                       onClick={() => onStop(run)}
-                      title={`Stop ${script.name}`}
+                      className="rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15 hover:text-emerald-200"
                     >
                       <Square className="h-4 w-4" />
-                    </Button>
+                    </IconButton>
                   ) : (
-                    <Button
+                    <IconButton
+                      label={`${run ? 'Run again' : 'Run'} ${script.name}`}
                       type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                      variant="quiet"
                       onClick={() => onRun(item)}
-                      title={`${run ? 'Run again' : 'Run'} ${script.name}`}
+                      className="rounded-md border border-border bg-background hover:bg-accent"
                     >
                       {run ? (
                         <RotateCcw className="h-4 w-4" />
@@ -124,7 +122,7 @@ export const ProjectActionsMenuPresentational: FC<
                           className="h-4 w-4"
                         />
                       )}
-                    </Button>
+                    </IconButton>
                   )}
 
                   <div className="min-w-0">
@@ -148,41 +146,38 @@ export const ProjectActionsMenuPresentational: FC<
                       {formatProjectActionRunMeta(run)}
                     </span>
                     {run && (
-                      <Button
+                      <IconButton
+                        label={expanded ? 'Hide output' : 'Show output'}
                         type="button"
                         variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
                         onClick={() => onToggleRun(run.id)}
-                        title={expanded ? 'Hide output' : 'Show output'}
+                        size="sm"
                       >
                         {expanded ? (
                           <ChevronDown className="h-3.5 w-3.5" />
                         ) : (
                           <ChevronRight className="h-3.5 w-3.5" />
                         )}
-                      </Button>
+                      </IconButton>
                     )}
-                    <Button
+                    <IconButton
+                      label="Edit action"
                       type="button"
                       variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
                       onClick={() => onEdit(script)}
-                      title="Edit action"
+                      size="sm"
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
+                    </IconButton>
+                    <IconButton
+                      label="Delete action"
                       type="button"
                       variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
                       onClick={() => onDelete(script)}
-                      title="Delete action"
+                      size="sm"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
                 {run && expanded && (
@@ -201,8 +196,9 @@ export const ProjectActionsMenuPresentational: FC<
         type="button"
         variant="ghost"
         onClick={onAdd}
+        size="lg"
         className={cn(
-          'grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-left',
+          'grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center rounded-md border border-dashed border-border px-3 py-3 text-left',
           items.length > 0 && 'mt-2',
         )}
       >
@@ -223,7 +219,8 @@ export const ProjectActionsMenuPresentational: FC<
           type="button"
           variant="ghost"
           onClick={onCreateLane}
-          className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-2 rounded-md px-3 py-2 text-left"
+          size="lg"
+          className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center rounded-md px-3 text-left"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
             <GitFork className="h-4 w-4" />
@@ -242,7 +239,8 @@ export const ProjectActionsMenuPresentational: FC<
             type="button"
             variant="ghost"
             onClick={onRevealLane}
-            className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-2 rounded-md px-3 py-2 text-left"
+            size="lg"
+            className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center rounded-md px-3 text-left"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
               <FolderOpen className="h-4 w-4" />

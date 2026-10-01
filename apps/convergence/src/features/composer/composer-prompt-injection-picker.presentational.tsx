@@ -70,6 +70,7 @@ export const ComposerPromptInjectionPicker: FC<
               onMouseEnter={() => onHover(index)}
               onClick={() => onSelect(prompt)}
               data-testid={`composer-prompt-injection-item-${prompt.id}`}
+              size="lg"
               className={cn(
                 'flex h-auto w-full flex-col items-start gap-0.5 rounded px-2 py-1.5 text-left text-xs',
                 isActive && 'bg-accent text-accent-foreground',
@@ -105,10 +106,9 @@ export const ComposerPromptInjectionPicker: FC<
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         onClick={onDismiss}
-        className="sr-only"
         aria-label="Close prompt injection picker"
+        className="sr-only"
       >
         Close
       </Button>

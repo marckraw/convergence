@@ -52,7 +52,11 @@ function renderDialog(
   const props: Parameters<typeof PromptLibraryBrowserDialog>[0] = {
     open: true,
     onOpenChange: vi.fn(),
-    trigger: <Button type="button">Open</Button>,
+    trigger: (
+      <Button type="button" size="lg">
+        Open
+      </Button>
+    ),
     projectName: 'convergence',
     catalog,
     prompts: [prompt],

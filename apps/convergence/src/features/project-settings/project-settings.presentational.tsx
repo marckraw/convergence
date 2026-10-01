@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import {
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -10,7 +11,6 @@ import {
   DialogTrigger,
   Input,
   SwitchRow,
-  cn,
 } from '@convergence/ui'
 import type { WorkspaceStartStrategy } from '@/entities/project'
 
@@ -79,12 +79,13 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
             <div className="grid gap-2 sm:grid-cols-2">
               <Button
                 type="button"
-                variant={strategy === 'base-branch' ? 'secondary' : 'outline'}
+                variant={strategy === 'base-branch' ? 'tonal' : 'secondary'}
+                onClick={() => onStrategyChange('base-branch')}
+                size="lg"
                 className={cn(
                   'h-auto w-full min-w-0 items-start justify-start whitespace-normal px-3 py-3 text-left',
                   strategy === 'base-branch' && 'ring-1 ring-ring',
                 )}
-                onClick={() => onStrategyChange('base-branch')}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="text-sm font-medium">Base branch</span>
@@ -96,12 +97,13 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
 
               <Button
                 type="button"
-                variant={strategy === 'current-head' ? 'secondary' : 'outline'}
+                variant={strategy === 'current-head' ? 'tonal' : 'secondary'}
+                onClick={() => onStrategyChange('current-head')}
+                size="lg"
                 className={cn(
                   'h-auto w-full min-w-0 items-start justify-start whitespace-normal px-3 py-3 text-left',
                   strategy === 'current-head' && 'ring-1 ring-ring',
                 )}
-                onClick={() => onStrategyChange('current-head')}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="text-sm font-medium">Current HEAD</span>
@@ -201,13 +203,14 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
         <DialogFooter className="border-t border-white/10 px-6 py-4">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={() => onOpenChange(false)}
             disabled={isSaving}
+            size="lg"
           >
             Cancel
           </Button>
-          <Button type="button" onClick={onSave} disabled={isSaving}>
+          <Button type="button" onClick={onSave} disabled={isSaving} size="lg">
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
         </DialogFooter>

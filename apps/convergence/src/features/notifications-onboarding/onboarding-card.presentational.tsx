@@ -20,10 +20,10 @@ export const NotificationsOnboardingCard: FC<OnboardingCardProps> = ({
       notification in Settings &rarr; Notifications.
     </p>
     <div className="flex shrink-0 gap-2">
-      <Button type="button" size="sm" onClick={onOpenSettings}>
+      <Button type="button" onClick={onOpenSettings}>
         Open Settings
       </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+      <Button type="button" variant="ghost" onClick={onDismiss}>
         Don&rsquo;t show again
       </Button>
     </div>

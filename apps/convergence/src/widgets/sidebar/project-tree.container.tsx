@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  IconButton,
   Input,
   Tooltip,
 } from '@convergence/ui'
@@ -174,24 +175,23 @@ export const ProjectTree = memo(function ProjectTree({
 
     return (
       <DropdownMenu>
-        <Tooltip label={`Session actions ${session.name}`} side="left">
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={
-                card
-                  ? 'h-10 w-10 shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
-                  : 'h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
-              }
-              aria-label={`Session actions ${session.name}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-        </Tooltip>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label={`Session actions ${session.name}`}
+            tooltipSide="left"
+            type="button"
+            variant="ghost"
+            size={card ? 'lg' : 'xs'}
+            className={
+              card
+                ? 'shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
+                : 'shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </IconButton>
+        </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
             className="gap-2"
@@ -259,23 +259,20 @@ export const ProjectTree = memo(function ProjectTree({
 
     return (
       <DropdownMenu>
-        <Tooltip
-          label={`Workspace actions ${workspace.branchName}`}
-          side="left"
-        >
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100"
-              aria-label={`Workspace actions ${workspace.branchName}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-        </Tooltip>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label={`Workspace actions ${workspace.branchName}`}
+            type="button"
+            variant="quiet"
+            onClick={(event) => event.stopPropagation()}
+            tooltipSide="left"
+            size="xs"
+            className="shrink-0 opacity-0 transition-opacity group-hover/workspace:opacity-100 focus-visible:opacity-100"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </IconButton>
+        </DropdownMenuTrigger>
+
         <DropdownMenuContent align="end">
           {isArchived ? (
             <DropdownMenuItem
@@ -408,6 +405,7 @@ export const ProjectTree = memo(function ProjectTree({
                 setRenamingSessionId(session.id)
                 setRenameDraft(session.name)
               }}
+              size="lg"
               className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
             >
               {session.providerId === 'shell' ? (
@@ -500,7 +498,8 @@ export const ProjectTree = memo(function ProjectTree({
                   onClick={() => {
                     if (!searching) toggleWorkspace(ws.id)
                   }}
-                  className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                  size="lg"
+                  className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left font-normal hover:text-foreground"
                 >
                   <ChevronRight
                     className={cn(
@@ -568,7 +567,8 @@ export const ProjectTree = memo(function ProjectTree({
                 onClick={() => {
                   if (!searching) setShowArchived((current) => !current)
                 }}
-                className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                size="lg"
+                className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left font-normal hover:text-foreground"
               >
                 <ChevronRight
                   className={cn(
@@ -619,7 +619,8 @@ export const ProjectTree = memo(function ProjectTree({
                           onClick={() => {
                             if (!searching) toggleWorkspace(ws.id)
                           }}
-                          className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                          size="lg"
+                          className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left font-normal hover:text-foreground"
                         >
                           <ChevronRight
                             className={cn(
@@ -668,9 +669,10 @@ export const ProjectTree = memo(function ProjectTree({
         <div className="mt-2 ml-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="quiet"
             onClick={onOpenCreateWorkspace}
-            className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal text-muted-foreground hover:text-foreground"
+            size="lg"
+            className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal"
           >
             <Plus className="h-3 w-3" />
             New workspace

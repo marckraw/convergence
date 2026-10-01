@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Star } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type { ModelPickerProviderFilter } from './model-picker-dialog.types'
 
@@ -24,15 +24,15 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
   <Button
     type="button"
     variant="ghost"
-    size="sm"
     aria-pressed={selected}
+    onClick={() => onSelect(id)}
+    size="lg"
     className={cn(
-      'h-9 shrink-0 justify-start gap-2 px-2 text-left text-xs sm:w-full',
+      'shrink-0 justify-start px-2 text-left text-xs sm:w-full py-0',
       selected
         ? 'bg-accent text-accent-foreground'
         : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
     )}
-    onClick={() => onSelect(id)}
   >
     {provider ? (
       provider.kind === 'favorites' ? (

@@ -7,12 +7,14 @@ import { ArrowRight, X } from 'lucide-react'
 import { ProviderAccountPicker } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
 import {
-  cn,
   Button,
+  cn,
+  IconButton,
   Input,
   SearchableSelect,
   SwitchRow,
   Textarea,
+  Tooltip,
 } from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import type {
@@ -177,16 +179,16 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
                 : `Saved · ${draft.enabled ? 'on' : 'off'}`}
           </p>
         </div>
-        <Button
+        <IconButton
+          label="Close the connection panel"
           type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="Close the connection panel"
+          variant="quiet"
           onClick={onClose}
-          className="size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+          size="sm"
+          className="shrink-0"
         >
           <X className="size-3.5" />
-        </Button>
+        </IconButton>
       </div>
 
       {/* Frame 09. The draft is kept and the STORED wire is untouched, and the
@@ -440,12 +442,12 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               key={choice.value}
               type="button"
               variant="ghost"
-              size="sm"
               aria-pressed={draft.condition.kind === choice.value}
               disabled={busy}
               onClick={() => onConditionKindChange(choice.value)}
+              size="sm"
               className={cn(
-                'h-7 justify-start rounded-md px-2 text-[11px] font-normal',
+                'justify-start rounded-md text-[11px] font-normal',
                 draft.condition.kind === choice.value
                   ? 'bg-white/10 text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
@@ -491,27 +493,25 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             className="flex flex-col gap-0.5"
           >
             {beforeDelivery.map((option) => (
-              <Button
-                key={option.mode}
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-pressed={draft.beforeDelivery === option.mode}
-                // Shown DISABLED with its reason rather than hidden: a control
-                // that vanishes teaches nothing, and the person is left
-                // wondering whether Convergence forgot the feature.
-                disabled={busy || option.disabled}
-                title={option.disabled ? option.help : undefined}
-                onClick={() => onBeforeDeliveryChange(option.mode)}
-                className={cn(
-                  'h-7 justify-start rounded-md px-2 text-[11px] font-normal',
-                  draft.beforeDelivery === option.mode
-                    ? 'bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {option.label}
-              </Button>
+              <Tooltip label={option.disabled ? option.help : undefined}>
+                <Button
+                  key={option.mode}
+                  type="button"
+                  variant="ghost"
+                  aria-pressed={draft.beforeDelivery === option.mode}
+                  disabled={busy || option.disabled}
+                  onClick={() => onBeforeDeliveryChange(option.mode)}
+                  size="sm"
+                  className={cn(
+                    'justify-start rounded-md text-[11px] font-normal',
+                    draft.beforeDelivery === option.mode
+                      ? 'bg-white/10 text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {option.label}
+                </Button>
+              </Tooltip>
             ))}
           </div>
           {draft.beforeDelivery === 'custom' ? (
@@ -562,21 +562,19 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         <div className="flex items-center gap-1.5">
           <Button
             type="button"
-            variant="secondary"
-            size="sm"
+            variant="tonal"
             disabled={busy || problem !== null || (!isNew && !dirty)}
             onClick={onSave}
-            className="h-8 px-3 text-[11px]"
+            className="text-[11px]"
           >
             {saveError ? 'Try again' : 'Save changes'}
           </Button>
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             disabled={busy}
             onClick={onCancel}
-            className="h-8 px-3 text-[11px]"
+            className="text-[11px]"
           >
             {saveError ? 'Discard changes' : 'Cancel'}
           </Button>
@@ -590,10 +588,10 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             disabled={busy}
             onClick={onDelete}
-            className="h-7 self-start px-0 text-[11px] text-muted-foreground hover:text-red-400"
+            size="sm"
+            className="self-start px-0 text-[11px] text-muted-foreground hover:text-red-400"
           >
             Delete connection
           </Button>

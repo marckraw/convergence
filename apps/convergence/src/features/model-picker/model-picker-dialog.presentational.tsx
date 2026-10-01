@@ -8,13 +8,14 @@ import {
 } from 'cmdk'
 import { Check, ChevronDown, Search, Star } from 'lucide-react'
 import {
-  cn,
   Button,
   type ButtonProps,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
+  IconButton,
 } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type {
@@ -179,22 +180,17 @@ export const ModelPickerDialogPresentational: FC<
                         {item.modelLabel}
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
-                        <Button
+                        <IconButton
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          aria-label={
+                          size="xs"
+                          label={
                             item.favorite
                               ? `Remove ${item.modelLabel} from favorites`
                               : `Add ${item.modelLabel} to favorites`
                           }
-                          title={
-                            item.favorite
-                              ? 'Remove from favorites'
-                              : 'Add to favorites'
-                          }
                           className={cn(
-                            'h-6 w-6 text-muted-foreground hover:bg-muted hover:text-foreground',
+                            'text-muted-foreground hover:bg-muted hover:text-foreground',
                             item.favorite &&
                               'text-yellow-600 hover:text-yellow-700 dark:text-yellow-300 dark:hover:text-yellow-200',
                           )}
@@ -210,7 +206,7 @@ export const ModelPickerDialogPresentational: FC<
                               item.favorite && 'fill-current',
                             )}
                           />
-                        </Button>
+                        </IconButton>
                         {item.selected ? (
                           <Check className="h-4 w-4 shrink-0" />
                         ) : null}

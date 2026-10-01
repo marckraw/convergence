@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  IconButton,
   Tooltip,
 } from '@convergence/ui'
 import {
@@ -43,31 +44,30 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
     <DropdownMenu>
       <Tooltip label={OPEN_SIDEBAR_TOOLS} side="bottom">
         <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size={iconOnly ? 'icon' : 'sm'}
-            className={
-              iconOnly
-                ? 'h-8 w-8'
-                : 'h-8 w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground'
-            }
-            aria-label={OPEN_SIDEBAR_TOOLS}
-          >
-            {iconOnly ? (
+          {iconOnly ? (
+            <IconButton
+              label={OPEN_SIDEBAR_TOOLS}
+              type="button"
+              variant="ghost"
+            >
               <MoreHorizontal className="h-4 w-4" />
-            ) : (
-              <>
-                <span className="flex items-center gap-2">
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                  Tools
-                </span>
-                <span className="text-[11px] text-muted-foreground/80">
-                  Dialogs
-                </span>
-              </>
-            )}
-          </Button>
+            </IconButton>
+          ) : (
+            <Button
+              type="button"
+              variant="quiet"
+              className="w-full justify-between px-2"
+              aria-label={OPEN_SIDEBAR_TOOLS}
+            >
+              <span className="flex items-center gap-2">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+                Tools
+              </span>
+              <span className="text-[11px] text-muted-foreground/80">
+                Dialogs
+              </span>
+            </Button>
+          )}
         </DropdownMenuTrigger>
       </Tooltip>
       <DropdownMenuContent align={iconOnly ? 'start' : 'end'} side="bottom">

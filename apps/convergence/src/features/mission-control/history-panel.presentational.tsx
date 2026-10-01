@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { X } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import {
   HISTORY_TONE_BORDER,
   HISTORY_TONE_TEXT,
@@ -94,11 +94,11 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
             key={entry.value}
             type="button"
             variant="ghost"
-            size="sm"
             aria-pressed={filter === entry.value}
             onClick={() => onFilterChange(entry.value)}
+            size="xs"
             className={cn(
-              'h-6 rounded-full px-2.5 text-[11px] font-normal',
+              'rounded-full px-2.5 font-normal',
               filter === entry.value
                 ? 'bg-white/10 text-foreground'
                 : 'text-muted-foreground hover:text-foreground',
@@ -112,10 +112,10 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         aria-label="Close history"
         onClick={onClose}
-        className="h-7 px-2 text-[11px]"
+        size="sm"
+        className="text-[11px] gap-2"
       >
         <X className="size-3.5" />
         Close
@@ -138,10 +138,10 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
         </p>
         <Button
           type="button"
-          variant="secondary"
-          size="sm"
+          variant="tonal"
           onClick={onRetry}
-          className="h-7 px-3 text-[11px]"
+          size="sm"
+          className="px-3 text-[11px]"
         >
           Try again
         </Button>
@@ -168,10 +168,10 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
         </p>
         <Button
           type="button"
-          variant="secondary"
-          size="sm"
+          variant="tonal"
           onClick={() => onFilterChange('all')}
-          className="h-7 px-3 text-[11px]"
+          size="sm"
+          className="px-3 text-[11px]"
         >
           Clear history filters
         </Button>
@@ -189,8 +189,9 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
                 variant="ghost"
                 aria-pressed={run.flowRunId === selectedRunId}
                 onClick={() => onSelectRun(run.flowRunId)}
+                size="lg"
                 className={cn(
-                  'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left font-normal',
+                  'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 text-left font-normal',
                   HISTORY_TONE_BORDER[run.tone],
                   run.flowRunId === selectedRunId && 'bg-white/[0.06]',
                 )}
@@ -221,10 +222,10 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
                 disabled={loadingOlder}
                 onClick={onLoadOlder}
-                className="h-7 w-full px-3 text-[11px] text-muted-foreground"
+                size="sm"
+                className="w-full px-3 text-[11px] text-muted-foreground"
               >
                 {loadingOlder
                   ? 'Loading older runs…'

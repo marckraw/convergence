@@ -16,6 +16,7 @@ import {
   DialogTitle,
   Input,
   Textarea,
+  Tooltip,
 } from '@convergence/ui'
 
 interface ProjectScriptEditorProps {
@@ -96,18 +97,20 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
               </span>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {PROJECT_SCRIPT_ICON_OPTIONS.map((option) => (
-                  <Button
-                    key={option.id}
-                    type="button"
-                    variant={icon === option.id ? 'secondary' : 'outline'}
-                    className="h-14 flex-col gap-1 px-1 text-[11px]"
-                    onClick={() => setIcon(option.id)}
-                    title={option.label}
-                    aria-pressed={icon === option.id ? true : undefined}
-                  >
-                    <ProjectScriptIcon icon={option.id} className="h-4 w-4" />
-                    {option.label}
-                  </Button>
+                  <Tooltip label={option.label}>
+                    <Button
+                      key={option.id}
+                      type="button"
+                      variant={icon === option.id ? 'tonal' : 'secondary'}
+                      onClick={() => setIcon(option.id)}
+                      aria-pressed={icon === option.id ? true : undefined}
+                      size="lg"
+                      className="h-14 flex-col gap-1 px-1 text-[11px]"
+                    >
+                      <ProjectScriptIcon icon={option.id} className="h-4 w-4" />
+                      {option.label}
+                    </Button>
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -139,12 +142,14 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
+              size="lg"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={saving || !name.trim() || !command.trim()}
+              size="lg"
             >
               {saving ? 'Saving…' : 'Save'}
             </Button>

@@ -52,8 +52,7 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
           onClick={onCheckNow}
           disabled={actionsDisabled}
         >
@@ -62,7 +61,6 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
         {status.phase === 'available' && (
           <Button
             type="button"
-            size="sm"
             onClick={onDownload}
             disabled={isDev || isSaving}
           >
@@ -72,7 +70,6 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
         {status.phase === 'downloaded' && (
           <Button
             type="button"
-            size="sm"
             onClick={onInstall}
             disabled={isDev || isSaving}
           >
@@ -83,7 +80,6 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             onClick={onOpenReleaseNotes}
             disabled={isDev || isSaving}
           >

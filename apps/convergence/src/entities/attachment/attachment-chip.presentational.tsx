@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { FileText, FileType, Image as ImageIcon, X } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
 import type { Attachment } from './attachment.types'
 
 interface AttachmentChipProps {
@@ -37,44 +37,43 @@ export const AttachmentChip: FC<AttachmentChipProps> = ({
       data-testid="attachment-chip"
       data-attachment-id={attachment.id}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label={`Preview ${attachment.filename}. Press to open preview or Delete to remove.`}
-        title={capabilityError ?? attachment.filename}
-        onClick={() => onOpen(attachment)}
-        className="h-5 gap-1.5 px-1 text-xs font-normal"
-      >
-        {attachment.thumbnailPath ? (
-          <img
-            src={`file://${attachment.thumbnailPath}`}
-            alt=""
-            className="h-4 w-4 rounded bg-background object-contain"
-          />
-        ) : kind === 'image' ? (
-          <ImageIcon className="h-3.5 w-3.5" />
-        ) : kind === 'pdf' ? (
-          <FileType className="h-3.5 w-3.5" />
-        ) : (
-          <FileText className="h-3.5 w-3.5" />
-        )}
-        <span className="max-w-[12rem] truncate">{displayName}</span>
-      </Button>
-      {onRemove && (
+      <Tooltip label={capabilityError ?? attachment.filename}>
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          aria-label={`Remove ${attachment.filename}`}
+          aria-label={`Preview ${attachment.filename}. Press to open preview or Delete to remove.`}
+          onClick={() => onOpen(attachment)}
+          className="h-5 gap-1.5 px-1 font-normal"
+        >
+          {attachment.thumbnailPath ? (
+            <img
+              src={`file://${attachment.thumbnailPath}`}
+              alt=""
+              className="h-4 w-4 rounded bg-background object-contain"
+            />
+          ) : kind === 'image' ? (
+            <ImageIcon className="h-3.5 w-3.5" />
+          ) : kind === 'pdf' ? (
+            <FileType className="h-3.5 w-3.5" />
+          ) : (
+            <FileText className="h-3.5 w-3.5" />
+          )}
+          <span className="max-w-[12rem] truncate">{displayName}</span>
+        </Button>
+      </Tooltip>
+      {onRemove && (
+        <IconButton
+          label={`Remove ${attachment.filename}`}
+          type="button"
+          variant="ghost"
           onClick={(e) => {
             e.stopPropagation()
             onRemove(attachment.id)
           }}
-          className="h-5 w-5"
+          size="xs"
         >
           <X className="h-3 w-3" />
-        </Button>
+        </IconButton>
       )}
     </span>
   )

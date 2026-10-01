@@ -1,6 +1,6 @@
 import type { CSSProperties, FC } from 'react'
 import { Search, X } from 'lucide-react'
-import { cn, Button, Input } from '@convergence/ui'
+import { cn, IconButton, Input } from '@convergence/ui'
 import type { LoomSearchField } from './loom-stack.types'
 import { LOOM_SEARCH_NAME } from './loom-search.pure'
 import {
@@ -50,16 +50,16 @@ export const LoomSearchFieldView: FC<{
       className={LOOM_SEARCH_INPUT_CLASS}
     />
     {field.value !== '' ? (
-      <Button
+      <IconButton
+        label="Clear search"
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label="Clear search"
-        className={LOOM_SEARCH_CLEAR_CLASS}
         onClick={field.onClear}
+        size="xs"
+        className={LOOM_SEARCH_CLEAR_CLASS}
       >
         <X aria-hidden="true" className={LOOM_SEARCH_GLYPH_CLASS} />
-      </Button>
+      </IconButton>
     ) : null}
   </div>
 )

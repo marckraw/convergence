@@ -177,8 +177,7 @@ function renderGeneratedProfilePanel({
           {generated ? (
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={onDeleteGeneratedProfile}
               disabled={isGeneratingProfile}
             >
@@ -188,7 +187,6 @@ function renderGeneratedProfilePanel({
           ) : null}
           <Button
             type="button"
-            size="sm"
             onClick={onGenerateProfile}
             disabled={isGeneratingProfile || !canGenerateProfile}
           >

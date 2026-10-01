@@ -34,6 +34,7 @@ export const LoomOutsideGroupView: FC<{
       <Button
         type="button"
         variant="ghost"
+        size="lg"
         aria-expanded={open}
         aria-controls={LIST_ID}
         onClick={onToggle}

@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  IconButton,
   TooltipCard,
 } from '@convergence/ui'
 import {
@@ -71,15 +72,15 @@ function renderProviderHelp(ariaLabel: string, content: ReactNode) {
       content={content}
       className="max-w-[280px] space-y-1.5 leading-relaxed"
     >
-      <Button
+      <IconButton
+        label={ariaLabel}
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label={ariaLabel}
-        className="h-6 w-6 text-muted-foreground"
+        size="xs"
+        className="text-muted-foreground"
       >
         <CircleHelp className="h-3.5 w-3.5" />
-      </Button>
+      </IconButton>
     </TooltipCard>
   )
 }
@@ -275,8 +276,7 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
         <DialogFooter className="border-t border-border/70 px-6 py-4">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onRefresh}
             disabled={!projectName || isLoading}
           >

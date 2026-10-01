@@ -45,16 +45,10 @@ export const PlanRequestForm: FC<PlanRequestFormProps> = ({ onSubmit }) => {
         placeholder="Optional rejection notes or requested changes"
       />
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" type="submit" name="decision" value="approve">
+        <Button type="submit" name="decision" value="approve">
           Approve plan
         </Button>
-        <Button
-          size="sm"
-          type="submit"
-          name="decision"
-          value="reject"
-          variant="ghost"
-        >
+        <Button type="submit" name="decision" value="reject" variant="ghost">
           Reject plan
         </Button>
       </div>

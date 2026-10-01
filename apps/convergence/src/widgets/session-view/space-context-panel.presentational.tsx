@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import { ExternalLink, GitBranch, GitPullRequest, Star } from 'lucide-react'
 import type { Space, SpaceAttempt, SpaceArtifact } from '@/entities/space'
 import { spaceAttemptRoleLabels, spaceStatusLabels } from '@/entities/space'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 
 export interface SpaceContextAttemptView {
   attempt: SpaceAttempt
@@ -40,17 +40,15 @@ export const SpaceContextPanel: FC<SpaceContextPanelProps> = ({
               </span>
             </div>
           </div>
-          <Button
+          <IconButton
+            label={`Open Space ${space.title}`}
             type="button"
             variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0"
+            className="shrink-0"
             onClick={() => onOpenSpace(space.id)}
-            aria-label={`Open Space ${space.title}`}
-            title="Open Space"
           >
             <ExternalLink className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </div>
 

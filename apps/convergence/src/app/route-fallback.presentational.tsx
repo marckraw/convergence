@@ -22,7 +22,7 @@ export const RouteFallbackView: FC<RouteFallbackViewProps> = ({
       <p className="mt-3 text-sm leading-6 text-muted-foreground">
         {fallback.message}
       </p>
-      <Button type="button" className="mt-6" onClick={onAction}>
+      <Button type="button" onClick={onAction} size="lg" className="mt-6">
         {fallback.actionLabel}
       </Button>
     </div>

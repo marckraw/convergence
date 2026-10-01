@@ -464,14 +464,13 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                     <Button
                       key={section.id}
                       type="button"
-                      variant={isActive ? 'secondary' : 'ghost'}
-                      size="sm"
+                      variant={isActive ? 'tonal' : 'ghost'}
                       aria-current={isActive ? 'page' : undefined}
+                      onClick={() => onSectionChange(section.id)}
                       className={cn(
-                        'h-auto min-w-48 items-start justify-start rounded-xl px-3 py-3 text-left sm:min-w-0',
+                        'h-auto min-w-48 items-start justify-start rounded-xl py-3 text-left sm:min-w-0',
                         isActive && 'ring-1 ring-ring',
                       )}
-                      onClick={() => onSectionChange(section.id)}
                     >
                       <span className="flex flex-col gap-1">
                         <span className="text-sm font-medium">
@@ -544,7 +543,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
                   onClick={onRestoreDefaults}
                   disabled={providers.length === 0 || isSaving}
                 >
@@ -557,8 +555,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
               <DialogClose asChild>
                 <Button
                   type="button"
-                  variant={usesIndependentSave ? 'default' : 'outline'}
-                  size="sm"
+                  variant={usesIndependentSave ? 'primary' : 'secondary'}
                   onClick={onCancel}
                   disabled={isSaving}
                 >
@@ -568,7 +565,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
               {usesIndependentSave ? null : (
                 <Button
                   type="button"
-                  size="sm"
                   onClick={onSave}
                   disabled={providers.length === 0 || isSaving || isSaveBlocked}
                 >

@@ -17,9 +17,9 @@ import {
   Button,
   Dialog,
   DialogContent,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTitle,
 } from '@convergence/ui'
 import { ConversationItem } from './conversation-item.container'
 import { ParallelWorkPanel } from './parallel-work.presentational'
@@ -480,7 +480,11 @@ export const ParallelWork: FC<Props> = ({
             stays open.
           </DialogDescription>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setConfirmId(null)}>
+            <Button
+              variant="secondary"
+              onClick={() => setConfirmId(null)}
+              size="lg"
+            >
               Cancel
             </Button>
             <Button
@@ -501,6 +505,7 @@ export const ParallelWork: FC<Props> = ({
                     ),
                   )
               }}
+              size="lg"
             >
               Stop task
             </Button>

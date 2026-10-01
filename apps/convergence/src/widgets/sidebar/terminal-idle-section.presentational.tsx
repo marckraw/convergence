@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Check, TerminalSquare } from 'lucide-react'
 import type { TerminalIdleNotice } from '@/entities/terminal'
-import { Button, Tooltip } from '@convergence/ui'
+import { Button, IconButton, Tooltip } from '@convergence/ui'
 
 interface TerminalIdleSectionProps {
   notices: readonly TerminalIdleNotice[]
@@ -40,6 +40,7 @@ export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
                 variant="ghost"
                 onClick={() => void onSelect(notice)}
                 aria-label={`${notice.sessionName}, terminal idle after ${notice.processName}, ${notice.projectName}`}
+                size="lg"
                 className="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 px-1.5 py-0.5 text-left text-xs leading-tight"
               >
                 <TerminalSquare className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -58,21 +59,20 @@ export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
             </Tooltip>
 
             <div className="mr-0.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-              <Tooltip side="left" label="Acknowledge">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Dismiss idle terminal ${notice.sessionName}`}
-                  className="h-5 w-5 shrink-0"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onDismiss(notice.terminalId)
-                  }}
-                >
-                  <Check className="h-2.5 w-2.5" />
-                </Button>
-              </Tooltip>
+              <IconButton
+                label={`Dismiss idle terminal ${notice.sessionName}`}
+                tooltipSide="left"
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="shrink-0"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDismiss(notice.terminalId)
+                }}
+              >
+                <Check className="h-2.5 w-2.5" />
+              </IconButton>
             </div>
           </div>
         ))}

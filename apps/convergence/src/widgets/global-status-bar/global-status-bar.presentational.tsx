@@ -138,16 +138,15 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
                   onClick={() => onSelectProject(project.projectId)}
+                  data-testid={`global-status-chip-${project.projectId}`}
+                  aria-label={formatProjectChipLabel(project)}
                   className={cn(
                     'h-auto px-1.5 py-0.5 text-[11px] font-medium shadow-none',
                     projectChipClass,
                     project.needsAttention.length > 0 &&
                       projectChipAttentionClass,
                   )}
-                  data-testid={`global-status-chip-${project.projectId}`}
-                  aria-label={formatProjectChipLabel(project)}
                 >
                   <span
                     className={cn(
@@ -187,14 +186,13 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             onClick={() => onSelectProject(recency.session.projectId)}
+            data-testid="global-status-recency"
+            aria-label={`Switch to project ${recency.projectName}`}
             className={cn(
               'h-auto px-1.5 py-0.5 text-[11px] font-medium shadow-none',
               recencyBadgeClass,
             )}
-            data-testid="global-status-recency"
-            aria-label={`Switch to project ${recency.projectName}`}
           >
             {recency.kind === 'completed' ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />

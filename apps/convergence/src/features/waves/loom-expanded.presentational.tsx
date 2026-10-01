@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Minimize2, PanelLeftClose } from 'lucide-react'
-import { Button, Tooltip } from '@convergence/ui'
+import { Button, IconButton, Tooltip } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -79,11 +79,11 @@ export const LoomExpandedView: FC<
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         ref={props.guideRef}
-        className="h-10 w-[148px] shrink-0 px-3 text-xs"
         style={NO_DRAG_STYLE}
         onClick={props.onOpenGuide}
+        size="lg"
+        className="w-[148px] shrink-0 px-3 text-xs py-0"
       >
         {LEARN_LOOM_ENTRY}
       </Button>
@@ -91,11 +91,11 @@ export const LoomExpandedView: FC<
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           aria-label={FOLD_LOOM}
-          className="h-10 shrink-0 gap-2 px-3 text-xs"
           style={NO_DRAG_STYLE}
           onClick={onFold}
+          size="lg"
+          className="shrink-0 px-3 text-xs py-0"
         >
           <Minimize2 className="size-3.5" />
           {FOLD_LOOM}
@@ -104,19 +104,19 @@ export const LoomExpandedView: FC<
       {/* Past Fold Loom, because it goes one step further (MAR-3292 R4):
           Fold gives the column back, Collapse takes it away. `no-drag` like
           every other control in this header row. */}
-      <Tooltip label={COLLAPSE_LOOM} side="bottom">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={COLLAPSE_LOOM}
-          className={LOOM_COLLAPSE_BUTTON_CLASS}
-          style={NO_DRAG_STYLE}
-          onClick={onCollapse}
-        >
-          <PanelLeftClose className="size-3.5" />
-        </Button>
-      </Tooltip>
+
+      <IconButton
+        label={COLLAPSE_LOOM}
+        type="button"
+        variant="ghost"
+        style={NO_DRAG_STYLE}
+        onClick={onCollapse}
+        tooltipSide="bottom"
+        size="sm"
+        className={LOOM_COLLAPSE_BUTTON_CLASS}
+      >
+        <PanelLeftClose className="size-3.5" />
+      </IconButton>
     </div>
     <div className="shrink-0 px-6 pb-3">
       <LoomStatusView header={props.header} refresh={props.refresh} />

@@ -1,6 +1,6 @@
 import type { FC, RefObject } from 'react'
 import { X } from 'lucide-react'
-import { Button, Input, cn } from '@convergence/ui'
+import { cn, IconButton, Input } from '@convergence/ui'
 
 interface SidebarSearchFieldProps {
   query: string
@@ -41,16 +41,16 @@ export const SidebarSearchField: FC<SidebarSearchFieldProps> = ({
       }}
     />
     {query.length > 0 ? (
-      <Button
+      <IconButton
+        label="Clear search"
         type="button"
         variant="ghost"
-        size="icon"
-        className="absolute top-2.5 right-3.5 h-7 w-7 text-muted-foreground"
-        aria-label="Clear search"
         onClick={onClear}
+        size="sm"
+        className="absolute top-2.5 right-3.5 text-muted-foreground"
       >
         <X className="h-3.5 w-3.5" />
-      </Button>
+      </IconButton>
     ) : null}
   </div>
 )

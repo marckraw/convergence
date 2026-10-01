@@ -54,8 +54,9 @@ export const TurnCard: FC<TurnCardProps> = ({
       <Button
         type="button"
         variant="ghost"
-        className="h-auto w-full justify-start gap-2 rounded-none px-3 py-2 text-left font-normal"
         onClick={onToggle}
+        size="lg"
+        className="h-auto w-full justify-start rounded-none px-3 text-left font-normal"
       >
         <ChevronRight
           className={cn(

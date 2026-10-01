@@ -22,7 +22,6 @@ export function FilterChoice({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
       aria-label={label}
       aria-description={
         count === undefined ? undefined : `${count} matching conversations`

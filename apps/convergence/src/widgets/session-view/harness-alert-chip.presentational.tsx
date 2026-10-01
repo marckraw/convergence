@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import { Button } from '@convergence/ui'
+import { Button, Tooltip } from '@convergence/ui'
 
 /**
  * A harness alert in the header's row, only while the alert is true (CH4 R3):
@@ -9,23 +9,21 @@ export const HarnessAlertChip = forwardRef<
   HTMLButtonElement,
   { label: string; expanded: boolean; onOpen: () => void }
 >(({ label, expanded, onOpen }, ref) => (
-  <Button
-    ref={ref}
-    type="button"
-    variant="ghost"
-    size="sm"
-    // Capped, so an alert chaining several reasons truncates inside its
-    // header row instead of overlapping it; the full label stays in the
-    // title (MAR-3427 C).
-    className="h-7 max-w-[15rem] rounded-full border border-destructive/50 px-2 text-[11px] text-destructive"
-    title={label}
-    aria-haspopup="menu"
-    aria-expanded={expanded}
-    data-testid="harness-alert"
-    onClick={onOpen}
-  >
-    <span className="min-w-0 truncate">{label}</span>
-  </Button>
+  <Tooltip label={label}>
+    <Button
+      ref={ref}
+      type="button"
+      variant="danger-quiet"
+      aria-haspopup="menu"
+      aria-expanded={expanded}
+      data-testid="harness-alert"
+      onClick={onOpen}
+      size="sm"
+      className="max-w-[15rem] rounded-full border border-destructive/50 text-[11px]"
+    >
+      <span className="min-w-0 truncate">{label}</span>
+    </Button>
+  </Tooltip>
 ))
 
 HarnessAlertChip.displayName = 'HarnessAlertChip'

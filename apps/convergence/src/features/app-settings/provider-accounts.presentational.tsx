@@ -10,7 +10,7 @@ import type {
   ProviderAccountSettingsRow,
   ProviderAccountSettingsWarning,
 } from '@/entities/provider-account'
-import { cn, Button, Input } from '@convergence/ui'
+import { Button, cn, Input } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
   CONFIGURED_SERVERS_SENTENCE,
@@ -209,11 +209,12 @@ export function ProviderAccountsFields({
           <Button
             key={provider.id}
             type="button"
-            variant={providerId === provider.id ? 'secondary' : 'ghost'}
-            className="min-h-10 flex-1 gap-2"
+            variant={providerId === provider.id ? 'tonal' : 'ghost'}
             aria-pressed={providerId === provider.id}
             disabled={actionPending || isLoadingConnectors}
             onClick={() => onProviderChange(provider.id)}
+            size="lg"
+            className="min-h-10 flex-1"
           >
             <ProviderIcon providerId={provider.id} title="" />
             {provider.label}
@@ -306,7 +307,6 @@ export function ProviderAccountsFields({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
                       disabled={isBusy || isRenaming}
                       onClick={() => onStartRename(row.id, row.label)}
                     >
@@ -316,7 +316,6 @@ export function ProviderAccountsFields({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
                       disabled={isBusy || !row.canSetDefault}
                       onClick={() => onSetDefault(row.id)}
                     >
@@ -326,7 +325,6 @@ export function ProviderAccountsFields({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
                       aria-expanded={showsConnectors}
                       disabled={isBusy || isLoadingConnectors}
                       onClick={() => onToggleConnectors(row.id)}
@@ -337,7 +335,6 @@ export function ProviderAccountsFields({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
                       disabled={isBusy}
                       onClick={() => onReconnect(row.id)}
                     >
@@ -349,7 +346,6 @@ export function ProviderAccountsFields({
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
                           disabled={isBusy}
                           onClick={onCancelRemove}
                         >
@@ -357,8 +353,7 @@ export function ProviderAccountsFields({
                         </Button>
                         <Button
                           type="button"
-                          variant="destructive"
-                          size="sm"
+                          variant="danger"
                           disabled={
                             isBusy ||
                             (!isCodex &&
@@ -383,7 +378,6 @@ export function ProviderAccountsFields({
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
                         disabled={isBusy}
                         onClick={() => onRequestRemove(row.id)}
                       >
@@ -439,7 +433,6 @@ export function ProviderAccountsFields({
                     />
                     <Button
                       type="button"
-                      size="sm"
                       disabled={isBusy || renameDraft.trim().length === 0}
                       onClick={onCommitRename}
                     >
@@ -448,7 +441,6 @@ export function ProviderAccountsFields({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
                       disabled={isBusy}
                       onClick={onCancelRename}
                     >
@@ -468,11 +460,10 @@ export function ProviderAccountsFields({
                           <h4 className="text-sm font-medium">From ChatGPT</h4>
                           <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
-                            className="min-h-10"
+                            variant="secondary"
                             disabled={isLoadingChatGptApps}
                             onClick={onRefreshChatGptApps}
+                            className="min-h-10"
                           >
                             <RefreshCw className="mr-2 size-3.5" />
                             Refresh
@@ -680,11 +671,10 @@ export function ProviderAccountsFields({
                             (isCodex && connector.status === 'ready') ? (
                               <Button
                                 type="button"
-                                size="sm"
                                 variant={
                                   action.emphasis === 'primary'
-                                    ? 'default'
-                                    : 'outline'
+                                    ? 'primary'
+                                    : 'secondary'
                                 }
                                 disabled={authorizingServerName !== null}
                                 onClick={() =>
@@ -725,7 +715,6 @@ export function ProviderAccountsFields({
                     ) ? (
                       <Button
                         type="button"
-                        size="sm"
                         disabled={actionPending}
                         onClick={() => onConnectLinear(row.id)}
                       >
@@ -805,6 +794,7 @@ export function ProviderAccountsFields({
               actionPending || (!isCodex && enrolEmail.trim().length === 0)
             }
             onClick={onEnrol}
+            size="lg"
           >
             {isEnrolling ? 'Sign-in in progress...' : `Connect ${providerName}`}
           </Button>
@@ -819,7 +809,6 @@ export function ProviderAccountsFields({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           disabled={isLoading || actionPending}
           onClick={onCheckHealth}
         >

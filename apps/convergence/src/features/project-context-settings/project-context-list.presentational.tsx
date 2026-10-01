@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import type { ProjectContextItem } from '@/entities/project-context'
-import { Button } from '@convergence/ui'
+import { Button, IconButton } from '@convergence/ui'
 
 interface ProjectContextListProps {
   items: ProjectContextItem[]
@@ -46,8 +46,7 @@ export const ProjectContextList: FC<ProjectContextListProps> = ({
         </div>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
           onClick={onCreateClick}
           disabled={isLoading}
         >
@@ -92,26 +91,24 @@ export const ProjectContextList: FC<ProjectContextListProps> = ({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button
+                    <IconButton
+                      label={`Edit ${item.label ?? 'context item'}`}
                       type="button"
-                      size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
                       onClick={() => onEditClick(item)}
-                      aria-label={`Edit ${item.label ?? 'context item'}`}
+                      size="sm"
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
+                    </IconButton>
+                    <IconButton
+                      label={`Delete ${item.label ?? 'context item'}`}
                       type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      variant="danger-quiet"
                       onClick={() => onDeleteRequest(item.id)}
-                      aria-label={`Delete ${item.label ?? 'context item'}`}
+                      size="sm"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
                 {isConfirmingDelete ? (
@@ -123,7 +120,6 @@ export const ProjectContextList: FC<ProjectContextListProps> = ({
                     <div className="flex items-center gap-2">
                       <Button
                         type="button"
-                        size="sm"
                         variant="ghost"
                         onClick={onDeleteCancel}
                       >
@@ -131,8 +127,7 @@ export const ProjectContextList: FC<ProjectContextListProps> = ({
                       </Button>
                       <Button
                         type="button"
-                        size="sm"
-                        variant="destructive"
+                        variant="danger"
                         onClick={() => onDeleteConfirm(item.id)}
                       >
                         Delete

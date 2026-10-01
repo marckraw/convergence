@@ -15,6 +15,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  IconButton,
   Tooltip,
 } from '@convergence/ui'
 import {
@@ -150,6 +151,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
           variant="ghost"
           onClick={() => onSelectSession(session.id)}
           aria-label={`Open chat session ${session.name}`}
+          size="lg"
           className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
         >
           <SessionStateBadge session={session} />
@@ -165,20 +167,20 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
       </Tooltip>
 
       <DropdownMenu>
-        <Tooltip label={`Chat session actions ${session.name}`} side="left">
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100"
-              aria-label={`Chat session actions ${session.name}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-        </Tooltip>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label={`Chat session actions ${session.name}`}
+            type="button"
+            variant="quiet"
+            onClick={(event) => event.stopPropagation()}
+            tooltipSide="left"
+            size="xs"
+            className="shrink-0 opacity-0 transition-opacity group-hover/session:opacity-100 focus-visible:opacity-100"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </IconButton>
+        </DropdownMenuTrigger>
+
         <DropdownMenuContent align="end">
           {!session.archivedAt ? (
             <DropdownMenuItem
@@ -232,20 +234,18 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
         <div className="mb-3 space-y-2">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onNewSession}
-            className="w-full justify-start gap-2"
+            className="w-full justify-start"
           >
             <MessageSquarePlus className="h-4 w-4" />
             New chat
           </Button>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onNewSpace}
-            className="w-full justify-start gap-2"
+            className="w-full justify-start"
           >
             <FolderPlus className="h-4 w-4" />
             New Space
@@ -271,20 +271,20 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           selectedSpaceId === space.id && 'bg-accent',
                         )}
                       >
-                        <Button
+                        <IconButton
+                          label={`${expanded ? 'Collapse' : 'Expand'} Space ${space.title}`}
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0"
-                          aria-label={`${expanded ? 'Collapse' : 'Expand'} Space ${space.title}`}
                           onClick={() => onToggleSpace(space.id)}
+                          size="xs"
+                          className="shrink-0"
                         >
                           {expanded ? (
                             <ChevronDown className="h-3.5 w-3.5" />
                           ) : (
                             <ChevronRight className="h-3.5 w-3.5" />
                           )}
-                        </Button>
+                        </IconButton>
 
                         <Tooltip label={space.title} side="right">
                           <Button
@@ -292,6 +292,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                             variant="ghost"
                             onClick={() => onSelectSpace(space.id)}
                             aria-label={`Open Space ${space.title}`}
+                            size="lg"
                             className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                           >
                             <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -304,23 +305,20 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           </Button>
                         </Tooltip>
                         <DropdownMenu>
-                          <Tooltip
-                            label={`Space actions ${space.title}`}
-                            side="left"
-                          >
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
-                                aria-label={`Space actions ${space.title}`}
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                          </Tooltip>
+                          <DropdownMenuTrigger asChild>
+                            <IconButton
+                              label={`Space actions ${space.title}`}
+                              type="button"
+                              variant="quiet"
+                              onClick={(event) => event.stopPropagation()}
+                              tooltipSide="left"
+                              size="xs"
+                              className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </IconButton>
+                          </DropdownMenuTrigger>
+
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               className="gap-2"
@@ -356,6 +354,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                       onSelectSpaceAttempt(attempt.sessionId)
                                     }
                                     aria-label={`Open Space attempt ${attempt.sessionName}`}
+                                    size="lg"
                                     className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                                   >
                                     <SessionStateBadge
@@ -376,25 +375,22 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                 </Tooltip>
 
                                 <DropdownMenu>
-                                  <Tooltip
-                                    label={`Space attempt actions ${attempt.sessionName}`}
-                                    side="left"
-                                  >
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/attempt:opacity-100 focus-visible:opacity-100"
-                                        aria-label={`Space attempt actions ${attempt.sessionName}`}
-                                        onClick={(event) =>
-                                          event.stopPropagation()
-                                        }
-                                      >
-                                        <MoreHorizontal className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                  </Tooltip>
+                                  <DropdownMenuTrigger asChild>
+                                    <IconButton
+                                      label={`Space attempt actions ${attempt.sessionName}`}
+                                      type="button"
+                                      variant="quiet"
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      tooltipSide="left"
+                                      size="xs"
+                                      className="shrink-0 opacity-0 transition-opacity group-hover/attempt:opacity-100 focus-visible:opacity-100"
+                                    >
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </IconButton>
+                                  </DropdownMenuTrigger>
+
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem
                                       className="gap-2"
@@ -479,24 +475,25 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
           {archivedSpaces.length > 0 ? (
             <div className="mb-3 ml-2 border-l border-border pl-2">
               <div className="group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-                <Button
+                <IconButton
+                  label={`${showArchivedSpaces ? 'Collapse' : 'Expand'} archived Spaces`}
                   type="button"
                   variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  aria-label={`${showArchivedSpaces ? 'Collapse' : 'Expand'} archived Spaces`}
                   onClick={onToggleArchivedSpaces}
+                  size="xs"
+                  className="shrink-0"
                 >
                   {showArchivedSpaces ? (
                     <ChevronDown className="h-3.5 w-3.5" />
                   ) : (
                     <ChevronRight className="h-3.5 w-3.5" />
                   )}
-                </Button>
+                </IconButton>
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={onToggleArchivedSpaces}
+                  size="lg"
                   className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                 >
                   <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -523,6 +520,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           variant="ghost"
                           onClick={() => onSelectSpace(space.id)}
                           aria-label={`Open archived Space ${space.title}`}
+                          size="lg"
                           className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                         >
                           <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -530,23 +528,20 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                         </Button>
                       </Tooltip>
                       <DropdownMenu>
-                        <Tooltip
-                          label={`Archived Space actions ${space.title}`}
-                          side="left"
-                        >
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
-                              aria-label={`Archived Space actions ${space.title}`}
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <MoreHorizontal className="h-3.5 w-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                        </Tooltip>
+                        <DropdownMenuTrigger asChild>
+                          <IconButton
+                            label={`Archived Space actions ${space.title}`}
+                            type="button"
+                            variant="quiet"
+                            onClick={(event) => event.stopPropagation()}
+                            tooltipSide="left"
+                            size="xs"
+                            className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </IconButton>
+                        </DropdownMenuTrigger>
+
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
                             className="gap-2"

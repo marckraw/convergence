@@ -5,6 +5,7 @@ import type {
   ProviderStatusInfo,
 } from '@/entities/session'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -12,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Button,
 } from '@convergence/ui'
 import {
   Bot,
@@ -230,8 +230,7 @@ function renderProviderRow(
                 {canSelfUpdate ? (
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
                     onClick={() => onUpdateProvider(provider.id)}
                     disabled={isAnyProviderUpdating}
                   >
@@ -504,8 +503,7 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
         <DialogFooter className="border-t border-border/70 px-6 py-4">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onRefresh}
             disabled={isLoading}
           >

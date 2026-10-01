@@ -3,13 +3,13 @@ import { useDialogStore } from '@/entities/dialog'
 import { ProjectCreateButton } from './project-create.presentational'
 
 interface ProjectCreateProps {
-  variant?: 'default' | 'outline' | 'ghost'
-  size?: 'default' | 'sm'
+  variant?: 'primary' | 'secondary' | 'ghost'
+  size?: 'lg' | 'md'
 }
 
 export const ProjectCreate: FC<ProjectCreateProps> = ({
-  variant = 'default',
-  size = 'default',
+  variant = 'primary',
+  size = 'lg',
 }) => {
   const openDialog = useDialogStore((s) => s.open)
 

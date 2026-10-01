@@ -14,6 +14,7 @@ export const ConversationActionItem: FC<{
 }> = ({ row, onActivate }) => (
   <>
     <Button
+      size="lg"
       type="button"
       variant="ghost"
       role="menuitem"

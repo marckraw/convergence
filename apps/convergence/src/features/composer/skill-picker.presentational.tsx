@@ -3,11 +3,11 @@ import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { hasSkillSelection } from '@/entities/skill'
 import {
   Button,
+  cn,
   Input,
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
 } from '@convergence/ui'
 import { AlertTriangle, Check, Library, Loader2, Search } from 'lucide-react'
 
@@ -43,13 +43,14 @@ function renderSkillRow(
       type="button"
       variant="ghost"
       disabled={!canSelect}
+      onClick={() => onToggleSkill(skill)}
+      size="lg"
       className={cn(
-        'h-auto w-full justify-start rounded-lg border border-transparent px-3 py-2 text-left',
+        'h-auto w-full justify-start rounded-lg border border-transparent px-3 text-left',
         selected
           ? 'border-primary/30 bg-primary/10 text-foreground'
           : 'hover:border-border/70 hover:bg-muted/40',
       )}
-      onClick={() => onToggleSkill(skill)}
     >
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
@@ -102,14 +103,11 @@ export const SkillPicker: FC<SkillPickerProps> = ({
     <PopoverTrigger asChild>
       <Button
         type="button"
-        size="sm"
-        variant="ghost"
-        className={cn(
-          'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
-          triggerClassName,
-        )}
+        variant="quiet"
         aria-label="Select skills"
         disabled={disabled}
+        size="sm"
+        className={triggerClassName}
       >
         <Library className="h-3.5 w-3.5" />
         Skills
@@ -132,7 +130,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
               {activeProviderLabel ?? 'Active provider'}
             </p>
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onBrowseAll}>
+          <Button type="button" variant="ghost" onClick={onBrowseAll}>
             Browse all
           </Button>
         </div>

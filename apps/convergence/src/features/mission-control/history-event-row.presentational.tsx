@@ -74,6 +74,7 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
         <div className={classes}>{content}</div>
       ) : (
         <Button
+          size="lg"
           type="button"
           variant="ghost"
           aria-pressed={selected}

@@ -25,6 +25,7 @@ export const ConversationActionsView: FC<ConversationActionsViewProps> = (
     >
       <div ref={anchorRef} className={styles.anchor}>
         <Button
+          size="lg"
           ref={triggerRef}
           type="button"
           variant="ghost"

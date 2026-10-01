@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomMastermindVerdictLine,
@@ -51,8 +51,9 @@ export function LoomMastermindCard({
             ]
               .filter((id): id is string => id !== null)
               .join(' ')}
-            className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
             onClick={() => onOpenSeat?.(mastermind.sessionId!)}
+            size="lg"
+            className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
           />
         ) : null}
         <span className="flex w-full items-baseline gap-1.5">

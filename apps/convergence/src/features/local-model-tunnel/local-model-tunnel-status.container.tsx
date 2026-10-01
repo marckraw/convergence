@@ -18,6 +18,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  IconButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -146,9 +147,8 @@ export const LocalModelTunnelStatusContainer: FC = () => {
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
               data-testid="local-model-tunnel-pill"
+              className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
             >
               <StatusDot state={aggregate.state} />
               <span className="min-w-0 truncate text-foreground">
@@ -177,8 +177,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
             </div>
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={() => handleOpenManage()}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -222,16 +221,15 @@ export const LocalModelTunnelStatusContainer: FC = () => {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     Profiles
                   </p>
-                  <Button
+                  <IconButton
+                    label="Add local model tunnel profile"
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    aria-label="Add local model tunnel profile"
                     onClick={() => void handleAddProfile()}
+                    size="sm"
                   >
                     <Plus className="h-4 w-4" />
-                  </Button>
+                  </IconButton>
                 </div>
                 <div className="flex gap-2 overflow-x-auto sm:flex-col sm:overflow-visible">
                   {profiles.map((item) => (
@@ -240,12 +238,11 @@ export const LocalModelTunnelStatusContainer: FC = () => {
                       type="button"
                       variant={
                         item.profile.id === selectedProfileId
-                          ? 'secondary'
+                          ? 'tonal'
                           : 'ghost'
                       }
-                      size="sm"
-                      className="h-auto min-w-48 justify-start rounded-lg px-3 py-3 text-left sm:min-w-0"
                       onClick={() => setSelectedProfileId(item.profile.id)}
+                      className="h-auto min-w-48 justify-start rounded-lg py-3 text-left sm:min-w-0"
                     >
                       <span className="min-w-0">
                         <span className="flex items-center gap-2">
@@ -288,8 +285,9 @@ export const LocalModelTunnelStatusContainer: FC = () => {
           <DialogFooter className="border-t border-border/70 px-6 py-4">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => setManageOpen(false)}
+              size="lg"
             >
               Done
             </Button>

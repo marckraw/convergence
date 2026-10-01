@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { X } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn, IconButton } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { HISTORY_TONE_TEXT } from './history-event-row.presentational'
 import { HistoryFact } from './history-fact.presentational'
@@ -90,16 +90,16 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
           {new Date(facts.timestamp).toLocaleString()}
         </time>
       </div>
-      <Button
+      <IconButton
+        label="Close the event panel"
         type="button"
-        variant="ghost"
-        size="sm"
-        aria-label="Close the event panel"
+        variant="quiet"
         onClick={onClose}
-        className="size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        size="sm"
+        className="shrink-0"
       >
         <X className="size-3.5" />
-      </Button>
+      </IconButton>
     </div>
 
     {facts.message ? (
@@ -131,10 +131,9 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
       {openRecipientLabel ? (
         <Button
           type="button"
-          variant="secondary"
-          size="sm"
+          variant="tonal"
           onClick={onOpenRecipient}
-          className="h-8 px-3 text-[11px]"
+          className="text-[11px]"
         >
           Open {openRecipientLabel} conversation
         </Button>
@@ -144,9 +143,8 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           onClick={onViewCurrentConnection}
-          className="h-8 px-3 text-[11px]"
+          className="text-[11px]"
         >
           View current connection
         </Button>
@@ -157,10 +155,9 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             disabled={busy || acknowledged}
             onClick={onMarkSeen}
-            className="h-8 px-3 text-[11px]"
+            className="text-[11px]"
           >
             {acknowledged ? 'Seen' : 'Mark seen'}
           </Button>

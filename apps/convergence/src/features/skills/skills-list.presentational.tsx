@@ -26,8 +26,9 @@ function renderSkillRow(
       type="button"
       variant="ghost"
       onClick={() => onSelectSkill(skill.id)}
+      size="lg"
       className={cn(
-        'h-auto w-full justify-start rounded-lg border border-transparent px-3 py-2 text-left',
+        'h-auto w-full justify-start rounded-lg border border-transparent px-3 text-left',
         selected
           ? 'border-primary/30 bg-primary/10 text-foreground'
           : 'hover:border-border/70 hover:bg-muted/40',

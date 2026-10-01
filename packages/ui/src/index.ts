@@ -6,8 +6,17 @@
  * re-exported one by one, never with `export *`, so this file is the whole
  * list of what the package promises.
  */
-export { Button, type ButtonProps } from './components/button/button'
-export { CopyButton } from './components/copy-button/copy-button'
+export {
+  Button,
+  type ButtonProps,
+  type ButtonSize,
+  type ButtonVariant,
+  buttonVariants,
+} from './components/button/button'
+export {
+  CopyButton,
+  type CopyButtonProps,
+} from './components/copy-button/copy-button'
 export {
   Dialog,
   DialogBody,
@@ -26,6 +35,10 @@ export {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './components/dropdown-menu/dropdown-menu'
+export {
+  IconButton,
+  type IconButtonProps,
+} from './components/icon-button/icon-button'
 export { Input, type InputProps } from './components/input/input'
 export { Kbd, type KbdProps } from './components/kbd/kbd'
 export {

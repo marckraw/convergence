@@ -127,8 +127,7 @@ export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
             <Button
               key={link.url}
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={() => window.open(link.url, '_blank')}
             >
               <ExternalLink className="h-3.5 w-3.5" />

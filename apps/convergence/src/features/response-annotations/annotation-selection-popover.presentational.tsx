@@ -1,6 +1,6 @@
 import type { FC, FormEvent } from 'react'
 import { MessageSquareQuote, X } from 'lucide-react'
-import { Button, Input } from '@convergence/ui'
+import { Button, IconButton, Input } from '@convergence/ui'
 
 /**
  * The floating affordance over a selection: react in one click, or say
@@ -76,19 +76,18 @@ export const AnnotationSelectionPopover: FC<
               aria-label="Comment on the selected text"
               className="h-8 text-sm"
             />
-            <Button type="submit" size="sm" className="h-8 shrink-0">
+            <Button type="submit" className="shrink-0">
               Add
             </Button>
-            <Button
+            <IconButton
+              label="Cancel comment"
               type="button"
               variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground"
-              aria-label="Cancel comment"
               onClick={onDismiss}
+              className="shrink-0 text-muted-foreground"
             >
               <X className="h-3.5 w-3.5" />
-            </Button>
+            </IconButton>
           </div>
         </form>
       ) : (
@@ -96,27 +95,27 @@ export const AnnotationSelectionPopover: FC<
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 rounded-full px-2 text-xs"
             aria-label="Comment on the selected text"
             onClick={onStartComment}
+            size="sm"
+            className="rounded-full"
           >
             <MessageSquareQuote className="h-3.5 w-3.5" />
             Comment
           </Button>
           <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
           {ANNOTATION_QUICK_REACTIONS.map((emoji) => (
-            <Button
+            <IconButton
+              label={`React with ${emoji}`}
               key={emoji}
               type="button"
               variant="ghost"
-              size="icon"
-              className="h-7 w-7 rounded-full text-base leading-none"
-              aria-label={`React with ${emoji}`}
               onClick={() => onReact(emoji)}
+              size="sm"
+              className="rounded-full text-base leading-none"
             >
               {emoji}
-            </Button>
+            </IconButton>
           ))}
         </div>
       )}

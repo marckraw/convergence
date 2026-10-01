@@ -110,7 +110,7 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
         searchPlaceholder="Search options..."
         emptyMessage="No matching options."
         triggerVariant="ghost"
-        triggerSize="sm"
+        triggerSize="md"
       />
       {view.branch ? (
         <>

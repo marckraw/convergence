@@ -12,7 +12,7 @@ import {
   type AttributedWorkItem,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
-import { Button } from '@convergence/ui'
+import { Button, IconButton } from '@convergence/ui'
 import {
   descendantActivity,
   parallelWorkCardTone,
@@ -124,8 +124,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     return id ? (
       <Button
         variant="ghost"
-        className="h-auto justify-start rounded-none p-0 hover:bg-transparent text-left text-xs text-blue-500 hover:underline"
         onClick={() => props.onDecision?.(id)}
+        size="lg"
+        className="h-auto justify-start rounded-none p-0 hover:bg-transparent text-left text-xs text-blue-500 hover:underline"
       >
         Waiting for your decision in the conversation →
       </Button>
@@ -147,19 +148,13 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
       <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
           <span title={messageReason}>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled
-              aria-label={messageReason}
-            >
+            <Button variant="secondary" disabled aria-label={messageReason}>
               Message
             </Button>
           </span>
           <span title={stopReason}>
             <Button
-              variant="outline"
-              size="sm"
+              variant="secondary"
               disabled={Boolean(stopReason) || state?.pending}
               onClick={() => props.onStop?.(workRowKey(row))}
             >
@@ -169,7 +164,6 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           {row.run && (
             <Button
               variant="ghost"
-              size="sm"
               onClick={() => props.onSpawn?.(row.run!.spawnedByItemId)}
             >
               View spawn
@@ -178,7 +172,6 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           {props.resultItems?.has(workRowKey(row)) && (
             <Button
               variant="ghost"
-              size="sm"
               onClick={() => props.onResult?.(workRowKey(row))}
             >
               View result
@@ -186,7 +179,6 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           )}
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => props.onDetails?.(workRowKey(row))}
           >
             Details
@@ -211,8 +203,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
       <>
         <Button
           variant="ghost"
-          className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
           onClick={() => props.onSelect(workRowKey(row))}
+          size="lg"
+          className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
         >
           {workTitle(row)}
         </Button>
@@ -260,10 +253,11 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           {children.length > 0 && (
             <Button
               variant="ghost"
-              className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center gap-1 text-[11px] text-muted-foreground"
               aria-expanded={!hidden}
               aria-label={`${hidden ? 'Expand' : 'Collapse'} ${workTitle(row)}`}
               onClick={() => props.onToggle?.(key)}
+              size="lg"
+              className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center gap-1 text-[11px] text-muted-foreground"
             >
               {hidden ? (
                 <ChevronRight className="size-3" />
@@ -294,8 +288,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         {selected ? (
           <Button
             variant="ghost"
-            className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center gap-2 text-sm"
             onClick={props.onBack}
+            size="lg"
+            className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center"
           >
             <ArrowLeft className="size-4" />
             Parallel work
@@ -308,15 +303,13 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
             </p>
           </div>
         )}
-        <Button
+        <IconButton
+          label="Close parallel work"
           variant="ghost"
-          size="icon"
-          className="size-8"
           onClick={props.onClose}
-          aria-label="Close parallel work"
         >
           <X className="size-4" />
-        </Button>
+        </IconButton>
       </header>
       <div
         className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5"
@@ -345,9 +338,10 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
               <div className="space-y-2">
                 <Button
                   variant="ghost"
-                  className="text-xs text-muted-foreground"
                   aria-expanded={props.olderOpen ?? false}
                   onClick={props.onToggleOlder}
+                  size="lg"
+                  className="text-xs text-muted-foreground"
                 >
                   {archive.older.length} older ·{' '}
                   {archive.newest

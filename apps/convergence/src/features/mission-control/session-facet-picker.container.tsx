@@ -9,8 +9,8 @@ import {
 } from 'cmdk'
 import { Check, ChevronDown } from 'lucide-react'
 import {
-  cn,
   Button,
+  cn,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -69,13 +69,13 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           role="combobox"
           aria-label={label}
           aria-expanded={open}
           disabled={options.length === 0}
+          size="sm"
           className={cn(
-            'h-7 max-w-56 gap-1.5 rounded-full border px-2.5 text-[11px] font-normal',
+            'max-w-56 rounded-full border px-2.5 text-[11px] font-normal',
             selected.length > 0
               ? 'border-white/25 bg-white/10 text-foreground'
               : 'border-white/10 text-muted-foreground hover:border-white/20',
@@ -158,9 +158,9 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-7 w-full justify-start px-2 text-xs font-normal"
               onClick={() => onClear()}
+              size="sm"
+              className="w-full justify-start font-normal"
             >
               {allLabel}
             </Button>

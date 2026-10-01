@@ -21,16 +21,10 @@ export const UrlRequestForm: FC<UrlRequestFormProps> = ({ onSubmit }) => (
       )
     }}
   >
-    <Button size="sm" type="submit" name="action" value="accept">
+    <Button type="submit" name="action" value="accept">
       Accept
     </Button>
-    <Button
-      size="sm"
-      type="submit"
-      name="action"
-      value="decline"
-      variant="ghost"
-    >
+    <Button type="submit" name="action" value="decline" variant="ghost">
       Decline
     </Button>
   </form>

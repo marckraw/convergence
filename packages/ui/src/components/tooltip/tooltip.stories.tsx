@@ -25,7 +25,7 @@ function Hints({ label }: HintsProps) {
             label={index === 0 ? label : `Opens ${side}`}
             side={side}
           >
-            <Button variant="outline">{`Show ${side}`}</Button>
+            <Button variant="secondary">{`Show ${side}`}</Button>
           </Tooltip>
         ))}
       </div>
@@ -131,11 +131,9 @@ export const Long: Story = {
  */
 export const Disabled: Story = {
   render: () => (
-    <Tooltip label="Open a project first">
-      <Button variant="outline" aria-disabled="true">
-        New conversation
-      </Button>
-    </Tooltip>
+    <Button variant="secondary" disabledReason="Open a project first">
+      New conversation
+    </Button>
   ),
   play: async ({ userEvent }) => {
     await userEvent.tab()

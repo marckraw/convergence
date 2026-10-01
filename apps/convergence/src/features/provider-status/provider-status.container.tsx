@@ -133,9 +133,8 @@ export const ProviderStatusDialogContainer: FC<
         trigger ?? (
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
+            variant="quiet"
+            className="w-full justify-between px-2"
           >
             <span className="flex items-center gap-2">
               <Bot className="h-3.5 w-3.5" />

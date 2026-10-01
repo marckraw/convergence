@@ -19,6 +19,7 @@ import type {
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import {
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,7 +33,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  cn,
 } from '@convergence/ui'
 import type {
   SkillBrowserFilters,
@@ -125,6 +125,7 @@ function renderViewSwitcher(
             variant="ghost"
             onClick={() => onChange(mode.id)}
             aria-pressed={active}
+            size="lg"
             className={cn(
               'h-auto gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium',
               active
@@ -521,8 +522,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
         <DialogFooter className="items-center border-t border-border/70 px-6 py-3">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onRefresh}
             disabled={!projectName || isCatalogLoading}
           >

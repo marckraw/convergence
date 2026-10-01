@@ -103,7 +103,6 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
               key={link.url}
               type="button"
               variant="ghost"
-              size="sm"
               onClick={() => window.open(link.url, '_blank')}
             >
               <ExternalLink className="h-3.5 w-3.5" />
