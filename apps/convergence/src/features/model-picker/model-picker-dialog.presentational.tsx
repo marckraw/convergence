@@ -16,6 +16,7 @@ import {
   listboxOptionId,
   listboxStep,
   SearchField,
+  Tooltip,
 } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type {
@@ -45,6 +46,9 @@ interface ModelPickerDialogPresentationalProps {
   onSelect: (item: ModelPickerModelItem) => void
   onToggleFavorite: (item: ModelPickerModelItem) => void
 }
+
+/** A favourite's star, in its category hue (R1: favourites are tag-yellow). */
+const favoriteInk = 'text-tag-yellow-ink hover:text-tag-yellow-ink'
 
 function formatContextWindowTokens(value: number): string {
   if (value >= 1_000_000 && value % 1_000_000 === 0) {
@@ -90,6 +94,7 @@ export const ModelPickerDialogPresentational: FC<
   const selectedIndex = models.findIndex((item) => item.value === selectedValue)
   const active = models.length === 0 ? null : Math.max(selectedIndex, 0)
   const hasModels = models.length > 0
+  const activeModel = active === null ? null : models[active]
 
   return (
     <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
@@ -111,17 +116,16 @@ export const ModelPickerDialogPresentational: FC<
         <ChevronDown className="h-3 w-3 shrink-0" />
       </Button>
 
-      <DialogContent
-        className="h-[min(620px,calc(100vh-2rem))] w-[min(860px,calc(100vw-2rem))]"
-        initialFocus={inputRef}
-      >
+      {/* R11: 860 px wide becomes the nearest size, xl (960); 620 px tall is h-155. */}
+      <DialogContent size="xl" className="h-155" initialFocus={inputRef}>
         <DialogTitle className="sr-only">Select model</DialogTitle>
         <DialogDescription className="sr-only">
           Search and filter providers to choose a model.
         </DialogDescription>
 
-        <div className="shrink-0 border-b border-white/10 px-4 py-3 pr-12">
+        <div className="flex shrink-0 items-center gap-2 border-b border-line-soft px-4 py-3 pr-12">
           <SearchField
+            className="min-w-0 flex-1"
             ref={inputRef}
             role="combobox"
             aria-label="Search models"
@@ -149,10 +153,40 @@ export const ModelPickerDialogPresentational: FC<
             }}
             placeholder="Search models..."
           />
+          {/*
+            The keyboard's way to star a model: the active row's star, beside
+            the field. A control inside an option is out of a listbox's reach
+            (nested-interactive), so a row's star is for the pointer only.
+          */}
+          <IconButton
+            variant="quiet"
+            size="sm"
+            label={
+              activeModel === null
+                ? 'Add to favorites'
+                : activeModel.favorite
+                  ? `Remove ${activeModel.modelLabel} from favorites`
+                  : `Add ${activeModel.modelLabel} to favorites`
+            }
+            pressed={activeModel?.favorite ?? false}
+            disabled={activeModel === null}
+            className={cn(activeModel?.favorite && favoriteInk)}
+            onClick={() => {
+              if (activeModel) onToggleFavorite(activeModel)
+            }}
+          >
+            <Star
+              aria-hidden
+              className={cn(
+                'size-3.5',
+                activeModel?.favorite && 'fill-current',
+              )}
+            />
+          </IconButton>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[11rem_minmax(0,1fr)]">
-          <aside className="min-w-0 border-b border-white/10 p-2 sm:border-r sm:border-b-0">
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <aside className="min-w-0 shrink-0 border-b border-line-soft p-2 sm:w-44 sm:border-r sm:border-b-0">
             <div className="app-scrollbar flex gap-1 overflow-x-auto sm:block sm:max-h-full sm:space-y-1 sm:overflow-y-auto">
               <ModelPickerProviderFilterButton
                 id="all"
@@ -182,7 +216,7 @@ export const ModelPickerDialogPresentational: FC<
               id={listId}
               aria-label="Models"
               active={active}
-              className="app-scrollbar min-h-0 overflow-y-auto p-2"
+              className="app-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
             >
               {models.map((item, index) => (
                 <ListboxOption
@@ -204,19 +238,13 @@ export const ModelPickerDialogPresentational: FC<
                         {item.modelLabel}
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
-                        <IconButton
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          label={
-                            item.favorite
-                              ? `Remove ${item.modelLabel} from favorites`
-                              : `Add ${item.modelLabel} to favorites`
-                          }
+                        {/* The pointer's star; the keyboard's is beside the field. */}
+                        <span
+                          aria-hidden
+                          data-testid="model-favorite-star"
                           className={cn(
-                            'text-muted-foreground hover:bg-muted hover:text-foreground',
-                            item.favorite &&
-                              'text-yellow-600 hover:text-yellow-700 dark:text-yellow-300 dark:hover:text-yellow-200',
+                            'flex size-6 items-center justify-center rounded-md text-ink-muted hover:bg-surface-muted hover:text-ink',
+                            item.favorite && favoriteInk,
                           )}
                           onClick={(event) => {
                             event.preventDefault()
@@ -226,11 +254,11 @@ export const ModelPickerDialogPresentational: FC<
                         >
                           <Star
                             className={cn(
-                              'h-3.5 w-3.5',
+                              'size-3.5',
                               item.favorite && 'fill-current',
                             )}
                           />
-                        </IconButton>
+                        </span>
                         {item.selected ? (
                           <>
                             <Check aria-hidden className="h-4 w-4 shrink-0" />
@@ -244,7 +272,7 @@ export const ModelPickerDialogPresentational: FC<
                       {item.modelId}
                     </div>
                     {item.modelDescription || item.contextWindowTokens ? (
-                      <div className="flex flex-wrap gap-1 text-[11px] leading-snug text-muted-foreground">
+                      <div className="flex flex-wrap gap-1 text-2xs leading-snug text-ink-muted">
                         {item.modelDescription ? (
                           <span>{item.modelDescription}</span>
                         ) : null}
@@ -257,16 +285,14 @@ export const ModelPickerDialogPresentational: FC<
                         ) : null}
                       </div>
                     ) : null}
-                    <div className="flex min-w-0 items-center gap-1.5 text-[11px] leading-snug text-muted-foreground">
+                    <div className="flex min-w-0 items-center gap-1.5 text-2xs leading-snug text-ink-muted">
                       <span className="truncate">{item.providerLabel}</span>
                       {item.providerBadge ? (
-                        <Badge
-                          tone="warning"
-                          shape="label"
-                          title={item.providerBadge.title}
-                        >
-                          {item.providerBadge.label}
-                        </Badge>
+                        <Tooltip label={item.providerBadge.title}>
+                          <Badge tone="warning" shape="label">
+                            {item.providerBadge.label}
+                          </Badge>
+                        </Tooltip>
                       ) : null}
                     </div>
                   </div>

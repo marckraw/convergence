@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Star } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import { Badge, Button, cn, Tooltip } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type { ModelPickerProviderFilter } from './model-picker-dialog.types'
 
@@ -12,6 +12,10 @@ interface ProviderFilterButtonProps {
   provider?: ModelPickerProviderFilter
   onSelect: (id: string) => void
 }
+
+/** The All and Favorites marks, in the favourites' hue (R1: tag-yellow). */
+const favoriteMark =
+  'inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-tag-yellow/30 bg-tag-yellow/10 text-tag-yellow-ink'
 
 export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
   id,
@@ -29,18 +33,16 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
     size="lg"
     className={cn(
       'shrink-0 justify-start px-2 text-left text-xs sm:w-full py-0',
+      // R7: the chosen look is the selected fill; hover is half of it.
       selected
-        ? 'bg-accent text-accent-foreground'
-        : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+        ? 'bg-fill-selected text-on-highlight'
+        : 'text-ink-muted hover:bg-fill-hover hover:text-ink',
     )}
   >
     {provider ? (
       provider.kind === 'favorites' ? (
-        <span
-          aria-hidden="true"
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-yellow-400/30 bg-yellow-500/12 text-yellow-700 dark:text-yellow-200"
-        >
-          <Star className="h-3.5 w-3.5 fill-current" />
+        <span aria-hidden="true" className={favoriteMark}>
+          <Star className="size-3.5 fill-current" />
         </span>
       ) : (
         <ProviderIcon
@@ -52,7 +54,7 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
     ) : (
       <span
         aria-hidden="true"
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-yellow-400/30 bg-yellow-500/12 text-[10px] font-semibold leading-none text-yellow-700 dark:text-yellow-200"
+        className={cn(favoriteMark, 'text-3xs leading-none font-semibold')}
       >
         *
       </span>
@@ -60,16 +62,17 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
     <span className="flex min-w-0 flex-1 items-center gap-1.5">
       <span className="min-w-0 truncate">{label}</span>
       {provider?.badge ? (
-        <span
-          title={provider.badge.title}
-          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
-        >
-          {provider.badge.label}
-        </span>
+        <Tooltip label={provider.badge.title}>
+          <Badge
+            tone="warning"
+            shape="label"
+            className="shrink-0 uppercase leading-none font-semibold"
+          >
+            {provider.badge.label}
+          </Badge>
+        </Tooltip>
       ) : null}
     </span>
-    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-      {count}
-    </span>
+    <Badge shape="count">{count}</Badge>
   </Button>
 )

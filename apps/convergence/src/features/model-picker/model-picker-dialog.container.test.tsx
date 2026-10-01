@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderInfo } from '@/entities/session'
 import {
@@ -153,10 +159,12 @@ describe('ModelPickerDialog', () => {
     )
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Select model' }))
+    // The pointer's star sits in the row (MAR-3617: the keyboard's is beside
+    // the field, for the active row).
     fireEvent.click(
-      await screen.findByRole('button', {
-        name: 'Add Claude Opus to favorites',
-      }),
+      within(
+        await screen.findByRole('option', { name: /Claude Opus/ }),
+      ).getByTestId('model-favorite-star'),
     )
 
     await waitFor(() => {
