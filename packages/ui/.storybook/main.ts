@@ -83,23 +83,18 @@ const config: StorybookConfig = {
           '@base-ui/react/popover',
           '@base-ui/react/select',
           '@base-ui/react/tooltip',
-          '@radix-ui/react-dialog',
-          '@radix-ui/react-dropdown-menu',
-          '@radix-ui/react-popover',
           'class-variance-authority',
           'clsx',
           'cmdk',
           'lucide-react',
-          'radix-ui',
           'tailwind-merge',
           // The app's own heavy dependencies, which its stories reach through
           // the components they render (MAR-3617): the markdown renderer and
-          // its plugins, the canvases, motion, charts and the stores.
+          // its plugins, the canvases, charts and the stores.
           '@streamdown/code',
           '@streamdown/mermaid',
           '@xyflow/react',
           'chartgpu-react',
-          'motion/react',
           'streamdown',
           'zustand',
         ],
