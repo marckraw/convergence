@@ -5,6 +5,7 @@ import type { SessionCrew } from '@/entities/session-crew'
 import type { SessionCard } from './mission-control.types'
 import { buildSessionWireHint } from './relay-hop.pure'
 import { SessionCardView } from './session-card.presentational'
+import { crewTokens } from '@convergence/ui'
 
 const session = (overrides: Partial<SessionSummary> = {}): SessionSummary => ({
   id: 'session-opus',
@@ -62,7 +63,7 @@ const cardOf = (
   projectName: 'convergence',
   providerLabel: 'Claude Code',
   activityLabel: 'idle · 10m',
-  crews: [crew('crew-1', 'convergence development', '#7c3aed', '🐎')],
+  crews: [crew('crew-1', 'convergence development', crewTokens.violet, '🐎')],
   searchText: 'opus-mac convergence',
   ...rest,
 })
@@ -162,12 +163,10 @@ export const BusyDark: Story = {
 
 /**
  * Reduced motion: the working card keeps its glare, so it still says it is
- * busy and in whose colour.
- *
- * The breath itself stops only under the system's prefers-reduced-motion:
- * global.css does not read `data-motion="reduced"` for it (the toolbar's
- * switch), so this story asserts what holds either way, and the sweep can
- * add the stopped breath once the stylesheet honours the switch.
+ * busy and in whose colour, but the breath stops. The breath plays
+ * --motion-loops times, which tokens.css sets to 0 under the system's
+ * prefers-reduced-motion and under `data-motion="reduced"` (the toolbar's
+ * switch, here) alike; the still glare sits at the top of the breath.
  */
 export const ReducedMotion: Story = {
   args: { card: working },
@@ -180,6 +179,13 @@ export const ReducedMotion: Story = {
     const glare = getComputedStyle(card, '::after')
     await expect(glare.boxShadow).not.toBe('none')
     await expect(Number(glare.opacity)).toBeGreaterThan(0)
+    // The breath stands still: it plays no beats at all, so nothing on the
+    // glow is running.
+    await expect(glare.animationIterationCount).toBe('0')
+    const breathing = card
+      .getAnimations({ subtree: true })
+      .filter((animation) => animation.playState === 'running')
+    await expect(breathing).toHaveLength(0)
     await expect(
       canvas.getByText('working · reading the Loom sheets'),
     ).toBeVisible()
@@ -256,8 +262,8 @@ export const Long: Story = {
       },
       {
         crews: [
-          crew('crew-1', 'convergence development', '#7c3aed', '🐎'),
-          crew('crew-2', 'backpack studio', '#10b981'),
+          crew('crew-1', 'convergence development', crewTokens.violet, '🐎'),
+          crew('crew-2', 'backpack studio', crewTokens.green),
           crew('crew-3', 'spikes', null),
         ],
       },
@@ -270,7 +276,7 @@ export const Long: Story = {
       'backpack studio',
       'spikes',
     ]) {
-      await expect(canvas.getByTitle(`In crew ${name}`)).toBeVisible()
+      await expect(canvas.getByText(`In crew ${name}`)).toBeInTheDocument()
     }
   },
 }

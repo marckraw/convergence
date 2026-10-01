@@ -6,6 +6,7 @@ import {
   formatFacetSummary,
 } from './session-card-facets.pure'
 import type { SessionCardFacetOption } from './session-card-facets.pure'
+import { FILTER_CHIP_OFF, FILTER_CHIP_ON } from './session-filter.styles'
 
 interface SessionFacetPickerProps {
   label: string
@@ -74,9 +75,7 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
       size="sm"
       className={cn(
         'max-w-56 rounded-full border px-2.5 text-2xs font-normal',
-        selected.length > 0
-          ? 'border-hairline-strong bg-white/10 text-foreground'
-          : 'border-hairline text-muted-foreground hover:border-hairline-strong',
+        selected.length > 0 ? FILTER_CHIP_ON : FILTER_CHIP_OFF,
       )}
       contentClassName="w-64"
       footer={

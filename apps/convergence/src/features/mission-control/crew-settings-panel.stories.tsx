@@ -9,6 +9,7 @@ import {
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,
 } from './crew-loop.pure'
+import { crewTokens } from '@convergence/ui'
 
 const seat = (overrides: Partial<SessionCrewMember>): SessionCrewMember => ({
   ...DEFAULT_CREW_MEMBER_SEAT,
@@ -52,7 +53,7 @@ const meta = {
   component: CrewSettingsPanel,
   args: {
     emoji: '🐎',
-    accentColor: '#7c3aed',
+    accentColor: crewTokens.violet,
     onEmojiChange: fn(),
     onAccentColorChange: fn(),
     memberCount: members.length,

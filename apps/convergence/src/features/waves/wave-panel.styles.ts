@@ -1,3 +1,4 @@
+import { durationsMs } from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
 
 export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from '@convergence/ui'
@@ -38,20 +39,21 @@ export const WAVE_RESIZE_HANDLE_CLASS =
  * (`learn-loom.styles.ts`).
  */
 export const LOOM_SHELL_CLASS =
-  'flex h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none data-[loom-motion=still]:transition-none'
+  'flex h-full shrink-0 overflow-hidden transition-layout duration-panel ease-out motion-reduce:transition-none data-[loom-motion=still]:transition-none'
 
 /**
  * How long the fold takes, in the currency each half speaks (MAR-3312 R1/R3).
  *
- * `LOOM_SHELL_CLASS`'s `duration-200`, the `--animate-loom-enter` delay in
- * `global.css`, and the timer that takes `slide` back off the shell are three
- * encodings of ONE fact; `loom-motion.render.test.tsx` reads the stylesheet
- * and refuses to let them drift apart.
+ * `LOOM_SHELL_CLASS`'s `duration-panel`, the `--animate-loom-enter` delay in
+ * `global.css` (`var(--motion-panel)`), and the timer that takes `slide` back
+ * off the shell are three spellings of ONE token, --motion-panel;
+ * `loom-motion.styles.test.ts` reads the stylesheet and refuses to let them
+ * drift apart.
  */
-export const LOOM_SLIDE_MS = 200
+export const LOOM_SLIDE_MS = durationsMs.panel
 
-/** How long the arriving shape takes to fade in, once the width has landed. */
-export const LOOM_ENTER_MS = 150
+/** How long the arriving shape takes to fade in, once the width has landed (--motion-fast). */
+export const LOOM_ENTER_MS = durationsMs.fast
 
 /**
  * The strip's width as a number (MAR-3312 R1): `WAVE_RAIL_CLASS`'s `w-11` in
@@ -65,8 +67,8 @@ export const LOOM_STRIP_WIDTH_PX = 44
  * The arriving shape, while the shell is still travelling (MAR-3312 R3).
  *
  * The app declares `animate-loom-enter` in `global.css` beside its other
- * keyframes, and its `200ms` delay is the shell's own duration -- the icons
- * arrive when the width has, not on top of a column still shrinking.
+ * keyframes, and its delay is the shell's own duration (--motion-panel) -- the
+ * icons arrive when the width has, not on top of a column still shrinking.
  */
 export const LOOM_ENTER_CLASS = 'animate-loom-enter motion-reduce:animate-none'
 

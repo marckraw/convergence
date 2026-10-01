@@ -733,10 +733,8 @@ describe('MissionControl', () => {
 
       render(<MissionControl />)
 
-      expect(
-        await screen.findByTitle('In crew Masterminds'),
-      ).toBeInTheDocument()
-      expect(screen.getByTitle('In crew Workers')).toBeInTheDocument()
+      expect(await screen.findByText('In crew Masterminds')).toBeInTheDocument()
+      expect(screen.getByText('In crew Workers')).toBeInTheDocument()
     })
 
     it('shows no chips at all before any crew exists', async () => {
@@ -746,7 +744,7 @@ describe('MissionControl', () => {
       render(<MissionControl />)
       await screen.findByText('Wire the room')
 
-      expect(screen.queryByTitle(/^In crew/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/^In crew/)).not.toBeInTheDocument()
     })
   })
 
@@ -762,21 +760,21 @@ describe('MissionControl', () => {
     await screen.findByText('Wire the room')
 
     expect(
-      await screen.findByRole('button', { name: 'Flat' }),
+      await screen.findByRole('radio', { name: 'Flat' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Canvas' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Canvas' })).toBeInTheDocument()
     // Mutation: leave either retired mode in the list -> red here.
     expect(
-      screen.queryByRole('button', { name: 'Waves' }),
+      screen.queryByRole('radio', { name: 'Waves' }),
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Crews' }),
+      screen.queryByRole('radio', { name: 'Crews' }),
     ).not.toBeInTheDocument()
   })
 
   describe('canvas view', () => {
     async function switchToCanvas() {
-      fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
+      fireEvent.click(await screen.findByRole('radio', { name: 'Canvas' }))
     }
     it('a stored recipe stays clean after reporting Off then On (mutations: unconditional birth-key write; enable clean Save)', async () => {
       seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
@@ -1438,12 +1436,16 @@ describe('MissionControl', () => {
       })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
-      fireEvent.keyDown(await screen.findByLabelText('Connect to Fable'), {
-        key: 'Enter',
-      })
-      fireEvent.keyDown(await screen.findByLabelText('Connect to Opus'), {
-        key: 'Enter',
-      })
+      // The card's body is a native button since MC-26, so Enter and Space
+      // ARE its click, by the platform: the keyboard route cannot drift from
+      // the pointer's. jsdom does not synthesise that click from a keydown,
+      // so the test proves the element is the button and presses it.
+      const fable = await screen.findByLabelText('Connect to Fable')
+      expect(fable.tagName).toBe('BUTTON')
+      fireEvent.click(fable)
+      const opus = await screen.findByLabelText('Connect to Opus')
+      expect(opus.tagName).toBe('BUTTON')
+      fireEvent.click(opus)
 
       expect(await screen.findByText('New connection')).toBeInTheDocument()
       // Enter PICKED rather than navigated: the mode decides, not the device.
@@ -1684,9 +1686,10 @@ describe('MissionControl', () => {
       render(<MissionControl onOpenSession={onOpenSession} />)
       await switchToCanvas()
 
-      fireEvent.keyDown(await screen.findByLabelText('Open Fable'), {
-        key: 'Enter',
-      })
+      // A native button (MC-26): Enter is its click, by the platform.
+      const fable = await screen.findByLabelText('Open Fable')
+      expect(fable.tagName).toBe('BUTTON')
+      fireEvent.click(fable)
 
       expect(onOpenSession).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'a' }),
@@ -3836,7 +3839,7 @@ describe('MissionControl', () => {
 
   describe('round 5 live-review canaries', () => {
     async function switchToCanvas() {
-      fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
+      fireEvent.click(await screen.findByRole('radio', { name: 'Canvas' }))
     }
     it('L-x nudges a card dropped onto the chair (mutation: restrict obstacles to sessions)', async () => {
       seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])

@@ -1,62 +1,100 @@
+import { durationsMs, type Tone } from '@convergence/ui'
 import type { AttentionState, SessionStatus } from '@/entities/session'
 import type { SessionCardState } from './session-card-state.pure'
 
 /**
  * One card must read as a different state from its neighbour at a glance,
- * across the room, without reading the words. Attention owns the frame.
+ * across the room, without reading the words. Attention owns the frame, in
+ * R1's tones (MAR-3617): waiting on you is warning whether it is an approval
+ * or a question, a failure is danger, a finish is success, and a host the
+ * room cannot see is warning too, with its own glyph and words, never red
+ * (MAR-3051: the run is not broken, the view of it is). No attention, no
+ * tone: the card's own hairline.
  */
-export const CARD_ATTENTION_STYLES: Record<AttentionState, string> = {
-  'needs-approval': 'border-warning/60 bg-warning/[0.04]',
-  'needs-input': 'border-blue-500/60 bg-blue-500/[0.04]',
-  failed: 'border-red-500/50 bg-red-500/[0.04]',
-  finished: 'border-emerald-500/50 bg-emerald-500/[0.04]',
-  // Amber, not red: the run is not broken, the view of it is (MAR-3051).
-  'host-unreachable': 'border-amber-500/60 bg-amber-500/[0.04]',
-  none: 'border-hairline',
+export const CARD_ATTENTION_TONE: Record<AttentionState, Tone | undefined> = {
+  'needs-approval': 'warning',
+  'needs-input': 'warning',
+  failed: 'danger',
+  finished: 'success',
+  'host-unreachable': 'warning',
+  none: undefined,
+}
+
+/**
+ * A grid card's attention frame: the tone's edge and its tint. Written after
+ * the open mark, so the tint wins over the open card's selected fill.
+ */
+export const CARD_TONE_FRAME: Record<Tone, string> = {
+  neutral: 'border-neutral-line bg-neutral-soft',
+  info: 'border-info-line bg-info-soft',
+  success: 'border-success-line bg-success-soft',
+  warning: 'border-warning-line bg-warning-soft',
+  danger: 'border-danger-line bg-danger-soft',
+}
+
+/**
+ * A canvas node's attention frame. The node stays opaque over the canvas, so
+ * the tint is laid over its surface as an image rather than replacing it.
+ */
+export const CARD_TONE_WASH: Record<Tone, string> = {
+  neutral:
+    'border-neutral-line bg-linear-to-b from-neutral-soft to-neutral-soft',
+  info: 'border-info-line bg-linear-to-b from-info-soft to-info-soft',
+  success:
+    'border-success-line bg-linear-to-b from-success-soft to-success-soft',
+  warning:
+    'border-warning-line bg-linear-to-b from-warning-soft to-warning-soft',
+  danger: 'border-danger-line bg-linear-to-b from-danger-soft to-danger-soft',
+}
+
+/**
+ * Each state the room filters by, in R1's tone: working is info everywhere a
+ * session is drawn (Mission Control, Needs you, Loom), never emerald, blue or
+ * sky depending on the surface (MC-2).
+ */
+export const SESSION_CARD_STATE_TONE: Record<SessionCardState, Tone> = {
+  working: 'info',
+  'needs-you': 'warning',
+  idle: 'neutral',
+  finished: 'success',
+  failed: 'danger',
+  'host-unreachable': 'warning',
+}
+
+/** The dot a card shows when nothing needs you: what the run is doing. */
+export const STATUS_DOT_TONE: Record<SessionStatus, Tone> = {
+  running: 'info',
+  idle: 'neutral',
+  answered: 'info',
+  completed: 'neutral',
+  failed: 'danger',
 }
 
 /**
  * The card of the conversation open in the main view (MAR-3321). A bright ring
  * standing 2px off the card, so it reads outside every attention frame rather
- * than fighting it, plus a lift of the surface. The lift is a background, so it
- * yields to an attention tint: the card places this before the attention
- * styles and the frame's colour wins wherever attention has one.
+ * than fighting it, plus the selected fill (R7). The fill is a background, so
+ * it yields to an attention tint: the card places this before the attention
+ * tone and the frame's colour wins wherever attention has one.
  */
 export const CARD_OPEN_CLASS =
-  'ring-2 ring-foreground/70 ring-offset-2 ring-offset-background bg-foreground/[0.06]'
+  'ring-2 ring-ink/70 ring-offset-2 ring-offset-canvas bg-fill-selected'
 
 /**
  * The card whose Hail is open. An outline, not a ring, so it is a different
  * property from the open mark and both can show on one card. Tailwind v4's
- * `outline-1` carries the outline style as well as the width.
+ * `outline-1` carries the outline style as well as the width; `-outline-offset-1`
+ * pulls it a pixel inside the edge.
  */
-export const CARD_HAIL_OPEN_CLASS =
-  'outline-1 outline-ring outline-offset-[-1px]'
+export const CARD_HAIL_OPEN_CLASS = 'outline-1 outline-focus -outline-offset-1'
 
+/** The last line's ink: the run's own words, in its tone when it failed. */
 export const ACTIVITY_TEXT_STYLES: Record<SessionStatus, string> = {
-  running: 'text-foreground',
-  idle: 'text-muted-foreground',
-  answered: 'text-muted-foreground',
-  completed: 'text-muted-foreground',
-  failed: 'text-red-600 dark:text-red-400',
-}
-
-/** A selected state chip wears the same colour its cards wear in the room. */
-export const STATE_CHIP_STYLES: Record<SessionCardState, string> = {
-  'host-unreachable': 'border-warning/60 bg-warning/10 text-foreground',
-  working: 'border-emerald-500/60 bg-emerald-500/10 text-foreground',
-  'needs-you': 'border-blue-500/60 bg-blue-500/10 text-foreground',
-  idle: 'border-hairline-strong bg-white/10 text-foreground',
-  finished: 'border-emerald-500/50 bg-emerald-500/[0.07] text-foreground',
-  failed: 'border-red-500/60 bg-red-500/10 text-foreground',
-}
-
-export const STATUS_DOT_STYLES: Record<SessionStatus, string> = {
-  running: 'bg-emerald-500',
-  idle: 'bg-muted-foreground/40',
-  answered: 'bg-emerald-500/40',
-  completed: 'bg-muted-foreground/40',
-  failed: 'bg-red-500',
+  running: 'text-ink',
+  idle: 'text-ink-muted',
+  answered: 'text-ink-muted',
+  completed: 'text-ink-muted',
+  failed: 'text-danger-ink',
 }
 
 /**
@@ -68,8 +106,8 @@ export const STATUS_DOT_STYLES: Record<SessionStatus, string> = {
  * set on the card, and `src/app/global.css` only reads them.
  */
 export const CARD_BREATHE = {
-  /** One full inhale-and-exhale. A glare, not an alarm. */
-  periodMs: 2800,
+  /** One full inhale-and-exhale (--motion-breath). A glare, not an alarm. */
+  periodMs: durationsMs.breath,
   /** Glow strength at the bottom of the breath. */
   minOpacity: 0.18,
   /** Glow strength at the top of the breath — and the still value when motion is off. */
@@ -80,7 +118,8 @@ export const CARD_BREATHE = {
   spreadPx: 1,
   /**
    * A crewless session still has to say it is working, so it breathes in the
-   * room's working hue — the same emerald `STATUS_DOT_STYLES.running` wears.
+   * working tone's solid (R1: working is info), the colour its running dot
+   * wears.
    */
-  neutralColor: 'var(--color-emerald-500)',
+  neutralColor: 'var(--info-solid)',
 } as const

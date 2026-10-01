@@ -238,9 +238,7 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
     expect(loomLandmarks()).toHaveLength(1)
     expect(screen.queryByLabelText('Loom strip')).toBeNull()
     // ...and the retired word opened Flat, not nothing.
-    expect(
-      screen.getByRole('button', { name: 'Flat' }).getAttribute('aria-pressed'),
-    ).toBe('true')
+    expect(screen.getByRole('radio', { name: 'Flat' })).toBeChecked()
     expect(screen.queryByRole('button', { name: 'Waves' })).toBeNull()
   })
 
