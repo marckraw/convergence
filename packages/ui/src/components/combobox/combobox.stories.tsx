@@ -401,6 +401,32 @@ export const Multiple: Story = {
   },
 }
 
+/**
+ * Short: a list short enough to scan has no search. The focus goes into the
+ * list, the arrows move the highlight and Enter picks.
+ */
+export const Short: Story = {
+  args: { searchable: false, items: PROJECTS.slice(0, 4) },
+  play: async ({ args, canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Project' })
+    await userEvent.click(trigger)
+    const dialog = await openedList()
+    await expect(within(dialog).queryByRole('combobox')).toBeNull()
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}')
+    await waitFor(() =>
+      expect(
+        within(dialog)
+          .getAllByRole('option')
+          .some((option) => option.hasAttribute('data-highlighted')),
+      ).toBe(true),
+    )
+    await userEvent.keyboard('{Enter}')
+    await expect(args.onChange).toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await expect(trigger).toHaveFocus()
+  },
+}
+
 /** R3: the trigger is 24, 28, 32 or 36 px, by `size`. */
 export const Sizes: Story = {
   render: (args) => (

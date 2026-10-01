@@ -1,6 +1,13 @@
 import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox'
 import { CheckIcon, ChevronDownIcon } from 'lucide-react'
-import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { cn } from '#lib/cn.pure'
 import type { ControlSize } from '#lib/control-frame.styles'
 import { popupMotion } from '../../motion/popup.styles'
@@ -95,6 +102,12 @@ type ComboboxSharedProps = {
   /** Whether the list has a search field. Turn it off for a list short enough to scan. */
   searchable?: boolean
   /**
+   * Whether an item matches the search, for a list with a matching rule of
+   * its own. By default an item matches when its label, description or
+   * badge holds the query, ignoring case.
+   */
+  filter?: (item: ComboboxItem, query: string) => boolean
+  /**
    * Controlled open state, for a caller that must open the list from outside
    * its trigger (MAR-3393: the Actions menu's "Hand off"). Absent, the
    * combobox owns its open state. A disabled combobox never opens.
@@ -184,6 +197,7 @@ function Combobox(props: ComboboxProps) {
     action,
     footer,
     searchable = true,
+    filter,
     open: controlledOpen,
     onOpenChange,
   } = props
@@ -192,6 +206,7 @@ function Combobox(props: ComboboxProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [trigger, setTrigger] = useState<HTMLElement | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const isDisabled =
     disabled || (items.length === 0 && !action && footer === undefined)
@@ -213,7 +228,9 @@ function Combobox(props: ComboboxProps) {
   const chosen = items.find((item) => item.id === selectedIds[0])
   const triggerIcon = icon ?? (props.multiple ? undefined : chosen?.icon)
   const name = ariaLabel ?? value
-  const visible = filterComboboxItems(items, query)
+  const visible = filter
+    ? items.filter((item) => filter(item, query))
+    : filterComboboxItems(items, query)
   const listShown = loadingMessage === undefined && !error && visible.length > 0
   const container = trigger?.closest<HTMLElement>(RADIX_DIALOG) ?? undefined
   useEscapeStaysInList(open && container !== undefined)
@@ -318,6 +335,7 @@ function Combobox(props: ComboboxProps) {
     const groups = groupComboboxItems(visible)
     return (
       <ComboboxPrimitive.List
+        ref={listRef}
         id={listId}
         aria-label={name}
         className={comboboxList}
@@ -394,6 +412,9 @@ function Combobox(props: ComboboxProps) {
             // The popup is a dialog to assistive tech; it takes its trigger's
             // name, so it is announced as the field it belongs to.
             aria-label={name}
+            // With no search, the list takes the focus, so its arrows and
+            // Enter work from the keyboard.
+            initialFocus={searchable ? undefined : listRef}
             className={cn(comboboxPopup, popupMotion, contentClassName)}
           >
             {searchable ? (
