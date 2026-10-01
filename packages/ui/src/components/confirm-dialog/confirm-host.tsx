@@ -122,19 +122,24 @@ function ConfirmHostDialog({
   )
 }
 
+/** With no host above, asking fails loudly, and only when it is asked. */
+const noHost: Confirm = () =>
+  Promise.reject(
+    new Error(
+      'useConfirm needs a ConfirmHost above it: mount UiProvider at the root.',
+    ),
+  )
+
 /**
  * Asks before something that can't be undone (MAR-3616, R5), from an event
  * handler, in one line: `if (!(await confirm({ title, description,
  * confirmLabel: 'Delete', variant: 'danger' }))) return`. Never the
- * browser's `window.confirm`. Needs UiProvider (or a ConfirmHost) above.
+ * browser's `window.confirm`. Needs UiProvider (or a ConfirmHost) above; a
+ * component that only might ask renders without one, and asking without one
+ * rejects.
  */
 function useConfirm(): Confirm {
-  const confirm = useContext(ConfirmContext)
-  if (!confirm)
-    throw new Error(
-      'useConfirm needs a ConfirmHost above it: mount UiProvider at the root.',
-    )
-  return confirm
+  return useContext(ConfirmContext) ?? noHost
 }
 
 export {

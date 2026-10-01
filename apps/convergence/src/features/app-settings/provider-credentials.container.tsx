@@ -5,7 +5,7 @@ import {
   openRouterCredentialsApi,
   type OpenRouterCredentialStatus,
 } from '@/entities/app-settings'
-import { Button, IconButton, Input } from '@convergence/ui'
+import { Button, IconButton, Input, useConfirm } from '@convergence/ui'
 
 function statusText(status: OpenRouterCredentialStatus | null): string {
   if (!status) return 'Checking...'
@@ -17,6 +17,8 @@ function statusText(status: OpenRouterCredentialStatus | null): string {
 }
 
 export const ProviderCredentialsContainer: FC = () => {
+  // What can't be taken back asks first, in the app's own dialog (R5).
+  const confirm = useConfirm()
   const [status, setStatus] = useState<OpenRouterCredentialStatus | null>(null)
   const [token, setToken] = useState('')
   const [showToken, setShowToken] = useState(false)
@@ -60,6 +62,14 @@ export const ProviderCredentialsContainer: FC = () => {
   }, [token])
 
   const handleRemove = useCallback(async () => {
+    const confirmed = await confirm({
+      title: 'Remove the OpenRouter API key?',
+      description:
+        'It is deleted from the macOS keychain. You can add a key again at any time.',
+      confirmLabel: 'Remove key',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     setIsSaving(true)
     setError(null)
     setMessage(null)
@@ -77,7 +87,7 @@ export const ProviderCredentialsContainer: FC = () => {
     } finally {
       setIsSaving(false)
     }
-  }, [])
+  }, [confirm])
 
   return (
     <div className="space-y-4">

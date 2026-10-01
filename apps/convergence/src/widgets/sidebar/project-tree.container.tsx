@@ -241,7 +241,7 @@ export const ProjectTree = memo(function ProjectTree({
             onClick={() => onDeleteSession(session.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete session</span>
+            <span>Delete session…</span>
           </MenuItem>
         </MenuContent>
       </Menu>
@@ -278,7 +278,7 @@ export const ProjectTree = memo(function ProjectTree({
           ) : (
             <MenuItem onClick={() => onArchiveWorkspace?.(workspace.id)}>
               <Archive className="h-3.5 w-3.5" />
-              <span>Archive workspace...</span>
+              <span>Archive workspace…</span>
             </MenuItem>
           )}
           {!workspace.worktreeRemovedAt ? (
@@ -291,7 +291,7 @@ export const ProjectTree = memo(function ProjectTree({
                 onClick={() => onRemoveWorkspaceWorktree?.(workspace.id)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                <span>Remove worktree from disk...</span>
+                <span>Remove worktree from disk…</span>
               </MenuItem>
             </>
           ) : null}
@@ -301,7 +301,7 @@ export const ProjectTree = memo(function ProjectTree({
             onClick={() => onDeleteWorkspace(workspace.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete permanently...</span>
+            <span>Delete permanently…</span>
           </MenuItem>
         </MenuContent>
       </Menu>

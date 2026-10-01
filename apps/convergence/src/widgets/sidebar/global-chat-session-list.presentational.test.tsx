@@ -155,7 +155,7 @@ describe('GlobalChatSessionList', () => {
         name: /chat session actions planning chat/i,
       }),
     )
-    fireEvent.click(await screen.findByText('Delete session'))
+    fireEvent.click(await screen.findByText('Delete session…'))
 
     expect(onDeleteSession).toHaveBeenCalledWith('global-session-1')
   })
@@ -170,7 +170,7 @@ describe('GlobalChatSessionList', () => {
         name: /chat session actions planning chat/i,
       }),
     )
-    fireEvent.click(await screen.findByText('Add to Space...'))
+    fireEvent.click(await screen.findByText('Add to Space…'))
 
     expect(onManageSessionSpaces).toHaveBeenCalledWith('global-session-1')
   })
@@ -222,7 +222,7 @@ describe('GlobalChatSessionList', () => {
     fireEvent.click(
       screen.getByRole('button', { name: /space actions launch plan/i }),
     )
-    fireEvent.click(await screen.findByText('Archive Space...'))
+    fireEvent.click(await screen.findByText('Archive Space…'))
     expect(onArchiveSpace).toHaveBeenCalledWith('space-1')
 
     fireEvent.click(
@@ -292,7 +292,7 @@ describe('GlobalChatSessionList', () => {
         name: /space attempt actions planning chat/i,
       }),
     )
-    fireEvent.click(await screen.findByText('Delete session'))
+    fireEvent.click(await screen.findByText('Delete session…'))
     expect(onDeleteSession).toHaveBeenCalledWith(baseSession.id)
   })
 })

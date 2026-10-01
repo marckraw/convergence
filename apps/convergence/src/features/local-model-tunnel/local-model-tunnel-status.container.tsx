@@ -23,6 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   Tooltip,
+  useConfirm,
 } from '@convergence/ui'
 import { Pencil, Plus } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
@@ -45,6 +46,8 @@ const NEW_PROFILE_INPUT: LocalModelTunnelProfileInput = {
 }
 
 export const LocalModelTunnelStatusContainer: FC = () => {
+  // What can't be taken back asks first, in the app's own dialog (R5).
+  const confirm = useConfirm()
   const snapshot = useLocalModelTunnelStore((s) => s.snapshot)
   const isLoading = useLocalModelTunnelStore((s) => s.isLoading)
   const isMutatingProfileId = useLocalModelTunnelStore(
@@ -132,6 +135,14 @@ export const LocalModelTunnelStatusContainer: FC = () => {
 
   const handleDeleteProfile = async () => {
     if (!selected) return
+    const confirmed = await confirm({
+      title: `Delete tunnel profile “${selected.profile.name}”?`,
+      description:
+        'The profile and its routes are deleted for good. A tunnel it runs is stopped.',
+      confirmLabel: 'Delete profile',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     await deleteProfile(selected.profile.id)
     setSelectedProfileId(null)
   }

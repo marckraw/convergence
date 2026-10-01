@@ -9,8 +9,11 @@ import {
   AnalyticsInsights,
   type AnalyticsInsightsTab,
 } from './analytics-insights.presentational'
+import { useConfirm } from '@convergence/ui'
 
 export const AnalyticsInsightsContainer: FC = () => {
+  // What can't be taken back asks first, in the app's own dialog (R5).
+  const confirm = useConfirm()
   const [activeTab, setActiveTab] = useState<AnalyticsInsightsTab>('usage')
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
   const [profileProviderId, setProfileProviderId] = useState('')
@@ -100,11 +103,18 @@ export const AnalyticsInsightsContainer: FC = () => {
     setGenerateDialogOpen(false)
   }, [generateWorkProfile, rangePreset, selectedModel, selectedProvider])
 
-  const handleDeleteProfile = useCallback(() => {
+  const handleDeleteProfile = useCallback(async () => {
     const id = overview?.generatedProfile?.id
     if (!id) return
-    void deleteWorkProfileSnapshot(id)
-  }, [deleteWorkProfileSnapshot, overview?.generatedProfile?.id])
+    const confirmed = await confirm({
+      title: 'Delete the generated work profile?',
+      description:
+        'The profile is deleted for good. You can generate a new one from your sessions.',
+      confirmLabel: 'Delete profile',
+      variant: 'danger',
+    })
+    if (confirmed) void deleteWorkProfileSnapshot(id)
+  }, [confirm, deleteWorkProfileSnapshot, overview?.generatedProfile?.id])
 
   return (
     <AnalyticsInsights

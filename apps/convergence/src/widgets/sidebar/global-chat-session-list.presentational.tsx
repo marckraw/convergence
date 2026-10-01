@@ -187,7 +187,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
           {!session.archivedAt ? (
             <MenuItem onClick={() => onManageSessionSpaces(session.id)}>
               <Link2 className="h-3.5 w-3.5" />
-              <span>Add to Space...</span>
+              <span>Add to Space…</span>
             </MenuItem>
           ) : null}
           {session.archivedAt ? (
@@ -206,7 +206,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
             onClick={() => onDeleteSession(session.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete session</span>
+            <span>Delete session…</span>
           </MenuItem>
         </MenuContent>
       </Menu>
@@ -317,7 +317,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           <MenuContent align="end">
                             <MenuItem onClick={() => onArchiveSpace(space.id)}>
                               <Archive className="h-3.5 w-3.5" />
-                              <span>Archive Space...</span>
+                              <span>Archive Space…</span>
                             </MenuItem>
                           </MenuContent>
                         </Menu>
@@ -392,7 +392,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                       }
                                     >
                                       <Link2 className="h-3.5 w-3.5" />
-                                      <span>Manage Spaces...</span>
+                                      <span>Manage Spaces…</span>
                                     </MenuItem>
                                     {attempt.session ? (
                                       attempt.session.archivedAt ? (
@@ -437,7 +437,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                         }
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
-                                        <span>Delete session</span>
+                                        <span>Delete session…</span>
                                       </MenuItem>
                                     ) : null}
                                   </MenuContent>

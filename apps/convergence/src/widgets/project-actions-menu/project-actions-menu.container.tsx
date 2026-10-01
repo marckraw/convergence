@@ -10,7 +10,7 @@ import {
   type ProjectScriptRun,
 } from '@/entities/project-script'
 import { ProjectScriptEditor } from '@/features/project-script-editor'
-import { Popover, PopoverTrigger } from '@convergence/ui'
+import { Popover, PopoverTrigger, useConfirm } from '@convergence/ui'
 import { isProjectScriptRunActive } from './project-actions-menu.pure'
 import {
   ProjectActionsMenuPresentational,
@@ -75,6 +75,7 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   const stopRun = useProjectScriptStore((state) => state.stopRun)
   const error = useProjectScriptStore((state) => state.error)
   const openDialog = useDialogStore((state) => state.open)
+  const confirm = useConfirm()
   const [ownOpen, setOwnOpen] = useState(false)
   const menuOpen = open ?? ownOpen
   const setMenuOpen = (next: boolean) => {
@@ -186,13 +187,18 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
             setMenuOpen(false)
             setEditorOpen(true)
           }}
-          onDelete={(script) => {
-            const confirmed = window.confirm(
-              `Delete action "${script.name}"?\n\nRun history for this action will also be removed.`,
-            )
-            if (confirmed) {
-              void deleteScript(script.id, project.id)
-            }
+          onDelete={async (script) => {
+            // The panel closes first: the question takes the focus, and gives
+            // it back to the panel's trigger.
+            setMenuOpen(false)
+            const confirmed = await confirm({
+              title: `Delete action “${script.name}”?`,
+              description:
+                'The action and its run history are deleted for good. Nothing is run.',
+              confirmLabel: 'Delete action',
+              variant: 'danger',
+            })
+            if (confirmed) void deleteScript(script.id, project.id)
           }}
           onToggleRun={(runId) => {
             setExpandedRunIds((current) => {

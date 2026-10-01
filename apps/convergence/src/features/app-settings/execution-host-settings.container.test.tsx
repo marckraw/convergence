@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isUnavailable } from '@/shared/testing/unavailable'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { TooltipProvider } from '@convergence/ui'
+import { UiProvider } from '@convergence/ui'
+import { answerConfirm } from '@/shared/testing/confirm'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
 import {
   executionHostSessionCounts,
@@ -78,7 +79,7 @@ function renderContainer(
 ) {
   const onRemove = vi.fn()
   const view = render(
-    <TooltipProvider>
+    <UiProvider>
       <ExecutionHostSettingsContainer
         draft={draft()}
         saved={saved()}
@@ -88,7 +89,7 @@ function renderContainer(
         onRemove={onRemove}
         {...props}
       />
-    </TooltipProvider>,
+    </UiProvider>,
   )
   return { ...view, onRemove, props }
 }
@@ -231,6 +232,9 @@ describe('ExecutionHostSettingsContainer', () => {
         name: 'Remove token for backpack-automations',
       }),
     )
+    // Removing a token from the keychain asks first (R5).
+    expect(executionHostDaemon.deleteToken).not.toHaveBeenCalled()
+    await answerConfirm('Remove token')
     await waitFor(() =>
       expect(executionHostDaemon.deleteToken).toHaveBeenCalledWith(ENDPOINT_ID),
     )
@@ -391,7 +395,7 @@ describe('ExecutionHostSettingsContainer', () => {
     ).toBeInTheDocument()
 
     rerender(
-      <TooltipProvider>
+      <UiProvider>
         <ExecutionHostSettingsContainer
           draft={draft({ baseUrl: 'https://moved.test' })}
           saved={saved()}
@@ -400,7 +404,7 @@ describe('ExecutionHostSettingsContainer', () => {
           onRemoteBaseUrlChange={vi.fn()}
           onRemove={vi.fn()}
         />
-      </TooltipProvider>,
+      </UiProvider>,
     )
 
     expect(
@@ -482,7 +486,7 @@ describe('ExecutionHostSettingsContainer', () => {
     ).toBeInTheDocument()
 
     rerender(
-      <TooltipProvider>
+      <UiProvider>
         <ExecutionHostSettingsContainer
           draft={draft({ baseUrl: 'HTTPS://Daemon.Test/' })}
           saved={saved()}
@@ -491,7 +495,7 @@ describe('ExecutionHostSettingsContainer', () => {
           onRemoteBaseUrlChange={vi.fn()}
           onRemove={vi.fn()}
         />
-      </TooltipProvider>,
+      </UiProvider>,
     )
 
     expect(
