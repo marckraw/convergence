@@ -12,7 +12,7 @@ import {
   IconButton,
   ChoiceField,
   Input,
-  SearchableSelect,
+  Combobox,
   Switch,
   Textarea,
 } from '@convergence/ui'
@@ -242,7 +242,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Recipient
         </label>
-        <SearchableSelect
+        <Combobox
           selectedId={selectedRecipientOptionId(draft)}
           value={
             spawning
@@ -263,7 +263,6 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           disabled={busy}
           searchPlaceholder="Find a conversation in this crew…"
           emptyMessage="No other conversations in this crew."
-          triggerClassName="h-8 text-xs"
         />
         {recipientNote ? (
           <p className="text-[10px] text-amber-400/80">{recipientNote}</p>
@@ -281,7 +280,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             The session this connection opens
           </p>
           <p className="text-[11px] text-muted-foreground">Execution host</p>
-          <SearchableSelect
+          <Combobox
             selectedId={spec.executionHost}
             value={
               hostOptions.find((option) => option.id === spec.executionHost)
@@ -297,7 +296,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             }
             disabled={busy}
             searchPlaceholder="Search hosts…"
-            triggerClassName="h-7 text-xs"
+            size="sm"
           />
           <WorkAddressSlot
             view={workAddressSlot}
@@ -349,7 +348,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               />
             </label>
           ) : null}
-          <SearchableSelect
+          <Combobox
             selectedId={spec.providerId}
             value={
               providerOptions.find((option) => option.id === spec.providerId)
@@ -362,10 +361,10 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             disabled={busy}
             searchPlaceholder="Search providers…"
             emptyMessage="No providers available."
-            triggerClassName="h-7 text-xs"
+            size="sm"
           />
           {modelOptions.length > 0 ? (
-            <SearchableSelect
+            <Combobox
               selectedId={spec.model}
               value={
                 modelOptions.find((option) => option.id === spec.model)
@@ -376,11 +375,11 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               disabled={busy}
               searchPlaceholder="Search models…"
               emptyMessage="No models for this provider."
-              triggerClassName="h-7 text-xs"
+              size="sm"
             />
           ) : null}
           {effortOptions.length > 0 ? (
-            <SearchableSelect
+            <Combobox
               selectedId={spec.effort}
               value={
                 effortOptions.find((option) => option.id === spec.effort)
@@ -391,7 +390,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               disabled={busy}
               searchPlaceholder="Search effort…"
               emptyMessage="No effort levels for this model."
-              triggerClassName="h-7 text-xs"
+              size="sm"
             />
           ) : null}
           {/* A spawned session's account is fixed the moment it starts, so
@@ -404,7 +403,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             }
             disabled={busy}
           />
-          <SearchableSelect
+          <Combobox
             selectedId={spec.projectId ?? GLOBAL_PROJECT_OPTION_ID}
             value={
               projectOptions.find(
@@ -421,7 +420,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             disabled={busy}
             searchPlaceholder="Search projects…"
             emptyMessage="No projects."
-            triggerClassName="h-7 text-xs"
+            size="sm"
           />
           <Input
             size="sm"

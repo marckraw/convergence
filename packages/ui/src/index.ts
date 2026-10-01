@@ -174,12 +174,6 @@ export {
   ScreenHeader,
   type ScreenHeaderProps,
 } from './components/screen-header/screen-header'
-export { SearchableSelect } from './components/searchable-select/searchable-select.container'
-export type {
-  SearchableSelectAction,
-  SearchableSelectItem,
-  SearchableSelectProps,
-} from './components/searchable-select/searchable-select.presentational'
 export {
   SectionHeader,
   type SectionHeaderProps,

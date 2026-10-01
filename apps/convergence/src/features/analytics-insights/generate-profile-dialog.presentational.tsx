@@ -10,8 +10,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  SearchableSelect,
-  type SearchableSelectItem,
+  Combobox,
+  type ComboboxItem,
 } from '@convergence/ui'
 
 interface GenerateProfileDialogProps {
@@ -21,7 +21,7 @@ interface GenerateProfileDialogProps {
   modelId: string
   modelLabel: string
   providers: ProviderInfo[]
-  providerItems: SearchableSelectItem[]
+  providerItems: ComboboxItem[]
   isGenerating: boolean
   onOpenChange: (open: boolean) => void
   onProviderChange: (providerId: string) => void
@@ -64,7 +64,7 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
             <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Provider
             </label>
-            <SearchableSelect
+            <Combobox
               selectedId={providerId}
               value={providerLabel}
               items={providerItems}
@@ -72,9 +72,8 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
               disabled={isGenerating || providerItems.length === 0}
               searchPlaceholder="Search providers..."
               emptyMessage="No providers available."
-              triggerVariant="secondary"
-              triggerSize="md"
-              triggerClassName="w-full justify-between px-2 text-xs"
+              variant="secondary"
+              className="w-full px-2 text-xs"
             />
           </div>
 

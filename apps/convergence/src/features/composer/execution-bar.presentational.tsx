@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import type { SearchableSelectItem } from '@convergence/ui'
+import type { ComboboxItem } from '@convergence/ui'
 import { ComposerSelect } from './composer-select.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
 import { WorkAddressSlot } from '@/entities/execution-host'
@@ -65,7 +65,7 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
             'Local'
           }
           items={view.choices.map(
-            (choice): SearchableSelectItem => ({
+            (choice): ComboboxItem => ({
               id: choice.id,
               label: choice.label,
             }),
