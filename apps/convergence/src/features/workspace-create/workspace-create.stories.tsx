@@ -69,7 +69,7 @@ export const Default: Story = {
       'feature/storiess',
     )
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Create' }),
+      within(dialog).getByRole('button', { name: 'Create workspace' }),
     )
     await expect(args.onSubmit).toHaveBeenCalledOnce()
     await userEvent.click(
@@ -85,7 +85,7 @@ export const ChooseBaseBranch: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
     await userEvent.click(
-      within(dialog).getByRole('combobox', { name: 'Use project default' }),
+      within(dialog).getByRole('combobox', { name: 'Create from' }),
     )
     const search = await screen.findByRole('combobox', {
       name: 'Search branches',
@@ -111,10 +111,10 @@ export const LoadingBranches: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
     await userEvent.click(
-      within(dialog).getByRole('combobox', { name: 'Use project default' }),
+      within(dialog).getByRole('combobox', { name: 'Create from' }),
     )
     const search = await screen.findByRole('combobox', {
-      name: 'Loading branches...',
+      name: 'Loading branches…',
     })
     await expect(screen.getAllByRole('option')).toHaveLength(1)
     // The list has settled with the focus in its search before Escape, as
@@ -126,14 +126,16 @@ export const LoadingBranches: Story = {
   },
 }
 
-/** Empty: no branch name yet, so Create waits. */
+/** Empty: no branch name yet, so Create workspace waits and says why (R2). */
 export const Empty: Story = {
   args: { branchName: '' },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create' }),
-    ).toBeDisabled()
+    const create = within(dialog).getByRole('button', {
+      name: 'Create workspace',
+    })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription('Name the branch first.')
     await userEvent.type(
       within(dialog).getByLabelText('Branch name'),
       '{Enter}',
@@ -142,19 +144,23 @@ export const Empty: Story = {
   },
 }
 
-/** Busy, creating: the field locks and the button says so. */
+/** Busy, creating: the field locks and, after a moment, the button says so. */
 export const Busy: Story = {
   args: { isSubmitting: true },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: 'New workspace' })
-    await expect(
-      within(dialog).getByRole('button', { name: 'Creating...' }),
-    ).toBeDisabled()
+    const create = within(dialog).getByRole('button', {
+      name: 'Create workspace',
+    })
+    await waitFor(() => expect(create).toHaveAttribute('aria-busy', 'true'), {
+      timeout: 1_000,
+    })
+    await expect(create).toHaveTextContent('Creating…')
     await expect(within(dialog).getByLabelText('Branch name')).toBeDisabled()
   },
 }
 
-/** Failed: git's refusal sits above the footer. */
+/** Failed: git's refusal is announced above the footer. */
 export const Failed: Story = {
   args: {
     error:
@@ -162,7 +168,9 @@ export const Failed: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText(/already checked out/)).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /already checked out/,
+    )
   },
 }
 

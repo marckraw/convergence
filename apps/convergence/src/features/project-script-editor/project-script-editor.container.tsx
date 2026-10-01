@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { FC } from 'react'
 import {
   PROJECT_SCRIPT_ICON_OPTIONS,
@@ -7,16 +7,16 @@ import {
   type ProjectScriptIconId,
 } from '@/entities/project-script'
 import {
-  Button,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Field,
+  FieldLabel,
+  FormDialog,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
-  Tooltip,
 } from '@convergence/ui'
 
 interface ProjectScriptEditorProps {
@@ -31,6 +31,34 @@ interface ProjectScriptEditorProps {
   }) => Promise<void>
 }
 
+/** An icon with its name: how a choice reads in the list and in the trigger. */
+function IconChoice({
+  icon,
+  label,
+}: {
+  icon: ProjectScriptIconId
+  label: string
+}) {
+  return (
+    <span className="flex items-center gap-2">
+      <ProjectScriptIcon icon={icon} className="size-4" />
+      {label}
+    </span>
+  )
+}
+
+const ICON_ITEMS = PROJECT_SCRIPT_ICON_OPTIONS.map((option) => ({
+  value: option.id,
+  label: <IconChoice icon={option.id} label={option.label} />,
+}))
+
+/** Why Save waits, or nothing when it can go. */
+function missingField(name: string, command: string): string | undefined {
+  if (!name.trim()) return 'Name the action first.'
+  if (!command.trim()) return 'Give the action a command first.'
+  return undefined
+}
+
 export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
   open,
   script,
@@ -42,6 +70,8 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
   const [icon, setIcon] = useState<ProjectScriptIconId>('play')
   const [cwd, setCwd] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const iconLabelId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -49,11 +79,12 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
     setCommand(script?.command ?? '')
     setIcon(script?.icon ?? 'play')
     setCwd(script?.cwd ?? '')
+    setError(null)
   }, [open, script])
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
+  const handleSave = async () => {
     setSaving(true)
+    setError(null)
     try {
       await onSave({
         name,
@@ -62,101 +93,79 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
         cwd: cwd.trim() ? cwd : null,
       })
       onOpenChange(false)
+    } catch (err) {
+      const reason = err instanceof Error ? ` ${err.message}` : ''
+      setError(`Couldn't save the action.${reason}`)
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogContent>
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <DialogHeader className="border-b border-border px-6 py-4">
-            <DialogTitle>{script ? 'Edit Action' : 'Add Action'}</DialogTitle>
-          </DialogHeader>
-          <DialogBody className="space-y-4">
-            <label className="block space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Name
-              </span>
-              <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-2">
-                <div className="flex h-9 items-center justify-center rounded-md border border-input bg-background text-muted-foreground">
-                  <ProjectScriptIcon icon={icon} className="h-4 w-4" />
-                </div>
-                <Input
-                  size="lg"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Dev"
-                  required
-                />
-              </div>
-            </label>
-            <div className="space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Icon
-              </span>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {PROJECT_SCRIPT_ICON_OPTIONS.map((option) => (
-                  <Tooltip key={option.id} label={option.label}>
-                    <Button
-                      type="button"
-                      variant={icon === option.id ? 'tonal' : 'secondary'}
-                      onClick={() => setIcon(option.id)}
-                      aria-pressed={icon === option.id ? true : undefined}
-                      size="lg"
-                      className="h-14 flex-col gap-1 px-1 text-[11px]"
-                    >
-                      <ProjectScriptIcon icon={option.id} className="h-4 w-4" />
-                      {option.label}
-                    </Button>
-                  </Tooltip>
-                ))}
-              </div>
-            </div>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Command
-              </span>
-              <Textarea
-                value={command}
-                onChange={(event) => setCommand(event.target.value)}
-                placeholder="npm run dev"
-                className="min-h-24 font-mono"
-                required
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Working directory
-              </span>
-              <Input
-                size="lg"
-                value={cwd}
-                onChange={(event) => setCwd(event.target.value)}
-                placeholder="Project repository path"
-              />
-            </label>
-          </DialogBody>
-          <DialogFooter className="border-t border-border px-6 py-4">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={script ? 'Edit action' : 'Add action'}
+      saves="on-save"
+      onSave={() => void handleSave()}
+      pending={saving}
+      saveDisabledReason={missingField(name, command)}
+      error={error}
+    >
+      <div className="space-y-4">
+        <Field>
+          <FieldLabel>Name</FieldLabel>
+          <Input
+            size="lg"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Dev"
+          />
+        </Field>
+        <div className="flex flex-col gap-1.5">
+          <span id={iconLabelId} className="text-sm font-medium">
+            Icon
+          </span>
+          <Select
+            items={ICON_ITEMS}
+            value={icon}
+            onValueChange={(next: ProjectScriptIconId) => setIcon(next)}
+          >
+            <SelectTrigger
               size="lg"
+              aria-labelledby={iconLabelId}
+              className="w-48"
             >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={saving || !name.trim() || !command.trim()}
-              size="lg"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROJECT_SCRIPT_ICON_OPTIONS.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  <IconChoice icon={option.id} label={option.label} />
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Field>
+          <FieldLabel>Command</FieldLabel>
+          <Textarea
+            value={command}
+            onChange={(event) => setCommand(event.target.value)}
+            placeholder="npm run dev"
+            className="min-h-24 font-mono"
+          />
+        </Field>
+        <Field>
+          <FieldLabel>Working directory</FieldLabel>
+          <Input
+            size="lg"
+            value={cwd}
+            onChange={(event) => setCwd(event.target.value)}
+            placeholder="Project repository path"
+          />
+        </Field>
+      </div>
+    </FormDialog>
   )
 }

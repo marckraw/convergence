@@ -3,15 +3,10 @@ import { Bot, Sparkles } from 'lucide-react'
 import type { ProviderInfo } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Combobox,
   type ComboboxItem,
+  FormDialog,
+  Notice,
 } from '@convergence/ui'
 
 interface GenerateProfileDialogProps {
@@ -29,6 +24,16 @@ interface GenerateProfileDialogProps {
   onConfirm: () => void
 }
 
+/** Why Generate waits, or nothing when it can go. */
+function generateBlock(
+  providerId: string,
+  modelId: string,
+): string | undefined {
+  if (!providerId) return 'Choose a provider first.'
+  if (!modelId) return 'Choose a model first.'
+  return undefined
+}
+
 export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
   open,
   providerId,
@@ -43,92 +48,80 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
   onModelChange,
   onConfirm,
 }) => (
-  <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-    <DialogContent size="md">
-      <DialogHeader>
-        <DialogTitle>Generate work profile</DialogTitle>
-        <DialogDescription>
-          Create an optional profile from local aggregate usage data.
-        </DialogDescription>
-      </DialogHeader>
+  <FormDialog
+    open={open}
+    onOpenChange={onOpenChange}
+    title="Generate work profile"
+    description="Create an optional profile from local aggregate usage data."
+    size="md"
+    saves="on-save"
+    onSave={onConfirm}
+    saveLabel={
+      <>
+        <Sparkles aria-hidden className="size-4" />
+        Generate
+      </>
+    }
+    pendingLabel="Generating…"
+    pending={isGenerating}
+    saveDisabledReason={generateBlock(providerId, modelId)}
+  >
+    <div className="space-y-5">
+      <Notice tone="warning" title="Only a summary leaves this Mac">
+        Convergence will prepare a local summary with aggregate counts, project
+        names, provider names, and session metadata. Full transcripts and raw
+        conversation excerpts are not sent in this version.
+      </Notice>
 
-      <div className="space-y-5 px-6 py-5">
-        <section className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
-          Convergence will prepare a local summary with aggregate counts,
-          project names, provider names, and session metadata. Full transcripts
-          and raw conversation excerpts are not sent in this version.
-        </section>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Provider
-            </label>
-            <Combobox
-              selectedId={providerId}
-              value={providerLabel}
-              items={providerItems}
-              onChange={onProviderChange}
-              disabled={isGenerating || providerItems.length === 0}
-              searchPlaceholder="Search providers..."
-              emptyMessage="No providers available."
-              variant="secondary"
-              className="w-full px-2 text-xs"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Model
-            </label>
-            <ModelPickerDialog
-              providers={providers}
-              selectedProviderId={providerId}
-              selectedModelId={modelId}
-              value={modelLabel}
-              onChange={(nextProviderId, nextModelId) =>
-                onModelChange(nextModelId, nextProviderId)
-              }
-              disabled={isGenerating || providers.length === 0}
-              triggerVariant="secondary"
-              triggerSize="md"
-              triggerClassName="w-full justify-between px-2 text-xs"
-            />
-          </div>
+      {/*
+        Not Fields: a Field's context would reach each picker's popup and name
+        its search too. Each trigger is named by its caption instead.
+      */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Provider</span>
+          <Combobox
+            selectedId={providerId}
+            value={providerLabel}
+            items={providerItems}
+            onChange={onProviderChange}
+            disabled={isGenerating || providerItems.length === 0}
+            ariaLabel="Provider"
+            searchPlaceholder="Search providers…"
+            emptyMessage="No providers available."
+            variant="secondary"
+            className="w-full px-2 text-xs"
+          />
         </div>
 
-        <div className="flex items-start gap-3 rounded-lg border border-border bg-card/60 p-4">
-          <span className="rounded-md border border-border bg-background p-2 text-muted-foreground">
-            <Bot className="size-4" />
-          </span>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            The selected provider receives only the prepared summary when you
-            confirm. The generated snapshot is stored locally and can be deleted
-            without deleting session history.
-          </p>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Model</span>
+          <ModelPickerDialog
+            providers={providers}
+            selectedProviderId={providerId}
+            selectedModelId={modelId}
+            value={modelLabel}
+            onChange={(nextProviderId, nextModelId) =>
+              onModelChange(nextModelId, nextProviderId)
+            }
+            disabled={isGenerating || providers.length === 0}
+            triggerVariant="secondary"
+            triggerSize="md"
+            triggerClassName="w-full justify-between px-2 text-xs"
+          />
         </div>
       </div>
 
-      <DialogFooter>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => onOpenChange(false)}
-          disabled={isGenerating}
-          size="lg"
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          onClick={onConfirm}
-          disabled={isGenerating || !providerId || !modelId}
-          size="lg"
-        >
-          <Sparkles className="size-4" />
-          {isGenerating ? 'Generating...' : 'Generate'}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+      <div className="flex items-start gap-3 rounded-lg border border-line bg-surface/60 p-4">
+        <span className="rounded-md border border-line bg-canvas p-2 text-ink-muted">
+          <Bot className="size-4" />
+        </span>
+        <p className="text-sm leading-relaxed text-ink-muted">
+          The selected provider receives only the prepared summary when you
+          confirm. The generated snapshot is stored locally and can be deleted
+          without deleting session history.
+        </p>
+      </div>
+    </div>
+  </FormDialog>
 )

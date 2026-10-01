@@ -118,19 +118,18 @@ export const Default: Story = {
   },
 }
 
-/** Busy: generating locks the pickers and both buttons. */
+/** Busy: generating locks the pickers, and Generate says so after a moment. */
 export const Busy: Story = {
   args: { isGenerating: true },
   play: async () => {
     const dialog = await openDialog()
+    const generate = within(dialog).getByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toHaveAttribute('aria-busy', 'true'), {
+      timeout: 1_000,
+    })
+    await expect(generate).toHaveTextContent('Generating…')
     await expect(
-      within(dialog).getByRole('button', { name: 'Generating...' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Cancel' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('combobox', { name: 'OpenAI' }),
+      within(dialog).getByRole('combobox', { name: 'Provider' }),
     ).toBeDisabled()
   },
 }
@@ -147,9 +146,11 @@ export const Disabled: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Generate' }),
-    ).toBeDisabled()
+    const generate = within(dialog).getByRole('button', { name: 'Generate' })
+    await expect(generate).toHaveAttribute('aria-disabled', 'true')
+    await expect(generate).toHaveAccessibleDescription(
+      'Choose a provider first.',
+    )
   },
 }
 
