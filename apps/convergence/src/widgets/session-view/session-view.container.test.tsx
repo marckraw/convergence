@@ -2104,7 +2104,10 @@ describe('SessionView', () => {
       const identity = screen.getByRole('group', {
         name: 'Test session, in emergence',
       })
-      expect(identity).toHaveAttribute('title', 'emergence / Test session')
+      expect(identity).toHaveAttribute(
+        'data-tooltip',
+        'emergence / Test session',
+      )
       expect(identity).toHaveTextContent('emergence')
       expect(identity).toHaveTextContent('Test session')
       expect(identity).not.toHaveTextContent('convergence')

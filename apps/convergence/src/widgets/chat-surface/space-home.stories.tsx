@@ -159,7 +159,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="h-[44rem] bg-background">
+      <div className="h-176 bg-canvas">
         <Story />
       </div>
     ),
@@ -176,8 +176,8 @@ export const Default: Story = {
     await expect(
       canvas.getByRole('heading', { level: 1, name: 'Design system sweep' }),
     ).toBeVisible()
-    await expect(canvas.getByRole('button', { name: /Chats/ })).toHaveAttribute(
-      'aria-pressed',
+    await expect(canvas.getByRole('tab', { name: 'Chats' })).toHaveAttribute(
+      'aria-selected',
       'true',
     )
     await userEvent.click(
@@ -190,7 +190,7 @@ export const Default: Story = {
     ).toBeDisabled()
     await userEvent.click(canvas.getByRole('button', { name: 'New chat' }))
     await expect(args.onBeginAttempt).toHaveBeenCalledOnce()
-    await userEvent.click(canvas.getByRole('button', { name: /Sources/ }))
+    await userEvent.click(canvas.getByRole('tab', { name: 'Sources' }))
     await expect(args.onTabChange).toHaveBeenCalledWith('sources')
     await userEvent.click(canvas.getByRole('button', { name: 'Archive Space' }))
     await expect(args.onArchiveSpace).toHaveBeenCalledOnce()
@@ -210,7 +210,7 @@ export const Empty: Story = {
 export const Sources: Story = {
   args: { activeTab: 'sources' },
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByText(/^18 KB - /)).toBeVisible()
+    await expect(canvas.getByText('18 KB')).toBeVisible()
     await userEvent.click(
       canvas.getByRole('button', {
         name: 'Remove source design-system-drift.md',

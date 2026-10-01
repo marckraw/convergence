@@ -2,6 +2,7 @@ import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
 import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
+import { DraftPlaceName, DraftStart } from './draft-start.presentational'
 import {
   ActivityStatus,
   ArchivedStatus,
@@ -46,7 +47,13 @@ import {
 } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
-import { Button, IconButton, MenuCheckboxItem, MenuItem } from '@convergence/ui'
+import {
+  Button,
+  IconButton,
+  MenuCheckboxItem,
+  MenuItem,
+  ScreenHeader,
+} from '@convergence/ui'
 import {
   Archive,
   ArrowLeftRight,
@@ -468,59 +475,47 @@ export const SessionView: FC = () => {
     const title = activeProject?.name ?? 'Convergence'
     return (
       <div className="relative flex h-full flex-col overflow-hidden">
-        <div
-          className="flex h-12 shrink-0 items-center justify-end gap-1 border-b border-border px-4"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <div
-            className="flex items-center gap-1"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            {activeProject && (
-              <ProjectActionsMenu
-                project={activeProject}
-                runtimeCwd={draftOpenPath}
-              />
-            )}
-            <ProjectOpenMenuContainer targetPath={draftOpenPath} />
-          </div>
-        </div>
+        <ScreenHeader
+          end={
+            <>
+              {activeProject && (
+                <ProjectActionsMenu
+                  project={activeProject}
+                  runtimeCwd={draftOpenPath}
+                />
+              )}
+              <ProjectOpenMenuContainer targetPath={draftOpenPath} />
+            </>
+          }
+        />
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-4">
-            <p
-              className="mb-1 max-w-full truncate text-lg font-medium"
+            <DraftStart
               title={title}
-            >
-              {title}
-            </p>
-            <p className="mb-3 text-sm text-muted-foreground">
-              What would you like to work on?
-            </p>
-            {activeProject && (
-              <div className="mb-5 flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-                <GitBranch className="h-3 w-3" />
-                {draftWorkspace ? (
-                  <>
-                    <span>
+              icon={<GitBranch />}
+              place={
+                activeProject ? (
+                  draftWorkspace ? (
+                    <>
                       Starting in worktree:{' '}
-                      <span className="font-medium text-foreground">
+                      <DraftPlaceName>
                         {draftWorkspace.branchName}
-                      </span>
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => beginSessionDraft(null)}
-                      className="ml-1 h-auto px-2"
-                    >
-                      Use main repo
-                    </Button>
-                  </>
-                ) : (
-                  <span>Starting in main repo</span>
-                )}
-              </div>
-            )}
+                      </DraftPlaceName>
+                    </>
+                  ) : (
+                    'Starting in main repo'
+                  )
+                ) : undefined
+              }
+              action={
+                activeProject && draftWorkspace
+                  ? {
+                      label: 'Use main repo',
+                      onClick: () => beginSessionDraft(null),
+                    }
+                  : undefined
+              }
+            />
             {draftComposerContext && (
               <ComposerContainer context={draftComposerContext} />
             )}

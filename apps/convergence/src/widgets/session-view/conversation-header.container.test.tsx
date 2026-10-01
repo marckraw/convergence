@@ -123,7 +123,7 @@ describe('ConversationHeader', () => {
     render(header(null, 'Loose chat'))
     const identity = document.querySelector('[data-header-identity]')!
     expect(identity).toHaveAttribute('aria-label', 'Loose chat')
-    expect(identity).toHaveAttribute('title', 'Loose chat')
+    expect(identity).toHaveAttribute('data-tooltip', 'Loose chat')
     expect(identity).toHaveTextContent(/^Loose chat$/)
     expect(document.querySelector('[data-header-project]')).toBeNull()
   })

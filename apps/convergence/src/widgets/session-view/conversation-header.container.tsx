@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type FC,
   type ReactNode,
 } from 'react'
@@ -20,6 +19,7 @@ import {
   MenuTrigger,
   type PopupFinalFocus,
   type PopupOpenChangeDetails,
+  tooltipAttributes,
 } from '@convergence/ui'
 import { useElementWidth } from '@/shared/hooks/use-element-width'
 import {
@@ -35,17 +35,13 @@ import {
 } from './conversation-header.pure'
 
 /**
- * The window drags by the header's empty space, and never by a control (R7).
- * The data attribute states the same fact where jsdom drops the style.
+ * The window drags by the header's empty space, and never by a control (R7):
+ * `app-drag` on the header, `app-no-drag` on its control groups (the theme's
+ * utilities, CONV-21). The data attribute states the same fact where jsdom
+ * computes no styles.
  */
-export const HEADER_DRAG_REGION = {
-  style: { WebkitAppRegion: 'drag' } as CSSProperties,
-  'data-app-region': 'drag',
-} as const
-export const HEADER_NO_DRAG_REGION = {
-  style: { WebkitAppRegion: 'no-drag' } as CSSProperties,
-  'data-app-region': 'no-drag',
-} as const
+export const HEADER_DRAG_REGION = { 'data-app-region': 'drag' } as const
+export const HEADER_NO_DRAG_REGION = { 'data-app-region': 'no-drag' } as const
 
 /** What More lists for a control that has yielded (R4). */
 export type HeaderMenuEntry =
@@ -513,18 +509,18 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
       ref={headerRef}
       data-conversation-header
       data-header-rows={layout.rows.length}
-      className="relative flex shrink-0 flex-col border-b border-border px-4"
+      className="app-drag relative flex shrink-0 flex-col border-b border-border px-4"
       {...HEADER_DRAG_REGION}
     >
       <div className="flex h-12 items-center gap-1.5">
         <div
-          className="flex min-w-0 items-center gap-1.5"
+          className="app-no-drag flex min-w-0 items-center gap-1.5"
           {...HEADER_NO_DRAG_REGION}
         >
           <div
             role="group"
             aria-label={identityLabel}
-            title={identityTitle}
+            {...tooltipAttributes(identityTitle)}
             data-header-identity
             className="flex min-w-0 shrink items-center gap-1.5 text-sm"
             style={{ minWidth: identity.minWidth }}
@@ -570,7 +566,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
             .map(renderSlot)}
         </div>
         <div
-          className="ml-auto flex shrink-0 items-center gap-1.5"
+          className="app-no-drag ml-auto flex shrink-0 items-center gap-1.5"
           {...HEADER_NO_DRAG_REGION}
         >
           {slots

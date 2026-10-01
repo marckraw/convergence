@@ -1,5 +1,5 @@
 import { SessionStateBadge } from '@/entities/session'
-import type { FC, ReactNode } from 'react'
+import type { FC } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type {
   Space,
@@ -19,14 +19,24 @@ import {
 } from '@/entities/space'
 import {
   Button,
-  cn,
+  Card,
+  EmptyState,
   IconButton,
   Input,
+  ListRow,
+  MetaLine,
+  ScreenHeader,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  StatusPill,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTab,
+  Textarea,
 } from '@convergence/ui'
 import {
   SELECT_EMPTY_VALUE,
@@ -113,14 +123,14 @@ const TABS: Array<{
   { id: 'brief', label: 'Brief', icon: FileText },
 ]
 
-function renderEmptyState(title: string, detail: string): ReactNode {
-  return (
-    <div className="rounded-lg border border-border/70 px-4 py-5">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">{detail}</p>
-    </div>
-  )
-}
+const isSpaceHomeTab = (value: unknown): value is SpaceHomeTab =>
+  TABS.some((tab) => tab.id === value)
+
+/** A list of rows in one bordered box, a hairline between rows. */
+const rowList = 'divide-y divide-line rounded-lg border border-line-soft'
+
+/** A field's small label over its control. */
+const fieldLabel = 'text-xs font-medium text-ink-muted'
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`
@@ -161,258 +171,205 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
 
   return (
     <div className="flex h-full flex-col">
-      <div
-        className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate">{space.title}</span>
-          <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-            {spaceStatusLabels[space.status]}
-          </span>
-          {space.archivedAt ? (
-            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-              Archived
-            </span>
-          ) : null}
-        </div>
-        <div
-          className="flex items-center gap-1"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          {space.archivedAt ? (
-            <Button
-              type="button"
-              variant="quiet"
-              onClick={onUnarchiveSpace}
-              className="gap-1.5"
-            >
-              <Undo2 className="h-4 w-4" />
-              Unarchive Space
+      <ScreenHeader
+        // The page's own heading is the h1 under it, so the strip names it at 2.
+        headingLevel={2}
+        start={<Folder aria-hidden className="size-4 text-ink-muted" />}
+        title={space.title}
+        titleAction={
+          <>
+            {/* The same pill in the session's Space panel (CONV-3). */}
+            <StatusPill>{spaceStatusLabels[space.status]}</StatusPill>
+            {space.archivedAt ? <StatusPill>Archived</StatusPill> : null}
+          </>
+        }
+        end={
+          <>
+            {space.archivedAt ? (
+              <Button variant="quiet" onClick={onUnarchiveSpace}>
+                <Undo2 aria-hidden />
+                Unarchive Space
+              </Button>
+            ) : (
+              <Button variant="quiet" onClick={onArchiveSpace}>
+                <Archive aria-hidden />
+                Archive Space
+              </Button>
+            )}
+            <Button variant="danger-quiet" onClick={onDeleteSpace}>
+              <Trash2 aria-hidden />
+              Delete Space
             </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="quiet"
-              onClick={onArchiveSpace}
-              className="gap-1.5"
-            >
-              <Archive className="h-4 w-4" />
-              Archive Space
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onDeleteSpace}
-            className="gap-1.5 text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete Space
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-8 py-7">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-          <header>
-            <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Folder className="h-4 w-4" />
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-sm text-ink-muted">
+              <Folder aria-hidden className="size-4" />
               <span>Space</span>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">
               {space.title}
             </h1>
-            <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+            <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-ink-muted">
               {space.brief.trim() || 'No Space brief yet.'}
             </p>
-          </header>
-
-          <div className="flex flex-wrap gap-2 border-b border-border">
-            {TABS.map((tab) => {
-              const Icon = tab.icon
-              return (
-                <Button
-                  key={tab.id}
-                  type="button"
-                  variant="ghost"
-                  onClick={() => onTabChange(tab.id)}
-                  aria-pressed={activeTab === tab.id}
-                  size="lg"
-                  className={cn(
-                    'inline-flex items-center border-b-2 px-3 transition-colors',
-                    activeTab === tab.id
-                      ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </Button>
-              )
-            })}
           </div>
 
-          {activeTab === 'chats' ? (
-            <section className="space-y-5">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-medium">Attempts</h2>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {attempts.length}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={onBeginAttempt}
-                    >
-                      <MessageSquarePlus className="h-4 w-4" />
-                      New chat
-                    </Button>
-                  </div>
-                </div>
-                {attempts.length > 0 ? (
-                  <div className="divide-y divide-border rounded-lg border border-border/70">
-                    {attempts.map(({ attempt, session }) => (
-                      <Button
-                        key={attempt.id}
-                        type="button"
-                        variant="ghost"
-                        onClick={() => onOpenAttempt(attempt.sessionId)}
-                        disabled={!session}
-                        size="lg"
-                        className="flex h-auto w-full min-w-0 items-start gap-3 py-3 text-left transition-colors hover:bg-accent"
-                      >
-                        <SessionStateBadge session={session} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium">
-                            {session?.name ?? 'Unknown session'}
-                          </div>
-                          <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                            <span>{spaceAttemptRoleLabels[attempt.role]}</span>
-                            {attempt.isPrimary ? <span>Primary</span> : null}
-                            {session ? <span>{session.providerId}</span> : null}
-                          </div>
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
-                ) : (
-                  renderEmptyState(
-                    'No attempts yet',
-                    'Start a new Space attempt to create the first linked chat.',
-                  )
-                )}
-              </div>
-            </section>
-          ) : null}
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              if (isSpaceHomeTab(value)) onTabChange(value)
+            }}
+            className="gap-6"
+          >
+            <TabsList aria-label="Space sections" className="self-start">
+              {TABS.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <TabsTab key={tab.id} value={tab.id}>
+                    <Icon aria-hidden className="size-4" />
+                    {tab.label}
+                  </TabsTab>
+                )
+              })}
+            </TabsList>
 
-          {activeTab === 'sources' ? (
-            <section className="space-y-3">
+            <TabsPanel value="chats" className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-medium">Attempts</h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-ink-muted">
+                    {attempts.length}
+                  </span>
+                  <Button variant="secondary" onClick={onBeginAttempt}>
+                    <MessageSquarePlus aria-hidden />
+                    New chat
+                  </Button>
+                </div>
+              </div>
+              {attempts.length > 0 ? (
+                <div className={rowList}>
+                  {attempts.map(({ attempt, session }) => (
+                    <ListRow
+                      key={attempt.id}
+                      render={<button type="button" />}
+                      onClick={() => onOpenAttempt(attempt.sessionId)}
+                      disabled={!session}
+                      className="hover:bg-fill-hover"
+                      leading={<SessionStateBadge session={session} />}
+                      title={session?.name ?? 'Unknown session'}
+                      meta={
+                        <>
+                          <span>{spaceAttemptRoleLabels[attempt.role]}</span>
+                          {attempt.isPrimary ? <span>Primary</span> : null}
+                          {session ? <span>{session.providerId}</span> : null}
+                        </>
+                      }
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No attempts yet"
+                  detail="Start a new Space attempt to create the first linked chat."
+                />
+              )}
+            </TabsPanel>
+
+            <TabsPanel value="sources" className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-medium">Sources</h2>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={onAddSources}
-                >
-                  <FilePlus className="h-4 w-4" />
+                <Button variant="secondary" onClick={onAddSources}>
+                  <FilePlus aria-hidden />
                   Add source
                 </Button>
               </div>
               {sources.length > 0 ? (
-                <div className="divide-y divide-border rounded-lg border border-border/70">
+                <div className={rowList}>
                   {sources.map((source) => (
                     <div
                       key={source.id}
                       className="flex min-w-0 items-center justify-between gap-3 px-4 py-3"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/70 bg-card/40">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface/40">
+                          <FileText
+                            aria-hidden
+                            className="size-4 text-ink-muted"
+                          />
                         </div>
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium">
                             {source.filename}
                           </div>
-                          <div className="mt-1 truncate text-xs text-muted-foreground">
-                            {formatBytes(source.sizeBytes)} -{' '}
-                            {source.storagePath}
-                          </div>
+                          <MetaLine className="mt-1 text-xs text-ink-muted">
+                            <span>{formatBytes(source.sizeBytes)}</span>
+                            <span>{source.storagePath}</span>
+                          </MetaLine>
                         </div>
                       </div>
                       <IconButton
                         label={`Remove source ${source.filename}`}
-                        type="button"
-                        variant="ghost"
+                        variant="danger-quiet"
+                        size="sm"
                         onClick={() => onDeleteSource(source.id)}
-                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        className="shrink-0"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 aria-hidden />
                       </IconButton>
                     </div>
                   ))}
                 </div>
               ) : (
-                renderEmptyState(
-                  'No sources yet',
-                  'Add local files to keep durable reference material inside this Space.',
-                )
+                <EmptyState
+                  title="No sources yet"
+                  detail="Add local files to keep durable reference material inside this Space."
+                />
               )}
-            </section>
-          ) : null}
+            </TabsPanel>
 
-          {activeTab === 'memory' ? (
-            <section className="space-y-3">
+            <TabsPanel value="memory" className="space-y-3">
               <div>
                 <h2 className="text-sm font-medium">Memory and instructions</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-ink-muted">
                   Durable guidance for future attempts. Retrieval and synthesis
                   come later.
                 </p>
               </div>
-              <textarea
+              <Textarea
                 value={memoryDraft}
                 onChange={(event) => onMemoryDraftChange(event.target.value)}
-                className="min-h-48 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="min-h-48 w-full resize-y"
                 aria-label="Space memory and instructions"
                 placeholder="Rules, preferences, durable facts, and instructions for this Space."
               />
-              <Button type="button" onClick={onSaveMemory}>
-                Save memory
-              </Button>
-            </section>
-          ) : null}
+              <Button onClick={onSaveMemory}>Save memory</Button>
+            </TabsPanel>
 
-          {activeTab === 'artifacts' ? (
-            <section className="space-y-4">
-              <div className="rounded-lg border border-border/70 px-4 py-4">
+            <TabsPanel value="artifacts" className="space-y-4">
+              <Card padding="md">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-sm font-medium">
                       {editingArtifactId ? 'Edit artifact' : 'Add artifact'}
                     </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-ink-muted">
                       Promoted outputs worth keeping with this Space.
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={onAddArtifactFiles}
-                  >
-                    <FilePlus className="h-4 w-4" />
+                  <Button variant="secondary" onClick={onAddArtifactFiles}>
+                    <FilePlus aria-hidden />
                     Add file
                   </Button>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="space-y-1 text-sm">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Label
-                    </span>
+                    <span className={fieldLabel}>Label</span>
                     <Input
                       size="lg"
                       value={artifactDraft.label}
@@ -422,14 +379,12 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           label: event.target.value,
                         })
                       }
-                      placeholder="Spec, PR, exported report..."
+                      placeholder="Spec, PR, exported report…"
                       aria-label="Artifact label"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Kind
-                    </span>
+                    <span className={fieldLabel}>Kind</span>
                     <Select
                       items={spaceArtifactKindLabels}
                       value={artifactDraft.kind}
@@ -457,9 +412,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     </Select>
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Value or path
-                    </span>
+                    <span className={fieldLabel}>Value or path</span>
                     <Input
                       size="lg"
                       value={artifactDraft.value}
@@ -474,9 +427,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Status
-                    </span>
+                    <span className={fieldLabel}>Status</span>
                     <Select
                       items={spaceArtifactStatusLabels}
                       value={artifactDraft.status}
@@ -504,9 +455,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     </Select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Source attempt
-                    </span>
+                    <span className={fieldLabel}>Source attempt</span>
                     <Select
                       items={{
                         [SELECT_EMPTY_VALUE]: 'None',
@@ -549,7 +498,6 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
-                    type="button"
                     onClick={onSubmitArtifact}
                     disabled={
                       artifactDraft.label.trim().length === 0 ||
@@ -557,27 +505,23 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     }
                   >
                     {editingArtifactId ? (
-                      <Save className="h-4 w-4" />
+                      <Save aria-hidden />
                     ) : (
-                      <Plus className="h-4 w-4" />
+                      <Plus aria-hidden />
                     )}
                     {editingArtifactId ? 'Save artifact' : 'Add artifact'}
                   </Button>
                   {editingArtifactId ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={onCancelArtifactEdit}
-                    >
-                      <X className="h-4 w-4" />
+                    <Button variant="ghost" onClick={onCancelArtifactEdit}>
+                      <X aria-hidden />
                       Cancel
                     </Button>
                   ) : null}
                 </div>
-              </div>
+              </Card>
 
               {artifacts.length > 0 ? (
-                <div className="divide-y divide-border rounded-lg border border-border/70">
+                <div className={rowList}>
                   {artifacts.map((artifact) => {
                     const sourceAttempt = sourceAttemptOptions.find(
                       ({ attempt }) =>
@@ -592,37 +536,37 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           <div className="truncate text-sm font-medium">
                             {artifact.label}
                           </div>
-                          <div className="mt-1 truncate text-xs text-muted-foreground">
-                            {spaceArtifactKindLabels[artifact.kind]} -{' '}
-                            {artifact.value}
-                          </div>
+                          <MetaLine className="mt-1 text-xs text-ink-muted">
+                            <span>
+                              {spaceArtifactKindLabels[artifact.kind]}
+                            </span>
+                            <span>{artifact.value}</span>
+                          </MetaLine>
                           {sourceAttempt ? (
-                            <div className="mt-1 truncate text-xs text-muted-foreground">
+                            <div className="mt-1 truncate text-xs text-ink-muted">
                               From {sourceAttempt.session?.name}
                             </div>
                           ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                          <StatusPill>
                             {spaceArtifactStatusLabels[artifact.status]}
-                          </span>
+                          </StatusPill>
                           <IconButton
                             label={`Edit artifact ${artifact.label}`}
-                            type="button"
-                            variant="ghost"
+                            variant="quiet"
+                            size="sm"
                             onClick={() => onEditArtifact(artifact)}
-                            className="text-muted-foreground"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil aria-hidden />
                           </IconButton>
                           <IconButton
                             label={`Remove artifact ${artifact.label}`}
-                            type="button"
-                            variant="ghost"
+                            variant="danger-quiet"
+                            size="sm"
                             onClick={() => onDeleteArtifact(artifact.id)}
-                            className="text-muted-foreground hover:text-destructive"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 aria-hidden />
                           </IconButton>
                         </div>
                       </div>
@@ -630,32 +574,32 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                   })}
                 </div>
               ) : (
-                renderEmptyState(
-                  'No artifacts yet',
-                  'Add a manual artifact or copy a file-backed artifact into this Space.',
-                )
+                <EmptyState
+                  title="No artifacts yet"
+                  detail="Add a manual artifact or copy a file-backed artifact into this Space."
+                />
               )}
-            </section>
-          ) : null}
+            </TabsPanel>
 
-          {activeTab === 'brief' ? (
-            <div className="rounded-lg border border-border/70 px-4 py-4">
-              <h2 className="text-sm font-medium">Space brief</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                User-curated current understanding for this Space.
-              </p>
-              <textarea
-                value={briefDraft}
-                onChange={(event) => onBriefDraftChange(event.target.value)}
-                className="mt-3 min-h-40 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                aria-label="Space brief"
-                placeholder="Current purpose, decisions, constraints, and useful background."
-              />
-              <Button type="button" onClick={onSaveBrief} className="mt-3">
-                Save brief
-              </Button>
-            </div>
-          ) : null}
+            <TabsPanel value="brief">
+              <Card padding="md">
+                <h2 className="text-sm font-medium">Space brief</h2>
+                <p className="mt-1 text-sm text-ink-muted">
+                  User-curated current understanding for this Space.
+                </p>
+                <Textarea
+                  value={briefDraft}
+                  onChange={(event) => onBriefDraftChange(event.target.value)}
+                  className="mt-3 min-h-40 w-full resize-y"
+                  aria-label="Space brief"
+                  placeholder="Current purpose, decisions, constraints, and useful background."
+                />
+                <Button onClick={onSaveBrief} className="mt-3">
+                  Save brief
+                </Button>
+              </Card>
+            </TabsPanel>
+          </Tabs>
         </div>
       </div>
     </div>

@@ -74,3 +74,24 @@ export const Long: Story = {
     await expect(getComputedStyle(box).outlineStyle).toBe('solid')
   },
 }
+
+/** Wrapped: prose more than code (injected context) wraps its long lines instead of scrolling sideways. */
+export const Wrapped: Story = {
+  render: () => (
+    <div className="w-80 rounded-md bg-canvas p-3">
+      <CodeBlock label="Injected context" wrap maxHeight="sm">
+        {
+          'The Space brief: move every screen onto the shared parts and tokens, then run its stories in light, dark and reduced motion before calling it done.'
+        }
+      </CodeBlock>
+    </div>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(
+      canvas.getByRole('figure', { name: 'Injected context' }),
+    ).toBeVisible()
+    const box = boxIn(canvasElement)
+    await expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth)
+    await expect(getComputedStyle(box).whiteSpace).toBe('pre-wrap')
+  },
+}

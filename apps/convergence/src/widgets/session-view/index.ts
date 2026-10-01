@@ -23,3 +23,4 @@ export {
   ArchivedStatus,
   ParallelWorkStatus,
 } from './header-status.presentational'
+export { DraftPlaceName, DraftStart } from './draft-start.presentational'
