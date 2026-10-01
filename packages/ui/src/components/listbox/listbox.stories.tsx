@@ -80,7 +80,7 @@ function CommandPicker({ commands, grouped = false, onPick }: PickerProps) {
           setActive(0)
         }}
         onKeyDown={(event) => {
-          const next = listboxStep(active, matches.length, event.key)
+          const next = listboxStep(active, matches.length, event)
           if (next !== undefined) setActive(next)
           else if (event.key === 'Enter') pick(matches[active])
           else return
@@ -292,7 +292,7 @@ function SkillPicker({ onPick }: { onPick: (title: string) => void }) {
         aria-expanded
         aria-activedescendant={listboxOptionId('skills', active)}
         onKeyDown={(event) => {
-          const next = listboxStep(active, FOUND.length, event.key)
+          const next = listboxStep(active, FOUND.length, event)
           if (next !== undefined) setActive(next)
           else if (event.key === 'Enter') onPick(FOUND[active].title)
           else return
