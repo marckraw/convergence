@@ -153,7 +153,11 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             <span className="text-xs font-medium text-muted-foreground">
               Display name
             </span>
-            <Input value={draft.name ?? ''} onChange={updateString('name')} />
+            <Input
+              size="lg"
+              value={draft.name ?? ''}
+              onChange={updateString('name')}
+            />
           </label>
           <div className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">
@@ -177,6 +181,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                 SSH target
               </span>
               <Input
+                size="lg"
                 value={draft.sshTarget ?? ''}
                 onChange={updateString('sshTarget')}
               />
@@ -212,6 +217,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
               Local bind IP
             </span>
             <Input
+              size="lg"
               value={draft.localBindHost ?? '127.0.0.1'}
               disabled={!draft.useCustomLocalBindHost}
               onChange={updateString('localBindHost')}
@@ -222,6 +228,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
               Local port
             </span>
             <Input
+              size="lg"
               type="number"
               min={1}
               max={65535}
@@ -236,6 +243,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                   Remote IP or hostname
                 </span>
                 <Input
+                  size="lg"
                   value={draft.remoteHost ?? ''}
                   onChange={updateString('remoteHost')}
                 />
@@ -245,6 +253,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                   Remote port
                 </span>
                 <Input
+                  size="lg"
                   type="number"
                   min={1}
                   max={65535}
@@ -314,6 +323,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Route label
                       </span>
                       <Input
+                        size="lg"
                         value={route.label}
                         onChange={updateRouteString(route.id, 'label')}
                       />
@@ -323,6 +333,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         SSH target
                       </span>
                       <Input
+                        size="lg"
                         value={route.sshTarget}
                         onChange={updateRouteString(route.id, 'sshTarget')}
                       />
@@ -332,6 +343,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Local port
                       </span>
                       <Input
+                        size="lg"
                         type="number"
                         min={1}
                         max={65535}
@@ -344,6 +356,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Remote host
                       </span>
                       <Input
+                        size="lg"
                         value={route.remoteHost}
                         onChange={updateRouteString(route.id, 'remoteHost')}
                       />
@@ -353,6 +366,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Remote port
                       </span>
                       <Input
+                        size="lg"
                         type="number"
                         min={1}
                         max={65535}
@@ -365,6 +379,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Connect timeout seconds
                       </span>
                       <Input
+                        size="lg"
                         type="number"
                         min={1}
                         max={120}
@@ -377,6 +392,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Health URL
                       </span>
                       <Input
+                        size="lg"
                         value={route.healthCheckUrl}
                         onChange={updateRouteString(route.id, 'healthCheckUrl')}
                       />
@@ -408,6 +424,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             Health URL
           </span>
           <Input
+            size="lg"
             value={draft.healthCheckUrl ?? ''}
             disabled={!draft.healthCheckEnabled}
             onChange={updateString('healthCheckUrl')}

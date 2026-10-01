@@ -73,6 +73,7 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
                 Branch name
               </label>
               <Input
+                size="lg"
                 id="workspace-branch-name"
                 value={branchName}
                 onChange={(event) => onBranchNameChange(event.target.value)}

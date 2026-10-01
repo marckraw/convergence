@@ -82,6 +82,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
 
         <div className="flex gap-2">
           <Input
+            size="lg"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search available Pi models..."

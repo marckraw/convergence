@@ -119,6 +119,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
               }}
             >
               <Input
+                size="lg"
                 value={createTitle}
                 onChange={(event) => onCreateTitleChange(event.target.value)}
                 placeholder="Space title"

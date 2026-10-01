@@ -46,6 +46,7 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
           Alert at % of the window
         </span>
         <Input
+          size="lg"
           type="number"
           min={MIN_PERCENT}
           max={MAX_PERCENT}
@@ -66,6 +67,7 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
           …or at this many tokens
         </span>
         <Input
+          size="lg"
           type="number"
           min={MIN_TOKENS}
           step={1000}

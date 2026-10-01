@@ -71,6 +71,7 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
           />
         ) : (
           <Input
+            size="lg"
             defaultValue={
               field.defaultValue === undefined
                 ? undefined

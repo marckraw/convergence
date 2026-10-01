@@ -26,12 +26,13 @@ export const SidebarSearchField: FC<SidebarSearchFieldProps> = ({
     className={cn('relative px-3 pt-2', className)}
   >
     <Input
+      size="md"
       ref={inputRef}
       type="search"
       value={query}
       placeholder="Search conversations"
       aria-label="Search conversations"
-      className="h-8 pr-8"
+      className="pr-8"
       onChange={(event) => onQueryChange(event.target.value)}
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return

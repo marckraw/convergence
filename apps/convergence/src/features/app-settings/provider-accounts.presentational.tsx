@@ -422,6 +422,7 @@ export function ProviderAccountsFields({
                 {isRenaming ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <Input
+                      size="lg"
                       aria-label={`Label for ${row.identity}`}
                       value={renameDraft}
                       disabled={isBusy}
@@ -769,6 +770,7 @@ export function ProviderAccountsFields({
         <div className="flex flex-col gap-2 sm:flex-row">
           {!isCodex ? (
             <Input
+              size="lg"
               aria-label="Account email"
               type="email"
               autoComplete="off"
@@ -780,6 +782,7 @@ export function ProviderAccountsFields({
             />
           ) : null}
           <Input
+            size="lg"
             aria-label="Account label (optional)"
             placeholder="Label (optional)"
             value={enrolLabel}

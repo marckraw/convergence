@@ -48,7 +48,7 @@ export const conversationActionsStyles = {
   panel: `absolute z-40 flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-popover/95 text-popover-foreground shadow-xl backdrop-blur-xl ${FOCUS_RING} ${POP}`,
   panelScroll: 'min-h-0 flex-1 overflow-y-auto overscroll-contain p-3',
   back: `-ml-1 mb-1 h-auto gap-1 px-1 py-0.5 text-base font-medium text-popover-foreground ${FOCUS_RING}`,
-  search: `mb-1 h-8 border-0 px-2 py-1.5 shadow-none ${FOCUS_RING}`,
+  search: `mb-1 border-0 px-2 py-1.5 shadow-none ${FOCUS_RING}`,
   notice: 'mb-1 px-2 text-xs leading-relaxed text-muted-foreground',
   list: 'flex flex-col',
   item: `h-auto w-full justify-start whitespace-normal rounded-md px-2 py-1.5 text-left text-sm font-normal text-popover-foreground ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent`,

@@ -121,6 +121,7 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
             disabled={disabled}
             placeholder={BRANCH_FIELD_PLACEHOLDER}
             aria-label="Branch the daemon should work on"
+            size="xs"
             className={stripInputClass}
             data-testid="work-address-branch-input"
           />

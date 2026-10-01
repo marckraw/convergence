@@ -125,6 +125,7 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
               Base branch name
             </label>
             <Input
+              size="lg"
               id="project-base-branch"
               value={baseBranchName}
               onChange={(event) => onBaseBranchNameChange(event.target.value)}
@@ -179,6 +180,7 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
                 File patterns
               </label>
               <Input
+                size="lg"
                 id="project-env-patterns"
                 value={envPatternsText}
                 onChange={(event) =>

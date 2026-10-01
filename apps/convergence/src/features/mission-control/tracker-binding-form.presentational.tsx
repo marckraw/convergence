@@ -112,11 +112,12 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             name; the id is the one thing Linear shows nowhere (MAR-3156). */}
         <span className={LABEL}>Project ({TRACKER_PROJECT_FIELD_HINT})</span>
         <Input
+          size="sm"
           aria-label="Tracker project"
           value={draft.projectId}
           disabled={busy}
           onChange={(event) => onDraftChange({ projectId: event.target.value })}
-          className="h-7 text-xs"
+          className="text-xs"
         />
         {boundProjectName === null ? null : (
           <span className={LABEL} data-tracker-bound-project>
@@ -128,6 +129,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         <label className="flex flex-1 flex-col gap-1">
           <span className={LABEL}>Label prefix</span>
           <Input
+            size="sm"
             aria-label="Tracker label prefix"
             value={draft.labelPrefix}
             placeholder="horse:"
@@ -135,12 +137,13 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             onChange={(event) =>
               onDraftChange({ labelPrefix: event.target.value })
             }
-            className="h-7 text-xs"
+            className="text-xs"
           />
         </label>
         <label className="flex flex-1 flex-col gap-1">
           <span className={LABEL}>Wave prefix</span>
           <Input
+            size="sm"
             aria-label="Tracker wave prefix"
             value={draft.wavePrefix}
             placeholder="wave:"
@@ -148,7 +151,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             onChange={(event) =>
               onDraftChange({ wavePrefix: event.target.value })
             }
-            className="h-7 text-xs"
+            className="text-xs"
           />
         </label>
       </div>
@@ -190,6 +193,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       {credential !== 'present' || asksForKey ? (
         <div className="flex items-center gap-1.5">
           <Input
+            size="sm"
             type="password"
             autoComplete="off"
             aria-label={
@@ -199,7 +203,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             value={keyDraft}
             disabled={busy}
             onChange={(event) => onKeyDraftChange(event.target.value)}
-            className="h-7 flex-1 text-xs"
+            className="flex-1 text-xs"
           />
           <Button
             type="button"

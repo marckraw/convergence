@@ -33,6 +33,7 @@ export const LoomSearchFieldView: FC<{
   >
     <Search aria-hidden="true" className={LOOM_SEARCH_ICON_CLASS} />
     <Input
+      size="md"
       type="search"
       aria-label={LOOM_SEARCH_NAME}
       placeholder="Issue id or title"

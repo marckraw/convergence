@@ -49,6 +49,7 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
           <span className="text-xs text-muted-foreground">(optional)</span>
         </label>
         <Input
+          size="lg"
           id="project-context-label"
           value={label}
           onChange={(event) => onLabelChange(event.target.value)}

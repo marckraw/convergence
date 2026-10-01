@@ -28,6 +28,7 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
       {state.kind === 'listed' ? (
         <>
           <Input
+            size="md"
             ref={searchRef}
             type="text"
             data-actions-item=""

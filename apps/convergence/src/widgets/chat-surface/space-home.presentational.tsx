@@ -414,6 +414,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       Label
                     </span>
                     <Input
+                      size="lg"
                       value={artifactDraft.label}
                       onChange={(event) =>
                         onArtifactDraftChange({
@@ -458,6 +459,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       Value or path
                     </span>
                     <Input
+                      size="lg"
                       value={artifactDraft.value}
                       onChange={(event) =>
                         onArtifactDraftChange({

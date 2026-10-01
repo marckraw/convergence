@@ -129,6 +129,7 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
                   Repository URL
                 </label>
                 <Input
+                  size="lg"
                   id="project-clone-url"
                   value={remoteUrl}
                   onChange={(event) => onRemoteUrlChange(event.target.value)}
@@ -147,6 +148,7 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
                 </label>
                 <div className="flex gap-2">
                   <Input
+                    size="lg"
                     id="project-clone-destination"
                     value={parentDirectory}
                     placeholder="Select a folder"
@@ -173,6 +175,7 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
                   Folder name
                 </label>
                 <Input
+                  size="lg"
                   id="project-clone-folder"
                   value={directoryName}
                   onChange={(event) =>

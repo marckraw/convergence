@@ -424,12 +424,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             triggerClassName="h-7 text-xs"
           />
           <Input
+            size="sm"
             value={spec.name}
             placeholder="Relayed session"
             aria-label="Name for the new session"
             disabled={busy}
             onChange={(event) => onSpawnChange({ name: event.target.value })}
-            className="h-7 text-xs"
+            className="text-xs"
           />
         </div>
       ) : null}
@@ -466,12 +467,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         {draft.condition.kind === 'token' ? (
           <>
             <Input
+              size="md"
               value={draft.condition.token}
               placeholder="BATON: horse"
               aria-label="The final line this connection waits for"
               disabled={busy}
               onChange={(event) => onConditionTokenChange(event.target.value)}
-              className="h-8 text-xs"
+              className="text-xs"
             />
             <p className="text-[10px] text-muted-foreground/70">
               Only this final line sends the reply to{' '}
@@ -521,12 +523,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           </div>
           {draft.beforeDelivery === 'custom' ? (
             <Input
+              size="md"
               value={draft.customOpener}
               placeholder="/clear"
               aria-label="The first message, sent on its own"
               disabled={busy}
               onChange={(event) => onCustomOpenerChange(event.target.value)}
-              className="h-8 text-xs"
+              className="text-xs"
             />
           ) : null}
           <p className="text-[10px] text-muted-foreground/70">

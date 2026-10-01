@@ -259,7 +259,7 @@ export const LOOM_SEARCH_ICON_CLASS =
 
 /** The input itself; the browser's own cancel control is hidden -- ours clears at once. */
 export const LOOM_SEARCH_INPUT_CLASS =
-  'h-8 pl-8 pr-8 text-xs [&::-webkit-search-cancel-button]:appearance-none'
+  'pl-8 pr-8 text-xs [&::-webkit-search-cancel-button]:appearance-none'
 
 /** The glyph inside the clear control and the compact icon. */
 export const LOOM_SEARCH_GLYPH_CLASS = 'size-3.5'

@@ -179,6 +179,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               mark, so a field that knocked per key made `my_horse`
               untypeable. */}
           <Input
+            size="md"
             value={nameValue}
             placeholder="unnamed"
             aria-label={`Baton name for ${label}`}
@@ -192,7 +193,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               }
             }}
             className={cn(
-              'h-8 flex-1 text-xs',
+              'flex-1 text-xs',
               problems.batonName !== undefined && 'border-amber-500/70',
             )}
           />
@@ -373,12 +374,13 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
               Worktree path
               <Input
+                size="md"
                 value={lanePathValue}
                 placeholder="/Users/…/my-repo-lane-name"
                 onChange={(event) => onLanePathChange(event.target.value)}
                 onBlur={onLanePathCommit}
                 className={cn(
-                  'h-8 text-xs',
+                  'text-xs',
                   problems.lanePath !== undefined && 'border-amber-500/70',
                 )}
               />
@@ -417,13 +419,14 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 <Minus aria-hidden className="size-3" />
               </IconButton>
               <Input
+                size="sm"
                 type="number"
                 min={1}
                 value={wipValue}
                 aria-label={`WIP limit for ${label}`}
                 onChange={(event) => onWipChange(event.target.value)}
                 onBlur={onWipCommit}
-                className="h-7 w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:ring-0 [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:outline-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <IconButton
                 label={`Raise the WIP limit for ${label}`}
