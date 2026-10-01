@@ -8,10 +8,10 @@ import type { CSSProperties } from 'react'
  * (MAR-3284's law). Sidebar tooltips and Loom's share this constant so one
  * pin can count equality across surfaces (MAR-3314 / MAR-3311).
  */
-export const LOOM_DRAG_STYLE = {
+export const DRAG_REGION_STYLE = {
   WebkitAppRegion: 'drag',
 } as CSSProperties
 
-export const LOOM_NO_DRAG_STYLE = {
+export const NO_DRAG_STYLE = {
   WebkitAppRegion: 'no-drag',
 } as CSSProperties

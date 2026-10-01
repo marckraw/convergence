@@ -59,4 +59,4 @@ export {
   TooltipTrigger,
 } from './components/tooltip/tooltip'
 export { cn } from './lib/cn.pure'
-export { LOOM_DRAG_STYLE, LOOM_NO_DRAG_STYLE } from './lib/no-drag.styles'
+export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from './lib/no-drag.styles'

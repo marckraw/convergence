@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -196,7 +196,7 @@ export const ProjectTree = memo(function ProjectTree({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="left" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="left" style={NO_DRAG_STYLE}>
             {`Session actions ${session.name}`}
           </TooltipContent>
         </Tooltip>
@@ -282,7 +282,7 @@ export const ProjectTree = memo(function ProjectTree({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="left" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="left" style={NO_DRAG_STYLE}>
             {`Workspace actions ${workspace.branchName}`}
           </TooltipContent>
         </Tooltip>
@@ -444,7 +444,7 @@ export const ProjectTree = memo(function ProjectTree({
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               {isRegeneratingName
                 ? `${session.name} (regenerating name…)`
                 : session.name}
@@ -477,7 +477,7 @@ export const ProjectTree = memo(function ProjectTree({
                   (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
               </p>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               {baseBranchName || 'main'}
             </TooltipContent>
           </Tooltip>
@@ -537,7 +537,7 @@ export const ProjectTree = memo(function ProjectTree({
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                <TooltipContent side="right" style={NO_DRAG_STYLE}>
                   <p>{ws.branchName}</p>
                   {searching ? (
                     <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
@@ -601,7 +601,7 @@ export const ProjectTree = memo(function ProjectTree({
                   </span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              <TooltipContent side="right" style={NO_DRAG_STYLE}>
                 <p>Archived workspaces and sessions</p>
                 {searching ? (
                   <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
@@ -658,7 +658,7 @@ export const ProjectTree = memo(function ProjectTree({
                             )}
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                        <TooltipContent side="right" style={NO_DRAG_STYLE}>
                           <p>{ws.branchName}</p>
                           {searching ? (
                             <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>

@@ -1,7 +1,7 @@
 import { cardStateTone, type FoldedSectionSummary } from '@/features/needs-you'
 import {
   cn,
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -43,7 +43,7 @@ export function FoldedGlyphs({ summary }: { summary: FoldedSectionSummary }) {
           )}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+      <TooltipContent side="right" style={NO_DRAG_STYLE}>
         <ul className="space-y-0.5">
           {summary.names.map((name, index) => (
             <li key={`${index}:${name}`}>{name}</li>

@@ -35,7 +35,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import {
   Button,
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -751,7 +751,7 @@ export const Sidebar: FC<SidebarProps> = ({
               <Code2 className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
             Show code surface
           </TooltipContent>
         </Tooltip>
@@ -769,7 +769,7 @@ export const Sidebar: FC<SidebarProps> = ({
               <MessageSquareText className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
             Show chat surface
           </TooltipContent>
         </Tooltip>
@@ -788,7 +788,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 <Satellite className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
               Show Mission Control
             </TooltipContent>
           </Tooltip>
@@ -819,7 +819,7 @@ export const Sidebar: FC<SidebarProps> = ({
               <Pin className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
             Pin sidebar
           </TooltipContent>
         </Tooltip>
@@ -837,7 +837,7 @@ export const Sidebar: FC<SidebarProps> = ({
               <PanelLeftClose className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
             Collapse sidebar
           </TooltipContent>
         </Tooltip>
@@ -889,7 +889,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <Settings className="h-4 w-4" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side={side} style={LOOM_NO_DRAG_STYLE}>
+      <TooltipContent side={side} style={NO_DRAG_STYLE}>
         Open settings
       </TooltipContent>
     </Tooltip>
@@ -911,7 +911,7 @@ export const Sidebar: FC<SidebarProps> = ({
               <ChevronRight className="h-3.5 w-3.5" />
             </div>
           </TooltipTrigger>
-          <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="right" style={NO_DRAG_STYLE}>
             Peek sidebar
           </TooltipContent>
         </Tooltip>
@@ -934,7 +934,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 <PanelLeftOpen className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               Expand sidebar
             </TooltipContent>
           </Tooltip>
@@ -952,7 +952,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 <Code2 className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               Show code surface
             </TooltipContent>
           </Tooltip>
@@ -970,7 +970,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 <MessageSquareText className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               Show chat surface
             </TooltipContent>
           </Tooltip>
@@ -989,7 +989,7 @@ export const Sidebar: FC<SidebarProps> = ({
                   <Satellite className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              <TooltipContent side="right" style={NO_DRAG_STYLE}>
                 Show Mission Control
               </TooltipContent>
             </Tooltip>
@@ -1027,7 +1027,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 ) : null}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               {`Needs You (${attentionCards.length})`}
             </TooltipContent>
           </Tooltip>
@@ -1053,7 +1053,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               {activeSurface === 'chat'
                 ? 'Convergence Chat'
                 : (activeProject?.name ?? 'No project')}
@@ -1079,7 +1079,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 <Plus className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="right" style={NO_DRAG_STYLE}>
               {activeSurface === 'chat' ? 'New chat' : 'Open a project'}
             </TooltipContent>
           </Tooltip>
@@ -1129,7 +1129,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
               Open insights
             </TooltipContent>
           </Tooltip>

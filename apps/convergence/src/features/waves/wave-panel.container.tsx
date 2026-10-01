@@ -43,7 +43,7 @@ import {
 import {
   LOOM_ENTER_CLASS,
   LOOM_ENTER_MS,
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   LOOM_SHELL_CLASS,
   LOOM_SLIDE_MS,
   LOOM_STRIP_WIDTH_PX,
@@ -964,7 +964,7 @@ export const WavePanel: FC<WavePanelProps> = memo(function WavePanel({
         // is underneath it (MAR-3284's law).
         style={{
           width: column ? column.width : LOOM_STRIP_WIDTH_PX,
-          ...LOOM_NO_DRAG_STYLE,
+          ...NO_DRAG_STYLE,
         }}
       >
         {column ? (

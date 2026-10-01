@@ -14,7 +14,7 @@ import type { LoomStackProps } from './loom-stack.types'
 import {
   LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_COMPACT_CLASS,
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   LOOM_SEARCH_COMPACT_ROW_CLASS,
   LOOM_SEARCH_SUBLINE_ROW_CLASS,
 } from './wave-panel.styles'
@@ -74,7 +74,7 @@ export const LoomCompactView: FC<
               Expand <Maximize2 className="size-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
             {EXPAND_LOOM}
           </TooltipContent>
         </Tooltip>
@@ -93,13 +93,13 @@ export const LoomCompactView: FC<
               size="sm"
               aria-label={COLLAPSE_LOOM}
               className={LOOM_COLLAPSE_BUTTON_CLASS}
-              style={LOOM_NO_DRAG_STYLE}
+              style={NO_DRAG_STYLE}
               onClick={onCollapse}
             >
               <PanelLeftClose className="size-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
             {COLLAPSE_LOOM}
           </TooltipContent>
         </Tooltip>

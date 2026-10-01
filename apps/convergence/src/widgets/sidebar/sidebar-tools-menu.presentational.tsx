@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -74,7 +74,7 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+        <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
           {OPEN_SIDEBAR_TOOLS}
         </TooltipContent>
       </Tooltip>
