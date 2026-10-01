@@ -251,12 +251,14 @@
   --spacing-control-md: var(--control-md);
   --spacing-control-lg: var(--control-lg);
 
-  /* Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog, max-h-dialog */
+  /* Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog, max-h-dialog, h-dialog-tall */
   --container-conversation: var(--layout-conversation);
   --container-dialog: var(--layout-dialog);
   --width-side-panel: var(--layout-side-panel);
   --width-work-panel: var(--layout-work-panel);
   --max-height-dialog: var(--layout-dialog-height);
+  /* h-dialog-tall and max-h-dialog-tall: a tall dialog's one height */
+  --height-dialog-tall: var(--layout-dialog-tall);
 
   /* Blur: backdrop-blur-glass (tooltips, R8), backdrop-blur-scrim (behind dialogs) */
   --blur-glass: var(--glass-blur);

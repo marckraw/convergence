@@ -32,7 +32,8 @@ const twMerge = extendTailwindMerge({
     classGroups: {
       duration: [{ duration: ['exit', 'fast', 'panel', 'slow'] }],
       w: [{ w: ['side-panel', 'work-panel'] }],
-      'max-h': [{ 'max-h': ['dialog'] }],
+      h: [{ h: ['dialog-tall'] }],
+      'max-h': [{ 'max-h': ['dialog', 'dialog-tall'] }],
     },
   },
 })

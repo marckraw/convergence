@@ -188,6 +188,67 @@ export const Long: Story = {
   },
 }
 
+/**
+ * Settings: opened by its own trigger, tall, and flush, so a side list and a
+ * scrolling page sit side by side; every change is kept, so it ends in Done.
+ */
+function SettingsDialog() {
+  const [open, setOpen] = useState(false)
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={setOpen}
+      trigger={<Button variant="secondary">Settings</Button>}
+      title="Settings"
+      size="xl"
+      height="tall"
+      flush
+      saves="as-you-go"
+    >
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label="Settings sections"
+          className="w-48 shrink-0 border-r border-line-soft p-3 text-sm"
+        >
+          Notifications
+        </nav>
+        <div
+          data-testid="settings-page"
+          className="min-h-0 flex-1 overflow-y-auto px-6 py-5"
+        >
+          {Array.from({ length: 60 }, (_, index) => (
+            <p key={index} className="text-sm">
+              Setting {index + 1}
+            </p>
+          ))}
+        </div>
+      </div>
+    </FormDialog>
+  )
+}
+
+/** Trigger, tall and flush: the page scrolls beside its list, and Done stays. */
+export const Flush: Story = {
+  render: () => <SettingsDialog />,
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: 'Settings' })
+    await userEvent.click(trigger)
+    const dialog = await screen.findByRole('dialog', { name: 'Settings' })
+    await arrived(dialog)
+    await expect(dialog).toHaveAttribute('data-height', 'tall')
+    // Saves as you go: no form to submit, one Done.
+    await expect(dialog.querySelector('form')).toBeNull()
+    await expect(
+      within(dialog).getByRole('navigation', { name: 'Settings sections' }),
+    ).toBeVisible()
+    const page = within(dialog).getByTestId('settings-page')
+    await expect(page.scrollHeight).toBeGreaterThan(page.clientHeight)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await expect(trigger).toHaveFocus()
+  },
+}
+
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },

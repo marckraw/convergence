@@ -588,6 +588,13 @@
   /* A dialog's default width and greatest height (w-[min(720px,…)], max-h-[min(80vh,720px)]) */
   --layout-dialog: 45rem;
   --layout-dialog-height: 45rem;
+  /*
+   * A tall dialog keeps one height whatever it shows, so it doesn't jump between tabs or as a
+   * list streams in: Settings (min(92vh, 960px)), and Skills, Tunnels, Prompt library and the
+   * debug log, whose 1120, 780, 820 and 640 px fold into it (R11, DS4). A height, not a width:
+   * layout.tokens.ts has no use for it.
+   */
+  --layout-dialog-tall: min(92vh, 60rem);
 
   /*
    * Motion -------------------------------------------------------------------------------------

@@ -92,6 +92,7 @@ export {
   type DialogFooterProps,
   DialogHeader,
   type DialogHeaderProps,
+  type DialogHeight,
   type DialogProps,
   type DialogSize,
   DialogTitle,
