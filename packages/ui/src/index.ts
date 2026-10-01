@@ -368,7 +368,14 @@ export {
   type AppliedTheme,
   type ThemeChoice,
 } from './lib/theme'
-export { TONES, type Tone } from './lib/tone.styles'
+export {
+  TONES,
+  type Tone,
+  toneInk,
+  toneLine,
+  toneSoft,
+  toneSolid,
+} from './lib/tone.styles'
 export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'
 export { crewTokens, type CrewTokenName } from './styles/crew.tokens'
