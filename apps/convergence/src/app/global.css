@@ -51,31 +51,40 @@
   }
 }
 
+/*
+ * The window's chrome (MAR-3617): every colour here is a token from
+ * @convergence/ui's tokens.css, light-dark() in both themes. The frame's wash
+ * darkens toward pure black at its foot, which is --media-backdrop's value
+ * (rgb(0 0 0) in both themes); no chrome token is black, and one use doesn't
+ * make one (R11).
+ */
 @layer components {
   .app-chrome {
     background:
       radial-gradient(
         circle at top left,
-        color-mix(in srgb, var(--foreground) 10%, transparent),
+        color-mix(in srgb, var(--ink) 10%, transparent),
         transparent 34%
       ),
       linear-gradient(
         180deg,
-        color-mix(in srgb, var(--background) 62%, transparent),
-        color-mix(in srgb, var(--background) 86%, black 10%)
+        color-mix(in srgb, var(--canvas) 62%, transparent),
+        color-mix(in srgb, var(--canvas) 86%, var(--media-backdrop) 10%)
       );
   }
 
+  /* The sidebar's panel; its width moves on the motion tokens when it folds or peeks. */
   .app-sidebar-panel {
     position: relative;
     background: linear-gradient(
       180deg,
       var(--chrome-sidebar),
-      color-mix(in srgb, var(--chrome-sidebar) 84%, var(--background) 16%)
+      color-mix(in srgb, var(--chrome-sidebar) 84%, var(--canvas) 16%)
     );
     box-shadow:
       inset -1px 0 0 var(--chrome-edge),
       24px 0 48px -34px var(--chrome-shadow);
+    transition: width var(--motion-fast) var(--motion-ease-move);
   }
 
   .app-sidebar-panel::after {
@@ -96,7 +105,7 @@
     background: linear-gradient(
       180deg,
       var(--chrome-main),
-      color-mix(in srgb, var(--chrome-main) 90%, var(--background) 10%)
+      color-mix(in srgb, var(--chrome-main) 90%, var(--canvas) 10%)
     );
   }
 
@@ -114,25 +123,26 @@
     background: color-mix(in srgb, var(--chrome-sidebar) 86%, transparent);
   }
 
-  *,
-  .app-scrollbar {
+  /*
+   * Every scrollbar in the app (MAR-3617 NAV-34: the .app-scrollbar class
+   * repeated these rules for elements * already matches, so it changed
+   * nothing and goes; a leftover class name in markup is inert).
+   */
+  * {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
 
-  *::-webkit-scrollbar,
-  .app-scrollbar::-webkit-scrollbar {
+  *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
 
-  *::-webkit-scrollbar-track,
-  .app-scrollbar::-webkit-scrollbar-track {
+  *::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  *::-webkit-scrollbar-thumb,
-  .app-scrollbar::-webkit-scrollbar-thumb {
+  *::-webkit-scrollbar-thumb {
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--scrollbar-thumb) 92%, white 8%),
@@ -144,8 +154,7 @@
     min-height: 36px;
   }
 
-  *::-webkit-scrollbar-thumb:hover,
-  .app-scrollbar::-webkit-scrollbar-thumb:hover {
+  *::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--scrollbar-thumb-hover) 88%, white 12%),
@@ -155,8 +164,7 @@
     background-clip: padding-box;
   }
 
-  *::-webkit-scrollbar-corner,
-  .app-scrollbar::-webkit-scrollbar-corner {
+  *::-webkit-scrollbar-corner {
     background: transparent;
   }
 }

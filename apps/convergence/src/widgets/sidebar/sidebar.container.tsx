@@ -33,24 +33,32 @@ import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
-import { Button, cn, IconButton, Tooltip, useConfirm } from '@convergence/ui'
+import {
+  Badge,
+  Button,
+  cn,
+  DragRegion,
+  IconButton,
+  ScreenHeader,
+  useConfirm,
+} from '@convergence/ui'
 import type { AppSurface } from '@/shared/types/app-surface.types'
 import {
   BarChart3,
   ChevronRight,
-  Code2,
   FolderGit2,
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
   Pin,
   Plus,
-  Satellite,
   Settings,
 } from 'lucide-react'
 import { type ChatSidebarSpace } from './global-chat-session-list.presentational'
 import { SidebarConversations } from './sidebar-conversations.container'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
+import { SurfaceSwitcher } from './surface-switcher.presentational'
+import { peekHandleClass, railMarkRing } from './sidebar.styles'
 import { toast } from 'sonner'
 import { useSidebarSearchShortcut } from './sidebar-search.container'
 import { useFeedClock } from './use-feed-clock'
@@ -772,42 +780,15 @@ export const Sidebar: FC<SidebarProps> = ({
   const collapse = useStableCallback(() => onCollapse())
   const headerStart = useMemo(
     () => (
-      <>
-        <IconButton
-          label="Show code surface"
-          type="button"
-          variant={activeSurface === 'code' ? 'tonal' : 'ghost'}
-          aria-pressed={activeSurface === 'code'}
-          onClick={() => selectSurface('code')}
-          tooltipSide="bottom"
-        >
-          <Code2 className="h-4 w-4" />
-        </IconButton>
-
-        <IconButton
-          label="Show chat surface"
-          type="button"
-          variant={activeSurface === 'chat' ? 'tonal' : 'ghost'}
-          aria-pressed={activeSurface === 'chat'}
-          onClick={() => selectSurface('chat')}
-          tooltipSide="bottom"
-        >
-          <MessageSquareText className="h-4 w-4" />
-        </IconButton>
-
-        {hasMissionControl ? (
-          <IconButton
-            label="Show Mission Control"
-            type="button"
-            variant={missionControlActive ? 'tonal' : 'ghost'}
-            aria-pressed={missionControlActive}
-            onClick={showMissionControl}
-            tooltipSide="bottom"
-          >
-            <Satellite className="h-4 w-4" />
-          </IconButton>
-        ) : null}
-      </>
+      <SurfaceSwitcher
+        placement="row"
+        activeSurface={activeSurface}
+        missionControlActive={missionControlActive}
+        onSelectSurface={selectSurface}
+        onShowMissionControl={
+          hasMissionControl ? showMissionControl : undefined
+        }
+      />
     ),
     [
       activeSurface,
@@ -885,26 +866,34 @@ export const Sidebar: FC<SidebarProps> = ({
   )
 
   if (collapsed) {
+    // R1: the loudest card waiting decides the rail's tone, and its count
+    // wears the same one (no red count beside a green ring).
+    const railTone = attentionCards.some(
+      (card) => card.attentionGroup === 'Waiting on you',
+    )
+      ? 'warning'
+      : attentionCards.some(({ session }) => session.attention === 'failed')
+        ? 'danger'
+        : 'success'
     return (
       <div className="relative flex h-full w-14 flex-col items-center">
-        <Tooltip label="Peek sidebar" side="right">
-          <div
-            className="absolute top-1/2 right-[-11px] z-20 flex h-14 w-5 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-white/10 bg-background/90 text-muted-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground"
-            role="button"
-            tabIndex={0}
-            aria-label="Peek sidebar"
-            onMouseEnter={onPeek}
-            onFocus={onPeek}
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </div>
-        </Tooltip>
-        <div
-          className="app-sidebar-topbar h-12 w-full border-b border-white/10"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        />
+        {/* The rail's edge: hover, focus or a press opens the sidebar over the content (NAV-27). */}
+        <IconButton
+          label="Peek sidebar"
+          tooltipSide="right"
+          type="button"
+          variant="ghost"
+          className={peekHandleClass}
+          onMouseEnter={onPeek}
+          onFocus={onPeek}
+          onClick={onPeek}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </IconButton>
+        {/* The window still moves from the rail's top (NAV-4). */}
+        <DragRegion className="app-sidebar-topbar border-b border-line" />
 
-        <div className="flex w-full flex-col items-center gap-1 border-b border-white/10 py-3">
+        <div className="flex w-full flex-col items-center gap-1 border-b border-hairline py-3">
           <IconButton
             label="Expand sidebar"
             type="button"
@@ -916,46 +905,17 @@ export const Sidebar: FC<SidebarProps> = ({
             <PanelLeftOpen className="h-4 w-4" />
           </IconButton>
 
-          <IconButton
-            label="Show code surface"
-            type="button"
-            variant={activeSurface === 'code' ? 'tonal' : 'ghost'}
-            aria-pressed={activeSurface === 'code'}
-            onClick={() => onSelectSurface('code')}
-            tooltipSide="right"
-            size="lg"
-          >
-            <Code2 className="h-4 w-4" />
-          </IconButton>
-
-          <IconButton
-            label="Show chat surface"
-            type="button"
-            variant={activeSurface === 'chat' ? 'tonal' : 'ghost'}
-            aria-pressed={activeSurface === 'chat'}
-            onClick={() => onSelectSurface('chat')}
-            tooltipSide="right"
-            size="lg"
-          >
-            <MessageSquareText className="h-4 w-4" />
-          </IconButton>
-
-          {onShowMissionControl ? (
-            <IconButton
-              label="Show Mission Control"
-              type="button"
-              variant={missionControlActive ? 'tonal' : 'ghost'}
-              aria-pressed={missionControlActive}
-              onClick={onShowMissionControl}
-              tooltipSide="right"
-              size="lg"
-            >
-              <Satellite className="h-4 w-4" />
-            </IconButton>
-          ) : null}
+          <SurfaceSwitcher
+            placement="rail"
+            activeSurface={activeSurface}
+            missionControlActive={missionControlActive}
+            onSelectSurface={onSelectSurface}
+            onShowMissionControl={onShowMissionControl}
+          />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
+          {/* Opens the sidebar over the content, where the Activity feed is (NAV-17). */}
           <IconButton
             label={`Needs You (${attentionCards.length})`}
             type="button"
@@ -963,25 +923,23 @@ export const Sidebar: FC<SidebarProps> = ({
             tooltipSide="right"
             size="lg"
             className="relative"
+            onClick={onPeek}
           >
             <span
+              data-tone={railTone}
               className={cn(
-                'h-3 w-3 rounded-full border-2',
-                attentionCards.some(
-                  (card) => card.attentionGroup === 'Waiting on you',
-                )
-                  ? 'border-warning'
-                  : attentionCards.some(
-                        ({ session }) => session.attention === 'failed',
-                      )
-                    ? 'border-destructive'
-                    : 'border-emerald-500',
+                'size-3 rounded-full border-2',
+                railMarkRing[railTone],
               )}
             />
             {attentionCards.length > 0 ? (
-              <span className="absolute -top-1 -right-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium leading-none text-destructive-foreground">
+              <Badge
+                shape="count"
+                tone={railTone}
+                className="absolute -top-1 -right-1"
+              >
                 {attentionCards.length}
-              </span>
+              </Badge>
             ) : null}
           </IconButton>
 
@@ -1018,15 +976,15 @@ export const Sidebar: FC<SidebarProps> = ({
           </IconButton>
         </div>
 
-        <div className="app-sidebar-footer flex w-full flex-col items-center gap-1 border-t border-white/10 py-3">
+        <div className="app-sidebar-footer flex w-full flex-col items-center gap-1 border-t border-hairline py-3">
           <SidebarToolsMenu
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
-            iconOnly
+            tooltipSide="right"
             onOpenDialog={openDialog}
           />
           {settingsGear('right')}
-          <ThemeToggleButton />
+          <ThemeToggleButton tooltipSide="right" />
         </div>
 
         {dialogHosts}
@@ -1038,37 +996,34 @@ export const Sidebar: FC<SidebarProps> = ({
 
   return (
     <div className="flex h-full flex-col">
-      <div
-        className="app-sidebar-topbar flex h-12 items-center justify-end border-b border-white/10 px-3"
-        style={
-          { WebkitAppRegion: peek ? 'no-drag' : 'drag' } as React.CSSProperties
-        }
-      >
-        <div
-          className="flex items-center gap-1"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <IconButton
-            label="Open insights"
-            variant="ghost"
-            onClick={() =>
-              openDialog('app-settings', { appSettingsSection: 'insights' })
-            }
-            tooltipSide="bottom"
-          >
-            <BarChart3 className="h-4 w-4" />
-          </IconButton>
+      {/* The sidebar's strip: it drags the window, except over the content
+          while peeking, and every control in it keeps its click (NAV-4). */}
+      <ScreenHeader
+        drag={!peek}
+        className="app-sidebar-topbar px-3"
+        end={
+          <>
+            <IconButton
+              label="Open insights"
+              variant="ghost"
+              onClick={() =>
+                openDialog('app-settings', { appSettingsSection: 'insights' })
+              }
+              tooltipSide="bottom"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </IconButton>
 
-          <SidebarToolsMenu
-            activeSurface={activeSurface}
-            hasActiveProject={!!activeProject}
-            iconOnly
-            onOpenDialog={openDialog}
-          />
-          {settingsGear('bottom')}
-          <ThemeToggleButton />
-        </div>
-      </div>
+            <SidebarToolsMenu
+              activeSurface={activeSurface}
+              hasActiveProject={!!activeProject}
+              onOpenDialog={openDialog}
+            />
+            {settingsGear('bottom')}
+            <ThemeToggleButton tooltipSide="bottom" />
+          </>
+        }
+      />
 
       <PerfProfiler id="sidebar">
         <SidebarConversations
@@ -1132,8 +1087,9 @@ export const Sidebar: FC<SidebarProps> = ({
         />
       </PerfProfiler>
 
-      <div className="app-sidebar-footer border-t border-white/10 p-3">
-        {activeSurface === 'code' ? (
+      {/* Only the code surface has a footer: chat's was an empty bar (NAV-29). */}
+      {activeSurface === 'code' ? (
+        <div className="app-sidebar-footer border-t border-hairline p-3">
           <Button
             variant="secondary"
             onClick={openProjectDialog}
@@ -1142,8 +1098,8 @@ export const Sidebar: FC<SidebarProps> = ({
             <Plus className="h-4 w-4" />
             Open a project
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {dialogHosts}
       {activeSurface === 'code' ? <WorkspaceCreateDialogContainer /> : null}

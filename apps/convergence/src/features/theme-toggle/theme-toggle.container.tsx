@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { FC } from 'react'
+import type { TooltipSide } from '@convergence/ui'
 import {
   type Theme,
   getStoredTheme,
@@ -10,7 +11,9 @@ import { ThemeToggle } from './theme-toggle.presentational'
 
 const CYCLE: Theme[] = ['dark', 'light', 'system']
 
-export const ThemeToggleButton: FC = () => {
+export const ThemeToggleButton: FC<{ tooltipSide?: TooltipSide }> = ({
+  tooltipSide,
+}) => {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
 
   useEffect(() => {
@@ -33,5 +36,7 @@ export const ThemeToggleButton: FC = () => {
     })
   }, [])
 
-  return <ThemeToggle theme={theme} onToggle={toggle} />
+  return (
+    <ThemeToggle theme={theme} onToggle={toggle} tooltipSide={tooltipSide} />
+  )
 }
