@@ -1,6 +1,9 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 
+/** A slot on the strip: a row of controls that keep their clicks (app-no-drag). */
+const stripSlot = 'app-no-drag flex shrink-0 items-center gap-1'
+
 type ScreenHeaderProps = Omit<
   ComponentProps<'header'>,
   'className' | 'title'
@@ -68,10 +71,7 @@ function ScreenHeader({
     >
       <div className="flex h-12 min-w-0 items-center gap-1.5">
         {start == null ? null : (
-          <div
-            data-slot="screen-header-start"
-            className="app-no-drag flex shrink-0 items-center gap-1"
-          >
+          <div data-slot="screen-header-start" className={stripSlot}>
             {start}
           </div>
         )}
@@ -92,19 +92,13 @@ function ScreenHeader({
             </div>
           )}
           {titleAction == null ? null : (
-            <div
-              data-slot="screen-header-title-action"
-              className="app-no-drag flex shrink-0 items-center gap-1"
-            >
+            <div data-slot="screen-header-title-action" className={stripSlot}>
               {titleAction}
             </div>
           )}
         </div>
         {end == null ? null : (
-          <div
-            data-slot="screen-header-end"
-            className="app-no-drag flex shrink-0 items-center gap-1"
-          >
+          <div data-slot="screen-header-end" className={stripSlot}>
             {end}
           </div>
         )}

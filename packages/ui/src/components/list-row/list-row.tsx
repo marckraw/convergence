@@ -144,7 +144,7 @@ function ListRow({
                 )}
               </span>
               {marks == null ? null : (
-                <span className="flex shrink-0 items-center gap-1.5">
+                <span className="flex shrink-0 items-center gap-1">
                   {marks}
                 </span>
               )}

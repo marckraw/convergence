@@ -73,7 +73,7 @@ function Notice({
           {icon}
         </span>
       )}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <p id={titleId} className="font-medium wrap-anywhere">
           {title}
         </p>
