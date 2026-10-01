@@ -18,7 +18,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="w-[560px]">
+        <div className="w-140">
           <Story />
         </div>
       </TooltipProvider>

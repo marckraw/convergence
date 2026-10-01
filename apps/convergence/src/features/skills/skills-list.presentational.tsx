@@ -49,7 +49,7 @@ function renderSkillRow(
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
           {renderScopeChip(skill.scope)}
           {!skill.enabled ? (
-            <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
               Disabled
             </span>
           ) : null}
@@ -90,7 +90,7 @@ export const SkillsListPane: FC<SkillsListPaneProps> = ({
                 {group.skills.length === 1 ? '' : 's'}
               </p>
             </div>
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
               {group.catalogSource.replace('-', ' ')}
             </span>
           </div>

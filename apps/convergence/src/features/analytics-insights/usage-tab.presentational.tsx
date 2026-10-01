@@ -194,7 +194,7 @@ function renderLoadingState() {
               <div className="h-4 w-32 rounded bg-muted" />
               <div className="h-3 w-48 rounded bg-muted/80" />
             </div>
-            <div className="h-[320px] rounded-lg bg-muted/50" />
+            <div className="h-80 rounded-lg bg-muted/50" />
           </div>
         ))}
       </section>
@@ -210,7 +210,7 @@ function renderMetricCard(card: MetricCard) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground break-words">
+          <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-muted-foreground break-words">
             {card.label}
           </p>
           <p className="mt-2 break-words text-2xl font-semibold">
@@ -283,7 +283,7 @@ function renderChartLegend(
 
 function renderChartRangeHint(left: string, right: string) {
   return (
-    <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+    <div className="mt-2 flex items-center justify-between gap-3 text-2xs text-muted-foreground">
       <span>{left}</span>
       <span>{right}</span>
     </div>
@@ -366,7 +366,7 @@ function renderProviderUsageRow({
 }) {
   const widthPct = max > 0 ? (value / max) * 100 : 0
   return (
-    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-2 text-[11px] text-muted-foreground">
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-2 text-2xs text-muted-foreground">
       <span>{label}</span>
       <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div
@@ -451,7 +451,7 @@ function renderProjectDistribution(overview: AnalyticsOverview) {
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-[11px] font-semibold text-blue-700 dark:text-blue-200">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-2xs font-semibold text-blue-700 dark:text-blue-200">
                     {index + 1}
                   </span>
                   <span className="truncate text-sm font-medium">
@@ -496,7 +496,7 @@ function renderStreakCalendar(overview: AnalyticsOverview) {
           <p className="text-lg font-semibold">
             {formatInteger(overview.streaks.current)}
           </p>
-          <p className="text-[11px] text-muted-foreground">current</p>
+          <p className="text-2xs text-muted-foreground">current</p>
         </div>
       </div>
 
@@ -505,7 +505,7 @@ function renderStreakCalendar(overview: AnalyticsOverview) {
         {WEEKDAY_LABELS_MONDAY_FIRST.map((label) => (
           <div
             key={label}
-            className="flex items-center justify-center text-[10px] font-medium text-muted-foreground"
+            className="flex items-center justify-center text-3xs font-medium text-muted-foreground"
           >
             {label}
           </div>
@@ -562,12 +562,12 @@ function renderHeatmap(overview: AnalyticsOverview) {
         })
       ) : (
         <div className="overflow-x-auto pb-1">
-          <div className="grid min-w-[540px] grid-cols-[2.25rem_repeat(24,minmax(0,1fr))] gap-1">
+          <div className="grid min-w-135 grid-cols-[2.25rem_repeat(24,minmax(0,1fr))] gap-1">
             <div />
             {HEATMAP_HOURS.map((hour) => (
               <div
                 key={hour}
-                className="text-center text-[10px] text-muted-foreground"
+                className="text-center text-3xs text-muted-foreground"
               >
                 {hour % 6 === 0 ? formatHour(hour) : ''}
               </div>
@@ -602,7 +602,7 @@ function renderHeatmapRow({
 }) {
   return (
     <>
-      <div className="flex items-center text-[11px] text-muted-foreground">
+      <div className="flex items-center text-2xs text-muted-foreground">
         {label}
       </div>
       {HEATMAP_HOURS.map((hour) => {

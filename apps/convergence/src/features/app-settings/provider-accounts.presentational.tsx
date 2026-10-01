@@ -281,13 +281,13 @@ export function ProviderAccountsFields({
                         {row.identity}
                       </h4>
                       {row.isDefault ? (
-                        <span className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-muted-foreground">
+                        <span className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-3xs font-semibold uppercase leading-none text-muted-foreground">
                           default
                         </span>
                       ) : null}
                       <span
                         className={cn(
-                          'rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none',
+                          'rounded border px-1.5 py-0.5 text-3xs font-semibold uppercase leading-none',
                           STATUS_TONE[row.status.tone],
                         )}
                       >

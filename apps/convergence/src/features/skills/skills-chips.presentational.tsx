@@ -9,7 +9,7 @@ import {
 } from './skills-browser.styles'
 
 const PILL =
-  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide'
+  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-medium uppercase tracking-wide'
 
 /** Origin-coloured pill that answers "where does this skill come from?". */
 export function renderScopeChip(

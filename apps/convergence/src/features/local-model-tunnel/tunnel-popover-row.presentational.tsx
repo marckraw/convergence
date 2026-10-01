@@ -34,7 +34,7 @@ export const TunnelPopoverRow: FC<TunnelPopoverRowProps> = ({
       <p className="mt-1 truncate text-xs text-muted-foreground">
         {formatLocalModelTunnelEndpoint(item)}
       </p>
-      <p className="mt-0.5 truncate text-[11px] text-muted-foreground/85">
+      <p className="mt-0.5 truncate text-2xs text-muted-foreground/85">
         {formatLocalModelTunnelConnectionLabel(item)} ·{' '}
         {formatLocalModelTunnelStatusDetail(item)}
       </p>

@@ -33,7 +33,7 @@ export const RangePicker: FC<RangePickerProps> = ({
             onClick={() => onChange(preset)}
             size="sm"
             className={cn(
-              'rounded-md px-2.5 text-[11px]',
+              'rounded-md px-2.5 text-2xs',
               selected && 'shadow-none ring-1 ring-ring',
             )}
           >

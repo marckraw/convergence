@@ -101,7 +101,7 @@ function renderDependencyList(dependencies: SkillDependency[]) {
           </span>
           <span
             className={cn(
-              'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+              'shrink-0 rounded-full border px-2 py-0.5 text-3xs font-medium uppercase tracking-wide',
               DEPENDENCY_STATE_CLASSES[dependency.state],
             )}
           >
@@ -180,7 +180,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
       <div className="mb-4 min-w-0">
         <div className="mb-3 flex items-end justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
               {selectedSkill.providerName}
             </span>
             {renderScopeChip(selectedSkill.scope)}
@@ -334,7 +334,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
       <div className="space-y-4">
         {selectedProvider ? (
           <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="mb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Provider
             </p>
             <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
@@ -367,7 +367,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
             </div>
             {nativeInvocation ? (
               <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background/60 px-2 py-1.5">
-                <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span className="shrink-0 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Native
                 </span>
                 <code className="min-w-0 flex-1 truncate text-xs text-foreground">
@@ -384,7 +384,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
 
         <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Path
             </p>
             {selectedSkill.path ? (
@@ -404,7 +404,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
 
         <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Dependencies
             </p>
             {selectedSkillHasMcpDependencies ? (
@@ -423,7 +423,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
         </section>
 
         <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="mb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             Warnings
           </p>
           {renderWarningList(selectedSkill.warnings)}
@@ -445,7 +445,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
         {selectedDetails ? (
           <>
             <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                 Resources
               </p>
               {selectedDetails.resources.length > 0 ? (
@@ -453,7 +453,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                   {selectedDetails.resources.map((resource) => (
                     <span
                       key={`${resource.kind}-${resource.relativePath}`}
-                      className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground"
+                      className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-2xs text-muted-foreground"
                     >
                       {resource.kind}: {resource.relativePath}
                     </span>

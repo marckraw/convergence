@@ -73,7 +73,7 @@ export function WorkStyleTab({
       <section className="rounded-lg border border-border bg-card/60 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Deterministic local profile
             </p>
             <h4 className="mt-2 text-lg font-semibold">
@@ -277,7 +277,7 @@ function renderFactCard(fact: FactCard) {
           {fact.icon}
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {fact.label}
           </p>
           <p className="mt-2 truncate text-base font-semibold">{fact.value}</p>

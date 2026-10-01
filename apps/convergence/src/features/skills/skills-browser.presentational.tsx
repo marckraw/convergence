@@ -162,7 +162,7 @@ function renderFilterSelect({
       <SelectTrigger
         size="md"
         aria-label={label}
-        className={cn('w-[150px] normal-case tracking-normal', className)}
+        className={cn('w-37.5 normal-case tracking-normal', className)}
       >
         <SelectValue />
       </SelectTrigger>
@@ -195,7 +195,7 @@ function renderFilterToolbar({
 >) {
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 px-6 py-3">
-      <div className="relative min-w-[200px] flex-1">
+      <div className="relative min-w-50 flex-1">
         <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           size="lg"
@@ -282,7 +282,7 @@ function renderFilterToolbar({
 
       {viewMode === 'grid' ? (
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
             Group by
           </span>
           {renderFilterSelect({
@@ -290,7 +290,7 @@ function renderFilterToolbar({
             value: groupBy,
             onChange: (value) => onGroupByChange(value as SkillGroupBy),
             options: GROUP_BY_OPTIONS,
-            className: 'w-[130px]',
+            className: 'w-32.5',
           })}
         </div>
       ) : null}

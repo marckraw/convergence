@@ -347,7 +347,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
               <BookOpenText className="h-3.5 w-3.5" />
               Prompts
             </span>
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-2xs text-muted-foreground/80">
               {catalog ? totalPromptCount : 'View'}
             </span>
           </Button>

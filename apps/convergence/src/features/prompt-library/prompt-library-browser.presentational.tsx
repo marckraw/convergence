@@ -104,7 +104,7 @@ function renderSelectControl({
   options: { value: string; label: string }[]
 }) {
   return (
-    <label className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <label className="min-w-0 flex-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
       <span>{label}</span>
       <Select
         items={options}
@@ -154,7 +154,7 @@ function renderPromptRow(
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium">{prompt.title}</span>
-          <span className="shrink-0 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="shrink-0 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
             {prompt.sourceLabel}
           </span>
         </span>
@@ -162,13 +162,13 @@ function renderPromptRow(
           {prompt.shortDescription || prompt.description || prompt.relativePath}
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
             {KIND_LABELS[prompt.kind]}
           </span>
           {prompt.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground"
+              className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs text-muted-foreground"
             >
               {tag}
             </span>
@@ -241,10 +241,10 @@ function renderDetailsPane({
       <div className="mb-4 flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
               {SCOPE_LABELS[selectedPrompt.scope]}
             </span>
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
               {KIND_LABELS[selectedPrompt.kind]}
             </span>
           </div>
@@ -282,7 +282,7 @@ function renderDetailsPane({
       <div className="space-y-4">
         <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Path
             </p>
             <CopyButton text={selectedPrompt.path} label="Copy prompt path" />
@@ -297,14 +297,14 @@ function renderDetailsPane({
 
         {selectedPrompt.tags.length > 0 ? (
           <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="mb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               Tags
             </p>
             <div className="flex flex-wrap gap-1.5">
               {selectedPrompt.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground"
+                  className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-2xs text-muted-foreground"
                 >
                   {tag}
                 </span>
@@ -330,7 +330,7 @@ function renderDetailsPane({
           <>
             <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Prompt Text
                 </p>
                 <CopyButton

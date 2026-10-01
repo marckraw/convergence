@@ -27,7 +27,7 @@ export function ProjectOpenMenuSection({
 }: ProjectOpenMenuSectionProps) {
   return (
     <div role="group" aria-label="Open in" className="flex flex-col">
-      <div className="px-2 pb-1 pt-1.5 text-[11px] text-muted-foreground">
+      <div className="px-2 pb-1 pt-1.5 text-2xs text-muted-foreground">
         Open in
       </div>
       {disabledReason || loading ? (

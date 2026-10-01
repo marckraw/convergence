@@ -386,7 +386,7 @@ export const SkillsBrowserDialogContainer: FC<
               <Library className="h-3.5 w-3.5" />
               Skills
             </span>
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-2xs text-muted-foreground/80">
               {catalog ? totalSkillCount : 'View'}
             </span>
           </Button>

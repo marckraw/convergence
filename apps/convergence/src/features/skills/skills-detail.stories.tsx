@@ -93,7 +93,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="h-[640px] w-[720px] rounded-lg border border-border">
+        <div className="h-160 w-180 rounded-lg border border-border">
           <Story />
         </div>
       </TooltipProvider>

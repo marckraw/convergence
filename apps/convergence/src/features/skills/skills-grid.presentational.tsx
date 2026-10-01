@@ -31,7 +31,7 @@ function renderSkillCard(
       onClick={() => onSelectSkill(skill.id)}
       size="lg"
       className={cn(
-        'flex h-full min-w-0 flex-col items-stretch justify-start gap-0 whitespace-normal rounded-xl border p-3 text-left transition-[transform,background-color,border-color] active:scale-[0.96]',
+        'flex h-full min-w-0 flex-col items-stretch justify-start gap-0 whitespace-normal rounded-xl border p-3 text-left transition-[transform,background-color,border-color] active:scale-96',
         selected
           ? 'border-primary/40 bg-primary/10'
           : 'border-border/70 hover:border-border hover:bg-muted/30',
@@ -89,7 +89,7 @@ export const SkillsGrid: FC<SkillsGridProps> = ({
           {showGroupHeaders ? (
             <div className="mb-2.5 flex items-center gap-2">
               <h4 className="text-sm font-semibold">{group.label}</h4>
-              <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs font-medium tabular-nums text-muted-foreground">
                 {group.skills.length}
               </span>
             </div>

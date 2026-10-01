@@ -160,7 +160,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
                 type="button"
                 variant="ghost"
                 data-testid="local-model-tunnel-pill"
-                className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
+                className="h-auto max-w-70 rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-2xs font-medium shadow-none hover:bg-accent"
               >
                 <StatusDot state={aggregate.state} />
                 <span className="min-w-0 truncate text-foreground">
@@ -265,7 +265,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
                             {item.profile.name}
                           </span>
                         </span>
-                        <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+                        <span className="mt-1 block truncate text-2xs text-muted-foreground">
                           {formatLocalModelTunnelEndpoint(item)}
                         </span>
                       </span>

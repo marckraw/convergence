@@ -116,7 +116,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
                 variant="ghost"
                 onClick={() => onJumpToGrid({ origin: bucket.origin })}
                 size="lg"
-                className="flex h-auto items-stretch justify-start gap-3 whitespace-normal rounded-xl border border-border/70 bg-muted/10 p-3 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-[0.96]"
+                className="flex h-auto items-stretch justify-start gap-3 whitespace-normal rounded-xl border border-border/70 bg-muted/10 p-3 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-96"
               >
                 <span
                   className={cn('w-1 shrink-0 rounded-full', meta.accentClass)}
@@ -131,7 +131,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     {meta.hint}
                   </span>
-                  <span className="mt-1 block text-[11px] text-muted-foreground">
+                  <span className="mt-1 block text-2xs text-muted-foreground">
                     {bucket.enabled} enabled
                     {bucket.withWarnings > 0
                       ? ` · ${bucket.withWarnings} flagged`
@@ -154,7 +154,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
               variant="ghost"
               onClick={() => onJumpToGrid({ providerId: bucket.providerId })}
               size="lg"
-              className="flex h-auto items-center justify-between whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-[0.96]"
+              className="flex h-auto items-center justify-between whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-96"
             >
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">
@@ -162,7 +162,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
                 </span>
                 {bucket.errored ? (
                   <span
-                    className="block truncate text-[11px] text-destructive"
+                    className="block truncate text-2xs text-destructive"
                     title={bucket.error ?? 'Discovery error'}
                   >
                     {bucket.error ?? 'Discovery error'}
@@ -192,7 +192,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
                 variant="ghost"
                 onClick={() => onJumpToGrid(item.patch)}
                 size="lg"
-                className="flex h-auto w-full items-center justify-between gap-3 whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-[0.96]"
+                className="flex h-auto w-full items-center justify-between gap-3 whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-96"
               >
                 <span className="flex items-center gap-2 text-sm">
                   <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-warning/30 bg-warning/10 px-1.5 text-xs font-semibold tabular-nums text-warning-foreground">

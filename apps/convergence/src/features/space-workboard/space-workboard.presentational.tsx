@@ -301,7 +301,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                           {space.attention !== 'none' ? (
                             <span
                               className={cn(
-                                'rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                                'rounded-full border px-2 py-0.5 text-3xs font-medium',
                                 spaceAttentionClassNames[space.attention],
                               )}
                             >
@@ -440,7 +440,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                         brief: event.target.value,
                       })
                     }
-                    className="min-h-[220px] resize-y"
+                    className="min-h-55 resize-y"
                     placeholder="Stable notes, decisions, constraints, and next action."
                     aria-label="Space brief"
                   />
@@ -471,7 +471,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
 
                     {synthesisPreview.brief ? (
                       <div className="space-y-2">
-                        <div className="text-[11px] font-medium uppercase text-muted-foreground">
+                        <div className="text-2xs font-medium uppercase text-muted-foreground">
                           Proposed Space brief
                         </div>
                         <Textarea
@@ -479,7 +479,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                           onChange={(event) =>
                             onSynthesisBriefChange(event.target.value)
                           }
-                          className="min-h-[140px] resize-y"
+                          className="min-h-35 resize-y"
                           aria-label="Suggested Space brief"
                         />
                         <div className="flex justify-end gap-2">
@@ -508,7 +508,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
 
                     {synthesisPreview.artifacts.length > 0 ? (
                       <div className="space-y-2">
-                        <div className="text-[11px] font-medium uppercase text-muted-foreground">
+                        <div className="text-2xs font-medium uppercase text-muted-foreground">
                           Proposed Artifacts
                         </div>
                         {synthesisPreview.artifacts.map((artifact) => (
@@ -630,7 +630,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
 
                             <DialogBody className="grid gap-4 md:grid-cols-[160px_1fr]">
                               <label className="space-y-1.5">
-                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                <span className="text-2xs font-medium uppercase text-muted-foreground">
                                   Kind
                                 </span>
                                 <Select
@@ -661,7 +661,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                               </label>
 
                               <label className="space-y-1.5">
-                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                <span className="text-2xs font-medium uppercase text-muted-foreground">
                                   Label
                                 </span>
                                 <Input
@@ -679,7 +679,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                               </label>
 
                               <label className="space-y-1.5">
-                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                <span className="text-2xs font-medium uppercase text-muted-foreground">
                                   Status
                                 </span>
                                 <Select
@@ -712,7 +712,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                               </label>
 
                               <label className="space-y-1.5">
-                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                <span className="text-2xs font-medium uppercase text-muted-foreground">
                                   Source
                                 </span>
                                 <Select
@@ -752,7 +752,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                               </label>
 
                               <label className="space-y-1.5 md:col-span-2">
-                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                <span className="text-2xs font-medium uppercase text-muted-foreground">
                                   Value
                                 </span>
                                 <Input
@@ -800,7 +800,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
 
                   {artifactSuggestions.length > 0 ? (
                     <div className="space-y-2">
-                      <div className="text-[11px] font-medium uppercase text-muted-foreground">
+                      <div className="text-2xs font-medium uppercase text-muted-foreground">
                         Suggestions
                       </div>
                       {artifactSuggestions.map((suggestion) => (
@@ -868,7 +868,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                 </section>
               </div>
             ) : (
-              <div className="flex min-h-[260px] items-center justify-center text-sm text-muted-foreground">
+              <div className="flex min-h-65 items-center justify-center text-sm text-muted-foreground">
                 Select or create a Space.
               </div>
             )}
@@ -906,7 +906,7 @@ function renderStatusBadge(status: SpaceStatus) {
   return (
     <span
       className={cn(
-        'rounded-full border px-2 py-0.5 text-[10px] font-medium',
+        'rounded-full border px-2 py-0.5 text-3xs font-medium',
         spaceStatusClassNames[status],
       )}
     >
@@ -949,7 +949,7 @@ function renderSynthesisNotes(input: {
             key={section.label}
             className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
           >
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">
+            <div className="text-2xs font-medium uppercase text-muted-foreground">
               {section.label}
             </div>
             <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -967,7 +967,7 @@ function renderSynthesisNotes(input: {
 function renderMetric(label: string, value: string | number) {
   return (
     <div className="rounded-lg border border-border/60 bg-card/30 px-3 py-2">
-      <div className="text-[11px] font-medium uppercase text-muted-foreground">
+      <div className="text-2xs font-medium uppercase text-muted-foreground">
         {label}
       </div>
       <div className="mt-1 truncate text-sm">{value}</div>
@@ -997,7 +997,7 @@ function renderAttemptRow(input: {
               {view.sessionName}
             </span>
             {attempt.isPrimary ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning-foreground">
+              <span className="inline-flex items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-3xs font-medium text-warning-foreground">
                 <Star className="h-3 w-3" />
                 Primary
               </span>
@@ -1101,7 +1101,7 @@ function renderArtifactRow(input: {
     >
       <div className="grid gap-3 md:grid-cols-[150px_1fr_160px_auto]">
         <label className="space-y-1.5">
-          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+          <span className="text-2xs font-medium uppercase text-muted-foreground">
             Kind
           </span>
           <Select
@@ -1129,7 +1129,7 @@ function renderArtifactRow(input: {
         </label>
 
         <label className="space-y-1.5">
-          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+          <span className="text-2xs font-medium uppercase text-muted-foreground">
             Label
           </span>
           <Input
@@ -1146,7 +1146,7 @@ function renderArtifactRow(input: {
         </label>
 
         <label className="space-y-1.5">
-          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+          <span className="text-2xs font-medium uppercase text-muted-foreground">
             Status
           </span>
           <Select
@@ -1187,7 +1187,7 @@ function renderArtifactRow(input: {
 
       <div className="mt-3 grid gap-3 md:grid-cols-[1fr_190px]">
         <label className="space-y-1.5">
-          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+          <span className="text-2xs font-medium uppercase text-muted-foreground">
             Value
           </span>
           <div className="flex gap-2">
@@ -1227,7 +1227,7 @@ function renderArtifactRow(input: {
         </label>
 
         <label className="space-y-1.5">
-          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+          <span className="text-2xs font-medium uppercase text-muted-foreground">
             Source
           </span>
           <Select

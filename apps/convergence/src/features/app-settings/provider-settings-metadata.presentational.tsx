@@ -75,7 +75,7 @@ export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
                 <p className="min-w-0 text-xs font-medium text-foreground">
                   {option.label}
                 </p>
-                <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-3xs text-muted-foreground">
                   {persistenceLabel(option.persistence)}
                 </span>
               </div>
