@@ -101,6 +101,10 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
     // here as in the app.
     ConversationViewMenu: actual.ConversationViewMenu,
     parallelWorkInRow: actual.parallelWorkInRow,
+    // The header's real status pills (CONV-3).
+    ActivityStatus: actual.ActivityStatus,
+    ArchivedStatus: actual.ArchivedStatus,
+    ParallelWorkStatus: actual.ParallelWorkStatus,
     useParallelWork: () => ({ rows: [], error: null, loading: false }),
     ParallelWork: ({
       open,

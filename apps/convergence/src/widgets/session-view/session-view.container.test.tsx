@@ -2797,17 +2797,24 @@ describe('SessionView', () => {
       })
       renderView()
       await screen.findByTestId('harness-alert')
-      const buttons = [...header().querySelectorAll('button')]
+      const all = [...header().querySelectorAll('button')]
       // The whole row: Parallel work, the harness chip, the three groups,
       // Stop and More.
-      expect(buttons.length).toBeGreaterThanOrEqual(7)
-      // One size for the whole row, read from the part (MAR-3616): sm, 28 px.
+      expect(all.length).toBeGreaterThanOrEqual(7)
+      // The states you can press (Parallel work, the harness chip) are status
+      // pills, the height of the row's other states (CONV-3, MAR-3617).
+      const pills = all.filter(
+        (button) => button.getAttribute('data-slot') === 'status-pill',
+      )
+      expect(pills).toHaveLength(2)
+      const buttons = all.filter((button) => !pills.includes(button))
+      // One size for every control in the row, read from the part (MAR-3616): sm, 28 px.
       for (const button of buttons)
         expect(
           button.getAttribute('data-size'),
           button.textContent || button.getAttribute('aria-label') || '',
         ).toBe('sm')
-      for (const button of buttons)
+      for (const button of all)
         expect(button.className).not.toMatch(/\bh-(8|9|10)\b/)
     })
 

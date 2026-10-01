@@ -2,6 +2,13 @@ import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
 import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
+import {
+  ActivityStatus,
+  ArchivedStatus,
+  ParallelWorkStatus,
+  RemoteStatus,
+  WorktreeRemovedStatus,
+} from './header-status.presentational'
 import { HarnessFactsSections } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
 import { SIDE_PANEL_WIDTH } from './parallel-work-dock.pure'
@@ -607,15 +614,12 @@ export const SessionView: FC = () => {
                     side: 'left' as const,
                     group: 'status' as const,
                     node: (
-                      <Button
+                      <ParallelWorkStatus
                         ref={parallelButton}
-                        variant="ghost"
-                        aria-expanded={parallelOpen}
-                        onClick={toggleParallel}
-                        size="sm"
-                      >
-                        {parallelLabel}
-                      </Button>
+                        label={parallelLabel}
+                        expanded={parallelOpen}
+                        onToggle={toggleParallel}
+                      />
                     ),
                   },
                 ]
@@ -633,22 +637,23 @@ export const SessionView: FC = () => {
                 />
               ),
             },
+            ...(session.archivedAt
+              ? [
+                  {
+                    id: 'archived',
+                    side: 'left' as const,
+                    group: 'status' as const,
+                    node: <ArchivedStatus />,
+                  },
+                ]
+              : []),
             ...(remote
               ? [
                   {
                     id: 'remote',
                     side: 'left' as const,
                     group: 'status' as const,
-                    node: (
-                      <span
-                        className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-600 dark:text-sky-300"
-                        title="This session runs on the remote execution host"
-                        data-testid="session-remote-indicator"
-                      >
-                        <Cloud className="h-3 w-3" />
-                        Remote
-                      </span>
-                    ),
+                    node: <RemoteStatus />,
                   },
                 ]
               : []),
@@ -659,13 +664,10 @@ export const SessionView: FC = () => {
                     side: 'left' as const,
                     group: 'status' as const,
                     node: (
-                      <span
-                        className="max-w-[12rem] truncate rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-                        title={activityLabel}
-                        data-testid="session-activity-indicator"
-                      >
-                        {activityLabel}
-                      </span>
+                      <ActivityStatus
+                        label={activityLabel}
+                        testId="session-activity-indicator"
+                      />
                     ),
                   },
                 ]
@@ -676,11 +678,7 @@ export const SessionView: FC = () => {
                     id: 'worktree-removed',
                     side: 'left' as const,
                     group: 'status' as const,
-                    node: (
-                      <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] text-warning-foreground">
-                        Worktree removed
-                      </span>
-                    ),
+                    node: <WorktreeRemovedStatus />,
                   },
                 ]
               : []),

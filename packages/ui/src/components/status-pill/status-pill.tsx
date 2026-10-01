@@ -1,5 +1,7 @@
+import { Button as ButtonPrimitive } from '@base-ui/react/button'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
+import { focusRing } from '#lib/focus-ring.styles'
 import { toneInk, toneLine, toneSoft, type Tone } from '#lib/tone.styles'
 
 /**
@@ -12,6 +14,15 @@ const fills: Record<Tone, string> = {
   success: toneSoft.success,
   warning: toneSoft.warning,
   danger: toneSoft.danger,
+}
+
+/** The pill's box and print, shared by the plain pill and the pressable one. */
+const pillBox =
+  'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border py-0.5 pl-2 text-2xs leading-2xs [&_svg]:pointer-events-none [&_svg]:shrink-0'
+
+/** The leading glyph, a Spinner or a StatusDot, in its own slot. */
+function Leading({ children }: { children: ReactNode }) {
+  return <span className="flex shrink-0 items-center">{children}</span>
 }
 
 type StatusPillProps = Omit<ComponentProps<'span'>, 'className'> & {
@@ -45,8 +56,7 @@ function StatusPill({
       data-slot="status-pill"
       data-tone={tone}
       className={cn(
-        'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border py-0.5 pl-2 text-2xs leading-2xs',
-        '[&_svg]:pointer-events-none [&_svg]:shrink-0',
+        pillBox,
         action == null ? 'pr-2' : 'pr-0.5',
         toneLine[tone],
         toneInk[tone],
@@ -55,13 +65,65 @@ function StatusPill({
       )}
       {...props}
     >
-      {leading == null ? null : (
-        <span className="flex shrink-0 items-center">{leading}</span>
-      )}
+      {leading == null ? null : <Leading>{leading}</Leading>}
       <span className="min-w-0 truncate">{children}</span>
       {action}
     </span>
   )
 }
 
-export { StatusPill, type StatusPillProps }
+type StatusPillButtonProps = Omit<
+  ButtonPrimitive.Props,
+  'className' | 'title'
+> & {
+  className?: string
+  /** What the state says (R1). */
+  tone?: Tone
+  /** Before the words: a glyph, a Spinner or a StatusDot. */
+  leading?: ReactNode
+}
+
+/**
+ * A StatusPill you can press (MAR-3617): a state that opens what it is about,
+ * such as the header's "2 running" (Parallel work), a harness alert (Details)
+ * or the wires (a popover). The same box, print and tone as the pill beside
+ * it, so the header's status row is one height (CONV-3), with the focus ring,
+ * a hover fill and `app-no-drag`. It reaches 4 px further all round under the
+ * pointer, so its target is never under 24 px. A trigger through `render`
+ * (`<PopoverTrigger render={<StatusPillButton …/>}>`).
+ */
+function StatusPillButton({
+  tone = 'neutral',
+  leading,
+  className,
+  children,
+  ...props
+}: StatusPillButtonProps) {
+  return (
+    <ButtonPrimitive
+      data-slot="status-pill"
+      data-tone={tone}
+      className={cn(
+        pillBox,
+        'relative pr-2 transition-colors app-no-drag after:absolute after:-inset-1',
+        'hover:bg-fill-hover disabled:opacity-50',
+        focusRing,
+        toneLine[tone],
+        toneInk[tone],
+        fills[tone],
+        className,
+      )}
+      {...props}
+    >
+      {leading == null ? null : <Leading>{leading}</Leading>}
+      <span className="min-w-0 truncate">{children}</span>
+    </ButtonPrimitive>
+  )
+}
+
+export {
+  StatusPill,
+  StatusPillButton,
+  type StatusPillButtonProps,
+  type StatusPillProps,
+}

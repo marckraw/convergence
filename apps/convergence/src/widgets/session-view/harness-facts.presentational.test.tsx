@@ -600,7 +600,7 @@ it('MAR-3427 C caps an alert pill chaining every reason: it truncates and keeps 
   expect(chip).toHaveAttribute('data-tooltip', label)
   expect(chip).not.toHaveAttribute('title')
   // 15rem = 240 px, the width the header's layout test holds the chip to.
-  expect(chip.className.split(/\s+/)).toContain('max-w-[15rem]')
+  expect(chip.className.split(/\s+/)).toContain('max-w-60')
   const text = within(chip).getByText(label)
   expect(text.className.split(/\s+/)).toEqual(
     expect.arrayContaining(['min-w-0', 'truncate']),

@@ -18,10 +18,13 @@ import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
+  ActivityStatus,
+  ArchivedStatus,
   ConversationHeader,
   ConversationViewMenu,
   headerFocusTarget,
   parallelWorkInRow,
+  ParallelWorkStatus,
   SessionConversationSurface,
   ParallelWork,
   useParallelWork,
@@ -730,15 +733,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                   side: 'left' as const,
                   group: 'status' as const,
                   node: (
-                    <Button
+                    <ParallelWorkStatus
                       ref={parallelButton}
-                      variant="ghost"
-                      aria-expanded={parallelOpen}
-                      onClick={toggleParallel}
-                      size="sm"
-                    >
-                      {parallelLabel}
-                    </Button>
+                      label={parallelLabel}
+                      expanded={parallelOpen}
+                      onToggle={toggleParallel}
+                    />
                   ),
                 },
               ]
@@ -762,11 +762,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                   id: 'archived',
                   side: 'left' as const,
                   group: 'status' as const,
-                  node: (
-                    <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                      Archived
-                    </span>
-                  ),
+                  node: <ArchivedStatus />,
                 },
               ]
             : []),
@@ -777,13 +773,10 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                   side: 'left' as const,
                   group: 'status' as const,
                   node: (
-                    <span
-                      className="max-w-[12rem] truncate rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-                      title={activityLabel}
-                      data-testid="chat-session-activity-indicator"
-                    >
-                      {activityLabel}
-                    </span>
+                    <ActivityStatus
+                      label={activityLabel}
+                      testId="chat-session-activity-indicator"
+                    />
                   ),
                 },
               ]

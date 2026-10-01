@@ -18,3 +18,8 @@ export {
   headerFocusTarget,
 } from './conversation-header.container'
 export { parallelWorkInRow } from './conversation-header.pure'
+export {
+  ActivityStatus,
+  ArchivedStatus,
+  ParallelWorkStatus,
+} from './header-status.presentational'
