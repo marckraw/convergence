@@ -132,7 +132,12 @@ export const Default: Story = {
     await expect(trigger).toHaveTextContent('emergence')
 
     await userEvent.keyboard('{Enter}')
-    await openedList()
+    const again = await openedList()
+    await waitFor(() =>
+      expect(
+        within(again).getByRole('combobox', { name: 'Search projects…' }),
+      ).toHaveFocus(),
+    )
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await expect(trigger).toHaveFocus()
@@ -491,9 +496,17 @@ export const InDialog: Story = {
       within(await openedList()).getByRole('option', { name: /emergence/ }),
     )
     await expect(args.onChange).toHaveBeenLastCalledWith('emergence')
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Project' })).toBeNull(),
+    )
 
     await userEvent.click(trigger)
-    await openedList()
+    const again = await openedList()
+    await waitFor(() =>
+      expect(
+        within(again).getByRole('combobox', { name: 'Search projects…' }),
+      ).toHaveFocus(),
+    )
     await userEvent.keyboard('{Escape}')
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Project' })).toBeNull(),
