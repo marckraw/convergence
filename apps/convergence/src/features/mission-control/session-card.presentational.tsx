@@ -10,8 +10,7 @@ import {
   formatSessionAttentionLabel,
   SessionStateBadge,
 } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 import type { SessionCard } from './mission-control.types'
 import type { SessionWireHint } from './relay-hop.pure'
 import { buildCardBreatheStyle } from './session-card-breathe.pure'

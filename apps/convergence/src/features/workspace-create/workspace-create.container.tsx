@@ -5,7 +5,7 @@ import { useDialogStore } from '@/entities/dialog'
 import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
-import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
+import type { SearchableSelectItem } from '@convergence/ui'
 import {
   PROJECT_DEFAULT_ID,
   WorkspaceCreateDialog,

@@ -2,8 +2,7 @@ import type { FC } from 'react'
 import { X } from 'lucide-react'
 import { RelayHopRow, formatArmedLabel } from '@/features/mission-control'
 import type { RelayHopLine, RelaySentence } from '@/features/mission-control'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 
 interface CanvasWirePopoverProps {
   sentence: RelaySentence

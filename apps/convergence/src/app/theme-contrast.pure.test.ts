@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { contrastRatio } from '@/shared/lib/color-contrast.pure'
 import {
@@ -12,18 +12,26 @@ import {
 } from './theme-contrast.pure'
 
 /**
- * The theme-contrast canary (MAR-3460). It reads the color roles out of
- * `global.css` itself — the `:root` block for Light, `:root` overlaid by
+ * The theme-contrast canary (MAR-3460). It reads the color roles out of the
+ * stylesheet itself — the `:root` block for Light, `:root` overlaid by
  * `.dark` for Dark, the same cascade the `<html class="dark">` element sees —
  * and computes the WCAG contrast of every pair the UI relies on. A token edit
  * that makes a pair unreadable turns this red before anyone has to see it.
+ *
+ * The stylesheet is the design system's theme, which moved out of
+ * `global.css` into `@convergence/ui/theme.css` (MAR-3610). It is found
+ * through the package's own `exports` door, the same name `global.css`
+ * imports it by.
  *
  * The backgrounds are the opaque `--background`, `--card` and `--muted`
  * tokens. The translucent macOS window surfaces (`--main-surface`,
  * `--sidebar-surface`) sit over the desktop and have no fixed color to test
  * against; the cards and fields drawn on them paint the opaque tokens.
  */
-const STYLESHEET = readFileSync(resolve(__dirname, 'global.css'), 'utf8')
+const STYLESHEET = readFileSync(
+  createRequire(__filename).resolve('@convergence/ui/theme.css'),
+  'utf8',
+)
 const THEMES = readThemeTokens(STYLESHEET)
 const ROOT = readDeclarations(STYLESHEET, ':root')
 const DARK = readDeclarations(STYLESHEET, '.dark')

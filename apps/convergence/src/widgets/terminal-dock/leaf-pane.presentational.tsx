@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import type { LeafNode, SplitDirection } from '@/entities/terminal'
 import { TerminalPaneContainer, PaneToolbar } from '@/features/terminal-pane'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { TabGroup } from './tab-group.presentational'
 
 export interface LeafPaneHandlers {

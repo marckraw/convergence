@@ -53,4 +53,16 @@ describe("Convergence's manifest", () => {
     )
     expect(declaredIn).toEqual(['devDependencies'])
   })
+
+  it('declares the design system the same way (MAR-3610)', () => {
+    // `@convergence/ui` ships TypeScript source through `exports` too, and only
+    // the renderer imports it, which Vite bundles whole. As a devDependency it
+    // stays out of the packaged app's runtime node_modules, like the client
+    // core. Mutation: delete it from `devDependencies` -> red.
+    const manifest = readManifest()
+    const declaredIn = (['dependencies', 'devDependencies'] as const).filter(
+      (field) => manifest[field]?.['@convergence/ui'] !== undefined,
+    )
+    expect(declaredIn).toEqual(['devDependencies'])
+  })
 })

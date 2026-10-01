@@ -1,7 +1,7 @@
 import { AlertCircle, KeyRound, LoaderCircle } from 'lucide-react'
 import { describeAccountHandoffRefusal } from '@/entities/provider-account'
 import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 export type ComposerAccountNoticeState =
   | { kind: 'pending' | 'staged' }

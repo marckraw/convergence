@@ -1,7 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 import { ProviderUsageCard } from './provider-usage-card.presentational'
 
 interface ProviderUsageFieldsProps {

@@ -18,9 +18,9 @@ import type {
   PromptLibraryEntry,
   PromptLibraryScope,
 } from '@/entities/prompt-library'
-import { Button } from '@/shared/ui/button'
-import { CopyButton } from '@/shared/ui/copy-button'
 import {
+  Button,
+  CopyButton,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,18 +28,16 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import {
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+  Textarea,
+  cn,
+} from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
-import { Textarea } from '@/shared/ui/textarea'
-import { cn } from '@/shared/lib/cn.pure'
 import type { PromptLibraryBrowserFilters } from './prompt-library-browser.pure'
 
 export interface PromptLibraryFormDraft {

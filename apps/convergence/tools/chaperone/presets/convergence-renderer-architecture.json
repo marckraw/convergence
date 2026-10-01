@@ -174,7 +174,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
         "pattern": "<button[\\s>]",
-        "message": "Use Button from src/shared/ui/ instead of raw <button>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
+        "message": "Use Button from @convergence/ui instead of raw <button>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       },
       {
         "id": "no-raw-button-in-presentational-outside-shared",
@@ -182,7 +182,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<button[\\s>]",
-        "message": "Use Button from src/shared/ui/ instead of raw <button>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
+        "message": "Use Button from @convergence/ui instead of raw <button>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       },
       {
         "id": "no-raw-input-outside-shared",
@@ -190,7 +190,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
         "pattern": "<input[\\s>]",
-        "message": "Use Input from src/shared/ui/ instead of raw <input>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
+        "message": "Use Input from @convergence/ui instead of raw <input>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       },
       {
         "id": "no-raw-input-in-presentational-outside-shared",
@@ -198,7 +198,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<input[\\s>]",
-        "message": "Use Input from src/shared/ui/ instead of raw <input>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
+        "message": "Use Input from @convergence/ui instead of raw <input>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       }
     ]
   }

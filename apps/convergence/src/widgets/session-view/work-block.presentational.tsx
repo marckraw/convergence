@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight, Layers } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import { WORK_BLOCK_SENTENCE_CLASS } from './work-block.styles'
 
 interface WorkBlockRowProps {

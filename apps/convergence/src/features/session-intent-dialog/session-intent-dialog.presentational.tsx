@@ -6,8 +6,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Button } from '@/shared/ui/button'
+  Button,
+} from '@convergence/ui'
 
 export interface SessionIntentDialogProps {
   open: boolean

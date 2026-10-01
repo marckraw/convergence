@@ -1,4 +1,4 @@
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type { ParallelWorkMarker } from './parallel-work.pure'
 export function ParallelWorkMarkerView({
   marker,

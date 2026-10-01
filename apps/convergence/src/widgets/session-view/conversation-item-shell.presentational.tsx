@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { CopyButton } from '@/shared/ui/copy-button'
+import { CopyButton } from '@convergence/ui'
 
 interface ConversationItemShellProps {
   copyText: string

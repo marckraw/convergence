@@ -2913,7 +2913,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       expect(content).toBeTruthy()
       expect(document.body.contains(content)).toBe(true)
       expect(column()!.contains(content)).toBe(false)
-      // Mutation: drop `style={LOOM_NO_DRAG_STYLE}` from the TooltipContent
+      // Mutation: drop `style={NO_DRAG_STYLE}` from the TooltipContent
       // -> this walk reaches <body> having found nothing, returns null, red.
       expect(region(content)).toBe('no-drag')
     })
@@ -3028,7 +3028,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       await screen.findByLabelText('Loom')
       await collapse()
       const folded = column()!
-      // Mutation: drop `style={LOOM_NO_DRAG_STYLE}` from the aside -> the
+      // Mutation: drop `style={NO_DRAG_STYLE}` from the aside -> the
       // column resolves to whatever a covered view declared and the icons
       // become a place to pick the window up, red.
       expect(region(folded)).toBe('no-drag')
@@ -3317,7 +3317,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     it('R4: the shell declares no-drag in both shapes, so nothing eats a click mid-motion', async () => {
       await wide()
-      // Mutation: drop `LOOM_NO_DRAG_STYLE` from the shell -> the region
+      // Mutation: drop `NO_DRAG_STYLE` from the shell -> the region
       // resolves to whatever title strip lies under the moving column, red.
       expect(region(shell())).toBe('no-drag')
       expect(document.querySelector('[data-wave-resize-handle]')).toBeTruthy()
@@ -4072,7 +4072,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
         expect(region(header)).toBe('drag')
         expect(region(header.querySelector('h2'))).toBe('drag')
 
-        // Mutation M1: drop `style={LOOM_NO_DRAG_STYLE}` from any of these
+        // Mutation M1: drop `style={NO_DRAG_STYLE}` from any of these
         // four -> that one resolves to `drag` and is red. This is the whole
         // defect: a control inside a drag strip is not a control.
         for (const control of [

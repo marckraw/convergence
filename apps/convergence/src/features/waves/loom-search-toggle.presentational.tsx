@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Search } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { LOOM_SEARCH_NAME } from './loom-search.pure'
 import {
   LOOM_SEARCH_GLYPH_CLASS,

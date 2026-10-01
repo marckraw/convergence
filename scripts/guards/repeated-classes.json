@@ -1,5 +1,8 @@
 {
-  "files": ["apps/convergence/src/**/*.{ts,tsx}"],
+  "files": [
+    "apps/convergence/src/**/*.{ts,tsx}",
+    "packages/ui/src/**/*.{ts,tsx}"
+  ],
   "exclude": [
     "**/*.test.{ts,tsx}",
     "**/*.stories.tsx",

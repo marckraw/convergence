@@ -6,12 +6,14 @@ import type { FC } from 'react'
 import { ArrowRight, X } from 'lucide-react'
 import { ProviderAccountPicker } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
-import { SwitchRow } from '@/shared/ui/switch'
-import { Textarea } from '@/shared/ui/textarea'
+import {
+  cn,
+  Button,
+  Input,
+  SearchableSelect,
+  SwitchRow,
+  Textarea,
+} from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import type {
   BeforeDeliveryMode,

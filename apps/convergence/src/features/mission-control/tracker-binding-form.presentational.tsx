@@ -3,8 +3,7 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 import {
   probeAsksForKey,
   probeTimeLabel,

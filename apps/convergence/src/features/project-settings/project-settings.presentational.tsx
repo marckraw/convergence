@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -8,10 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import { SwitchRow } from '@/shared/ui/switch'
-import { cn } from '@/shared/lib/cn.pure'
+  Input,
+  SwitchRow,
+  cn,
+} from '@convergence/ui'
 import type { WorkspaceStartStrategy } from '@/entities/project'
 
 interface ProjectSettingsDialogProps {

@@ -1,6 +1,6 @@
 // Mission Control's board header, pasted from the session's: the second copy of the bar, and of
 // its label inside cn(). Short strings like "flex items-center" repeat freely.
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 export function BoardHeader({ title, live }: { title: string; live: boolean }) {
   return (

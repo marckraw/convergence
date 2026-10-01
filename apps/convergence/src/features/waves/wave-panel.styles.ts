@@ -1,6 +1,6 @@
 import type { LoomHorseRuntime } from './loom-horses.pure'
 
-export { LOOM_DRAG_STYLE, LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
+export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from '@convergence/ui'
 
 /**
  * Every visual knob of the wave panel (MAR-3097), so "narrower" or "quieter"
@@ -145,9 +145,9 @@ export const LOOM_EXPANDED_CLASS =
  * drag-outside / no-drag-inside nesting `session-view.container.tsx:299/303`
  * already uses.
  *
- * Inline styles live in `@/shared/ui/no-drag.styles` (re-exported above) so
- * the sidebar's tooltips and Loom's share one constant a pin can count
- * (MAR-3314).
+ * Inline styles live in `@convergence/ui` (`NO_DRAG_STYLE`, re-exported
+ * above) so the sidebar's tooltips and Loom's share one constant a pin can
+ * count (MAR-3314).
  */
 
 /**

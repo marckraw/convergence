@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   MessageSquare,
 } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 interface SessionBadgeProps {
   parallelWork?: ParallelWorkCounts

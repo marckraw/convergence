@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { ArrowUpRight } from 'lucide-react'
 
 export interface SeatFact {

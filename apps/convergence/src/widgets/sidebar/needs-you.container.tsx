@@ -17,7 +17,7 @@ import {
 } from '@/features/needs-you'
 import { NeedsYou as NeedsYouFeed } from './needs-you.presentational'
 import { NeedsYouControls } from './needs-you-controls.presentational'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 const preferenceKey = 'convergence:sidebar-activity-view:v1'
 const filtersExpandedKey = 'convergence:sidebar-activity-filters-expanded:v1'

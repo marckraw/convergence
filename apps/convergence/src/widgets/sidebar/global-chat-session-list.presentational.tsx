@@ -8,16 +8,18 @@ import {
 import { memo } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type { SpaceAttemptRole } from '@/entities/space'
-import { Button } from '@/shared/ui/button'
-import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import {
+  Button,
+  NO_DRAG_STYLE,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
-import { cn } from '@/shared/lib/cn.pure'
+  cn,
+} from '@convergence/ui'
 import {
   Archive,
   ChevronDown,
@@ -165,7 +167,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
             </span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+        <TooltipContent side="right" style={NO_DRAG_STYLE}>
           {session.name}
         </TooltipContent>
       </Tooltip>
@@ -186,7 +188,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="left" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="left" style={NO_DRAG_STYLE}>
             {`Chat session actions ${session.name}`}
           </TooltipContent>
         </Tooltip>
@@ -315,10 +317,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                               ) : null}
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent
-                            side="right"
-                            style={LOOM_NO_DRAG_STYLE}
-                          >
+                          <TooltipContent side="right" style={NO_DRAG_STYLE}>
                             {space.title}
                           </TooltipContent>
                         </Tooltip>
@@ -338,10 +337,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                 </Button>
                               </DropdownMenuTrigger>
                             </TooltipTrigger>
-                            <TooltipContent
-                              side="left"
-                              style={LOOM_NO_DRAG_STYLE}
-                            >
+                            <TooltipContent side="left" style={NO_DRAG_STYLE}>
                               {`Space actions ${space.title}`}
                             </TooltipContent>
                           </Tooltip>
@@ -400,7 +396,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                   </TooltipTrigger>
                                   <TooltipContent
                                     side="right"
-                                    style={LOOM_NO_DRAG_STYLE}
+                                    style={NO_DRAG_STYLE}
                                   >
                                     {attempt.sessionName}
                                   </TooltipContent>
@@ -426,7 +422,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                     </TooltipTrigger>
                                     <TooltipContent
                                       side="left"
-                                      style={LOOM_NO_DRAG_STYLE}
+                                      style={NO_DRAG_STYLE}
                                     >
                                       {`Space attempt actions ${attempt.sessionName}`}
                                     </TooltipContent>
@@ -566,7 +562,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                             <span className="truncate">{space.title}</span>
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                        <TooltipContent side="right" style={NO_DRAG_STYLE}>
                           {space.title}
                         </TooltipContent>
                       </Tooltip>
@@ -586,10 +582,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                               </Button>
                             </DropdownMenuTrigger>
                           </TooltipTrigger>
-                          <TooltipContent
-                            side="left"
-                            style={LOOM_NO_DRAG_STYLE}
-                          >
+                          <TooltipContent side="left" style={NO_DRAG_STYLE}>
                             {`Archived Space actions ${space.title}`}
                           </TooltipContent>
                         </Tooltip>

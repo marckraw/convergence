@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type { Attachment } from './attachment.types'
 
 interface AttachmentInlinePreviewProps {

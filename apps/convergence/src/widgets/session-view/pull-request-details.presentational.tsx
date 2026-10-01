@@ -1,8 +1,7 @@
 import type { FC } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { WorkspacePullRequest } from '@/entities/pull-request'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 
 interface PullRequestDetailsProps {
   pullRequest: WorkspacePullRequest

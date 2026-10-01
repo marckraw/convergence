@@ -4,7 +4,7 @@ import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { localProviderCatalogs, useSessionStore } from '@/entities/session'
 import type { Project } from '@/entities/project'
 import type { ProviderInfo, Session } from '@/entities/session'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { GlobalStatusBar } from './index'
 
 const projects: Project[] = [

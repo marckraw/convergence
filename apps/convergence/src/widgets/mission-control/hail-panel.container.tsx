@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import { Radio, X } from 'lucide-react'
 import { ComposerContainer } from '@/features/composer'
 import type { SessionCard } from '@/features/mission-control'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { buildHailComposerContext } from './hail-composer-context.pure'
 
 interface HailPanelProps {

@@ -7,7 +7,7 @@ import {
   MessageSquareWarning,
 } from 'lucide-react'
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@convergence/ui'
 import { pullRequestPresentation } from './pull-request-presentation.pure'
 
 export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { Sidebar } from './sidebar.container'
 
 vi.mock('@/features', async () => {

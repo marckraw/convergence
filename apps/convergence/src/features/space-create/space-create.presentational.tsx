@@ -1,15 +1,15 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import { Textarea } from '@/shared/ui/textarea'
+  Input,
+  Textarea,
+} from '@convergence/ui'
 
 interface SpaceCreateDialogProps {
   open: boolean

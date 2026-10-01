@@ -10,9 +10,7 @@ import type {
   ProviderAccountSettingsRow,
   ProviderAccountSettingsWarning,
 } from '@/entities/provider-account'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { cn, Button, Input } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
   CONFIGURED_SERVERS_SENTENCE,

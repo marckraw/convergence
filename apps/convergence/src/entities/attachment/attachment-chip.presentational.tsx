@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { FileText, FileType, Image as ImageIcon, X } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import type { Attachment } from './attachment.types'
 
 interface AttachmentChipProps {

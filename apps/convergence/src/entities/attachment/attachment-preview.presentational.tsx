@@ -4,7 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 import type { Attachment } from './attachment.types'
 
 interface AttachmentPreviewProps {

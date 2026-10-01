@@ -1,16 +1,16 @@
 import type { FC } from 'react'
 import { Link2 } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
 import {
+  Button,
+  cn,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+} from '@convergence/ui'
 import { LOOM_FOLLOW_LABEL } from './loom-follow.pure'
-import { LOOM_NO_DRAG_STYLE } from './wave-panel.styles'
+import { NO_DRAG_STYLE } from './wave-panel.styles'
 import type { LoomSubline } from './loom-stack.types'
 
 /**
@@ -36,7 +36,7 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
           className="inline-flex h-7 max-w-full gap-1 px-2 text-xs"
           // Expanded Loom's header is the window's drag strip (MAR-3284 R1),
           // so the trigger has to say it is not.
-          style={LOOM_NO_DRAG_STYLE}
+          style={NO_DRAG_STYLE}
         >
           <SelectValue />
         </SelectTrigger>
@@ -47,8 +47,8 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
           // no-drag cover and opens exactly where a covered view's own drag
           // strip lies (MAR-3284 R2). Without this the items nearest the header
           // are the window's, not the list's -- what
-          // `shared/ui/dropdown-menu.tsx:18` already does for menus.
-          style={LOOM_NO_DRAG_STYLE}
+          // `@convergence/ui`'s `dropdown-menu.tsx` already does for menus.
+          style={NO_DRAG_STYLE}
           // The list is portalled, but React bubbles its keydown through the
           // React tree -- into the shells' Escape handlers, which fold Loom
           // or close a detail. Escape here is the list's own: it closes the
@@ -81,7 +81,7 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
         )}
         // Expanded Loom's header is the window's drag strip (MAR-3284 R1),
         // so this control has to say it is not.
-        style={LOOM_NO_DRAG_STYLE}
+        style={NO_DRAG_STYLE}
         onClick={() => follow.onToggle(!follow.on)}
       >
         <Link2 aria-hidden="true" className="size-3.5" />

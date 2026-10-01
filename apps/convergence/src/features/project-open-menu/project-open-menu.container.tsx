@@ -1,11 +1,11 @@
 import { useProjectOpenApps } from './use-project-open-apps'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@convergence/ui'
 import { ChevronDown, Code2, Folder } from 'lucide-react'
 
 interface ProjectOpenMenuContainerProps {

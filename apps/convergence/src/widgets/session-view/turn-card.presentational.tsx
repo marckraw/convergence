@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { ChangedFilesTree } from './changed-files-tree.container'
 import {

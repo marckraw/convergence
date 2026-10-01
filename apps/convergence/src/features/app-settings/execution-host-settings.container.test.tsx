@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
 import {
   executionHostSessionCounts,

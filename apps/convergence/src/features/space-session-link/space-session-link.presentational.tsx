@@ -5,23 +5,21 @@ import {
   spaceAttemptRoleLabels,
   spaceAttemptRoleOptions,
 } from '@/entities/space'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import {
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+} from '@convergence/ui'
 import {
   SELECT_EMPTY_VALUE,
   fromSelectValue,

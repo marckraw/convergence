@@ -1,6 +1,5 @@
 import type { FC } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import { STATE_CHIP_STYLES } from './session-card.styles'
 import {
   SESSION_CARD_STATES,

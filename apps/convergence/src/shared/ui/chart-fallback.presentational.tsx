@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { BarChart3 } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 interface ChartFallbackProps {
   title?: string

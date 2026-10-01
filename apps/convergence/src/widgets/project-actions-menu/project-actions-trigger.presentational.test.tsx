@@ -6,7 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@convergence/ui'
 import { ProjectActionsTrigger } from './project-actions-trigger.presentational'
 
 const script: ProjectScript = {

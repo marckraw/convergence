@@ -4,9 +4,7 @@ import type {
   ExecutionHostDaemonCredentialStatus,
   RemoteExecutionHostConnectionResult,
 } from '@/entities/app-settings'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, Input, cn } from '@convergence/ui'
 import type { ExecutionHostEndpointActionBlocks } from './execution-host-settings.pure'
 
 interface ExecutionHostFieldsProps {

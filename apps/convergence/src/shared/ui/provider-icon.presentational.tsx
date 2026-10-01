@@ -1,4 +1,4 @@
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { resolveProviderIcon, type ProviderBrand } from './provider-icon.pure'
 import anthropic from './provider-logos/anthropic.svg'
 import openai from './provider-logos/openai.svg'

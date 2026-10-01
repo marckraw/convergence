@@ -9,9 +9,13 @@ import {
   NotebookPen,
   PanelLeftOpen,
 } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import {
+  Button,
+  cn,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
 import {
@@ -20,7 +24,7 @@ import {
   type LoomSheet,
 } from './wave-panel-sheet.pure'
 import {
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   LOOM_STRIP_BUTTON_CLASS,
   LOOM_STRIP_COUNT_CLASS,
   LOOM_STRIP_SHEET_CLASS,
@@ -147,7 +151,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
     aria-label="Loom strip"
     data-loom="strip"
     className={cn(WAVE_RAIL_CLASS, className)}
-    style={LOOM_NO_DRAG_STYLE}
+    style={NO_DRAG_STYLE}
   >
     <Tooltip>
       <TooltipTrigger asChild>
@@ -158,13 +162,13 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
           size="sm"
           aria-label={OPEN_LOOM}
           className={LOOM_STRIP_BUTTON_CLASS}
-          style={LOOM_NO_DRAG_STYLE}
+          style={NO_DRAG_STYLE}
           onClick={onOpen}
         >
           <PanelLeftOpen className="size-3.5" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+      <TooltipContent side="right" style={NO_DRAG_STYLE}>
         {OPEN_LOOM}
       </TooltipContent>
     </Tooltip>
@@ -191,7 +195,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
               data-loom-strip-sheet={sheet}
               aria-label={name}
               className={LOOM_STRIP_SHEET_CLASS}
-              style={LOOM_NO_DRAG_STYLE}
+              style={NO_DRAG_STYLE}
               onClick={() => onSelectSheet(sheet)}
             >
               <Icon className="size-3.5" />
@@ -200,7 +204,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
               </span>
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+          <TooltipContent side="right" style={NO_DRAG_STYLE}>
             {name}
           </TooltipContent>
         </Tooltip>
@@ -220,13 +224,13 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
           size="sm"
           aria-label={EXPAND_LOOM}
           className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
-          style={LOOM_NO_DRAG_STYLE}
+          style={NO_DRAG_STYLE}
           onClick={onExpand}
         >
           <Maximize2 className="size-3.5" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+      <TooltipContent side="right" style={NO_DRAG_STYLE}>
         {EXPAND_LOOM}
       </TooltipContent>
     </Tooltip>

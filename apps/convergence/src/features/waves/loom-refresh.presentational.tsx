@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 /**
  * Loom's Refresh control (MAR-3227 R6): the word, and when the tracker was

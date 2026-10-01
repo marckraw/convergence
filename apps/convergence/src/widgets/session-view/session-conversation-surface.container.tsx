@@ -1,5 +1,5 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
 import { useMemo, useRef, type FC, type ReactNode } from 'react'
 import type {

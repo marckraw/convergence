@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { SidebarSearchToggle } from './sidebar-search-toggle.presentational'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
 import {

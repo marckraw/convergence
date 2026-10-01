@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { globSync } from 'node:fs'
 
@@ -13,6 +14,12 @@ import { globSync } from 'node:fs'
  * buttons inherited `pointer-events: none` from their rail, and nothing was
  * red (MAR-2760). This test reads the globs the stylesheet declares and
  * checks each one against where the package is actually installed.
+ *
+ * The design system is the same problem in the other direction (MAR-3610):
+ * `@convergence/ui` is a workspace package outside the app's tree, so a
+ * class used only inside it -- a dialog's, a select's -- is emitted only
+ * because `global.css` names the package's source with `@source`. Delete
+ * that line and the build still passes while the dialog loses its layout.
  */
 const GLOBAL_CSS_PATH = resolve(__dirname, 'global.css')
 const SCANNED_PACKAGES = [
@@ -68,5 +75,22 @@ describe('global.css @source globs', () => {
       const matches = globSync(pattern)
       expect(matches.length, `${pattern} matched nothing`).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('global.css and the design system package', () => {
+  const css = readFileSync(GLOBAL_CSS_PATH, 'utf8')
+  /** The package's real source root: where its entry point resolves. */
+  const packageSource = dirname(
+    createRequire(__filename).resolve('@convergence/ui'),
+  )
+
+  it('imports the theme through the package name', () => {
+    expect(css).toContain("@import '@convergence/ui/theme.css';")
+  })
+
+  it('scans the package source where it actually resolves', () => {
+    expect(declaredSourceGlobs()).toContain(packageSource)
+    expect(existsSync(resolve(packageSource, 'index.ts'))).toBe(true)
   })
 })

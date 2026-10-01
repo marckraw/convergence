@@ -133,7 +133,7 @@ import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { X } from 'lucide-react'
 
 import type { ComposerSessionContext } from './composer.types'

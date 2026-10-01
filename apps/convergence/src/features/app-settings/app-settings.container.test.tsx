@@ -21,7 +21,7 @@ import {
 import { useAnalyticsStore, type AnalyticsOverview } from '@/entities/analytics'
 import { useDialogStore } from '@/entities/dialog'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { AppSettingsDialogContainer } from './app-settings.container'
 
 const TEST_ATTACHMENTS = {

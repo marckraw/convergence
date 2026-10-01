@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import type { SessionSummary } from '@/entities/session'

@@ -32,8 +32,8 @@ import {
   spaceArtifactStatusLabels,
   spaceArtifactStatusOptions,
 } from '@/entities/space'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogBody,
   DialogContent,
@@ -42,22 +42,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import {
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+  Textarea,
+  cn,
+} from '@convergence/ui'
 import {
   SELECT_EMPTY_VALUE,
   fromSelectValue,
   toSelectValue,
 } from '@/shared/lib/select-value.pure'
-import { Textarea } from '@/shared/ui/textarea'
-import { cn } from '@/shared/lib/cn.pure'
 import {
   spaceAttentionOptions,
   spaceAttentionClassNames,

@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import { ExternalLink, GitBranch, GitPullRequest, Star } from 'lucide-react'
 import type { Space, SpaceAttempt, SpaceArtifact } from '@/entities/space'
 import { spaceAttemptRoleLabels, spaceStatusLabels } from '@/entities/space'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 export interface SpaceContextAttemptView {
   attempt: SpaceAttempt

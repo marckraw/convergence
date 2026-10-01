@@ -5,7 +5,7 @@ import {
 } from '@/entities/session'
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { perfApi } from '@/shared/lib/perf.api'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { placeCompactions } from './harness-facts.pure'
 import { CompactionMarker } from './compaction-marker.presentational'

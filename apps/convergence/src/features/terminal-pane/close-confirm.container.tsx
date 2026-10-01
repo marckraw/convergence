@@ -1,13 +1,13 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 
 export interface CloseConfirmRequest {
   sessionId: string

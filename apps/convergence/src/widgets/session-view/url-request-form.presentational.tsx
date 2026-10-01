@@ -1,6 +1,6 @@
 import type { FC, FormEvent } from 'react'
 import type { InteractionResponse } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 interface UrlRequestFormProps {
   onSubmit: (response: InteractionResponse, displayText: string) => void

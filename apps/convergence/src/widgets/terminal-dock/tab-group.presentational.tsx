@@ -2,8 +2,7 @@ import type { FC } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { Plus, X } from 'lucide-react'
 import type { TerminalTab } from '@/entities/terminal'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 
 interface TabGroupProps {
   tabs: TerminalTab[]

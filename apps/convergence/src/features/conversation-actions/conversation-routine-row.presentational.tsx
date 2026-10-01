@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { ConversationActionItem } from './conversation-action-item.presentational'
 import type { RoutineRowView } from './conversation-actions-menu.pure'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'

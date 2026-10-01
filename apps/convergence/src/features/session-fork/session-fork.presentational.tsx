@@ -1,17 +1,17 @@
 import type { FC } from 'react'
 import { GitFork, RefreshCw, Sparkles } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import { Textarea } from '@/shared/ui/textarea'
-import { cn } from '@/shared/lib/cn.pure'
+  Input,
+  Textarea,
+  cn,
+} from '@convergence/ui'
 import type {
   ForkStrategy,
   ProviderInfo,

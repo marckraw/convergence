@@ -1,8 +1,6 @@
 import type { FC, RefObject } from 'react'
 import { X } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, Input, cn } from '@convergence/ui'
 
 interface SidebarSearchFieldProps {
   query: string

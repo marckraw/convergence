@@ -15,7 +15,7 @@ import {
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   SpaceWorkboardDialog,
   type SpaceAttemptView,

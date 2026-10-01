@@ -10,7 +10,7 @@ import {
   type ProjectScriptRun,
 } from '@/entities/project-script'
 import { ProjectScriptEditor } from '@/features/project-script-editor'
-import { DropdownMenu, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuTrigger } from '@convergence/ui'
 import { isProjectScriptRunActive } from './project-actions-menu.pure'
 import {
   ProjectActionsMenuPresentational,

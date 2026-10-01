@@ -5,8 +5,7 @@ import {
   type SkillCatalogEntry,
   type SkillSelection,
 } from '@/entities/skill'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 
 interface ComposerSkillInjectionPickerProps {
   open: boolean

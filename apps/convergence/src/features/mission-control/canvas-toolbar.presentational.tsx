@@ -1,7 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Link2, Plus, Settings2, History } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 
 interface CanvasToolbarProps {
   importCrew: ReactNode

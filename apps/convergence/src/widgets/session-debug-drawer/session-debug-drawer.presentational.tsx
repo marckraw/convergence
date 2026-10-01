@@ -1,13 +1,13 @@
 import type { FC } from 'react'
 import type { ProviderDebugEntry } from '@/entities/provider-debug'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 import { drawerStyles } from './session-debug-drawer.styles'
 
 interface SessionDebugDrawerProps {

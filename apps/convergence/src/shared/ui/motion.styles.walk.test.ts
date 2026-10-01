@@ -10,6 +10,10 @@ import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
  * tests, so a busy machine timed the whole file out on the read (MAR-3385).
  * The assertion is unchanged. The rendered suite still matches this same
  * token pattern on the elements it mounts.
+ *
+ * The primitives moved to `@convergence/ui` (MAR-3610), which walks its own
+ * tree the same way (`packages/ui/src/styles/motion.styles.walk.test.ts`).
+ * This walk keeps the app's tree, anchored on a file the app still owns.
  */
 const sourceRoot = resolve(__dirname, '../..')
 const pluginTokens =
@@ -32,7 +36,7 @@ it(
   () => {
     const files = sourceFiles(sourceRoot)
     expect(files.length).toBeGreaterThan(100)
-    expect(files).toContain(join(__dirname, 'tooltip.tsx'))
+    expect(files).toContain(join(__dirname, 'markdown.presentational.tsx'))
     expect(
       files
         .filter((path) => pluginTokens.test(readFileSync(path, 'utf8')))

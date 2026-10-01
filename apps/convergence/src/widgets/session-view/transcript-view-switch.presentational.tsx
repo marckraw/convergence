@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem } from '@convergence/ui'
 import type { TranscriptViewMode } from './transcript-view-mode.api'
 
 interface TranscriptViewMenuItemsProps {

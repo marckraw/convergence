@@ -1,6 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 import { ConversationActionItem } from './conversation-action-item.presentational'
 import {
   SKILLS_EMPTY_LABEL,

@@ -1,8 +1,12 @@
 import type { FC } from 'react'
 import { Search } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import {
+  Button,
+  NO_DRAG_STYLE,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 
 interface SidebarSearchToggleProps {
   open: boolean
@@ -29,7 +33,7 @@ export const SidebarSearchToggle: FC<SidebarSearchToggleProps> = ({
         <Search className="h-4 w-4" />
       </Button>
     </TooltipTrigger>
-    <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+    <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
       {SEARCH_CONVERSATIONS}
     </TooltipContent>
   </Tooltip>

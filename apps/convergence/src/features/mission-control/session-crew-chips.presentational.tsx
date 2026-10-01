@@ -1,7 +1,6 @@
 import type { CSSProperties, FC } from 'react'
 import { Users } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import type { SessionCardCrewFacetOption } from './session-card-facets.pure'
 
 interface SessionCrewChipsProps {

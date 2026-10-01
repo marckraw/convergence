@@ -18,7 +18,7 @@ import {
   RotateCcw,
   Shuffle,
 } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button, cn } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { ANNOTATION_MESSAGE_ID_ATTRIBUTE } from '@/features/response-annotations'
 import {
@@ -27,7 +27,6 @@ import {
   MissingAttachmentChip,
   type Attachment,
 } from '@/entities/attachment'
-import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItemShell } from './conversation-item-shell.presentational'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'

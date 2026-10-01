@@ -13,7 +13,7 @@ import type {
   WorkStyleInteractionShape,
   WorkStyleSessionSizeBucket,
 } from '@/entities/analytics'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   formatHour,
   formatInteger,

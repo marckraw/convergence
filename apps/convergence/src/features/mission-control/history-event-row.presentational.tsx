@@ -1,6 +1,5 @@
 import type { FC } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import type { HistoryEventRow, HistoryTone } from './run-history.pure'
 
 /** One tone, one colour. Unknown is neutral: red is for what we understand. */

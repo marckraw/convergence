@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import type { WaveHeader } from './wave-sections.pure'
 import { WAVE_OUTAGE_DOT_CLASS } from './wave-panel.styles'
 

@@ -3,7 +3,7 @@ import type { FC, ReactNode } from 'react'
 import { Info } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import releaseNotesBundle from '@/shared/generated/release-notes.generated.json'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { ReleaseNotesDialog } from './release-notes.presentational'
 import type { ReleaseNotesBundle } from './release-notes.types'
 

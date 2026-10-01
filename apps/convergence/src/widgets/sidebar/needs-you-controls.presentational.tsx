@@ -20,14 +20,12 @@ import {
   type FeedView,
   type buildFeedView,
 } from '@/features/needs-you'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn, TooltipProvider } from '@convergence/ui'
 import {
   noConversationMatchesLine,
   normalizeNameQuery,
 } from '@/shared/lib/name-search.pure'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
-import { TooltipProvider } from '@/shared/ui/tooltip'
 import { FilterChoice } from './activity-filter-choice.presentational'
 
 interface Props {

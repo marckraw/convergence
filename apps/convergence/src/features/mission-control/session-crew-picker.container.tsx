@@ -10,10 +10,14 @@ import {
 } from 'cmdk'
 import { Check, Plus, Users, X } from 'lucide-react'
 import { useSessionCrewStore } from '@/entities/session-crew'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import {
+  cn,
+  Button,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@convergence/ui'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 import {
   CREW_SEARCH_THRESHOLD,

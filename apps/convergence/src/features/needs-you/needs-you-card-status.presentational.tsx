@@ -5,7 +5,7 @@ import {
   LoaderCircle,
   MessageCircle,
 } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
 import { cardStateTone } from './needs-you-card-state.styles'
 

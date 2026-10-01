@@ -1,11 +1,11 @@
 import { Archive, CheckCheck, MoreHorizontal } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@convergence/ui'
 import { SessionActivityCard } from './session-activity-card.presentational'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
 

@@ -1,8 +1,7 @@
 import type { FC } from 'react'
 import { Repeat } from 'lucide-react'
 import type { ProjectContextItem } from '@/entities/project-context'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 
 const BODY_PREVIEW_LIMIT = 90
 

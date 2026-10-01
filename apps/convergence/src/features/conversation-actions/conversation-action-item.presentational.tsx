@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ActionRowView } from './conversation-actions.types'
 

@@ -1,6 +1,6 @@
 {
   "path": ["."],
-  "pattern": "apps/convergence/src/**/*.{ts,tsx}",
+  "pattern": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
   "format": ["typescript", "tsx"],
   "ignore": [
     "**/*.test.ts",

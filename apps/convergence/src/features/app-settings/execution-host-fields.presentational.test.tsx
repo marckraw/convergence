@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { RemoteExecutionHostConnectionResult } from '@/entities/app-settings'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { ExecutionHostFields } from './execution-host-fields.presentational'
 
 function renderFields(

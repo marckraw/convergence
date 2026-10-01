@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { SkillSelection } from '@/entities/skill'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { Library, X } from 'lucide-react'
 
 interface SkillSelectionChipProps {

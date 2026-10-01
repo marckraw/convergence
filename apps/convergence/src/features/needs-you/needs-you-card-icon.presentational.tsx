@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@convergence/ui'
 
 export function NeedsYouCardIcon({
   label,

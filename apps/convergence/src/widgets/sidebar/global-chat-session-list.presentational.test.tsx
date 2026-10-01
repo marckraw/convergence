@@ -8,7 +8,7 @@ import { AttentionIndicator } from '@/entities/session'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { SessionSummary } from '@/entities/session'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import {
   GlobalChatSessionList,
   type ChatSidebarSpace,

@@ -1,7 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Circle, CircleHelp, CircleX, LoaderCircle } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomHorseTicketLine,

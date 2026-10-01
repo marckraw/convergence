@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { useDialogStore } from '@/entities/dialog'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { Play } from 'lucide-react'
 
 interface SessionCreateInlineProps {

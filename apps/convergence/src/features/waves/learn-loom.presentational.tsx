@@ -1,12 +1,12 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
 import {
+  Button,
+  cn,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 import {
   LEARN_LOOM_CONTROLS,
   LEARN_LOOM_REFERENCE_TITLE,

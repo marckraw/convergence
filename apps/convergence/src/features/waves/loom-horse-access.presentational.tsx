@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import type { LoomHorseAccessLine as Line } from './loom-horse-access.pure'
 import { LOOM_HORSE_ACCESS_TONE } from './loom-horse-access.styles'
 

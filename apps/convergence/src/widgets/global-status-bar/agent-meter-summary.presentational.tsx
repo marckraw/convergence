@@ -2,7 +2,7 @@ import type { AgentMeterSnapshot } from '@/shared/types/agent-meter.types'
 import { formatMeterUsage, formatSessionMeter } from '@/entities/agent-meter'
 import type { SessionSummary } from '@/entities/session'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@convergence/ui'
 
 export function AgentMeterSummary({
   snapshot,

@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { ArrowRight, ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import type { RelayHopLine, RelayHopTone } from './relay-hop.pure'
 
 const TONE_TEXT: Record<RelayHopTone, string> = {

@@ -1,8 +1,6 @@
 import type { CSSProperties, FC } from 'react'
 import { Search, X } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { cn, Button, Input } from '@convergence/ui'
 import type { LoomSearchField } from './loom-stack.types'
 import { LOOM_SEARCH_NAME } from './loom-search.pure'
 import {

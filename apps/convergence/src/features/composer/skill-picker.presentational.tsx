@@ -1,10 +1,14 @@
 import type { FC } from 'react'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { hasSkillSelection } from '@/entities/skill'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { cn } from '@/shared/lib/cn.pure'
+import {
+  Button,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@convergence/ui'
 import { AlertTriangle, Check, Library, Loader2, Search } from 'lucide-react'
 
 interface SkillPickerProps {

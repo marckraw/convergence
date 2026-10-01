@@ -1,7 +1,7 @@
 import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
 import { isEditableTarget } from '@/shared/lib/editable-target.pure'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   formatAnnotationCount,
   stripNavigationTarget,

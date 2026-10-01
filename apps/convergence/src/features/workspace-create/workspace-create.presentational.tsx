@@ -1,17 +1,17 @@
 import type { FC } from 'react'
 import { GitBranch } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
-import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
+  Input,
+  SearchableSelect,
+  type SearchableSelectItem,
+} from '@convergence/ui'
 
 export const PROJECT_DEFAULT_ID = '__project_default__'
 

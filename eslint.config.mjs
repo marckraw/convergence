@@ -24,6 +24,7 @@ export default tseslint.config(
       '**/dist/',
       '**/node_modules/',
       '**/tools/',
+      '**/storybook-static/',
       'canaries/',
     ],
   },

@@ -21,7 +21,7 @@ import { updatesApi, useUpdatesStore } from '@/entities/updates'
 import { useProviderUpdatesStore } from '@/entities/provider-updates'
 import { taskProgressApi, useTaskProgressStore } from '@/entities/task-progress'
 import { Toaster, toast } from 'sonner'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import {

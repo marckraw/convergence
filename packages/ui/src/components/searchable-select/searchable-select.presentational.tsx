@@ -1,0 +1,260 @@
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from 'cmdk'
+import { Check, ChevronDown } from 'lucide-react'
+import type { ReactNode, RefObject } from 'react'
+import { cn } from '#lib/cn.pure'
+import { Button, type ButtonProps } from '../button/button'
+import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover'
+
+export interface SearchableSelectItem {
+  id: string
+  label: string
+  description?: string
+  icon?: ReactNode
+  badge?: {
+    label: string
+    title?: string
+  }
+  /**
+   * Nesting level, for an item that belongs under the one before it -- a lane
+   * under its root project (MAR-2783). 0 or absent is top level.
+   */
+  depth?: number
+  /**
+   * Listed but not choosable. For options that exist and matter to the user —
+   * a provider account attestation disabled, say — where hiding them would be
+   * more confusing than showing why they cannot be picked.
+   */
+  disabled?: boolean
+}
+
+export interface SearchableSelectAction {
+  label: string
+  icon?: ReactNode
+  onSelect: () => void
+}
+
+export interface SearchableSelectProps {
+  selectedId: string | null
+  value: string
+  items: SearchableSelectItem[]
+  onChange: (id: string) => void
+  disabled?: boolean
+  searchPlaceholder?: string
+  emptyMessage?: string
+  triggerVariant?: ButtonProps['variant']
+  triggerSize?: ButtonProps['size']
+  triggerClassName?: string
+  /** The trigger's accessible name; defaults to its visible value. */
+  ariaLabel?: string
+  contentClassName?: string
+  icon?: ReactNode
+  action?: SearchableSelectAction
+  /**
+   * Controlled open state, for a caller that must open the list from outside
+   * its trigger (MAR-3393: the Actions menu's "Hand off"). Absent, the select
+   * owns its open state exactly as before. A disabled select never opens.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+interface SearchableSelectPresentationalProps {
+  selectedId: string | null
+  value: string
+  items: SearchableSelectItem[]
+  query: string
+  open: boolean
+  isDisabled: boolean
+  searchPlaceholder: string
+  emptyMessage: string
+  triggerVariant: ButtonProps['variant']
+  triggerSize: ButtonProps['size']
+  triggerClassName?: string
+  /** The trigger's accessible name; defaults to its visible value. */
+  ariaLabel?: string
+  contentClassName?: string
+  icon?: ReactNode
+  action?: SearchableSelectAction
+  selectedBadge?: SearchableSelectItem['badge']
+  inputRef: RefObject<HTMLInputElement | null>
+  onOpenChange: (open: boolean) => void
+  onQueryChange: (query: string) => void
+  onSelect: (id: string) => void
+  onActionSelect: () => void
+}
+
+export function SearchableSelectPresentational({
+  selectedId,
+  value,
+  items,
+  query,
+  open,
+  isDisabled,
+  searchPlaceholder,
+  emptyMessage,
+  triggerVariant,
+  triggerSize,
+  triggerClassName,
+  ariaLabel,
+  contentClassName,
+  icon,
+  action,
+  selectedBadge,
+  inputRef,
+  onOpenChange,
+  onQueryChange,
+  onSelect,
+  onActionSelect,
+}: SearchableSelectPresentationalProps) {
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant={triggerVariant}
+          size={triggerSize}
+          disabled={isDisabled}
+          role="combobox"
+          aria-label={ariaLabel ?? value}
+          aria-expanded={open}
+          className={cn('justify-between', triggerClassName)}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            {icon}
+            <span className="truncate">{value}</span>
+            {selectedBadge ? (
+              <span
+                title={selectedBadge.title}
+                className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
+              >
+                {selectedBadge.label}
+              </span>
+            ) : null}
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        // The popover is a dialog to assistive tech; it takes its trigger's
+        // name, so it is announced as the field it belongs to (MAR-3611).
+        aria-label={ariaLabel ?? value}
+        align="start"
+        collisionPadding={16}
+        className={cn(
+          'flex min-h-0 flex-col min-w-52 w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] max-h-[min(24rem,var(--radix-popover-content-available-height))] p-0',
+          contentClassName,
+        )}
+        onOpenAutoFocus={(event: Event) => {
+          event.preventDefault()
+          inputRef.current?.focus()
+        }}
+      >
+        <Command
+          shouldFilter={false}
+          label={searchPlaceholder}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="shrink-0 border-b border-white/10 px-3 py-2">
+            <CommandInput
+              ref={inputRef}
+              value={query}
+              onValueChange={onQueryChange}
+              placeholder={searchPlaceholder}
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+          <CommandList
+            className="app-scrollbar min-h-0 flex-1 overflow-y-auto p-1"
+            style={{ maxHeight: '100%' }}
+            onWheel={(event) => {
+              event.currentTarget.scrollTop += event.deltaY
+            }}
+          >
+            {items.length === 0 ? (
+              <CommandEmpty className="px-2 py-6 text-center text-sm text-muted-foreground">
+                {emptyMessage}
+              </CommandEmpty>
+            ) : (
+              items.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={item.id}
+                  disabled={item.disabled}
+                  onSelect={() => {
+                    if (item.disabled) return
+                    onSelect(item.id)
+                  }}
+                  data-depth={item.depth ?? 0}
+                  style={
+                    item.depth
+                      ? { paddingLeft: `${0.5 + item.depth * 1.25}rem` }
+                      : undefined
+                  }
+                  className={cn(
+                    'flex gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground',
+                    item.disabled
+                      ? 'cursor-not-allowed items-start opacity-50'
+                      : 'cursor-pointer items-center',
+                  )}
+                >
+                  {item.icon}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{item.label}</span>
+                      {item.badge ? (
+                        <span
+                          title={item.badge.title}
+                          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
+                        >
+                          {item.badge.label}
+                        </span>
+                      ) : null}
+                    </span>
+                    {item.description ? (
+                      <span
+                        className={cn(
+                          'text-[11px] text-muted-foreground',
+                          // A disabled row's description is the reason it
+                          // cannot be picked, and this popover has no tooltip:
+                          // truncated, that reason is a mystery no hover
+                          // solves. It wraps. Every other description is
+                          // supplementary and keeps the single line.
+                          item.disabled ? 'whitespace-normal' : 'truncate',
+                        )}
+                      >
+                        {item.description}
+                      </span>
+                    ) : null}
+                  </div>
+                  {item.id === selectedId ? (
+                    <Check className="ml-auto h-3.5 w-3.5 shrink-0" />
+                  ) : null}
+                </CommandItem>
+              ))
+            )}
+          </CommandList>
+        </Command>
+        {action ? (
+          <div className="border-t border-white/10 p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto w-full justify-start px-2 py-2 text-sm"
+              onClick={onActionSelect}
+            >
+              {action.icon}
+              {action.label}
+            </Button>
+          </div>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  )
+}

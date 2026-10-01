@@ -6,7 +6,7 @@ import { useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { ProjectMcpVisibility } from '@/shared/types/mcp.types'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { McpServersDialog } from './mcp-servers.presentational'
 
 interface McpServersDialogContainerProps {

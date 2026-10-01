@@ -17,8 +17,8 @@ import type {
   SkillProviderId,
 } from '@/entities/skill'
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,16 +26,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import {
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
-import { cn } from '@/shared/lib/cn.pure'
+  cn,
+} from '@convergence/ui'
 import type {
   SkillBrowserFilters,
   SkillBrowserProviderGroup,

@@ -10,8 +10,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import {
   laneLabel,
   seatDisplayName,

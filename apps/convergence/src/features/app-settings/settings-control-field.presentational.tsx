@@ -1,8 +1,12 @@
 import type { FC, ReactNode } from 'react'
 import { Info } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import {
+  cn,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 
 interface SettingsControlFieldProps {
   title: string

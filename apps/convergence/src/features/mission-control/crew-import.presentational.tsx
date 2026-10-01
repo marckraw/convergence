@@ -4,9 +4,9 @@ import type {
   CrewImportReport,
   CrewImportRow,
 } from '@/shared/types/crew-import.types'
-import { Input } from '@/shared/ui/input'
-import { Button } from '@/shared/ui/button'
 import {
+  Input,
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -14,7 +14,7 @@ import {
   DialogDescription,
   DialogBody,
   DialogFooter,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 
 interface Props {
   plan: CrewImportPlan

@@ -3,9 +3,7 @@ import type {
   InteractionFormField,
   InteractionResponse,
 } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button, Input, Textarea } from '@convergence/ui'
 
 interface FormRequestFormProps {
   fields: InteractionFormField[]

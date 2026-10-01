@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
+import type { SearchableSelectItem } from '@convergence/ui'
 import { ComposerSelect } from './composer-select.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
 import { WorkAddressSlot } from '@/entities/execution-host'

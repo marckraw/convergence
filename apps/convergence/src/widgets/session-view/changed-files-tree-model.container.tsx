@@ -6,8 +6,7 @@ import {
 } from '@pierre/trees'
 import { FileTree, useFileTreeSearch } from '@pierre/trees/react'
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 import type { PierreChangedFilesTreeInput } from './changed-files-tree.pure'
 
 interface ChangedFilesTreeModelProps {

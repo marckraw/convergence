@@ -1,6 +1,6 @@
 import { Code2, Folder } from 'lucide-react'
 import type { ProjectOpenApp } from '@/entities/project-open'
-import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem } from '@convergence/ui'
 
 interface ProjectOpenMenuSectionProps {
   apps: ProjectOpenApp[]

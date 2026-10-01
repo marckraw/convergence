@@ -24,10 +24,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+  cn,
+  Button,
+  TooltipProvider,
+  SwitchRow,
+} from '@convergence/ui'
 import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
@@ -41,7 +42,6 @@ import { ContextAlertFields } from './context-alert-fields.presentational'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
-import { SwitchRow } from '@/shared/ui/switch'
 import { PiModelVisibilityContainer } from './pi-model-visibility.container'
 import { ProviderAccountsContainer } from './provider-accounts.container'
 import { ConnectionsOverviewContainer } from './connections-overview.container'

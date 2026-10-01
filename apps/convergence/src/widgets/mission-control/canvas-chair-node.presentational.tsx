@@ -6,8 +6,7 @@ import {
   CHAIR_NODE_EMOJI,
   CHAIR_NODE_LABEL,
 } from '@/features/mission-control'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasChairNodeData } from './session-canvas.types'
 

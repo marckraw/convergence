@@ -9,11 +9,9 @@ import {
   Server,
 } from 'lucide-react'
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { Button } from '@/shared/ui/button'
+import { Button, TooltipProvider, cn } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
-import { TooltipProvider } from '@/shared/ui/tooltip'
-import { cn } from '@/shared/lib/cn.pure'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
 import { NeedsYouCardStatus } from './needs-you-card-status.presentational'
 import { NeedsYouPr } from './needs-you-pr.presentational'

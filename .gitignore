@@ -5,6 +5,8 @@ release/
 !apps/convergence/electron/backend/release/
 !apps/convergence/src/entities/release/
 .fallow/
+storybook-static/
+debug-storybook.log
 
 # Build artifacts generated on demand (dev/build/typecheck/test all run
 # `npm run prepare:release-notes` first).

@@ -5,9 +5,13 @@ import type { ProjectActivity } from '@/entities/session'
 import { summarizeAttentionRequests } from '@/entities/session'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import {
+  cn,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 import { AggregateSummary } from './aggregate-summary.presentational'
 import { ProjectSummary } from './project-summary.presentational'
 import {

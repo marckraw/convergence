@@ -8,7 +8,7 @@ import {
   useSessionStore,
   type SessionSummary,
 } from '@/entities/session'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { Sidebar } from './sidebar.container'
 
 /**

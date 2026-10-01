@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import {
   LOOM_SHEET_ICONS,
   LOOM_SHEET_ICON_CLASS,

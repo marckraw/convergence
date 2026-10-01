@@ -1,12 +1,12 @@
 import type { FC } from 'react'
 import { ChevronDown, Copy, ExternalLink } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@convergence/ui'
 import {
   CHATGPT_LINK_ACTION_LABEL,
   type ChatGptLinkAction,

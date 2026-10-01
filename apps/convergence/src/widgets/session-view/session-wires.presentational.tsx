@@ -1,8 +1,12 @@
 import type { ComponentPropsWithoutRef, FC } from 'react'
 import { Waypoints } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { cn } from '@/shared/lib/cn.pure'
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@convergence/ui'
 import { formatSessionWireCount } from './session-wires.pure'
 
 export interface SessionWireLine {

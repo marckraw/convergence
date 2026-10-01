@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type { MainViewRouteFallback } from './routes/main-view-route-resolution.pure'
 
 interface RouteFallbackViewProps {

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { orderProjectsWithLanes, type Project } from '@/entities/project'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import { SearchableSelect } from '@convergence/ui'
 import { FolderGit2, Plus } from 'lucide-react'
 
 interface ProjectSwitcherProps {

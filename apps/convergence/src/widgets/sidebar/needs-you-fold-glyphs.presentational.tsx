@@ -1,8 +1,12 @@
 import { cardStateTone, type FoldedSectionSummary } from '@/features/needs-you'
-import { cn } from '@/shared/lib/cn.pure'
-import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
+import {
+  cn,
+  NO_DRAG_STYLE,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 /**
  * What a folded section still says on its title row (MAR-3366 R4): one
@@ -39,7 +43,7 @@ export function FoldedGlyphs({ summary }: { summary: FoldedSectionSummary }) {
           )}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+      <TooltipContent side="right" style={NO_DRAG_STYLE}>
         <ul className="space-y-0.5">
           {summary.names.map((name, index) => (
             <li key={`${index}:${name}`}>{name}</li>

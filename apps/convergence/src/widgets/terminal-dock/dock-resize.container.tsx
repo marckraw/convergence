@@ -1,7 +1,7 @@
 import type { FC, PointerEvent } from 'react'
 import { useCallback, useEffect, useRef } from 'react'
 import { useTerminalStore, type DockPlacement } from '@/entities/terminal'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 interface DockResizeHandleProps {
   sessionId: string

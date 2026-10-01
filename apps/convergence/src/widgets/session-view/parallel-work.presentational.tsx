@@ -12,7 +12,7 @@ import {
   type AttributedWorkItem,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   descendantActivity,
   parallelWorkCardTone,

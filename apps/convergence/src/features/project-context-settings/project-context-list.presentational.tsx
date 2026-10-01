@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import type { ProjectContextItem } from '@/entities/project-context'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 interface ProjectContextListProps {
   items: ProjectContextItem[]

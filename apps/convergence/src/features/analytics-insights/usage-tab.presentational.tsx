@@ -11,7 +11,7 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import type { AnalyticsOverview } from '@/entities/analytics'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { ChartGpuChart } from '@/shared/ui/chartgpu-chart.container'
 import {
   buildConversationBalanceChartOptions,

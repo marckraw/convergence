@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { Theme } from '@/shared/lib/theme'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { Sun, Moon, Monitor } from 'lucide-react'
 
 interface ThemeToggleProps {

@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 interface SettingsSubsectionProps {
   title: string

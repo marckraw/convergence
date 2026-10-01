@@ -12,7 +12,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 import type {
   CuratedSection,
   PaletteItem,

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { ArrowUpRight, RotateCw, Slash, X, type LucideIcon } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type { ActionsMenuGroup } from './conversation-actions-menu.pure'
 import {
   conversationActionsStyles as styles,

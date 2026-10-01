@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import { LOOM_OUTSIDE_NAME, type LoomOutsideView } from './loom-outside.pure'
 import {
   LOOM_SHEET_NOTE_CLASS,

@@ -12,7 +12,7 @@ import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
  * of those hints (except a clamped truncation line, or the literal empty
  * `title=""` ProviderIcon prop that is not a hint). And every
  * `TooltipContent` that can float over the title strip must declare
- * `LOOM_NO_DRAG_STYLE` (MAR-3284): a rendered hover only opens one portal,
+ * `NO_DRAG_STYLE` (MAR-3284): a rendered hover only opens one portal,
  * so count equality is how the rest stay honest.
  */
 const SIDEBAR_ROOT = resolve(dirname(fileURLToPath(import.meta.url)))
@@ -24,7 +24,7 @@ const TRUNCATION_COMMENT = '// truncation hint (MAR-3314)'
 const TOOLTIP_CONTENT = /<TooltipContent\b/g
 // Opening tag to its `>`: `[\s\S]` crosses newlines so a broken tag is one.
 const TOOLTIP_CONTENT_TAG = /<TooltipContent\b[\s\S]*?>/g
-const NO_DRAG = 'style={LOOM_NO_DRAG_STYLE}'
+const NO_DRAG = 'style={NO_DRAG_STYLE}'
 
 function sidebarTsxFiles(): string[] {
   const files: string[] = []

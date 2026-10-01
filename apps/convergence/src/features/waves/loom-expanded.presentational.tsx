@@ -1,16 +1,20 @@
 import type { FC } from 'react'
 import { Minimize2, PanelLeftClose } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import {
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
   LOOM_COLLAPSE_BUTTON_CLASS,
-  LOOM_DRAG_STYLE,
+  DRAG_REGION_STYLE,
   LOOM_EXPANDED_CLASS,
-  LOOM_NO_DRAG_STYLE,
+  NO_DRAG_STYLE,
   LOOM_SEARCH_EXPANDED_CLASS,
 } from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
@@ -40,7 +44,7 @@ export const LoomExpandedView: FC<
     aria-label="Loom"
     data-loom="expanded"
     className={LOOM_EXPANDED_CLASS}
-    style={LOOM_NO_DRAG_STYLE}
+    style={NO_DRAG_STYLE}
     onKeyDown={(event) => {
       if (isLoomSearchShortcut(event)) {
         event.preventDefault()
@@ -56,7 +60,7 @@ export const LoomExpandedView: FC<
     <div
       data-loom-header
       className="flex shrink-0 items-center gap-4 px-6 py-3"
-      style={LOOM_DRAG_STYLE}
+      style={DRAG_REGION_STYLE}
     >
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
       {/* A box, not a paragraph (MAR-3284 R4): the crew picker lives here.
@@ -73,7 +77,7 @@ export const LoomExpandedView: FC<
       <LoomSearchFieldView
         field={props.field}
         className={LOOM_SEARCH_EXPANDED_CLASS}
-        style={LOOM_NO_DRAG_STYLE}
+        style={NO_DRAG_STYLE}
       />
       {/* Before Fold Loom, so the lesson is reachable without leaving the
           panel it explains (MAR-3201 R9). */}
@@ -83,7 +87,7 @@ export const LoomExpandedView: FC<
         size="sm"
         ref={props.guideRef}
         className="h-10 w-[148px] shrink-0 px-3 text-xs"
-        style={LOOM_NO_DRAG_STYLE}
+        style={NO_DRAG_STYLE}
         onClick={props.onOpenGuide}
       >
         {LEARN_LOOM_ENTRY}
@@ -96,14 +100,14 @@ export const LoomExpandedView: FC<
             size="sm"
             aria-label={FOLD_LOOM}
             className="h-10 shrink-0 gap-2 px-3 text-xs"
-            style={LOOM_NO_DRAG_STYLE}
+            style={NO_DRAG_STYLE}
             onClick={onFold}
           >
             <Minimize2 className="size-3.5" />
             {FOLD_LOOM}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+        <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
           {FOLD_LOOM}
         </TooltipContent>
       </Tooltip>
@@ -118,13 +122,13 @@ export const LoomExpandedView: FC<
             size="sm"
             aria-label={COLLAPSE_LOOM}
             className={LOOM_COLLAPSE_BUTTON_CLASS}
-            style={LOOM_NO_DRAG_STYLE}
+            style={NO_DRAG_STYLE}
             onClick={onCollapse}
           >
             <PanelLeftClose className="size-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+        <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
           {COLLAPSE_LOOM}
         </TooltipContent>
       </Tooltip>

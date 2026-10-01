@@ -3,7 +3,7 @@ import type {
   InteractionQuestion,
   InteractionResponse,
 } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 interface ChoiceRequestFormProps {
   questions: InteractionQuestion[]

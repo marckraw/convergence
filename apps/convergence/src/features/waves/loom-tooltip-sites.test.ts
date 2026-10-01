@@ -69,7 +69,7 @@ describe('MAR-3311 R1: the app mounts the one provider, above the shell', () => 
  * The no-drag rule is about every tooltip, not one of them (MAR-3311 R2).
  *
  * `TooltipContent` renders into a portal that floats over Loom's title-bar
- * region, where an element without `LOOM_NO_DRAG_STYLE` is draggable chrome:
+ * region, where an element without `NO_DRAG_STYLE` is draggable chrome:
  * the click lands on the window, not on what is underneath it
  * (MAR-3284's law). A rendered test can only read the one tooltip it opens,
  * so six of the seven contents could lose the style and every suite would
@@ -86,7 +86,7 @@ const TOOLTIP_CONTENT = /<TooltipContent\b/g
 // over several lines still matches as one.
 const TOOLTIP_CONTENT_TAG = /<TooltipContent\b[^>]*>/g
 
-const NO_DRAG = 'style={LOOM_NO_DRAG_STYLE}'
+const NO_DRAG = 'style={NO_DRAG_STYLE}'
 
 describe('MAR-3311 R2: every Loom tooltip is no-drag, not just the read one', () => {
   it.each(FOLDED_COLUMN)('%s gives every tooltip the no-drag style', (file) => {

@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { cardStateTone, type FoldedSectionSummary } from '@/features/needs-you'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 /**
  * A folded section's second line (MAR-3372): what asks, each in its state's

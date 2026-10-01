@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'streamdown/styles.css';
+@import '@convergence/ui/theme.css';
 
 /*
  * Streamdown's components carry their Tailwind classes inside its bundle, so
@@ -14,151 +15,13 @@
 @source "../../../../node_modules/@streamdown/mermaid/dist/*.js";
 @source "../../../../node_modules/@streamdown/code/dist/*.js";
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --radius: 0.625rem;
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-success-ink: var(--success-ink);
-  --color-success-surface: var(--success-surface);
-  --color-warning-ink: var(--warning-ink);
-  --color-warning-surface: var(--warning-surface);
-  --color-error-ink: var(--error-ink);
-  --color-error-surface: var(--error-surface);
-  --color-info-ink: var(--info-ink);
-  --color-info-surface: var(--info-surface);
-  --color-border: var(--border);
-  --color-control-border: var(--control-border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-}
-
-:root {
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(0.975 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(0.985 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.955 0 0);
-  --muted-foreground: oklch(0.46 0 0);
-  --accent: oklch(0.915 0.075 95);
-  --accent-foreground: oklch(0.28 0.04 80);
-  --destructive: oklch(0.55 0.23 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.78 0.16 75);
-  --warning-foreground: var(--warning-ink);
-  /*
-   * Color roles (MAR-3460). A status `*-ink` is readable text: >= 4.5:1 on
-   * background, card and muted, and on its own `*-surface` (a tint laid over
-   * the card). `--control-border` outlines a control and clears 3:1;
-   * `--border` stays the quiet decorative separator. `--ring` clears 3:1.
-   * `theme-contrast.pure.test.ts` computes every pair, in both themes, from
-   * this file.
-   */
-  --success-ink: oklch(0.48 0.13 150);
-  --success-surface: oklch(0.72 0.15 150 / 0.14);
-  --warning-ink: oklch(0.46 0.13 65);
-  --warning-surface: oklch(0.72 0.15 75 / 0.14);
-  --error-ink: oklch(0.48 0.13 27);
-  --error-surface: oklch(0.72 0.15 27 / 0.14);
-  --info-ink: oklch(0.48 0.13 250);
-  --info-surface: oklch(0.72 0.15 250 / 0.14);
-  --border: oklch(0.88 0 0);
-  --control-border: oklch(0.62 0 0);
-  --input: oklch(0.88 0 0);
-  --ring: oklch(0.5 0 0);
-  --sidebar: oklch(0.96 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --chrome-edge: rgba(255, 255, 255, 0.48);
-  --chrome-shadow: rgba(15, 23, 42, 0.12);
-  --sidebar-surface: rgba(255, 255, 255, 0.76);
-  --sidebar-sheen: rgba(255, 255, 255, 0.48);
-  --main-surface: rgba(252, 252, 253, 0.86);
-  --scrollbar-track: rgba(255, 255, 255, 0.08);
-  --scrollbar-thumb: rgba(17, 24, 39, 0.2);
-  --scrollbar-thumb-hover: rgba(17, 24, 39, 0.3);
-}
-
-.dark {
-  --background: oklch(0.21 0.005 260);
-  --foreground: oklch(0.88 0 0);
-  --card: oklch(0.24 0.005 260);
-  --card-foreground: oklch(0.88 0 0);
-  --popover: oklch(0.24 0.005 260);
-  --popover-foreground: oklch(0.88 0 0);
-  --primary: oklch(0.88 0 0);
-  --primary-foreground: oklch(0.18 0 0);
-  --secondary: oklch(0.27 0.005 260);
-  --secondary-foreground: oklch(0.88 0 0);
-  --muted: oklch(0.27 0.005 260);
-  --muted-foreground: oklch(0.66 0 0);
-  --accent: oklch(0.27 0.005 260);
-  --accent-foreground: oklch(0.88 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.18 0 0);
-  --warning: oklch(0.78 0.16 75);
-  --warning-foreground: var(--warning-ink);
-  --success-ink: oklch(0.78 0.13 150);
-  --success-surface: oklch(0.72 0.15 150 / 0.16);
-  --warning-ink: oklch(0.86 0.13 85);
-  --warning-surface: oklch(0.72 0.15 75 / 0.16);
-  --error-ink: oklch(0.78 0.13 27);
-  --error-surface: oklch(0.72 0.15 27 / 0.16);
-  --info-ink: oklch(0.78 0.13 250);
-  --info-surface: oklch(0.72 0.15 250 / 0.16);
-  --border: oklch(0.32 0.005 260);
-  --control-border: oklch(0.55 0.005 260);
-  --input: oklch(0.28 0.005 260);
-  --ring: oklch(0.72 0 0);
-  --sidebar: oklch(0.17 0.005 260);
-  --sidebar-foreground: oklch(0.82 0 0);
-  --chrome-edge: rgba(255, 255, 255, 0.12);
-  --chrome-shadow: rgba(0, 0, 0, 0.38);
-  --sidebar-surface: rgba(16, 19, 27, 0.62);
-  --sidebar-sheen: rgba(255, 255, 255, 0.08);
-  --main-surface: rgba(22, 25, 33, 0.82);
-  --scrollbar-track: rgba(255, 255, 255, 0.04);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
-}
-
-:root[data-platform='darwin'][data-reduced-transparency='false'] {
-  --sidebar-surface: rgba(255, 255, 255, 0.62);
-  --main-surface: rgba(250, 250, 252, 0.78);
-}
-
-.dark[data-platform='darwin'][data-reduced-transparency='false'] {
-  --sidebar-surface: rgba(14, 17, 25, 0.42);
-  --sidebar-sheen: rgba(255, 255, 255, 0.1);
-  --main-surface: rgba(19, 22, 30, 0.72);
-  --scrollbar-track: rgba(255, 255, 255, 0.035);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
-}
+/*
+ * The design system lives in its own workspace package (MAR-3610). Tailwind
+ * only scans the app's own tree by default, so a class used only inside
+ * `@convergence/ui` (a dialog's, a select's) would never be emitted without
+ * this line. `global-css-sources.test.ts` pins it.
+ */
+@source "../../../../packages/ui/src";
 
 @layer base {
   html,
@@ -307,16 +170,6 @@
  */
 @theme {
   --animate-loom-enter: loom-enter 150ms ease-out 200ms both;
-  --animate-pop-in: pop-in 150ms ease-out both;
-  --animate-pop-out: pop-out 100ms ease-in both;
-  --animate-slide-in-top:
-    pop-in 150ms ease-out both, slide-in-top 150ms ease-out both;
-  --animate-slide-in-bottom:
-    pop-in 150ms ease-out both, slide-in-bottom 150ms ease-out both;
-  --animate-slide-in-left:
-    pop-in 150ms ease-out both, slide-in-left 150ms ease-out both;
-  --animate-slide-in-right:
-    pop-in 150ms ease-out both, slide-in-right 150ms ease-out both;
 }
 
 @keyframes loom-enter {
@@ -325,79 +178,6 @@
   }
   to {
     opacity: 1;
-  }
-}
-
-/*
- * Surface motion (MAR-3319): scale leaves positioned dialogs' translate
- * intact; directional travel uses transform so Select's translate offset
- * survives too. Side utilities include the pop animation because CSS
- * animation shorthands replace one another. Conditional classes use
- * motion-safe so their attribute specificity cannot defeat reduced motion.
- */
-@keyframes pop-in {
-  from {
-    opacity: 0;
-    scale: 0.95;
-  }
-  to {
-    opacity: 1;
-    scale: 1;
-  }
-}
-
-@keyframes pop-out {
-  from {
-    opacity: 1;
-    scale: 1;
-  }
-  to {
-    opacity: 0;
-    scale: 0.95;
-  }
-}
-
-@keyframes slide-in-top {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
-  }
-}
-
-@keyframes slide-in-bottom {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
-  }
-}
-
-@keyframes slide-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
-  }
-}
-
-@keyframes slide-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
   }
 }
 

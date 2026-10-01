@@ -9,16 +9,16 @@ import {
   type LocalModelTunnelProfileWithStatus,
   type LocalModelTunnelRouteCandidate,
 } from '@/entities/local-model-tunnel'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
 import {
+  Button,
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
-import { SwitchRow } from '@/shared/ui/switch'
+  SwitchRow,
+} from '@convergence/ui'
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
 import { TunnelActionButtons } from './tunnel-action-buttons.presentational'

@@ -2,7 +2,7 @@ import { memo, useMemo, type FC, type Ref } from 'react'
 import { defaultRehypePlugins, Streamdown, type Components } from 'streamdown'
 import { mermaid as mermaidPlugin } from '@streamdown/mermaid'
 import { code as codePlugin } from '@streamdown/code'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 const SHIKI_THEME: ['github-light', 'github-dark'] = [
   'github-light',

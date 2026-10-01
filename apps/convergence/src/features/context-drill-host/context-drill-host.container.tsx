@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { useContextDrillStore } from '@/entities/context-drill'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import {

@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import type { AnalyticsRangePreset } from '@/entities/analytics'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 import { getRangeLabel } from './analytics-insights.pure'
 
 const RANGE_PRESETS: AnalyticsRangePreset[] = ['7d', '30d', '90d', 'all']

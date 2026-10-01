@@ -2,9 +2,8 @@ import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, CSSProperties } from 'react'
 import type { ProjectScript } from '@/entities/project-script'
 import { ProjectScriptIcon } from '@/entities/project-script'
-import { Button } from '@/shared/ui/button'
+import { Button, cn } from '@convergence/ui'
 import { ChevronDown, Play } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
 
 interface ProjectActionsTriggerProps extends ComponentPropsWithoutRef<'button'> {
   selectedScript: ProjectScript | null

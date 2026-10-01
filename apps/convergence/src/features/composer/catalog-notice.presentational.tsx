@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { OptionRowNotice } from '@/entities/session'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { AlertTriangle } from 'lucide-react'
 
 /**
