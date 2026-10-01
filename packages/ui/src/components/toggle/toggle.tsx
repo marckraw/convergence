@@ -8,7 +8,7 @@ export type ToggleVariant = 'button' | 'chip'
 
 export type ToggleProps = Omit<TogglePrimitive.Props, 'className'> & {
   className?: string
-  /** R3: 24, 28, 32 or 36 px. `sm` (28) unless said, a toolbar's height. */
+  /** R3: 24, 28, 32 or 36 px. `md` (32) unless said. */
   size?: ControlSize
   /**
    * `button`: a toolbar toggle, quiet until pressed (the composer's Fast and
@@ -41,7 +41,7 @@ const sizes: Record<ControlSize, string> = {
  */
 export function Toggle({
   className,
-  size = 'sm',
+  size = 'md',
   variant = 'button',
   ...props
 }: ToggleProps) {

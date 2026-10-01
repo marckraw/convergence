@@ -43,8 +43,8 @@ export const Default: Story = {
     await expect(getComputedStyle(fast).outlineStyle).toBe('solid')
     await userEvent.keyboard('{Enter}')
     await expect(fast).toHaveAttribute('aria-pressed', 'false')
-    await expect(fast).toHaveAttribute('data-size', 'sm')
-    await expect(fast.getBoundingClientRect().height).toBe(28)
+    await expect(fast).toHaveAttribute('data-size', 'md')
+    await expect(fast.getBoundingClientRect().height).toBe(32)
   },
 }
 
