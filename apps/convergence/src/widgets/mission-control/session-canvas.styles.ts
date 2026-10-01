@@ -10,8 +10,9 @@ import type { CSSProperties } from 'react'
  * instead.
  *
  * There is deliberately no light map and dark map. Every value here resolves to
- * an app token that already swaps under `.dark`, so one mapping themes both
- * modes and the two can never drift apart.
+ * an app token that already carries both themes (`light-dark()`, picked by
+ * `data-theme`, MAR-3615), so one mapping themes both modes and the two can
+ * never drift apart.
  *
  * Set on the canvas wrapper rather than in a stylesheet: custom properties
  * inherit, so the cage holds -- nothing outside this widget is restyled.

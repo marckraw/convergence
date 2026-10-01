@@ -52,38 +52,41 @@ function installMatchMedia(initialMatches: boolean) {
   }
 }
 
-function darkClass(): boolean {
-  return document.documentElement.classList.contains('dark')
+/** What the page wears: data-theme on <html> (MAR-3615; the .dark class before it). */
+function darkTheme(): boolean {
+  return document.documentElement.dataset.theme === 'dark'
 }
 
 describe('ThemeToggleButton system appearance', () => {
   beforeEach(() => {
     localStorage.clear()
-    document.documentElement.classList.remove('dark')
+    delete document.documentElement.dataset.theme
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     localStorage.clear()
-    document.documentElement.classList.remove('dark')
+    delete document.documentElement.dataset.theme
   })
 
-  it('on System, a prefers-color-scheme change adds and removes the dark class', () => {
+  it('on System, a prefers-color-scheme change flips data-theme between dark and light', () => {
     storeTheme('system')
     const media = installMatchMedia(false)
     render(<ThemeToggleButton />)
 
-    expect(darkClass()).toBe(false)
+    // System writes the resolved theme, never no attribute: the CSS and the
+    // code that reads data-theme see one truth.
+    expect(document.documentElement.dataset.theme).toBe('light')
     const queries = media.queries()
     expect(queries.length).toBeGreaterThan(0)
     // Mutation: a different query → this list includes it, and fire below
-    // never reaches that listener, so the dark class stays off.
+    // never reaches that listener, so the page stays light.
     expect(queries.every((query) => query === DARK_SCHEME)).toBe(true)
     media.fire(true)
     // Mutation: no listener → stays light here, red.
-    expect(darkClass()).toBe(true)
+    expect(darkTheme()).toBe(true)
     media.fire(false)
-    expect(darkClass()).toBe(false)
+    expect(darkTheme()).toBe(false)
   })
 
   it('on Dark, a prefers-color-scheme change does nothing', () => {
@@ -91,9 +94,9 @@ describe('ThemeToggleButton system appearance', () => {
     const media = installMatchMedia(true)
     render(<ThemeToggleButton />)
 
-    expect(darkClass()).toBe(true)
+    expect(darkTheme()).toBe(true)
     media.fire(false)
-    expect(darkClass()).toBe(true)
+    expect(darkTheme()).toBe(true)
     expect(media.netListeners()).toBe(0)
   })
 
@@ -106,10 +109,10 @@ describe('ThemeToggleButton system appearance', () => {
     fireEvent.click(screen.getByTitle('Theme: system'))
     fireEvent.click(screen.getByTitle('Theme: dark'))
     expect(screen.getByTitle('Theme: light')).toBeTruthy()
-    // Mutation: a listener that stays after leaving System → dark class
-    // appears on the next OS change, red.
+    // Mutation: a listener that stays after leaving System → the page turns
+    // dark on the next OS change, red.
     media.fire(true)
-    expect(darkClass()).toBe(false)
+    expect(darkTheme()).toBe(false)
     expect(media.netListeners()).toBe(0)
   })
 

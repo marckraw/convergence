@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import type { Preview } from '@storybook/react-vite'
+import { applyTheme } from '../src/lib/theme'
 import { finishScriptedAnimations, untilIdle } from './motion-testing'
 import './preview.css'
 
@@ -12,7 +13,7 @@ const preview: Preview = {
   globalTypes: {
     theme: {
       description:
-        'Color theme, as the .dark class on <html> (shared/lib/theme.ts)',
+        'Color theme, as data-theme on <html> (applyTheme, @convergence/ui)',
       toolbar: {
         title: 'Theme',
         icon: 'mirror',
@@ -62,10 +63,10 @@ const preview: Preview = {
   decorators: [
     (Story, { globals }) => {
       // The tokens resolve from these attributes, exactly as they do in the
-      // app: applyTheme() toggles .dark, and App.container.tsx writes the
+      // app: applyTheme() writes data-theme, and App.container.tsx writes the
       // platform and the reduced-transparency preference.
       const root = document.documentElement
-      root.classList.toggle('dark', globals.theme === 'dark')
+      applyTheme(globals.theme === 'dark' ? 'dark' : 'light', root)
       if (globals.motion === 'reduced') root.dataset.motion = 'reduced'
       else delete root.dataset.motion
       root.dataset.platform = 'darwin'

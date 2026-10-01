@@ -3770,7 +3770,7 @@ describe('MissionControl', () => {
     })
 
     it('wears the room’s theme rather than the library’s default', async () => {
-      document.documentElement.classList.add('dark')
+      document.documentElement.dataset.theme = 'dark'
       seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
       seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
@@ -3788,7 +3788,7 @@ describe('MissionControl', () => {
         expect(document.querySelector('.react-flow.dark')).toBeInTheDocument()
       })
 
-      document.documentElement.classList.remove('dark')
+      document.documentElement.dataset.theme = 'light'
 
       await waitFor(() => {
         expect(document.querySelector('[data-session-canvas]')).toHaveAttribute(
@@ -3799,6 +3799,7 @@ describe('MissionControl', () => {
           document.querySelector('.react-flow.dark'),
         ).not.toBeInTheDocument()
       })
+      delete document.documentElement.dataset.theme
     })
 
     it('remembers the canvas the way it remembers the other two views', async () => {

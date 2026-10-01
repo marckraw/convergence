@@ -30,6 +30,7 @@ import {
 
 const componentsRoot = resolve(__dirname, '../components')
 const stylesheet = readFileSync(join(__dirname, 'theme.css'), 'utf8')
+const tokens = readFileSync(join(__dirname, 'tokens.css'), 'utf8')
 const primitives = ['tooltip', 'dropdown-menu', 'popover', 'select', 'dialog']
 const pluginTokens =
   /animate-in|animate-out|fade-in-|fade-out-|zoom-in-|zoom-out-|slide-in-from-|slide-out-to-/
@@ -74,18 +75,27 @@ describe('MAR-3319: surface motion has real stylesheet definitions', () => {
     }
   })
 
-  it('the pop uses 95% scale and directional arrivals retain the pop alongside 8px travel', () => {
+  it('the pop and the arrivals keep 150 ms in, 100 ms out, a 95% scale and 8 px of travel, as tokens (MAR-3615)', () => {
+    // The values live in tokens.css, so reduced motion can zero the travel
+    // and the scale in one place; the theme names them.
+    expect(tokens).toMatch(/--motion-fast:\s*150ms;/)
+    expect(tokens).toMatch(/--motion-exit:\s*100ms;/)
+    expect(tokens).toMatch(/--motion-ease-enter:\s*ease-out;/)
+    expect(tokens).toMatch(/--motion-ease-exit:\s*ease-in;/)
+    expect(tokens).toMatch(/--motion-scale-from:\s*0\.95;/)
+    expect(tokens).toMatch(/--motion-shift:\s*8px;/)
+
     expect(stylesheet).toMatch(
-      /--animate-pop-in:\s*pop-in 150ms ease-out both;/,
+      /--animate-pop-in:\s*pop-in var\(--motion-fast\) var\(--motion-ease-enter\) both;/,
     )
     expect(stylesheet).toMatch(
-      /--animate-pop-out:\s*pop-out 100ms ease-in both;/,
+      /--animate-pop-out:\s*pop-out var\(--motion-exit\) var\(--motion-ease-exit\) both;/,
     )
     for (const name of ['pop-in', 'pop-out']) {
       const body = stylesheet
         .split(`@keyframes ${name} {`)[1]
         .split('@keyframes')[0]
-      expect(body).toContain('scale: 0.95;')
+      expect(body).toContain('scale: var(--motion-scale-from);')
       expect(body).toContain('scale: 1;')
       expect(body).toContain('opacity: 0;')
       expect(body).toContain('opacity: 1;')
@@ -93,14 +103,14 @@ describe('MAR-3319: surface motion has real stylesheet definitions', () => {
       expect(body).not.toMatch(/\b(?:transform|translate):/)
     }
     for (const [side, travel] of [
-      ['top', 'translateY(-8px)'],
-      ['bottom', 'translateY(8px)'],
-      ['left', 'translateX(-8px)'],
-      ['right', 'translateX(8px)'],
+      ['top', 'translateY(calc(-1 * var(--motion-shift)))'],
+      ['bottom', 'translateY(var(--motion-shift))'],
+      ['left', 'translateX(calc(-1 * var(--motion-shift)))'],
+      ['right', 'translateX(var(--motion-shift))'],
     ]) {
       expect(stylesheet).toMatch(
         new RegExp(
-          `--animate-slide-in-${side}:\\s*pop-in 150ms ease-out both,\\s*slide-in-${side} 150ms ease-out both;`,
+          `--animate-slide-in-${side}:\\s*pop-in var\\(--motion-fast\\) var\\(--motion-ease-enter\\) both,\\s*slide-in-${side} var\\(--motion-fast\\) var\\(--motion-ease-enter\\) both;`,
         ),
       )
       const body = stylesheet

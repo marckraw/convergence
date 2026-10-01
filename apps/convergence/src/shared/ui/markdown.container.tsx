@@ -1,31 +1,10 @@
-import { useEffect, useRef, useState, type FC } from 'react'
+import { useEffect, useRef, type FC } from 'react'
+import { useAppliedTheme } from '@convergence/ui'
 import { detectMarkdownCut } from '@/shared/lib/markdown-cut-detector.pure'
 import {
   MarkdownPresentational,
   type MarkdownProps,
 } from './markdown.presentational'
-
-function readIsDark(): boolean {
-  if (typeof document === 'undefined') return false
-  return document.documentElement.classList.contains('dark')
-}
-
-function useIsDark(): boolean {
-  const [isDark, setIsDark] = useState<boolean>(readIsDark)
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    const root = document.documentElement
-    setIsDark(root.classList.contains('dark'))
-    const observer = new MutationObserver(() => {
-      setIsDark(root.classList.contains('dark'))
-    })
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
-    return () => observer.disconnect()
-  }, [])
-
-  return isDark
-}
 
 // Canary: warns when rendered textContent appears to drop the tail of `content`.
 // Originally added to catch silent cuts from the previous markdown parser.
@@ -35,7 +14,8 @@ export const Markdown: FC<Omit<MarkdownProps, 'rootRef' | 'mermaidTheme'>> = (
   props,
 ) => {
   const rootRef = useRef<HTMLDivElement>(null)
-  const isDark = useIsDark()
+  // Mermaid can't read CSS: it is told the theme on screen, live (MAR-3615).
+  const isDark = useAppliedTheme() === 'dark'
   const { content } = props
 
   useEffect(() => {

@@ -21,7 +21,7 @@
  */
 html {
   min-height: 100%;
-  background-color: var(--background);
+  background-color: var(--canvas);
   background-image:
     radial-gradient(
       circle at 12% 8%,

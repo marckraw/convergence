@@ -62,8 +62,8 @@
     position: relative;
     background: linear-gradient(
       180deg,
-      var(--sidebar-surface),
-      color-mix(in srgb, var(--sidebar-surface) 84%, var(--background) 16%)
+      var(--chrome-sidebar),
+      color-mix(in srgb, var(--chrome-sidebar) 84%, var(--background) 16%)
     );
     box-shadow:
       inset -1px 0 0 var(--chrome-edge),
@@ -77,18 +77,18 @@
     pointer-events: none;
     background: linear-gradient(
       180deg,
-      var(--sidebar-sheen),
+      var(--chrome-sheen),
       transparent 18%,
       transparent 82%,
-      color-mix(in srgb, var(--sidebar-sheen) 60%, transparent)
+      color-mix(in srgb, var(--chrome-sheen) 60%, transparent)
     );
   }
 
   .app-main-panel {
     background: linear-gradient(
       180deg,
-      var(--main-surface),
-      color-mix(in srgb, var(--main-surface) 90%, var(--background) 10%)
+      var(--chrome-main),
+      color-mix(in srgb, var(--chrome-main) 90%, var(--background) 10%)
     );
   }
 
@@ -103,7 +103,7 @@
 
   .app-sidebar-topbar,
   .app-sidebar-footer {
-    background: color-mix(in srgb, var(--sidebar-surface) 86%, transparent);
+    background: color-mix(in srgb, var(--chrome-sidebar) 86%, transparent);
   }
 
   *,

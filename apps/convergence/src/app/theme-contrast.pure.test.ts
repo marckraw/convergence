@@ -1,90 +1,160 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { contrastRatio } from '@/shared/lib/color-contrast.pure'
+import { contrastRatio, parseCssColor } from '@/shared/lib/color-contrast.pure'
 import {
   backdropLabel,
   readDeclarations,
-  readThemeTokens,
+  readLightDarkTokens,
   resolveBackdrop,
   resolveThemeColor,
+  splitLightDark,
   type Backdrop,
 } from './theme-contrast.pure'
 
 /**
- * The theme-contrast canary (MAR-3460). It reads the color roles out of the
- * stylesheet itself — the `:root` block for Light, `:root` overlaid by
- * `.dark` for Dark, the same cascade the `<html class="dark">` element sees —
- * and computes the WCAG contrast of every pair the UI relies on. A token edit
- * that makes a pair unreadable turns this red before anyone has to see it.
+ * The theme-contrast canary (MAR-3460, on the tokens since MAR-3615). It reads
+ * the colour tokens out of `tokens.css` itself (the top-level `:root` block,
+ * each `light-dark(LIGHT, DARK)` split into its two themes, the halves
+ * `<html data-theme>` picks between through `color-scheme`) and computes the
+ * WCAG contrast of every pair the UI relies on. A token edit that makes a pair
+ * unreadable turns this red before anyone has to see it.
  *
- * The stylesheet is the design system's theme, which moved out of
- * `global.css` into `@convergence/ui/theme.css` (MAR-3610). It is found
- * through the package's own `exports` door, the same name `global.css`
- * imports it by.
+ * `tokens.css` sits beside the design system's theme, which `global.css`
+ * imports as `@convergence/ui/theme.css`; it is found through that door.
  *
- * The backgrounds are the opaque `--background`, `--card` and `--muted`
- * tokens. The translucent macOS window surfaces (`--main-surface`,
- * `--sidebar-surface`) sit over the desktop and have no fixed color to test
- * against; the cards and fields drawn on them paint the opaque tokens.
+ * The backgrounds are the opaque surfaces (`--canvas`, `--surface`,
+ * `--surface-muted`, `--raised`). The translucent macOS window chrome
+ * (`--chrome-main`, `--chrome-sidebar`) sits over the desktop and has no fixed
+ * colour to test against; the cards and fields drawn on it paint the opaque
+ * tokens.
  */
-const STYLESHEET = readFileSync(
-  createRequire(__filename).resolve('@convergence/ui/theme.css'),
+const THEME_CSS_PATH = createRequire(__filename).resolve(
+  '@convergence/ui/theme.css',
+)
+const THEME_CSS = readFileSync(THEME_CSS_PATH, 'utf8')
+const TOKENS_CSS = readFileSync(
+  join(dirname(THEME_CSS_PATH), 'tokens.css'),
   'utf8',
 )
-const THEMES = readThemeTokens(STYLESHEET)
-const ROOT = readDeclarations(STYLESHEET, ':root')
-const DARK = readDeclarations(STYLESHEET, '.dark')
+const ROOT = readDeclarations(TOKENS_CSS, ':root')
+const THEMES = readLightDarkTokens(TOKENS_CSS)
 
 const TEXT = 4.5
 const NON_TEXT = 3
-const STATUSES = ['success', 'warning', 'error', 'info'] as const
-const PLAIN_BACKDROPS = ['background', 'card', 'muted'] as const
+const PLAIN = ['canvas', 'surface', 'surface-muted', 'raised'] as const
+const TONES = ['info', 'success', 'warning', 'danger'] as const
+const TAGS = [
+  'cyan',
+  'sky',
+  'green',
+  'emerald',
+  'lime',
+  'teal',
+  'violet',
+  'indigo',
+  'rose',
+  'orange',
+  'yellow',
+  'zinc',
+] as const
 
 /**
- * Every pair the canary holds, with its WCAG threshold: 4.5:1 for text,
- * 3:1 for the focus ring and a control's outline.
+ * Every pair the canary holds, with its WCAG threshold: 4.5:1 for text, 3:1
+ * for what isn't text (a status dot, the focus ring, a control's outline).
  */
 const PAIRS: ReadonlyArray<readonly [string, Backdrop, number]> = [
   // Body and secondary text on every plain surface.
-  ...PLAIN_BACKDROPS.flatMap((bg) => [
-    ['foreground', bg, TEXT] as const,
-    ['muted-foreground', bg, TEXT] as const,
+  ...PLAIN.flatMap((bg) => [
+    ['ink', bg, TEXT] as const,
+    ['ink-muted', bg, TEXT] as const,
   ]),
-  // Status inks on every plain surface, and on their own tint over a card.
-  ...STATUSES.flatMap((status) => [
-    ...PLAIN_BACKDROPS.map((bg) => [`${status}-ink`, bg, TEXT] as const),
-    [
-      `${status}-ink`,
-      { layer: `${status}-surface`, over: 'card' },
-      TEXT,
-    ] as const,
+  // Each tone's words on every plain surface, and on its own tint over the
+  // surface and over the canvas (a badge, a notice).
+  ...(['neutral', ...TONES] as const).flatMap((tone) => [
+    ...PLAIN.map((bg) => [`${tone}-ink`, bg, TEXT] as const),
+    [`${tone}-ink`, { layer: `${tone}-soft`, over: 'surface' }, TEXT] as const,
+    [`${tone}-ink`, { layer: `${tone}-soft`, over: 'canvas' }, TEXT] as const,
   ]),
-  // The legacy warning alias its 43 users still write.
-  ['warning-foreground', 'background', TEXT],
-  ['warning-foreground', 'card', TEXT],
-  // The solid destructive button, at rest and on hover (`/90`).
-  ['destructive-foreground', 'destructive', TEXT],
-  [
-    'destructive-foreground',
-    { layer: 'destructive', alpha: 0.9, over: 'background' },
-    TEXT,
-  ],
-  [
-    'destructive-foreground',
-    { layer: 'destructive', alpha: 0.9, over: 'card' },
-    TEXT,
-  ],
-  ['primary-foreground', 'primary', TEXT],
-  ['accent-foreground', 'accent', TEXT],
+  // Each tone's dot or bar, where it sits. Neutral's is the idle dot, which
+  // only recedes, so it isn't held to 3:1.
+  ...TONES.flatMap((tone) =>
+    (['canvas', 'surface', 'surface-muted'] as const).map(
+      (bg) => [`${tone}-solid`, bg, NON_TEXT] as const,
+    ),
+  ),
+  // The destructive button, at rest and on hover (`/90`).
+  ['on-danger', 'danger-solid', TEXT],
+  ['on-danger', { layer: 'danger-solid', alpha: 0.9, over: 'canvas' }, TEXT],
+  ['on-danger', { layer: 'danger-solid', alpha: 0.9, over: 'surface' }, TEXT],
+  ['on-strong', 'strong', TEXT],
+  ['on-highlight', 'highlight', TEXT],
+  // R7: the chosen chip and the selected row; R8: tooltips and dialogs.
+  ['ink', 'chip', TEXT],
+  ['ink', 'fill-selected', TEXT],
+  ['ink', { layer: 'glass', over: 'canvas' }, TEXT],
+  ['ink', { layer: 'sheet', over: 'canvas' }, TEXT],
+  // A category's word on its own pill (the hue at 10% over a card).
+  ...TAGS.map(
+    (hue) =>
+      [
+        `tag-${hue}-ink`,
+        { layer: `tag-${hue}`, alpha: 0.1, over: 'surface' },
+        TEXT,
+      ] as const,
+  ),
+  ['merged-ink', { layer: 'merged', alpha: 0.1, over: 'surface' }, TEXT],
+  ['on-avatar-agent', 'avatar-agent', TEXT],
+  // A diff's line counts on a turn card.
+  ...(['canvas', 'surface'] as const).flatMap((bg) => [
+    ['diff-added', bg, TEXT] as const,
+    ['diff-removed', bg, TEXT] as const,
+  ]),
   // Non-text: the focus ring and a control's outline.
-  ['ring', 'background', NON_TEXT],
-  ['ring', 'card', NON_TEXT],
-  ['control-border', 'background', NON_TEXT],
-  ['control-border', 'card', NON_TEXT],
+  ['focus', 'canvas', NON_TEXT],
+  ['focus', 'surface', NON_TEXT],
+  ['control-line', 'canvas', NON_TEXT],
+  ['control-line', 'surface', NON_TEXT],
+  // The terminal, dark in both themes (R12).
+  ['terminal-ink', 'terminal-bg', TEXT],
+  ['terminal-tab-ink', 'terminal-tab', TEXT],
+  ['terminal-tab-ink-muted', 'terminal-tab', TEXT],
+  [
+    'terminal-tab-ink-muted',
+    { layer: 'terminal-strip', over: 'terminal-bg' },
+    TEXT,
+  ],
 ]
 
+/** Whether a declared value is a colour, `light-dark()` or not. */
+function isColour(value: string): boolean {
+  const halves = splitLightDark(value)
+  try {
+    parseCssColor(halves ? halves[0] : value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** The token names whose value is a colour (aliases followed). */
+function colourTokens(): string[] {
+  return Object.keys(ROOT).filter((name) => {
+    try {
+      resolveThemeColor(THEMES.light, name)
+      return true
+    } catch {
+      return false
+    }
+  })
+}
+
 describe('MAR-3460: theme color roles are readable in both themes', () => {
+  it('holds 85 pairs in each theme', () => {
+    expect(PAIRS).toHaveLength(85)
+  })
+
   describe.each(['light', 'dark'] as const)('%s', (theme) => {
     it.each(
       PAIRS.map(([fg, bg, min]) => [fg, backdropLabel(bg), min, bg] as const),
@@ -101,38 +171,75 @@ describe('MAR-3460: theme color roles are readable in both themes', () => {
 
     it('secondary text stays visibly quieter than body text', () => {
       const ratio = contrastRatio(
-        resolveThemeColor(THEMES[theme], 'foreground'),
-        resolveThemeColor(THEMES[theme], 'muted-foreground'),
+        resolveThemeColor(THEMES[theme], 'ink'),
+        resolveThemeColor(THEMES[theme], 'ink-muted'),
       )
       expect(ratio).toBeGreaterThanOrEqual(1.5)
     })
   })
+})
 
-  it('every status role is declared in both themes and mapped for Tailwind', () => {
-    for (const status of STATUSES) {
-      for (const role of ['ink', 'surface']) {
-        const name = `${status}-${role}`
-        expect(ROOT[name], `:root --${name}`).toBeDefined()
-        expect(DARK[name], `.dark --${name}`).toBeDefined()
-        expect(STYLESHEET).toContain(`--color-${name}: var(--${name});`)
+describe('MAR-3615: the tokens carry both themes', () => {
+  it('every colour is light-dark() with two colours, except the terminal’s (R12)', () => {
+    const colours = Object.entries(ROOT).filter(([, value]) => isColour(value))
+    expect(colours.length).toBeGreaterThan(100)
+    for (const [name, value] of colours) {
+      if (name.startsWith('terminal-')) {
+        expect(splitLightDark(value), `--${name} is one value`).toBeNull()
+        continue
       }
+      const halves = splitLightDark(value)
+      expect(halves, `--${name} is light-dark()`).not.toBeNull()
+      expect(() => parseCssColor(halves![0]), `--${name} light`).not.toThrow()
+      expect(() => parseCssColor(halves![1]), `--${name} dark`).not.toThrow()
     }
-    expect(STYLESHEET).toContain(
-      '--color-control-border: var(--control-border);',
+  })
+
+  it('every colour token is a Tailwind colour, except what only app CSS and xterm read', () => {
+    const unmapped = colourTokens().filter(
+      (name) =>
+        !THEME_CSS.includes(`--color-${name}: var(--${name});`) &&
+        !/^(chrome-|scrollbar-|terminal-(cursor|selection|ansi-))/.test(name),
+    )
+    expect(unmapped).toEqual([])
+  })
+
+  it('data-theme picks the half through color-scheme; with none the system does', () => {
+    expect(TOKENS_CSS).toMatch(/^:root \{\s*color-scheme: light dark;/m)
+    expect(TOKENS_CSS).toMatch(
+      /^\[data-theme='light'\] \{\s*color-scheme: light;\s*\}/m,
+    )
+    expect(TOKENS_CSS).toMatch(
+      /^\[data-theme='dark'\] \{\s*color-scheme: dark;\s*\}/m,
     )
   })
 
-  it('the decorative border keeps its quiet value; controls get their own role', () => {
-    expect(ROOT.border).toBe('oklch(0.88 0 0)')
-    expect(DARK.border).toBe('oklch(0.32 0.005 260)')
+  it('the decorative line keeps its quiet value; controls get their own role', () => {
+    expect(splitLightDark(ROOT.line)).toEqual([
+      'oklch(0.88 0 0)',
+      'oklch(0.32 0.005 260)',
+    ])
     for (const theme of ['light', 'dark'] as const) {
-      expect(THEMES[theme]['control-border']).not.toBe(THEMES[theme].border)
+      expect(THEMES[theme]['control-line']).not.toBe(THEMES[theme].line)
     }
   })
 
-  it('follows var() aliases in the theme and refuses a cycle', () => {
-    expect(resolveThemeColor(THEMES.light, 'warning-foreground')).toEqual(
-      resolveThemeColor(THEMES.light, 'warning-ink'),
+  it('R7: the hover fill is exactly half of the selected fill', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const selected = resolveThemeColor(THEMES[theme], 'fill-selected')
+      const hover = resolveThemeColor(THEMES[theme], 'fill-hover')
+      expect({ ...hover, a: 1 }).toEqual({ ...selected, a: 1 })
+      expect(hover.a).toBe(selected.a / 2)
+    }
+  })
+
+  it('follows var() aliases in the tokens and refuses a cycle', () => {
+    expect(ROOT['merged-ink']).toBe('var(--tag-teal-ink)')
+    expect(resolveThemeColor(THEMES.light, 'merged-ink')).toEqual(
+      resolveThemeColor(THEMES.light, 'tag-teal-ink'),
+    )
+    expect(resolveThemeColor(THEMES.dark, 'fill-selected')).toEqual(
+      resolveThemeColor(THEMES.dark, 'highlight'),
     )
     expect(() =>
       resolveThemeColor({ a: 'var(--b)', b: 'var(--a)' }, 'a'),
@@ -140,5 +247,16 @@ describe('MAR-3460: theme color roles are readable in both themes', () => {
     expect(() => readDeclarations('.x { --a: red; }', ':root')).toThrow(
       /no ":root \{" block/,
     )
+  })
+
+  it('splits light-dark() at its top-level comma only', () => {
+    expect(
+      splitLightDark('light-dark(oklch(0.5 0 0 / 0.1), rgb(255 255 255))'),
+    ).toEqual(['oklch(0.5 0 0 / 0.1)', 'rgb(255 255 255)'])
+    expect(
+      splitLightDark('light-dark(rgba(1, 2, 3, 0.4), rgba(5, 6, 7, 0.8))'),
+    ).toEqual(['rgba(1, 2, 3, 0.4)', 'rgba(5, 6, 7, 0.8)'])
+    expect(splitLightDark('oklch(0.5 0 0)')).toBeNull()
+    expect(() => splitLightDark('light-dark(red)')).toThrow(/two values/)
   })
 })

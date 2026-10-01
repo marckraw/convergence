@@ -60,3 +60,14 @@ export {
 } from './components/tooltip/tooltip'
 export { cn } from './lib/cn.pure'
 export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from './lib/no-drag.styles'
+export {
+  applyTheme,
+  readAppliedTheme,
+  resolveTheme,
+  type AppliedTheme,
+  type ThemeChoice,
+} from './lib/theme'
+export { useAppliedTheme } from './lib/use-applied-theme'
+export { durationsMs, easings } from './motion/tokens'
+export { layoutPx } from './styles/layout.tokens'
+export { terminalTokens } from './styles/terminal.tokens'

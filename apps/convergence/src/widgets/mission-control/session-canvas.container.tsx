@@ -9,6 +9,7 @@ import {
   ReactFlow,
 } from '@xyflow/react'
 import type { Edge, Node, NodeChange, ReactFlowInstance } from '@xyflow/react'
+import { useAppliedTheme } from '@convergence/ui'
 import { Waypoints } from 'lucide-react'
 import {
   CANVAS_CHAIR_NODE_HEIGHT,
@@ -47,7 +48,6 @@ import { CanvasSpawnNode } from './canvas-spawn-node.presentational'
 import { CanvasWirePopover } from './canvas-wire-popover.presentational'
 import { CANVAS_THEME_VARS } from './session-canvas.styles'
 import { CANVAS_HANDLE } from './session-canvas.types'
-import { useCanvasColorMode } from './use-canvas-color-mode'
 
 import '@xyflow/react/dist/style.css'
 
@@ -207,7 +207,8 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
   const hails = useCrewHailStore((state) => state.hails)
   const acknowledgeCrew = useCrewHailStore((state) => state.acknowledgeCrew)
   const canvasRef = useRef<HTMLDivElement>(null)
-  const colorMode = useCanvasColorMode()
+  // React Flow's colorMode wears the theme on screen, live (MAR-3615).
+  const colorMode = useAppliedTheme()
 
   const graph = useMemo(
     () => buildCanvasGraph(groups, relays, hails),

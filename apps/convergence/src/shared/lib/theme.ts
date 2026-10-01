@@ -1,4 +1,13 @@
-export type Theme = 'light' | 'dark' | 'system'
+import type { ThemeChoice } from '@convergence/ui'
+
+/**
+ * The app's side of the theme: where the choice is kept. Putting it on screen
+ * is the design system's (`applyTheme` writes `data-theme` on `<html>`,
+ * MAR-3615); this file remembers it between launches.
+ */
+export { applyTheme } from '@convergence/ui'
+
+export type Theme = ThemeChoice
 
 const STORAGE_KEY = 'convergence-theme'
 
@@ -20,18 +29,4 @@ export function storeTheme(theme: Theme): void {
   } catch {
     // localStorage not available
   }
-}
-
-function resolveTheme(theme: Theme): 'light' | 'dark' {
-  if (theme === 'system') {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light'
-  }
-  return theme
-}
-
-export function applyTheme(theme: Theme): void {
-  const resolved = resolveTheme(theme)
-  document.documentElement.classList.toggle('dark', resolved === 'dark')
 }
