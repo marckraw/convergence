@@ -105,11 +105,7 @@ const meta = {
   args: {
     open: true,
     onOpenChange: fn(),
-    trigger: (
-      <Button variant="ghost" size="sm">
-        MCP
-      </Button>
-    ),
+    trigger: <Button variant="ghost">MCP</Button>,
     projectName: 'convergence',
     snapshot,
     isLoading: false,

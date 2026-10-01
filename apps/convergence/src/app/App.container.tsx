@@ -21,7 +21,7 @@ import { updatesApi, useUpdatesStore } from '@/entities/updates'
 import { useProviderUpdatesStore } from '@/entities/provider-updates'
 import { taskProgressApi, useTaskProgressStore } from '@/entities/task-progress'
 import { toast } from 'sonner'
-import { TooltipProvider } from '@convergence/ui'
+import { UiProvider } from '@convergence/ui'
 import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import {
@@ -483,7 +483,7 @@ export function App({
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <UiProvider>
       <AppShell
         activeSessionId={activeSessionId}
         activeGlobalSessionId={activeGlobalSessionId}
@@ -542,6 +542,6 @@ export function App({
       <ProviderUpdatesToastContainer />
       <FeedbackButtonContainer />
       <ThemedToasterContainer />
-    </TooltipProvider>
+    </UiProvider>
   )
 }

@@ -17,7 +17,7 @@ import {
   Loader2,
   RotateCcw,
 } from 'lucide-react'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 import {
   DEFAULT_DIFF_CONTEXT_LINES,
   foldUnifiedDiffContext,
@@ -256,24 +256,22 @@ function renderDiffContextControls(input: {
       className="ml-auto flex shrink-0 items-center gap-1"
       aria-label="Diff context controls"
     >
-      <Button
+      <IconButton
+        label="Show more context above changes"
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label="Show more context above changes"
-        title="Show more context above changes"
+        size="xs"
         disabled={!input.canExpandBefore || !input.onExpandBefore}
         onClick={input.onExpandBefore}
         className={diffContextButtonClassName(input.canExpandBefore)}
       >
         <ChevronUp className="h-3.5 w-3.5" />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
+        label="Show more context above and below changes"
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label="Show more context above and below changes"
-        title="Show more context above and below changes"
+        size="xs"
         disabled={
           (!input.canExpandBefore && !input.canExpandAfter) ||
           !input.onExpandBoth
@@ -284,38 +282,36 @@ function renderDiffContextControls(input: {
         )}
       >
         <ChevronsUpDown className="h-3.5 w-3.5" />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
+        label="Show more context below changes"
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label="Show more context below changes"
-        title="Show more context below changes"
+        size="xs"
         disabled={!input.canExpandAfter || !input.onExpandAfter}
         onClick={input.onExpandAfter}
         className={diffContextButtonClassName(input.canExpandAfter)}
       >
         <ChevronDown className="h-3.5 w-3.5" />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
+        label="Reset visible diff context"
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label="Reset visible diff context"
-        title="Reset visible diff context"
+        size="xs"
         disabled={!input.expandedFromDefault || !input.onReset}
         onClick={input.onReset}
         className={diffContextButtonClassName(input.expandedFromDefault)}
       >
         <RotateCcw className="h-3.5 w-3.5" />
-      </Button>
+      </IconButton>
     </div>
   )
 }
 
 function diffContextButtonClassName(enabled: boolean): string {
   return [
-    'h-6 w-6 rounded border border-border text-muted-foreground',
+    'rounded border border-border text-muted-foreground',
     enabled
       ? 'hover:bg-muted hover:text-foreground'
       : 'cursor-not-allowed opacity-40',

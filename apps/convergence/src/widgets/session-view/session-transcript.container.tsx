@@ -773,13 +773,12 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                   )}
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto shrink-0 px-1 py-0 font-normal text-muted-foreground hover:text-foreground"
+                    variant="quiet"
                     onClick={() => {
                       fillEpisode.current.pages = 5
                       requestOlder(Boolean(olderError))
                     }}
+                    className="h-auto shrink-0 px-1 font-normal"
                   >
                     {olderError ? 'Try again' : 'Load earlier messages'}
                   </Button>

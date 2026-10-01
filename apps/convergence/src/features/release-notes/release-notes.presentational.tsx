@@ -6,15 +6,15 @@ import type {
   ReleaseNotesEntry,
 } from './release-notes.types'
 import {
-  DialogClose,
+  Button,
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Button,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 
@@ -129,8 +129,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
             >
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
+                variant="secondary"
                 onClick={() =>
                   onHistoryPageChange(Math.max(1, historyPage - 1))
                 }
@@ -147,8 +146,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
               </span>
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
+                variant="secondary"
                 onClick={() =>
                   onHistoryPageChange(
                     Math.min(historyTotalPages, historyPage + 1),
@@ -164,7 +162,12 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
             <span aria-hidden />
           )}
           <DialogClose asChild>
-            <Button type="button" variant="outline" className="sm:w-auto">
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="sm:w-auto"
+            >
               Close
             </Button>
           </DialogClose>

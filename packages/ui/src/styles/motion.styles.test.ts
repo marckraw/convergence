@@ -21,17 +21,13 @@ import {
   SelectItem,
   SelectTrigger,
 } from '../components/select/select'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '../components/tooltip/tooltip'
 
 const componentsRoot = resolve(__dirname, '../components')
 const stylesheet = readFileSync(join(__dirname, 'theme.css'), 'utf8')
 const tokens = readFileSync(join(__dirname, 'tokens.css'), 'utf8')
-const primitives = ['tooltip', 'dropdown-menu', 'popover', 'select', 'dialog']
+// The tooltip moved to transitions on Base UI's starting and ending frames
+// (MAR-3616, popupMotion): its motion is pinned in the tooltip's own tests.
+const primitives = ['dropdown-menu', 'popover', 'select', 'dialog']
 const pluginTokens =
   /animate-in|animate-out|fade-in-|fade-out-|zoom-in-|zoom-out-|slide-in-from-|slide-out-to-/
 
@@ -126,19 +122,6 @@ describe('MAR-3319: surface motion has real stylesheet definitions', () => {
 
 const fixtures = [
   [
-    'tooltip',
-    createElement(
-      TooltipProvider,
-      null,
-      createElement(
-        Tooltip,
-        { open: true },
-        createElement(TooltipTrigger, null, 'Open'),
-        createElement(TooltipContent, { id: 'motion-surface' }, 'Tip'),
-      ),
-    ),
-  ],
-  [
     'dropdown-menu',
     createElement(
       DropdownMenu,
@@ -210,7 +193,7 @@ describe('MAR-3319: rendered surface motion', () => {
       )) {
         expect(token).toMatch(/^motion-safe:/)
       }
-      if (['tooltip', 'popover', 'select'].includes(_name)) {
+      if (['popover', 'select'].includes(_name)) {
         for (const [side, from] of [
           ['bottom', 'top'],
           ['top', 'bottom'],

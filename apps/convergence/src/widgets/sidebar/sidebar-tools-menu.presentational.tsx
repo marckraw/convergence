@@ -7,10 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  NO_DRAG_STYLE,
+  IconButton,
   Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@convergence/ui'
 import {
   BookOpenText,
@@ -44,39 +42,33 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
 
   return (
     <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
+      <Tooltip label={OPEN_SIDEBAR_TOOLS} side="bottom">
+        <DropdownMenuTrigger asChild>
+          {iconOnly ? (
+            <IconButton
+              label={OPEN_SIDEBAR_TOOLS}
               type="button"
               variant="ghost"
-              size={iconOnly ? 'icon' : 'sm'}
-              className={
-                iconOnly
-                  ? 'h-8 w-8'
-                  : 'h-8 w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground'
-              }
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </IconButton>
+          ) : (
+            <Button
+              type="button"
+              variant="quiet"
+              className="w-full justify-between px-2"
               aria-label={OPEN_SIDEBAR_TOOLS}
             >
-              {iconOnly ? (
-                <MoreHorizontal className="h-4 w-4" />
-              ) : (
-                <>
-                  <span className="flex items-center gap-2">
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                    Tools
-                  </span>
-                  <span className="text-[11px] text-muted-foreground/80">
-                    Dialogs
-                  </span>
-                </>
-              )}
+              <span className="flex items-center gap-2">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+                Tools
+              </span>
+              <span className="text-[11px] text-muted-foreground/80">
+                Dialogs
+              </span>
             </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
-          {OPEN_SIDEBAR_TOOLS}
-        </TooltipContent>
+          )}
+        </DropdownMenuTrigger>
       </Tooltip>
       <DropdownMenuContent align={iconOnly ? 'start' : 'end'} side="bottom">
         <DropdownMenuItem

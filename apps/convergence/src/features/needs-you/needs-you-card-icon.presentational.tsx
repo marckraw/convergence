@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@convergence/ui'
+import { cn, Tooltip } from '@convergence/ui'
 
 export function NeedsYouCardIcon({
   label,
@@ -11,21 +11,18 @@ export function NeedsYouCardIcon({
   compact?: boolean
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          role="img"
-          aria-label={label}
-          tabIndex={0}
-          className={cn(
-            'flex items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            compact ? 'relative z-10 size-3 shrink-0' : 'h-7 w-10',
-          )}
-        >
-          {children}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+    <Tooltip label={label} side="right">
+      <span
+        role="img"
+        aria-label={label}
+        tabIndex={0}
+        className={cn(
+          'flex items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          compact ? 'relative z-10 size-3 shrink-0' : 'h-7 w-10',
+        )}
+      >
+        {children}
+      </span>
     </Tooltip>
   )
 }

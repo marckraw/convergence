@@ -11,8 +11,9 @@ import {
 import { Check, Plus, Users, X } from 'lucide-react'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import {
-  cn,
   Button,
+  cn,
+  IconButton,
   Input,
   Popover,
   PopoverContent,
@@ -98,12 +99,12 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
           <PopoverTrigger asChild>
             <Button
               type="button"
-              variant={holding.length > 0 ? 'secondary' : 'ghost'}
-              size="sm"
+              variant={holding.length > 0 ? 'tonal' : 'ghost'}
               aria-label={`Add ${sessionName} to a crew`}
               aria-expanded={open}
+              size="xs"
               className={cn(
-                'h-6 max-w-32 shrink-0 gap-1 px-2 text-[11px] transition-opacity',
+                'max-w-32 shrink-0 transition-opacity',
                 holding.length > 0
                   ? 'opacity-100'
                   : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100',
@@ -231,16 +232,16 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                         }
                       }}
                     />
-                    <Button
+                    <IconButton
+                      label="Cancel new crew"
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      aria-label="Cancel new crew"
-                      className="size-7 shrink-0 p-0"
                       onClick={resetDraft}
+                      size="sm"
+                      className="shrink-0"
                     >
                       <X className="size-3.5" />
-                    </Button>
+                    </IconButton>
                   </div>
 
                   <CrewDecorationPicker
@@ -252,11 +253,11 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
 
                   <Button
                     type="button"
-                    variant="secondary"
-                    size="sm"
+                    variant="tonal"
                     disabled={!isValidCrewName(draftName)}
-                    className="h-7 text-xs"
                     onClick={() => void submitDraft()}
+                    size="sm"
+                    className="px-3"
                   >
                     Create &amp; add this session
                   </Button>
@@ -266,9 +267,9 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
-                    className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-normal"
                     onClick={() => setCreating(true)}
+                    size="sm"
+                    className="w-full justify-start font-normal"
                   >
                     <Plus className="size-3.5" />
                     New crew
@@ -276,7 +277,6 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
                     disabled={importBusy}
                     onClick={() => {
                       setOpen(false)

@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import {
   localProviderCatalogs,
   offeredProviders,
@@ -388,7 +389,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'high',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
 
     fireEvent.click(screen.getByText('Open'))
 
@@ -424,7 +427,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultModelId: 'gpt-5.4',
       defaultEffortId: 'high',
     })
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     const toggle = await screen.findByRole('switch', {
       name: 'Describe work blocks',
@@ -456,7 +461,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -488,7 +495,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'high',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -526,7 +535,9 @@ describe('AppSettingsDialogContainer', () => {
     })
     document.documentElement.dataset.platform = 'darwin'
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -558,7 +569,9 @@ describe('AppSettingsDialogContainer', () => {
       testFire,
     }
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -576,7 +589,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -600,7 +615,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -629,7 +646,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -654,7 +673,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -702,7 +723,9 @@ describe('AppSettingsDialogContainer', () => {
       payload: { appSettingsSection: 'insights' },
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
 
     expect(
       await screen.findByRole('tab', { name: 'Your Usage' }),
@@ -718,7 +741,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -748,7 +773,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -783,7 +810,9 @@ describe('AppSettingsDialogContainer', () => {
       check: updatesCheck,
     }
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -801,7 +830,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -838,7 +869,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -873,7 +906,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'kuba-vps', 'https://daemon.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -901,7 +936,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -927,7 +964,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -969,7 +1008,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     // Wait for the count so the removal is not blocked on an unknown one.
@@ -1011,7 +1052,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -1059,7 +1102,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -1099,7 +1144,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -1144,7 +1191,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     await waitFor(() => expect(counts).toHaveBeenCalledTimes(1))
@@ -1170,7 +1219,7 @@ describe('AppSettingsDialogContainer', () => {
     const remove = screen.getByRole('button', {
       name: 'Remove endpoint kuba-vps',
     })
-    expect(remove).toBeDisabled()
+    expect(isUnavailable(remove)).toBe(true)
     fireEvent.click(remove)
     expect(
       screen.getByRole('button', { name: 'Remove endpoint kuba-vps' }),
@@ -1204,7 +1253,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -1232,7 +1283,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'Remote daemon', 'https://daemon.example.com')],
     )
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     await waitFor(() =>
@@ -1263,7 +1316,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
 
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -1294,7 +1349,9 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    render(
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
+    )
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()

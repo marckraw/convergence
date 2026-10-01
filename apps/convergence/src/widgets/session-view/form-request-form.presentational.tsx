@@ -86,11 +86,10 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
       </label>
     ))}
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" type="submit" name="decision" value="accept">
+      <Button type="submit" name="decision" value="accept">
         Submit
       </Button>
       <Button
-        size="sm"
         type="submit"
         name="decision"
         value="decline"

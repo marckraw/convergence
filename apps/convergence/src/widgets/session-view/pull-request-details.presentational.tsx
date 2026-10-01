@@ -79,10 +79,9 @@ export const PullRequestDetails: FC<PullRequestDetailsProps> = ({
           {externalPullRequestUrl ? (
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              className="mt-3 w-full justify-center gap-2"
+              variant="secondary"
               onClick={() => window.open(externalPullRequestUrl, '_blank')}
+              className="mt-3 w-full justify-center"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Open in browser

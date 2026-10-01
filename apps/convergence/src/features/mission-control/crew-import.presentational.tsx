@@ -5,15 +5,15 @@ import type {
   CrewImportRow,
 } from '@/shared/types/crew-import.types'
 import {
-  Input,
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
-  DialogBody,
-  DialogFooter,
+  Input,
 } from '@convergence/ui'
 
 interface Props {
@@ -180,8 +180,7 @@ export function CrewImportView({
                         )}
                         {r.state === 'missing-project' && (
                           <Button
-                            variant="outline"
-                            size="sm"
+                            variant="secondary"
                             disabled={busy}
                             onClick={onChooseFolder}
                           >
@@ -209,11 +208,20 @@ export function CrewImportView({
           )}
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" disabled={busy} onClick={onClose}>
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={onClose}
+            size="lg"
+          >
             {report ? 'Close' : 'Cancel'}
           </Button>
           {!report && (
-            <Button disabled={busy || !plan.canApply} onClick={onApply}>
+            <Button
+              disabled={busy || !plan.canApply}
+              onClick={onApply}
+              size="lg"
+            >
               {busy ? 'Working…' : 'Apply'}
             </Button>
           )}

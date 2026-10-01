@@ -17,7 +17,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider>
         <div className="w-[560px]">
           <Story />
         </div>

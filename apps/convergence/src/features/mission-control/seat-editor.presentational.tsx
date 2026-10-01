@@ -10,7 +10,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { cn, Button, Input } from '@convergence/ui'
+import { Button, cn, IconButton, Input } from '@convergence/ui'
 import {
   LOCAL_HOST_ID,
   ROLE_CARD_LIMIT,
@@ -157,11 +157,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           </p>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="danger-quiet"
             disabled={busy}
             onClick={onRemove}
-            className="h-7 self-start px-2.5 text-[11px] text-destructive hover:text-destructive"
+            size="sm"
+            className="self-start px-2.5 text-[11px]"
           >
             Remove seat
           </Button>
@@ -196,16 +196,16 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               problems.batonName !== undefined && 'border-amber-500/70',
             )}
           />
-          <Button
+          <IconButton
+            label={`Close ${label}`}
             type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={`Close ${label}`}
+            variant="quiet"
             onClick={onClose}
-            className="size-6 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+            size="xs"
+            className="shrink-0"
           >
             <ChevronDown aria-hidden className="size-4" />
-          </Button>
+          </IconButton>
         </div>
         {refusalFor('batonName')}
         {nameNotice ? (
@@ -236,8 +236,9 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               onClick={() => {
                 if (member.role !== role) onSeatEdit({ role })
               }}
+              size="xs"
               className={cn(
-                'h-6 rounded px-1 text-[10px] font-normal transition-colors',
+                'rounded px-1 text-[10px] font-normal transition-colors py-2',
                 member.role === role
                   ? 'border border-white/15 bg-white/10 text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
@@ -293,11 +294,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             </p>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
+              variant="tonal"
               disabled={busy}
               onClick={onWriteCard}
-              className="h-7 self-start px-2.5 text-[11px]"
+              size="sm"
+              className="self-start px-2.5 text-[11px]"
             >
               Write a card
             </Button>
@@ -350,8 +351,9 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                   if (member.lanePolicy !== lane.value)
                     onSeatEdit({ lanePolicy: lane.value })
                 }}
+                size="xs"
                 className={cn(
-                  'h-6 rounded px-1 text-[10px] font-normal transition-colors',
+                  'rounded px-1 text-[10px] font-normal transition-colors py-2',
                   member.lanePolicy === lane.value
                     ? 'border border-white/15 bg-white/10 text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
@@ -402,22 +404,18 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                   : 'border-white/15',
               )}
             >
-              <Button
+              <IconButton
+                label={`Lower the WIP limit for ${label}`}
                 type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`Lower the WIP limit for ${label}`}
+                variant="quiet"
                 disabled={busy || stepBase <= 1}
-                // Keep focus in the field: a blur here would commit the typed
-                // value as a second write racing the step. The keyboard path
-                // (Tab to the button, then Enter) still blurs first and then
-                // steps -- two ordered writes that end at the right value.
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSeatEdit({ wipLimit: stepBase - 1 })}
-                className="h-7 px-2 text-muted-foreground hover:text-foreground disabled:opacity-40"
+                size="sm"
+                className="px-2 disabled:opacity-40"
               >
                 <Minus aria-hidden className="size-3" />
-              </Button>
+              </IconButton>
               <Input
                 type="number"
                 min={1}
@@ -427,18 +425,18 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 onBlur={onWipCommit}
                 className="h-7 w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:ring-0 [&::-webkit-inner-spin-button]:appearance-none"
               />
-              <Button
+              <IconButton
+                label={`Raise the WIP limit for ${label}`}
                 type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`Raise the WIP limit for ${label}`}
+                variant="quiet"
                 disabled={busy}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSeatEdit({ wipLimit: stepBase + 1 })}
-                className="h-7 px-2 text-muted-foreground hover:text-foreground disabled:opacity-40"
+                size="sm"
+                className="px-2 disabled:opacity-40"
               >
                 <Plus aria-hidden className="size-3" />
-              </Button>
+              </IconButton>
             </div>
           </div>
           {refusalFor('wipLimit')}
@@ -482,11 +480,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
         </p>
         <Button
           type="button"
-          variant="ghost"
-          size="sm"
+          variant="danger-quiet"
           disabled={busy}
           onClick={onRemove}
-          className="h-7 shrink-0 gap-1 px-1 text-[11px] font-normal text-destructive hover:text-destructive disabled:opacity-50"
+          size="sm"
+          className="shrink-0 gap-1 px-1 text-[11px] font-normal disabled:opacity-50"
         >
           <Trash2 aria-hidden className="size-3.5" />
           {recipe ? 'Delete recipe' : 'Remove from crew'}

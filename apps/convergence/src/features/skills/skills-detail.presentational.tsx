@@ -21,15 +21,14 @@ import type {
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import {
   Button,
+  cn,
   CopyButton,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  IconButton,
   Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import {
@@ -76,11 +75,8 @@ interface SkillDetailPaneProps {
 /** Wraps an action in a hover tooltip so each icon's purpose is legible. */
 function withTooltip(label: string, node: ReactNode) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">{node}</span>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+    <Tooltip label={label}>
+      <span className="inline-flex">{node}</span>
     </Tooltip>
   )
 }
@@ -199,9 +195,9 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 px-2 text-xs"
                     aria-label="Copy"
+                    size="sm"
+                    className="gap-1"
                   >
                     <Copy className="h-3.5 w-3.5" />
                     Copy
@@ -240,21 +236,20 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
             {selectedSkill.path && onReveal
               ? withTooltip(
                   'Reveal in Finder',
-                  <Button
+                  <IconButton
+                    label="Reveal in Finder"
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
                     onClick={onReveal}
                     disabled={isRevealing}
-                    aria-label="Reveal in Finder"
+                    size="sm"
                   >
                     {isRevealing ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <FolderOpen className="h-4 w-4" />
                     )}
-                  </Button>,
+                  </IconButton>,
                 )
               : null}
             {selectedSkill.path && onOpenInEditor
@@ -265,9 +260,9 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 px-2 text-xs"
                         aria-label="Open in editor"
+                        size="sm"
+                        className="gap-1"
                       >
                         <Code2 className="h-3.5 w-3.5" />
                         Open
@@ -306,36 +301,34 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
             {selectedSkill.path && onOpenFile
               ? withTooltip(
                   'Open SKILL.md',
-                  <Button
+                  <IconButton
+                    label="Open SKILL.md"
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
                     onClick={onOpenFile}
                     disabled={isOpeningFile}
-                    aria-label="Open SKILL.md"
+                    size="sm"
                   >
                     {isOpeningFile ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <ExternalLink className="h-4 w-4" />
                     )}
-                  </Button>,
+                  </IconButton>,
                 )
               : null}
             {onClose
               ? withTooltip(
                   'Close',
-                  <Button
+                  <IconButton
+                    label="Close details"
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
                     onClick={onClose}
-                    aria-label="Close details"
+                    size="sm"
                   >
                     <X className="h-4 w-4" />
-                  </Button>,
+                  </IconButton>,
                 )
               : null}
           </div>
@@ -427,10 +420,9 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
             {selectedSkillHasMcpDependencies ? (
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 px-2 text-xs"
+                variant="secondary"
                 onClick={onOpenMcpServers}
+                size="sm"
               >
                 <Link2 className="h-3.5 w-3.5" />
                 MCP Servers

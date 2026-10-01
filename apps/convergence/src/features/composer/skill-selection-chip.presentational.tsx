@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { SkillSelection } from '@/entities/skill'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 import { Library, X } from 'lucide-react'
 
 interface SkillSelectionChipProps {
@@ -18,15 +18,15 @@ export const SkillSelectionChip: FC<SkillSelectionChipProps> = ({
     <span className="shrink-0 text-[10px] uppercase text-muted-foreground">
       {selection.status}
     </span>
-    <Button
+    <IconButton
+      label={`Remove ${selection.displayName}`}
       type="button"
-      variant="ghost"
-      size="icon"
-      className="h-4 w-4 rounded-full text-muted-foreground hover:text-foreground"
-      aria-label={`Remove ${selection.displayName}`}
+      variant="quiet"
       onClick={() => onRemove(selection.id)}
+      size="xs"
+      className="rounded-full"
     >
       <X className="h-3 w-3" />
-    </Button>
+    </IconButton>
   </span>
 )

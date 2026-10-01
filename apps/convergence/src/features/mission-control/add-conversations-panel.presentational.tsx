@@ -1,6 +1,12 @@
 import type { FC } from 'react'
 import { Users, X } from 'lucide-react'
-import { cn, Button, Input, SearchableSelect } from '@convergence/ui'
+import {
+  Button,
+  cn,
+  IconButton,
+  Input,
+  SearchableSelect,
+} from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import { SeatRefusal } from './seat-refusal.presentational'
 
@@ -81,16 +87,16 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
           Bring existing conversations into {crewName}.
         </p>
       </div>
-      <Button
+      <IconButton
+        label="Close the add conversations panel"
         type="button"
-        variant="ghost"
-        size="sm"
-        aria-label="Close the add conversations panel"
+        variant="quiet"
         onClick={onClose}
-        className="size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        size="sm"
+        className="shrink-0"
       >
         <X className="size-3.5" />
-      </Button>
+      </IconButton>
     </div>
 
     <Input
@@ -143,8 +149,9 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
                 aria-pressed={selected}
                 disabled={busy}
                 onClick={() => onToggle(entry.sessionId)}
+                size="lg"
                 className={cn(
-                  'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left font-normal',
+                  'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 text-left font-normal',
                   selected
                     ? 'border-sky-500/60 bg-sky-500/5'
                     : 'border-white/10 hover:border-white/20',
@@ -195,11 +202,10 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
       <div className="flex items-center gap-1.5">
         <Button
           type="button"
-          variant="secondary"
-          size="sm"
+          variant="tonal"
           disabled={busy || selectedIds.length === 0}
           onClick={onAdd}
-          className="h-8 px-3 text-[11px]"
+          className="text-[11px]"
         >
           {selectedIds.length === 1
             ? 'Add 1 conversation'
@@ -208,10 +214,9 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           disabled={busy}
           onClick={onClose}
-          className="h-8 px-3 text-[11px]"
+          className="text-[11px]"
         >
           Cancel
         </Button>

@@ -4,7 +4,7 @@ import type {
   ExecutionHostDaemonCredentialStatus,
   RemoteExecutionHostConnectionResult,
 } from '@/entities/app-settings'
-import { Button, Input, cn } from '@convergence/ui'
+import { Button, cn, IconButton, Input } from '@convergence/ui'
 import type { ExecutionHostEndpointActionBlocks } from './execution-host-settings.pure'
 
 interface ExecutionHostFieldsProps {
@@ -145,12 +145,11 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
-        className="mt-6 shrink-0"
         aria-label={`Remove endpoint ${displayName}`}
-        title={removalBlock ?? undefined}
         onClick={onRequestRemove}
-        disabled={isRemovalPending || !!removalBlock}
+        disabled={isRemovalPending}
+        disabledReason={removalBlock ?? undefined}
+        className="mt-6 shrink-0"
       >
         <Trash2 className="mr-2 h-4 w-4" />
         Remove
@@ -169,8 +168,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
         <div className="flex gap-2">
           <Button
             type="button"
-            variant="destructive"
-            size="sm"
+            variant="danger"
             aria-label={`Confirm removing endpoint ${displayName}`}
             onClick={onConfirmRemove}
           >
@@ -178,8 +176,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           </Button>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             aria-label={`Keep endpoint ${displayName}`}
             onClick={onCancelRemove}
           >
@@ -233,16 +230,11 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             aria-label={`Test connection for ${displayName}`}
-            title={actionBlocks.connection ?? undefined}
             onClick={onTestDaemonConnection}
-            disabled={
-              isCredentialSaving ||
-              isConnectionTesting ||
-              !!actionBlocks.connection
-            }
+            disabled={isCredentialSaving || isConnectionTesting}
+            disabledReason={actionBlocks.connection ?? undefined}
           >
             <Wifi className="mr-2 h-4 w-4" />
             {isConnectionTesting ? 'Testing...' : 'Test connection'}
@@ -250,7 +242,6 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             aria-label={`Remove token for ${displayName}`}
             onClick={onDeleteDaemonToken}
             disabled={
@@ -294,31 +285,28 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
               disabled={isCredentialSaving || !!actionBlocks.token}
               className="pr-10"
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              // The eye is 36px to match the field it sits in; the pseudo
-              // element takes the pointer target to 40x40 without moving
-              // anything visible.
-              className={cn(
-                'absolute right-0 top-0 h-9 w-9',
-                "before:absolute before:-inset-0.5 before:content-['']",
-              )}
-              aria-label={
+            <IconButton
+              label={
                 showDaemonToken
                   ? `Hide token for ${displayName}`
                   : `Show token for ${displayName}`
               }
+              type="button"
+              variant="ghost"
               onClick={onToggleDaemonTokenVisibility}
               disabled={isCredentialSaving}
+              size="lg"
+              className={cn(
+                'absolute right-0 top-0',
+                "before:absolute before:-inset-0.5 before:content-['']",
+              )}
             >
               {showDaemonToken ? (
                 <EyeOff className="h-4 w-4" />
               ) : (
                 <Eye className="h-4 w-4" />
               )}
-            </Button>
+            </IconButton>
           </div>
           <Button
             type="button"
@@ -329,6 +317,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
               !!actionBlocks.token ||
               daemonTokenDraft.trim().length === 0
             }
+            size="lg"
           >
             {credentialStatus?.configured ? 'Replace token' : 'Save token'}
           </Button>

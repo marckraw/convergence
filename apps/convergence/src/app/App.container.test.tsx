@@ -691,8 +691,13 @@ describe('App', () => {
       expect(screen.getAllByText('Route Chat').length).toBeGreaterThan(0)
     })
     expect(useAppSurfaceStore.getState().activeSurface).toBe('chat')
-    expect(useSessionStore.getState().activeGlobalSessionId).toBe(
-      'global-session-1',
+    // The route selects the session in an effect after the list draws it;
+    // nothing flushes that effect early since Radix's tooltips left the
+    // sidebar (MAR-3616), so wait for the selection as for the list.
+    await waitFor(() =>
+      expect(useSessionStore.getState().activeGlobalSessionId).toBe(
+        'global-session-1',
+      ),
     )
   })
 

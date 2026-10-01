@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import type { LoomSheet } from './wave-panel-sheet.pure'
 import {
   LOOM_SHEET_TITLE_CLASS,
@@ -41,12 +41,13 @@ export const LoomTitleView: FC<LoomTitleViewProps> = ({
     aria-label={title}
     aria-expanded={open}
     aria-controls={open ? `loom-sheet-${sheet}` : undefined}
+    onClick={onSelect}
+    size="lg"
     className={cn(
       LOOM_SHEET_TITLE_CLASS,
       open && LOOM_SHEET_TITLE_OPEN_CLASS,
       className,
     )}
-    onClick={onSelect}
   >
     {children ?? title}
   </Button>

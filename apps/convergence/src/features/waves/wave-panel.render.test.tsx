@@ -98,6 +98,9 @@ const rowOf = (key: string) =>
  */
 const region = (node: Element | null) => {
   for (let at: Element | null = node; at !== null; at = at.parentElement) {
+    // The design system's parts say it with a class (MAR-3616).
+    if (at.classList.contains('app-no-drag')) return 'no-drag'
+    if (at.classList.contains('app-drag')) return 'drag'
     const said = (
       (at as HTMLElement).style as CSSStyleDeclaration & {
         WebkitAppRegion?: string
@@ -2854,20 +2857,20 @@ describe('MAR-3097: through the containers and the real stores', () => {
     })
 
     /**
-     * The hover Radix actually listens for (MAR-3311 R1).
+     * The hover the tooltip host listens for (MAR-3311 R1, MAR-3616).
      *
      * `@testing-library/user-event` is not a dependency of this repo, so the
-     * brief's `userEvent.hover` is spelled here as the event the trigger
-     * reads: `pointermove` with a non-touch pointer. `findBy*` then waits
-     * out the provider's open delay rather than this file naming a number
-     * the app could change underneath it.
+     * brief's `userEvent.hover` is spelled here as the event the host reads:
+     * `pointerover` with a non-touch pointer. `findBy*` then waits out the
+     * provider's open delay rather than this file naming a number the app
+     * could change underneath it.
      *
      * Read off `screen`, not the column: the content is portalled to
      * `document.body`, outside Loom's tree entirely.
      */
     const hover = async (control: Element) => {
       await act(async () => {
-        fireEvent.pointerMove(control, { pointerType: 'mouse' })
+        fireEvent.pointerOver(control, { pointerType: 'mouse' })
       })
       return screen.findByRole('tooltip')
     }
@@ -2887,7 +2890,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       const tip = await hover(before)
       // The words are the control's own name, and the number in them is the
       // number the button draws -- one string read twice, never a copy.
-      // Mutation: give the TooltipContent its own text, or its own count ->
+      // Mutation: give the Tooltip its own text, or its own count ->
       // the two disagree, red.
       const shown = before.querySelector(
         '[data-wave-count="before"]',
@@ -2909,11 +2912,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
       // no-drag region, floating over the window's title strip. Silence
       // there is not "no opinion" -- it is "whatever is underneath
       // decides" (MAR-3284's law), and what is underneath is a drag strip.
-      const content = tip.parentElement
-      expect(content).toBeTruthy()
+      const content = tip
       expect(document.body.contains(content)).toBe(true)
       expect(column()!.contains(content)).toBe(false)
-      // Mutation: drop `style={NO_DRAG_STYLE}` from the TooltipContent
+      // Mutation: drop `app-no-drag` from the tooltip host's bubble
       // -> this walk reaches <body> having found nothing, returns null, red.
       expect(region(content)).toBe('no-drag')
     })

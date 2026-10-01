@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { RotateCcw } from 'lucide-react'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 import { expect } from 'storybook/test'
 import { DiffFileHeader } from './diff-file-header.presentational'
 
@@ -62,15 +62,9 @@ export const Long: Story = {
   args: {
     path: 'packages/very-deeply/nested/workspace/that-nobody/remembers-creating/src/features/conversation/history/transcript-entry-view-model.pure.test.ts',
     actions: (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Reset visible diff context"
-        className="h-6 w-6"
-      >
+      <IconButton type="button" size="xs" label="Reset visible diff context">
         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-      </Button>
+      </IconButton>
     ),
   },
   play: async ({ args, canvas }) => {

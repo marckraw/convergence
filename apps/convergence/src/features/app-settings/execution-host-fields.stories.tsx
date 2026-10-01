@@ -204,9 +204,20 @@ export const Disabled: Story = {
         'Save settings first — this endpoint does not exist yet.',
       ),
     ).toBeVisible()
+    // Remove and Test connection are unavailable with a reason (R2,
+    // MAR-3616): focusable, and each says why.
+    const remove = canvas.getByRole('button', {
+      name: 'Remove endpoint kuba-vps',
+    })
+    await expect(remove).toHaveAttribute('aria-disabled', 'true')
+    await expect(remove).toHaveAccessibleDescription(
+      '3 sessions still run on this endpoint.',
+    )
     await expect(
-      canvas.getByRole('button', { name: 'Remove endpoint kuba-vps' }),
-    ).toBeDisabled()
+      canvas.getByRole('button', { name: 'Test connection for kuba-vps' }),
+    ).toHaveAccessibleDescription(
+      'Save settings first — this endpoint does not exist yet.',
+    )
     await expect(
       canvas.getByRole('button', { name: 'Save token for kuba-vps' }),
     ).toBeDisabled()

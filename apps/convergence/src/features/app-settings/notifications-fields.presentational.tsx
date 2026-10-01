@@ -191,8 +191,7 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
         <div className="flex gap-2">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={() => onTestFire('info')}
             disabled={isSaving}
           >
@@ -200,8 +199,7 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
           </Button>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={() => onTestFire('critical')}
             disabled={isSaving}
           >

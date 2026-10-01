@@ -10,7 +10,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
-import { Button, Textarea, cn } from '@convergence/ui'
+import { Button, cn, Textarea } from '@convergence/ui'
 import { ModelSelectorRow } from './model-selector-row.presentational'
 
 interface ForkComposerProps {
@@ -97,12 +97,11 @@ export const ForkComposer: FC<ForkComposerProps> = ({
       <div className="mt-2 flex flex-wrap items-center gap-1">
         <Button
           type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+          variant="quiet"
           aria-label="Attach file"
           onClick={() => void openFileDialog()}
           disabled={disabled || ingestInFlight}
+          size="sm"
         >
           <Paperclip className="h-3.5 w-3.5" />
           Attach

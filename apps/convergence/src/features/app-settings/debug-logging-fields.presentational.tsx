@@ -28,8 +28,7 @@ export const DebugLoggingFields: FC<DebugLoggingFieldsProps> = ({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
           onClick={onOpenLogFolder}
           disabled={isSaving}
         >

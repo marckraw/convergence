@@ -290,8 +290,10 @@ describe('ChatSurface', () => {
 
     expect(screen.getByText('Running')).toBeInTheDocument()
     const stop = screen.getByRole('button', { name: /^Stop / })
+    // Its name is its tooltip (MAR-3616, R2), never a native title.
     expect(stop).toHaveAttribute('aria-label', `Stop ${globalSession.name}`)
-    expect(stop).toHaveAttribute('title', `Stop ${globalSession.name}`)
+    expect(stop).toHaveAttribute('data-tooltip', `Stop ${globalSession.name}`)
+    expect(stop).not.toHaveAttribute('title')
   })
 
   it('MAR-3288 R5 says Compacting context… and never Finished while compacting — mutation drop the activity prop turns red', () => {

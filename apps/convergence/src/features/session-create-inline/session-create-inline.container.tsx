@@ -19,14 +19,13 @@ export const SessionCreateInline: FC<SessionCreateInlineProps> = ({
   return (
     <Button
       type="button"
-      variant="ghost"
-      size="sm"
+      variant="quiet"
       onClick={(event) => {
         stopSidebarEvent(event)
         openDialog('session-intent', { workspaceId })
       }}
       onMouseDown={stopSidebarEvent}
-      className="flex w-full justify-start gap-1 px-2 text-muted-foreground hover:text-foreground"
+      className="flex w-full justify-start gap-1 px-2"
     >
       <Play className="h-3 w-3" />
       New session

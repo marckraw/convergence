@@ -2,10 +2,11 @@ import type { ComponentPropsWithoutRef, FC } from 'react'
 import { Waypoints } from 'lucide-react'
 import {
   Button,
+  cn,
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
+  Tooltip,
 } from '@convergence/ui'
 import { formatSessionWireCount } from './session-wires.pure'
 
@@ -58,22 +59,21 @@ export const SessionWires: FC<SessionWiresProps> = ({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title={summary}
-          aria-label={summary}
-          className={cn(
-            'h-7 gap-1.5 rounded-full border border-border/70 px-2 text-[11px]',
-            // Every wire switched off reads as quiet as the wires themselves
-            // are, so the chip cannot imply something is about to happen.
-            armedCount === 0 ? 'text-muted-foreground/60' : 'text-foreground',
-          )}
-        >
-          <Waypoints className="h-3.5 w-3.5" />
-          {formatSessionWireCount(lines.length)}
-        </Button>
+        <Tooltip label={summary}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={summary}
+            size="sm"
+            className={cn(
+              'rounded-full border border-border/70 text-[11px]',
+              armedCount === 0 ? 'text-muted-foreground/60' : 'text-foreground',
+            )}
+          >
+            <Waypoints className="h-3.5 w-3.5" />
+            {formatSessionWireCount(lines.length)}
+          </Button>
+        </Tooltip>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-96 p-2" {...contentFocus}>
         <ul className="flex flex-col gap-1">

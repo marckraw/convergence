@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { focusForTooltip } from '@/shared/testing/tooltip'
 import { TooltipProvider } from '@convergence/ui'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
@@ -185,12 +186,11 @@ it('keeps a selected provider visible after its cards disappear', () => {
 })
 
 it('shows provider names on keyboard focus', async () => {
-  render(<NeedsYou {...props} />)
+  render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
   openFilters()
-  fireEvent.focus(choice('Provider filters', 'OpenAI'))
-  expect(await screen.findByRole('tooltip')).toHaveTextContent(
-    'OpenAI · 3 conversations',
-  )
+  expect(
+    await focusForTooltip(choice('Provider filters', 'OpenAI')),
+  ).toHaveTextContent('OpenAI · 3 conversations')
 })
 
 it('keeps filter selections and the collapsed preference through a remount', () => {

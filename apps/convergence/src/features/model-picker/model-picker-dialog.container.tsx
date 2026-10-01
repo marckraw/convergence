@@ -23,8 +23,8 @@ export function ModelPickerDialog({
   value,
   onChange,
   disabled = false,
-  triggerVariant = 'outline',
-  triggerSize = 'sm',
+  triggerVariant = 'secondary',
+  triggerSize = 'md',
   triggerClassName,
 }: ModelPickerDialogProps) {
   const [open, setOpen] = useState(false)

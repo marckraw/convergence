@@ -106,9 +106,9 @@ describe('ThemeToggleButton system appearance', () => {
     render(<ThemeToggleButton />)
 
     expect(media.netListeners()).toBe(1)
-    fireEvent.click(screen.getByTitle('Theme: system'))
-    fireEvent.click(screen.getByTitle('Theme: dark'))
-    expect(screen.getByTitle('Theme: light')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Theme: system' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Theme: dark' }))
+    expect(screen.getByRole('button', { name: 'Theme: light' })).toBeTruthy()
     // Mutation: a listener that stays after leaving System → the page turns
     // dark on the next OS change, red.
     media.fire(true)

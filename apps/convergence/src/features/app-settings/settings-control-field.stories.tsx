@@ -10,15 +10,11 @@ const meta = {
     title: 'Default model',
     description:
       'The model a new conversation starts with. Each provider keeps its own.',
-    children: (
-      <Button variant="outline" size="sm">
-        Claude Opus 5.5
-      </Button>
-    ),
+    children: <Button variant="secondary">Claude Opus 5.5</Button>,
   },
   decorators: [
     (Story) => (
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider>
         <div className="w-[560px]">
           <Story />
         </div>

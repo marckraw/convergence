@@ -9,12 +9,7 @@ const meta = {
   component: CanvasToolbar,
   args: {
     importCrew: (
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-7 text-[11px]"
-      >
+      <Button type="button" variant="ghost" size="sm" className="text-[11px]">
         <Upload aria-hidden className="size-3" />
         Import crew
       </Button>
@@ -90,14 +85,16 @@ export const Disabled: Story = {
     summary: '0 conversations · 0 connections',
   },
   play: async ({ canvas }) => {
-    for (const name of [
-      'Add conversation',
-      'Connect',
-      'Crew settings',
-      'History',
-    ]) {
+    for (const name of ['Add conversation', 'Crew settings', 'History']) {
       await expect(canvas.getByRole('button', { name })).toBeDisabled()
     }
+    // Connect is unavailable with a reason (R2, MAR-3616): it stays
+    // focusable and says why.
+    const connect = canvas.getByRole('button', { name: 'Connect' })
+    await expect(connect).toHaveAttribute('aria-disabled', 'true')
+    await expect(connect).toHaveAccessibleDescription(
+      'Add a second conversation to this crew before connecting.',
+    )
     await expect(
       canvas.getByRole('button', { name: 'Import crew' }),
     ).toBeEnabled()

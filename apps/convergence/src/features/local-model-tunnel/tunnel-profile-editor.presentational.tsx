@@ -11,6 +11,7 @@ import {
 } from '@/entities/local-model-tunnel'
 import {
   Button,
+  IconButton,
   Input,
   Select,
   SelectContent,
@@ -264,8 +265,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
               </p>
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
+                variant="secondary"
                 onClick={addRouteCandidate}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -287,16 +287,16 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         {formatRouteCandidate(route)}
                       </p>
                     </div>
-                    <Button
+                    <IconButton
+                      label={`Remove route ${route.label}`}
                       type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                      aria-label={`Remove route ${route.label}`}
+                      variant="danger-quiet"
                       onClick={() => removeRouteCandidate(route.id)}
+                      size="sm"
+                      className="shrink-0"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </IconButton>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="space-y-1.5">
@@ -467,16 +467,21 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             onRestart={onRestart}
             onManage={() => undefined}
           />
-          <Button type="button" onClick={onSave} disabled={isMutating}>
+          <Button
+            type="button"
+            onClick={onSave}
+            disabled={isMutating}
+            size="lg"
+          >
             Save profile
           </Button>
         </div>
         <Button
           type="button"
-          variant="outline"
-          className="text-destructive hover:text-destructive"
+          variant="danger-quiet"
           onClick={onDelete}
           disabled={isMutating}
+          size="lg"
         >
           <Trash2 className="h-4 w-4" />
           Delete

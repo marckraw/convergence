@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight, Layers } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 import { WORK_BLOCK_SENTENCE_CLASS } from './work-block.styles'
 
 interface WorkBlockRowProps {
@@ -32,27 +32,31 @@ export const WorkBlockRow: FC<WorkBlockRowProps> = ({
   onToggle,
 }) => (
   <div className="py-1">
-    <Button
-      type="button"
-      variant="ghost"
-      data-testid="work-block"
-      data-working={working ? 'true' : undefined}
-      aria-expanded={open}
-      title={`${memberCount} ${memberCount === 1 ? 'entry' : 'entries'} · ${open ? 'fold' : 'open'}`}
-      onClick={onToggle}
-      className="h-auto w-full min-w-0 justify-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1.5 text-left font-normal hover:bg-muted/40"
+    <Tooltip
+      label={`${memberCount} ${memberCount === 1 ? 'entry' : 'entries'} · ${open ? 'fold' : 'open'}`}
     >
-      <ChevronRight
-        className={cn(
-          'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-          open && 'rotate-90',
-        )}
-      />
-      <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-        {label}
-      </span>
-    </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        data-testid="work-block"
+        data-working={working ? 'true' : undefined}
+        aria-expanded={open}
+        onClick={onToggle}
+        size="lg"
+        className="h-auto w-full min-w-0 justify-start rounded-md border border-border/60 bg-muted/20 px-2 py-1.5 text-left font-normal hover:bg-muted/40"
+      >
+        <ChevronRight
+          className={cn(
+            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+            open && 'rotate-90',
+          )}
+        />
+        <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {label}
+        </span>
+      </Button>
+    </Tooltip>
     {sentence ? (
       <p
         data-testid="work-block-sentence"

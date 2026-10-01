@@ -45,7 +45,9 @@ export const Long: Story = {
   },
   play: async ({ args, canvas }) => {
     const chip = canvas.getByRole('button', { name: args.label })
-    await expect(chip).toHaveAttribute('title', args.label)
+    // The full label is the app's tooltip, never a native title (MAR-3616).
+    await expect(chip).toHaveAttribute('data-tooltip', args.label)
+    await expect(chip).not.toHaveAttribute('title')
     await expect(chip.getBoundingClientRect().width).toBeLessThanOrEqual(240)
   },
 }

@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import { GitFork, RefreshCw, Sparkles } from 'lucide-react'
 import {
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -10,7 +11,6 @@ import {
   DialogTitle,
   Input,
   Textarea,
-  cn,
 } from '@convergence/ui'
 import type {
   ForkStrategy,
@@ -156,12 +156,13 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
             <div className="grid gap-2 sm:grid-cols-2">
               <Button
                 type="button"
-                variant={strategy === 'full' ? 'secondary' : 'outline'}
+                variant={strategy === 'full' ? 'tonal' : 'secondary'}
+                onClick={() => onStrategyChange('full')}
+                size="lg"
                 className={cn(
                   'h-auto items-start justify-start px-3 py-3 text-left',
                   strategy === 'full' && 'ring-1 ring-ring',
                 )}
-                onClick={() => onStrategyChange('full')}
               >
                 <span className="flex flex-col gap-1">
                   <span className="text-sm font-medium">Full transcript</span>
@@ -172,13 +173,14 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               </Button>
               <Button
                 type="button"
-                variant={strategy === 'summary' ? 'secondary' : 'outline'}
+                variant={strategy === 'summary' ? 'tonal' : 'secondary'}
                 disabled={!summaryAllowed}
+                onClick={() => onStrategyChange('summary')}
+                size="lg"
                 className={cn(
                   'h-auto items-start justify-start px-3 py-3 text-left',
                   strategy === 'summary' && 'ring-1 ring-ring',
                 )}
-                onClick={() => onStrategyChange('summary')}
               >
                 <span className="flex flex-col gap-1">
                   <span className="text-sm font-medium">
@@ -207,8 +209,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                 {summaryAllowed && (
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
                     onClick={() => onStrategyChange('summary')}
                   >
                     Switch to summary
@@ -243,12 +244,13 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
             <div className="grid gap-2 sm:grid-cols-2">
               <Button
                 type="button"
-                variant={workspaceMode === 'reuse' ? 'secondary' : 'outline'}
+                variant={workspaceMode === 'reuse' ? 'tonal' : 'secondary'}
+                onClick={() => onWorkspaceModeChange('reuse')}
+                size="lg"
                 className={cn(
                   'h-auto items-start justify-start px-3 py-3 text-left',
                   workspaceMode === 'reuse' && 'ring-1 ring-ring',
                 )}
-                onClick={() => onWorkspaceModeChange('reuse')}
               >
                 <span className="flex flex-col gap-1">
                   <span className="text-sm font-medium">Reuse workspace</span>
@@ -259,12 +261,13 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               </Button>
               <Button
                 type="button"
-                variant={workspaceMode === 'fork' ? 'secondary' : 'outline'}
+                variant={workspaceMode === 'fork' ? 'tonal' : 'secondary'}
+                onClick={() => onWorkspaceModeChange('fork')}
+                size="lg"
                 className={cn(
                   'h-auto items-start justify-start px-3 py-3 text-left',
                   workspaceMode === 'fork' && 'ring-1 ring-ring',
                 )}
-                onClick={() => onWorkspaceModeChange('fork')}
               >
                 <span className="flex flex-col gap-1">
                   <span className="text-sm font-medium">New workspace</span>
@@ -294,7 +297,6 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
                     onClick={onGenerateSummary}
                     disabled={isSubmitting}
                   >
@@ -323,8 +325,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                   </p>
                   <Button
                     type="button"
-                    variant="secondary"
-                    size="sm"
+                    variant="tonal"
                     onClick={onGenerateSummary}
                     disabled={isSubmitting}
                   >
@@ -359,8 +360,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                   <p>{preview.message}</p>
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
                     onClick={() => onStrategyChange('full')}
                   >
                     Switch to full transcript
@@ -388,13 +388,19 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
         <DialogFooter className="border-t border-white/10 px-6 py-4">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={onCancel}
             disabled={isSubmitting}
+            size="lg"
           >
             Cancel
           </Button>
-          <Button type="button" onClick={onConfirm} disabled={!canConfirm}>
+          <Button
+            type="button"
+            onClick={onConfirm}
+            disabled={!canConfirm}
+            size="lg"
+          >
             {isSubmitting ? 'Forking…' : 'Create fork'}
           </Button>
         </DialogFooter>

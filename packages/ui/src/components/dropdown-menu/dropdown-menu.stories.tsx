@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MoreHorizontal } from 'lucide-react'
 import { expect, fn, screen, waitFor } from 'storybook/test'
 import { settled } from '../../../.storybook/motion-testing'
-import { Button } from '../button/button'
+import { IconButton } from '../icon-button/icon-button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,9 +26,9 @@ function ConversationMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Conversation actions">
+        <IconButton label="Conversation actions" size="lg">
           <MoreHorizontal aria-hidden />
-        </Button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={onRename}>Rename…</DropdownMenuItem>

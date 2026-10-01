@@ -6,10 +6,11 @@ import type {
 } from '@/entities/session'
 import {
   Button,
+  cn,
+  IconButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
 } from '@convergence/ui'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import {
@@ -200,26 +201,26 @@ export function ContextWindowDot({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <span onPointerEnter={openPanel} onPointerLeave={closePanelSoon}>
-          <Button
+          <IconButton
+            label={getAriaLabel(contextWindow)}
             type="button"
             variant="ghost"
-            size="icon"
-            className={cn(
-              'h-7 w-7 shrink-0 rounded-full border shadow-none',
-              buttonClass[tone],
-            )}
-            aria-label={getAriaLabel(contextWindow)}
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
               openPanel()
             }}
+            size="sm"
+            className={cn(
+              'shrink-0 rounded-full border shadow-none',
+              buttonClass[tone],
+            )}
           >
             <span
               className={cn('h-2.5 w-2.5 rounded-full', dotClass[tone])}
               aria-hidden="true"
             />
-          </Button>
+          </IconButton>
         </span>
       </PopoverTrigger>
       <PopoverContent
@@ -297,8 +298,6 @@ export function ContextWindowDot({
           <div className="space-y-2 border-t border-border/70 pt-3">
             <Button
               type="button"
-              size="sm"
-              className="w-full"
               disabled={
                 !compaction.enabled || isCompacting || drillBeat !== null
               }
@@ -307,6 +306,7 @@ export function ContextWindowDot({
                 event.stopPropagation()
                 void compact()
               }}
+              className="w-full"
             >
               {isCompacting || session.activity === 'compacting'
                 ? 'Compacting context…'
@@ -342,30 +342,28 @@ export function ContextWindowDot({
           <div className="space-y-2 border-t border-border/70 pt-3">
             <Button
               type="button"
-              size="sm"
-              variant="secondary"
-              className="w-full"
+              variant="tonal"
               disabled={!drill.enabled}
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
                 runDrill()
               }}
+              className="w-full"
             >
               {drill.label}
             </Button>
             {drill.cancel.visible ? (
               <Button
                 type="button"
-                size="sm"
                 variant="ghost"
-                className="w-full"
                 disabled={!drill.cancel.enabled}
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
                   cancelDrill()
                 }}
+                className="w-full"
               >
                 Cancel
               </Button>

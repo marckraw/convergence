@@ -6,7 +6,7 @@ import {
 } from '@pierre/trees'
 import { FileTree, useFileTreeSearch } from '@pierre/trees/react'
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
-import { Button, Input } from '@convergence/ui'
+import { IconButton, Input } from '@convergence/ui'
 import type { PierreChangedFilesTreeInput } from './changed-files-tree.pure'
 
 interface ChangedFilesTreeModelProps {
@@ -132,57 +132,50 @@ export const ChangedFilesTreeModel: FC<ChangedFilesTreeModelProps> = ({
                   {search.matchingPaths.length}
                 </span>
               )}
-              <Button
+              <IconButton
+                label="Previous search match"
                 type="button"
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                title="Previous match"
-                aria-label="Previous search match"
+                size="sm"
                 disabled={!search.value || search.matchingPaths.length === 0}
                 onClick={search.focusPreviousMatch}
               >
                 <ChevronUp className="h-3.5 w-3.5" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
+                label="Next search match"
                 type="button"
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                title="Next match"
-                aria-label="Next search match"
+                size="sm"
                 disabled={!search.value || search.matchingPaths.length === 0}
                 onClick={search.focusNextMatch}
               >
                 <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
+                label="Close changed-files search"
                 type="button"
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                title="Close search"
-                aria-label="Close changed-files search"
+                size="sm"
                 onClick={() => {
                   search.setValue(null)
                   search.close()
                 }}
               >
                 <X className="h-3.5 w-3.5" />
-              </Button>
+              </IconButton>
             </>
           ) : (
-            <Button
+            <IconButton
+              label="Search changed files"
               type="button"
               variant="ghost"
-              size="icon"
-              className="ml-auto h-7 w-7"
-              title="Search changed files"
-              aria-label="Search changed files"
               onClick={() => search.open(search.value)}
+              size="sm"
+              className="ml-auto"
             >
               <Search className="h-3.5 w-3.5" />
-            </Button>
+            </IconButton>
           )}
         </div>
       )}

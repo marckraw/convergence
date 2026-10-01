@@ -10,10 +10,10 @@ import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
  * A native `title=` hint waits a second, ignores the theme, and cannot be
  * styled — so a control wearing both whispers twice. The pin is the absence
  * of those hints (except a clamped truncation line, or the literal empty
- * `title=""` ProviderIcon prop that is not a hint). And every
- * `TooltipContent` that can float over the title strip must declare
- * `NO_DRAG_STYLE` (MAR-3284): a rendered hover only opens one portal,
- * so count equality is how the rest stay honest.
+ * `title=""` ProviderIcon prop that is not a hint). A tooltip that floats
+ * over the title strip must be `no-drag` (MAR-3284); since MAR-3616 the one
+ * tooltip host is, so the pin is that no sidebar file builds a tooltip of its
+ * own again.
  */
 const SIDEBAR_ROOT = resolve(dirname(fileURLToPath(import.meta.url)))
 
@@ -21,10 +21,7 @@ const NATIVE_HINT = /\btitle=/
 const EMPTY_TITLE = /\btitle=""/
 const TRUNCATION_COMMENT = '// truncation hint (MAR-3314)'
 
-const TOOLTIP_CONTENT = /<TooltipContent\b/g
-// Opening tag to its `>`: `[\s\S]` crosses newlines so a broken tag is one.
-const TOOLTIP_CONTENT_TAG = /<TooltipContent\b[\s\S]*?>/g
-const NO_DRAG = 'style={NO_DRAG_STYLE}'
+const OWN_TOOLTIP = /<TooltipContent\b/
 
 function sidebarTsxFiles(): string[] {
   const files: string[] = []
@@ -66,25 +63,17 @@ describe('MAR-3314 R2: the sidebar cannot grow an OS hint again', () => {
   )
 })
 
-describe('MAR-3314 R2: every sidebar tooltip is no-drag, not just the read one', () => {
-  const withTooltips = SIDEBAR_FILES.filter((path) =>
-    /<TooltipContent\b/.test(readFileSync(path, 'utf8')),
-  )
-
+describe('MAR-3314 R2: every sidebar tooltip is the no-drag host', () => {
   it.each(
-    withTooltips.map((path) => [path.slice(SIDEBAR_ROOT.length + 1), path]),
+    SIDEBAR_FILES.map((path) => [path.slice(SIDEBAR_ROOT.length + 1), path]),
   )(
-    '%s gives every tooltip the no-drag style',
+    '%s builds no tooltip of its own',
     { timeout: WALK_TEST_TIMEOUT_MS },
     (_name, path) => {
       const source = readFileSync(path, 'utf8')
-      const written = source.match(TOOLTIP_CONTENT) ?? []
-      const noDrag = (source.match(TOOLTIP_CONTENT_TAG) ?? []).filter((tag) =>
-        tag.includes(NO_DRAG),
-      )
-      // Mutation: drop the style from ANY one TooltipContent -> red here.
-      expect(written.length).toBeGreaterThan(0)
-      expect(noDrag.length).toBe(written.length)
+      // Mutation: bring back a per-instance `TooltipContent` in any sidebar
+      // file -> red.
+      expect(source).not.toMatch(OWN_TOOLTIP)
     },
   )
 })

@@ -1,7 +1,7 @@
 import type { DispatchPlan } from '@/shared/types/tracker.types'
 import type { ReactNode, UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import {
   loomNowRows,
   loomSheetCounts,
@@ -224,8 +224,9 @@ export const LoomSheetView = <TSession,>({
                   <Button
                     type="button"
                     variant="link"
-                    className={LOOM_SEARCH_ELSEWHERE_CLASS}
                     onClick={() => onSelectSheet?.(place.sheet)}
+                    size="lg"
+                    className={LOOM_SEARCH_ELSEWHERE_CLASS}
                   >
                     {loomSearchElsewhereLabel(place)}
                   </Button>
@@ -330,11 +331,11 @@ export const LoomSheetView = <TSession,>({
                           <Button
                             type="button"
                             variant="ghost"
-                            size="sm"
                             aria-expanded={qaExpanded}
                             aria-controls={QA_SECTION_ID}
-                            className={LOOM_QA_TOGGLE_CLASS}
                             onClick={onToggleQa}
+                            size="xs"
+                            className={LOOM_QA_TOGGLE_CLASS}
                           >
                             {qaExpanded
                               ? 'Show fewer'

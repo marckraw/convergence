@@ -43,10 +43,9 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
       <DialogTrigger asChild>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-10"
+          variant="secondary"
           disabled={!props.enabled}
+          className="min-h-10"
         >
           Merge reviewed…
         </Button>
@@ -121,17 +120,19 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
         </DialogBody>
         <DialogFooter className="p-6">
           <Button
-            variant="outline"
-            className="min-h-10"
+            variant="secondary"
             onClick={props.onRefresh}
             disabled={running}
+            size="lg"
+            className="min-h-10"
           >
             Refresh
           </Button>
           <Button
-            className="min-h-10 tabular-nums"
             disabled={!canMergeReviewed(plan, selected, busy)}
             onClick={props.onMerge}
+            size="lg"
+            className="min-h-10 tabular-nums"
           >
             {mergeableCount > 0
               ? `Merge ${mergeableCount}`

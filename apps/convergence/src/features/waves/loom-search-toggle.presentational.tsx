@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Search } from 'lucide-react'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 import { LOOM_SEARCH_NAME } from './loom-search.pure'
 import {
   LOOM_SEARCH_GLYPH_CLASS,
@@ -15,15 +15,15 @@ export const LoomSearchToggleView: FC<{
   revealed: boolean
   onToggle: () => void
 }> = ({ revealed, onToggle }) => (
-  <Button
+  <IconButton
+    label={LOOM_SEARCH_NAME}
     type="button"
     variant="ghost"
-    size="icon"
-    aria-label={LOOM_SEARCH_NAME}
     aria-expanded={revealed}
-    className={LOOM_SEARCH_TOGGLE_CLASS}
     onClick={onToggle}
+    size="sm"
+    className={LOOM_SEARCH_TOGGLE_CLASS}
   >
     <Search aria-hidden="true" className={LOOM_SEARCH_GLYPH_CLASS} />
-  </Button>
+  </IconButton>
 )

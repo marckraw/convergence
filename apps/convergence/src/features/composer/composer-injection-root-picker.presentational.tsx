@@ -53,8 +53,9 @@ export const ComposerInjectionRootPicker: FC<
               onMouseEnter={() => onHover(index)}
               onClick={() => onSelect(item)}
               data-testid={`composer-injection-root-item-${item.kind}`}
+              size="lg"
               className={cn(
-                'flex h-auto w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs',
+                'flex h-auto w-full items-start rounded px-2 py-1.5 text-left text-xs',
                 isActive && 'bg-accent text-accent-foreground',
               )}
             >
@@ -79,10 +80,9 @@ export const ComposerInjectionRootPicker: FC<
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         onClick={onDismiss}
-        className="sr-only"
         aria-label="Close injection picker"
+        className="sr-only"
       >
         Close
       </Button>

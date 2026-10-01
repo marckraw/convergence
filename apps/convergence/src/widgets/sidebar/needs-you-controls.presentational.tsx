@@ -20,7 +20,7 @@ import {
   type FeedView,
   type buildFeedView,
 } from '@/features/needs-you'
-import { Button, cn, TooltipProvider } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import {
   noConversationMatchesLine,
   normalizeNameQuery,
@@ -60,249 +60,243 @@ export function NeedsYouControls({
   const summary = buildFeedFilterSummary(view)
   const activeNameSearch = normalizeNameQuery(nameSearchQuery)
   return (
-    <TooltipProvider delayDuration={250}>
-      <div
-        className="space-y-2.5 border-b border-border/60 pb-3 text-[11px]"
-        aria-label="Activity controls"
-      >
-        <div className="flex h-[30px] items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium">Activity</span>
-            <span
-              className="tabular-nums text-muted-foreground"
-              aria-label={`${result.shown} of ${result.total} cards shown`}
-            >
-              {result.filtered
-                ? `${result.shown} of ${result.total}`
-                : result.total}
-            </span>
-          </div>
-          {result.filtered && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onReset}
-              aria-label="Clear activity filters"
-              className="h-7 gap-1 px-1.5 text-[11px] font-normal"
-            >
-              <X aria-hidden="true" className="size-3" /> Clear
-            </Button>
-          )}
-        </div>
-        <Button
-          ref={triggerRef}
-          type="button"
-          variant="ghost"
-          onClick={onToggle}
-          aria-expanded={expanded}
-          aria-controls={controlsId}
-          aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
-          className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 py-2 text-left text-[11px] font-normal"
-        >
-          <SlidersHorizontal
-            aria-hidden="true"
-            className="size-3.5 text-muted-foreground"
-          />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="font-medium">{summary.activity}</span>
-            <span className="break-words text-muted-foreground">
-              {summary.scope}
-            </span>
-            <span className="break-words text-muted-foreground">
-              Order: {summary.order}
-            </span>
-          </span>
-          <ChevronDown
-            aria-hidden="true"
-            className={cn(
-              'size-3.5 text-muted-foreground transition-transform motion-reduce:transition-none',
-              expanded && 'rotate-180',
-            )}
-          />
-        </Button>
-        <div id={controlsId} hidden={!expanded} className="space-y-2.5">
-          <div
-            role="group"
-            aria-label="Activity view"
-            className="grid grid-cols-2 gap-1.5"
+    <div
+      className="space-y-2.5 border-b border-border/60 pb-3 text-[11px]"
+      aria-label="Activity controls"
+    >
+      <div className="flex h-[30px] items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium">Activity</span>
+          <span
+            className="tabular-nums text-muted-foreground"
+            aria-label={`${result.shown} of ${result.total} cards shown`}
           >
-            {activityViews.map((value) => {
-              const label = activityViewLabels[value]
-              const Icon = viewIcons[value]
+            {result.filtered
+              ? `${result.shown} of ${result.total}`
+              : result.total}
+          </span>
+        </div>
+        {result.filtered && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onReset}
+            aria-label="Clear activity filters"
+            size="sm"
+            className="gap-1 px-1.5 text-[11px] font-normal"
+          >
+            <X aria-hidden="true" className="size-3" /> Clear
+          </Button>
+        )}
+      </div>
+      <Button
+        ref={triggerRef}
+        type="button"
+        variant="ghost"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={controlsId}
+        aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
+        size="lg"
+        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 text-left text-[11px] font-normal"
+      >
+        <SlidersHorizontal
+          aria-hidden="true"
+          className="size-3.5 text-muted-foreground"
+        />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="font-medium">{summary.activity}</span>
+          <span className="break-words text-muted-foreground">
+            {summary.scope}
+          </span>
+          <span className="break-words text-muted-foreground">
+            Order: {summary.order}
+          </span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            'size-3.5 text-muted-foreground transition-transform motion-reduce:transition-none',
+            expanded && 'rotate-180',
+          )}
+        />
+      </Button>
+      <div id={controlsId} hidden={!expanded} className="space-y-2.5">
+        <div
+          role="group"
+          aria-label="Activity view"
+          className="grid grid-cols-2 gap-1.5"
+        >
+          {activityViews.map((value) => {
+            const label = activityViewLabels[value]
+            const Icon = viewIcons[value]
+            return (
+              <FilterChoice
+                key={value}
+                label={label}
+                selected={
+                  value === 'all'
+                    ? !view.activities.length
+                    : view.activities.includes(value)
+                }
+                count={result.activityCounts[value]}
+                onClick={() =>
+                  onChange({
+                    ...view,
+                    activities:
+                      value === 'all'
+                        ? []
+                        : toggleFeedChoice(view.activities, value),
+                  })
+                }
+                className="h-9 min-w-0 px-1"
+              >
+                {Icon && (
+                  <Icon
+                    aria-hidden="true"
+                    className="size-3.5 text-muted-foreground"
+                  />
+                )}
+                {label}
+              </FilterChoice>
+            )
+          })}
+        </div>
+        <div
+          role="group"
+          aria-label="Host filters"
+          className="flex items-start gap-1"
+        >
+          <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
+            Host
+          </span>
+          <div className="flex min-w-0 flex-wrap gap-1">
+            <FilterChoice
+              label="All hosts"
+              selected={!view.hosts.length}
+              onClick={() => onChange({ ...view, hosts: [] })}
+            >
+              All
+            </FilterChoice>
+            {(['local', 'remote'] as const).map((host) => {
+              const Icon = host === 'local' ? Laptop : Server
+              const label =
+                host === 'local'
+                  ? 'MacBook · Local conversations'
+                  : 'Remote · All remote hosts'
               return (
                 <FilterChoice
-                  key={value}
+                  key={host}
                   label={label}
-                  selected={
-                    value === 'all'
-                      ? !view.activities.length
-                      : view.activities.includes(value)
-                  }
-                  count={result.activityCounts[value]}
+                  tooltip={`${label} · ${result.hostCounts[host]} conversations`}
+                  selected={view.hosts.includes(host)}
+                  count={result.hostCounts[host]}
                   onClick={() =>
                     onChange({
                       ...view,
-                      activities:
-                        value === 'all'
-                          ? []
-                          : toggleFeedChoice(view.activities, value),
+                      hosts: toggleFeedChoice(view.hosts, host),
                     })
                   }
-                  className="h-9 min-w-0 px-1"
                 >
-                  {Icon && (
-                    <Icon
-                      aria-hidden="true"
-                      className="size-3.5 text-muted-foreground"
-                    />
-                  )}
-                  {label}
+                  <Icon
+                    aria-hidden="true"
+                    className="size-3.5 text-muted-foreground"
+                  />
                 </FilterChoice>
               )
             })}
           </div>
-          <div
-            role="group"
-            aria-label="Host filters"
-            className="flex items-start gap-1"
-          >
-            <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
-              Host
-            </span>
-            <div className="flex min-w-0 flex-wrap gap-1">
-              <FilterChoice
-                label="All hosts"
-                selected={!view.hosts.length}
-                onClick={() => onChange({ ...view, hosts: [] })}
-              >
-                All
-              </FilterChoice>
-              {(['local', 'remote'] as const).map((host) => {
-                const Icon = host === 'local' ? Laptop : Server
-                const label =
-                  host === 'local'
-                    ? 'MacBook · Local conversations'
-                    : 'Remote · All remote hosts'
-                return (
-                  <FilterChoice
-                    key={host}
-                    label={label}
-                    tooltip={`${label} · ${result.hostCounts[host]} conversations`}
-                    selected={view.hosts.includes(host)}
-                    count={result.hostCounts[host]}
-                    onClick={() =>
-                      onChange({
-                        ...view,
-                        hosts: toggleFeedChoice(view.hosts, host),
-                      })
-                    }
-                  >
-                    <Icon
-                      aria-hidden="true"
-                      className="size-3.5 text-muted-foreground"
-                    />
-                  </FilterChoice>
-                )
-              })}
-            </div>
-          </div>
-          <div
-            role="group"
-            aria-label="Provider filters"
-            className="flex items-start gap-1"
-          >
-            <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
-              Provider
-            </span>
-            <div className="flex min-w-0 flex-wrap gap-1">
-              <FilterChoice
-                label="All providers"
-                selected={!view.providers.length}
-                onClick={() => onChange({ ...view, providers: [] })}
-              >
-                All
-              </FilterChoice>
-              {result.providers.map((provider) => (
-                <FilterChoice
-                  key={provider.value}
-                  label={provider.label}
-                  tooltip={`${provider.label} · ${provider.count} conversations`}
-                  count={provider.count}
-                  selected={view.providers.includes(provider.value)}
-                  onClick={() =>
-                    onChange({
-                      ...view,
-                      providers: toggleFeedChoice(
-                        view.providers,
-                        provider.value,
-                      ),
-                    })
-                  }
-                >
-                  <ProviderIcon
-                    providerId={provider.value}
-                    title=""
-                    className="size-3.5"
-                  />
-                </FilterChoice>
-              ))}
-            </div>
-          </div>
-          <div
-            role="group"
-            aria-label="Order by"
-            className="flex items-start gap-1"
-          >
-            <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
-              Order
-            </span>
-            <div className="flex min-w-0 flex-wrap gap-1">
-              {feedOrders.map((order) => (
-                <FilterChoice
-                  key={order}
-                  label={feedOrderLabels[order].label}
-                  tooltip={feedOrderLabels[order].tooltip}
-                  selected={view.order === order}
-                  onClick={() => onChange({ ...view, order })}
-                >
-                  {feedOrderLabels[order].label}
-                </FilterChoice>
-              ))}
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onCollapse}
-              className="text-[11px] font-normal"
+        </div>
+        <div
+          role="group"
+          aria-label="Provider filters"
+          className="flex items-start gap-1"
+        >
+          <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
+            Provider
+          </span>
+          <div className="flex min-w-0 flex-wrap gap-1">
+            <FilterChoice
+              label="All providers"
+              selected={!view.providers.length}
+              onClick={() => onChange({ ...view, providers: [] })}
             >
-              Collapse filters
-            </Button>
+              All
+            </FilterChoice>
+            {result.providers.map((provider) => (
+              <FilterChoice
+                key={provider.value}
+                label={provider.label}
+                tooltip={`${provider.label} · ${provider.count} conversations`}
+                count={provider.count}
+                selected={view.providers.includes(provider.value)}
+                onClick={() =>
+                  onChange({
+                    ...view,
+                    providers: toggleFeedChoice(view.providers, provider.value),
+                  })
+                }
+              >
+                <ProviderIcon
+                  providerId={provider.value}
+                  title=""
+                  className="size-3.5"
+                />
+              </FilterChoice>
+            ))}
           </div>
         </div>
-        {result.hiddenPins > 0 && (
-          <p className="text-muted-foreground">
-            {result.hiddenPins} pinned{' '}
-            {result.hiddenPins === 1 ? 'card hidden' : 'cards hidden'} by
-            filters.
-          </p>
-        )}
-        {result.shown === 0 && (
-          <p
-            role="status"
-            className="rounded-lg border border-dashed border-border p-3 text-muted-foreground"
+        <div
+          role="group"
+          aria-label="Order by"
+          className="flex items-start gap-1"
+        >
+          <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
+            Order
+          </span>
+          <div className="flex min-w-0 flex-wrap gap-1">
+            {feedOrders.map((order) => (
+              <FilterChoice
+                key={order}
+                label={feedOrderLabels[order].label}
+                tooltip={feedOrderLabels[order].tooltip}
+                selected={view.order === order}
+                onClick={() => onChange({ ...view, order })}
+              >
+                {feedOrderLabels[order].label}
+              </FilterChoice>
+            ))}
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCollapse}
+            className="text-[11px] font-normal"
           >
-            {activeNameSearch.length > 0
-              ? noConversationMatchesLine(nameSearchQuery.trim())
-              : result.filtered
-                ? 'No activity matches these filters. Edit or clear filters to see your activity.'
-                : 'No activity cards yet.'}
-          </p>
-        )}
+            Collapse filters
+          </Button>
+        </div>
       </div>
-    </TooltipProvider>
+      {result.hiddenPins > 0 && (
+        <p className="text-muted-foreground">
+          {result.hiddenPins} pinned{' '}
+          {result.hiddenPins === 1 ? 'card hidden' : 'cards hidden'} by filters.
+        </p>
+      )}
+      {result.shown === 0 && (
+        <p
+          role="status"
+          className="rounded-lg border border-dashed border-border p-3 text-muted-foreground"
+        >
+          {activeNameSearch.length > 0
+            ? noConversationMatchesLine(nameSearchQuery.trim())
+            : result.filtered
+              ? 'No activity matches these filters. Edit or clear filters to see your activity.'
+              : 'No activity cards yet.'}
+        </p>
+      )}
+    </div>
   )
 }

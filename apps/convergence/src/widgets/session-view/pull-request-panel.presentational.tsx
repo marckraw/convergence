@@ -1,7 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import { GitBranch, GitPullRequest, RefreshCw, X } from 'lucide-react'
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, IconButton } from '@convergence/ui'
 
 interface PullRequestPanelProps {
   pullRequest: SessionPullRequest | null
@@ -28,31 +28,27 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
           <span className="truncate text-sm font-medium">Pull request</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button
+          <IconButton
+            label="Refresh PR status"
             type="button"
             variant="ghost"
-            size="icon"
-            className="h-7 w-7"
             onClick={onRefresh}
             disabled={loading}
-            title="Refresh PR status"
-            aria-label="Refresh PR status"
+            size="sm"
           >
             <RefreshCw
               className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
             />
-          </Button>
-          <Button
+          </IconButton>
+          <IconButton
+            label="Close pull request panel"
             type="button"
             variant="ghost"
-            size="icon"
-            className="h-7 w-7"
             onClick={onClose}
-            title="Close pull request panel"
-            aria-label="Close pull request panel"
+            size="sm"
           >
             <X className="h-3.5 w-3.5" />
-          </Button>
+          </IconButton>
         </div>
       </div>
 
@@ -95,12 +91,13 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
             </p>
             <Button
               type="button"
-              variant="outline"
-              className="mt-3"
+              variant="secondary"
               onClick={() => {
                 if (/^https:\/\//.test(pullRequest.url))
                   window.open(pullRequest.url, '_blank')
               }}
+              size="lg"
+              className="mt-3"
             >
               Open in browser
             </Button>

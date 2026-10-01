@@ -64,7 +64,7 @@ export function HarnessFactsSections({
       {error ? (
         <div role="alert">
           {error}{' '}
-          <Button variant="ghost" size="sm" onClick={onRetry}>
+          <Button variant="ghost" onClick={onRetry}>
             Retry
           </Button>
         </div>
@@ -273,14 +273,12 @@ export function HarnessFactsSections({
                     !server.nameTruncated && (
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        disabled={
-                          mcp.unavailable !== null || mcp.pending !== null
-                        }
-                        title={mcp.unavailable ?? undefined}
+                        disabled={mcp.pending !== null}
+                        disabledReason={mcp.unavailable ?? undefined}
                         aria-label={`Reconnect ${server.name}`}
                         onClick={() => mcp.onReconnect(server.name)}
+                        size="xs"
+                        className="text-xs"
                       >
                         {mcp.pending === server.name
                           ? 'Reconnecting…'

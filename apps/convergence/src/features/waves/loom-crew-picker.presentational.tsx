@@ -1,8 +1,8 @@
 import type { FC } from 'react'
 import { Link2 } from 'lucide-react'
 import {
-  Button,
   cn,
+  IconButton,
   Select,
   SelectContent,
   SelectItem,
@@ -68,24 +68,21 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
           and a sentence's worth of label beside the picker would be a second
           thing to read on it. What it does is said to a screen reader, and
           shown by whether it is pressed. */}
-      <Button
+      <IconButton
+        label={LOOM_FOLLOW_LABEL}
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label={LOOM_FOLLOW_LABEL}
         aria-pressed={follow.on}
-        title={LOOM_FOLLOW_LABEL}
-        className={cn(
-          'size-7 shrink-0 text-muted-foreground',
-          follow.on && 'bg-accent text-accent-foreground',
-        )}
-        // Expanded Loom's header is the window's drag strip (MAR-3284 R1),
-        // so this control has to say it is not.
         style={NO_DRAG_STYLE}
         onClick={() => follow.onToggle(!follow.on)}
+        size="sm"
+        className={cn(
+          'shrink-0 text-muted-foreground',
+          follow.on && 'bg-accent text-accent-foreground',
+        )}
       >
         <Link2 aria-hidden="true" className="size-3.5" />
-      </Button>
+      </IconButton>
     </span>
   )
 }

@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import { STATE_CHIP_STYLES } from './session-card.styles'
 import {
   SESSION_CARD_STATES,
@@ -38,11 +38,11 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
             key={state}
             type="button"
             variant="ghost"
-            size="sm"
             aria-pressed={active}
             onClick={() => onToggle(state)}
+            size="sm"
             className={cn(
-              'h-7 gap-1.5 rounded-full border px-2.5 text-[11px] font-normal',
+              'rounded-full border px-2.5 text-[11px] font-normal',
               active
                 ? STATE_CHIP_STYLES[state]
                 : 'border-white/10 text-muted-foreground hover:border-white/20',
@@ -59,8 +59,8 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
         <Button
           type="button"
           variant="link"
-          size="sm"
           onClick={onClear}
+          size="sm"
           className="h-7 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
         >
           Clear

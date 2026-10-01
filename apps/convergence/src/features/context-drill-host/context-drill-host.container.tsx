@@ -135,10 +135,11 @@ export function ContextDrillHostContainer({
                 {record.outcome.reason}
               </p>
               <Button
-                className="mt-3"
                 onClick={() => {
                   void useContextDrillStore.getState().run(sessionId)
                 }}
+                size="lg"
+                className="mt-3"
               >
                 Run the drill
               </Button>

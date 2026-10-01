@@ -158,11 +158,11 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       <div className="flex items-center gap-1.5">
         <Button
           type="button"
-          variant="secondary"
-          size="sm"
-          className="h-7 flex-1 text-xs"
+          variant="tonal"
           disabled={busy || !draft.projectId.trim()}
           onClick={onSaveBinding}
+          size="sm"
+          className="flex-1 px-3"
         >
           {bound ? 'Save binding' : 'Bind to project'}
         </Button>
@@ -170,10 +170,10 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
             disabled={busy}
             onClick={onUnbind}
+            size="sm"
+            className="px-3"
           >
             Unbind
           </Button>
@@ -206,11 +206,11 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           />
           <Button
             type="button"
-            variant="secondary"
-            size="sm"
-            className="h-7 text-xs"
+            variant="tonal"
             disabled={busy || !keyDraft.trim()}
             onClick={onSaveKey}
+            size="sm"
+            className="px-3"
           >
             Store key
           </Button>
@@ -219,10 +219,10 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="h-7 justify-start px-2 text-xs font-normal"
           disabled={busy}
           onClick={onForgetKey}
+          size="sm"
+          className="justify-start font-normal"
         >
           Forget key
         </Button>
@@ -231,11 +231,11 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       <div className="flex items-center gap-2">
         <Button
           type="button"
-          variant="secondary"
-          size="sm"
-          className="h-7 text-xs"
+          variant="tonal"
           disabled={busy || !bound}
           onClick={onTest}
+          size="sm"
+          className="px-3"
         >
           Test
         </Button>

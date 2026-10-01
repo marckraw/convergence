@@ -113,10 +113,9 @@ export function AnalyticsInsights({
           <span>{error}</span>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
-            className="w-fit border-destructive/40 bg-background text-destructive hover:bg-destructive/10"
+            variant="danger-quiet"
             onClick={onRetry}
+            className="w-fit border border-destructive/40 bg-background"
           >
             <RefreshCw className="size-3.5" />
             Retry
@@ -172,13 +171,9 @@ function renderTabButton({
       type="button"
       role="tab"
       aria-selected={selected}
-      variant={selected ? 'secondary' : 'ghost'}
-      size="sm"
-      className={cn(
-        'h-8 rounded-md px-3 text-xs',
-        selected && 'shadow-none ring-1 ring-ring',
-      )}
+      variant={selected ? 'tonal' : 'ghost'}
       onClick={onClick}
+      className={cn('rounded-md', selected && 'shadow-none ring-1 ring-ring')}
     >
       {label}
     </Button>

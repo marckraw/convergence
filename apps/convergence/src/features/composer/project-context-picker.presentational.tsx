@@ -2,10 +2,10 @@ import type { FC } from 'react'
 import type { ProjectContextItem } from '@/entities/project-context'
 import {
   Button,
+  cn,
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
 } from '@convergence/ui'
 import { Check, FileText, Repeat } from 'lucide-react'
 
@@ -44,14 +44,11 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
     <PopoverTrigger asChild>
       <Button
         type="button"
-        size="sm"
-        variant="ghost"
-        className={cn(
-          'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
-          triggerClassName,
-        )}
+        variant="quiet"
         aria-label="Select project context"
         disabled={disabled || items.length === 0}
+        size="sm"
+        className={triggerClassName}
       >
         <FileText className="h-3.5 w-3.5" />
         Context
@@ -82,13 +79,14 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
                 key={item.id}
                 type="button"
                 variant="ghost"
+                onClick={() => onToggleItem(item.id)}
+                size="lg"
                 className={cn(
-                  'h-auto w-full justify-start rounded-lg border border-transparent px-3 py-2 text-left',
+                  'h-auto w-full justify-start rounded-lg border border-transparent px-3 text-left',
                   selected
                     ? 'border-primary/30 bg-primary/10 text-foreground'
                     : 'hover:border-border/70 hover:bg-muted/40',
                 )}
-                onClick={() => onToggleItem(item.id)}
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2">

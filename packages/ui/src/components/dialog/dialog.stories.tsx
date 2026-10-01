@@ -35,7 +35,7 @@ function RenameConversation({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">Rename conversation</Button>
+        <Button variant="secondary">Rename conversation</Button>
       </DialogTrigger>
       <DialogContent className="w-[min(560px,calc(100vw-2rem))]">
         <form
@@ -60,7 +60,7 @@ function RenameConversation({
           </DialogBody>
           <DialogFooter className="border-t border-border/70 px-6 py-4">
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="secondary">Cancel</Button>
             </DialogClose>
             <Button type="submit">Save</Button>
           </DialogFooter>

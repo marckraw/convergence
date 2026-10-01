@@ -372,10 +372,9 @@ export const SkillsBrowserDialogContainer: FC<
         trigger ?? (
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
+            variant="quiet"
             disabled={!projectId}
+            className="w-full justify-between px-2"
           >
             <span className="flex items-center gap-2">
               <Library className="h-3.5 w-3.5" />

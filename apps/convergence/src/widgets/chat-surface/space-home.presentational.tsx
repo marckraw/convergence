@@ -19,13 +19,14 @@ import {
 } from '@/entities/space'
 import {
   Button,
+  cn,
+  IconButton,
   Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  cn,
 } from '@convergence/ui'
 import {
   SELECT_EMPTY_VALUE,
@@ -183,10 +184,9 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
           {space.archivedAt ? (
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
+              variant="quiet"
               onClick={onUnarchiveSpace}
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              className="gap-1.5"
             >
               <Undo2 className="h-4 w-4" />
               Unarchive Space
@@ -194,10 +194,9 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
           ) : (
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
+              variant="quiet"
               onClick={onArchiveSpace}
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              className="gap-1.5"
             >
               <Archive className="h-4 w-4" />
               Archive Space
@@ -206,7 +205,6 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             onClick={onDeleteSpace}
             className="gap-1.5 text-muted-foreground hover:text-destructive"
           >
@@ -240,13 +238,14 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                   type="button"
                   variant="ghost"
                   onClick={() => onTabChange(tab.id)}
+                  aria-pressed={activeTab === tab.id}
+                  size="lg"
                   className={cn(
-                    'inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm transition-colors',
+                    'inline-flex items-center border-b-2 px-3 transition-colors',
                     activeTab === tab.id
                       ? 'border-primary text-foreground'
                       : 'border-transparent text-muted-foreground hover:text-foreground',
                   )}
-                  aria-pressed={activeTab === tab.id}
                 >
                   <Icon className="h-4 w-4" />
                   {tab.label}
@@ -266,8 +265,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     </span>
                     <Button
                       type="button"
-                      size="sm"
-                      variant="outline"
+                      variant="secondary"
                       onClick={onBeginAttempt}
                     >
                       <MessageSquarePlus className="h-4 w-4" />
@@ -283,8 +281,9 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         type="button"
                         variant="ghost"
                         onClick={() => onOpenAttempt(attempt.sessionId)}
-                        className="flex h-auto w-full min-w-0 items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent"
                         disabled={!session}
+                        size="lg"
+                        className="flex h-auto w-full min-w-0 items-start gap-3 py-3 text-left transition-colors hover:bg-accent"
                       >
                         <SessionStateBadge session={session} />
                         <div className="min-w-0 flex-1">
@@ -316,8 +315,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                 <h2 className="text-sm font-medium">Sources</h2>
                 <Button
                   type="button"
-                  size="sm"
-                  variant="outline"
+                  variant="secondary"
                   onClick={onAddSources}
                 >
                   <FilePlus className="h-4 w-4" />
@@ -345,16 +343,15 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           </div>
                         </div>
                       </div>
-                      <Button
+                      <IconButton
+                        label={`Remove source ${source.filename}`}
                         type="button"
-                        size="icon"
                         variant="ghost"
-                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                        aria-label={`Remove source ${source.filename}`}
                         onClick={() => onDeleteSource(source.id)}
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </IconButton>
                     </div>
                   ))}
                 </div>
@@ -383,7 +380,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                 aria-label="Space memory and instructions"
                 placeholder="Rules, preferences, durable facts, and instructions for this Space."
               />
-              <Button type="button" size="sm" onClick={onSaveMemory}>
+              <Button type="button" onClick={onSaveMemory}>
                 Save memory
               </Button>
             </section>
@@ -403,8 +400,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                   </div>
                   <Button
                     type="button"
-                    size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={onAddArtifactFiles}
                   >
                     <FilePlus className="h-4 w-4" />
@@ -538,7 +534,6 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     type="button"
-                    size="sm"
                     onClick={onSubmitArtifact}
                     disabled={
                       artifactDraft.label.trim().length === 0 ||
@@ -555,7 +550,6 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                   {editingArtifactId ? (
                     <Button
                       type="button"
-                      size="sm"
                       variant="ghost"
                       onClick={onCancelArtifactEdit}
                     >
@@ -596,26 +590,24 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
                             {spaceArtifactStatusLabels[artifact.status]}
                           </span>
-                          <Button
+                          <IconButton
+                            label={`Edit artifact ${artifact.label}`}
                             type="button"
-                            size="icon"
                             variant="ghost"
-                            className="h-8 w-8 text-muted-foreground"
-                            aria-label={`Edit artifact ${artifact.label}`}
                             onClick={() => onEditArtifact(artifact)}
+                            className="text-muted-foreground"
                           >
                             <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
+                          </IconButton>
+                          <IconButton
+                            label={`Remove artifact ${artifact.label}`}
                             type="button"
-                            size="icon"
                             variant="ghost"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            aria-label={`Remove artifact ${artifact.label}`}
                             onClick={() => onDeleteArtifact(artifact.id)}
+                            className="text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </Button>
+                          </IconButton>
                         </div>
                       </div>
                     )
@@ -643,12 +635,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                 aria-label="Space brief"
                 placeholder="Current purpose, decisions, constraints, and useful background."
               />
-              <Button
-                type="button"
-                size="sm"
-                className="mt-3"
-                onClick={onSaveBrief}
-              >
+              <Button type="button" onClick={onSaveBrief} className="mt-3">
                 Save brief
               </Button>
             </div>

@@ -14,9 +14,7 @@ function UsagePopover({ lines }: UsagePopoverProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          Context 42%
-        </Button>
+        <Button variant="secondary">Context 42%</Button>
       </PopoverTrigger>
       <PopoverContent className="w-72" aria-label="Context usage">
         <h2 className="mb-2 text-sm font-semibold">Context usage</h2>

@@ -29,6 +29,7 @@ function renderSkillCard(
       type="button"
       variant="ghost"
       onClick={() => onSelectSkill(skill.id)}
+      size="lg"
       className={cn(
         'flex h-full min-w-0 flex-col items-stretch justify-start gap-0 whitespace-normal rounded-xl border p-3 text-left transition-[transform,background-color,border-color] active:scale-[0.96]',
         selected

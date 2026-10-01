@@ -77,11 +77,11 @@ const config: StorybookConfig = {
         // runs makes it reload the page mid-test, which fails every story in
         // that file on a cold cache (as in CI).
         include: [
+          '@base-ui/react/button',
+          '@base-ui/react/tooltip',
           '@radix-ui/react-dialog',
           '@radix-ui/react-dropdown-menu',
           '@radix-ui/react-popover',
-          '@radix-ui/react-slot',
-          '@radix-ui/react-tooltip',
           'class-variance-authority',
           'clsx',
           'cmdk',

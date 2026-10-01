@@ -110,13 +110,18 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
       <div className="flex items-center justify-end gap-2">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           onClick={onCancel}
           disabled={isSaving}
+          size="lg"
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isSaving || body.trim().length === 0}>
+        <Button
+          type="submit"
+          disabled={isSaving || body.trim().length === 0}
+          size="lg"
+        >
           {isSaving
             ? 'Saving...'
             : mode === 'create'

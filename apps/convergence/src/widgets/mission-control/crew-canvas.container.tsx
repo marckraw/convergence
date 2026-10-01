@@ -1526,8 +1526,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-[11px]"
               disabled={importing}
               onClick={() =>
                 leaveDraft(() => {
@@ -1535,6 +1533,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                   start()
                 })
               }
+              size="sm"
+              className="text-[11px]"
             >
               Import crew…
             </Button>
@@ -2191,17 +2191,15 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
             <div className="flex items-center gap-1.5">
               <Button
                 type="button"
-                variant="secondary"
-                size="sm"
+                variant="tonal"
                 onClick={() => setConfirmDiscard(null)}
-                className="h-8 px-3 text-[11px]"
+                className="text-[11px]"
               >
                 Keep editing
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
                 onClick={() => {
                   const leaving = confirmDiscard
                   setConfirmDiscard(null)
@@ -2215,7 +2213,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                   // guard only asked.
                   leaving.run()
                 }}
-                className="h-8 px-3 text-[11px]"
+                className="text-[11px]"
               >
                 Discard draft
               </Button>

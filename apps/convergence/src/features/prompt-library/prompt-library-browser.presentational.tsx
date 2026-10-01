@@ -20,6 +20,7 @@ import type {
 } from '@/entities/prompt-library'
 import {
   Button,
+  cn,
   CopyButton,
   Dialog,
   DialogContent,
@@ -35,7 +36,6 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
-  cn,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import type { PromptLibraryBrowserFilters } from './prompt-library-browser.pure'
@@ -139,8 +139,9 @@ function renderPromptRow(
       type="button"
       variant="ghost"
       onClick={() => onSelectPrompt(prompt.id)}
+      size="lg"
       className={cn(
-        'h-auto w-full justify-start rounded-lg border border-transparent px-3 py-2 text-left',
+        'h-auto w-full justify-start rounded-lg border border-transparent px-3 text-left',
         selected
           ? 'border-primary/30 bg-primary/10 text-foreground'
           : 'hover:border-border/70 hover:bg-muted/40',
@@ -254,8 +255,7 @@ function renderDetailsPane({
           {selectedDetails ? (
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={() => onStartEdit(selectedPrompt)}
               disabled={isMutating}
             >
@@ -265,9 +265,7 @@ function renderDetailsPane({
           ) : null}
           <Button
             type="button"
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive"
+            variant="danger-quiet"
             onClick={() => onDeletePrompt(selectedPrompt)}
             disabled={isMutating}
           >
@@ -387,20 +385,14 @@ function renderPromptForm({
         <div className="flex shrink-0 items-center gap-2">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onCancel}
             disabled={isMutating}
           >
             <X className="h-3.5 w-3.5" />
             Cancel
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={onSubmit}
-            disabled={isMutating}
-          >
+          <Button type="button" onClick={onSubmit} disabled={isMutating}>
             {isMutating ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
@@ -571,11 +563,10 @@ export const PromptLibraryBrowserDialog: FC<
             <DialogTitle>Prompt Library</DialogTitle>
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              className="ml-auto"
+              variant="secondary"
               onClick={onStartCreate}
               disabled={!projectName || isMutating}
+              className="ml-auto"
             >
               <Plus className="h-3.5 w-3.5" />
               New
@@ -663,8 +654,7 @@ export const PromptLibraryBrowserDialog: FC<
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
                     onClick={onStartCreate}
                     disabled={isMutating}
                   >
@@ -706,8 +696,7 @@ export const PromptLibraryBrowserDialog: FC<
         <DialogFooter className="border-t border-border/70 px-6 py-4">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onRefresh}
             disabled={!projectName || isCatalogLoading}
           >

@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import { X } from 'lucide-react'
 import { RelayHopRow, formatArmedLabel } from '@/features/mission-control'
 import type { RelayHopLine, RelaySentence } from '@/features/mission-control'
-import { cn, Button } from '@convergence/ui'
+import { cn, IconButton } from '@convergence/ui'
 
 interface CanvasWirePopoverProps {
   sentence: RelaySentence
@@ -47,16 +47,16 @@ export const CanvasWirePopover: FC<CanvasWirePopoverProps> = ({
         </span>
       </div>
 
-      <Button
+      <IconButton
+        label="Close wire details"
         type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Close wire details"
+        variant="quiet"
         onClick={onClose}
-        className="size-5 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        size="xs"
+        className="shrink-0"
       >
         <X className="size-3" />
-      </Button>
+      </IconButton>
     </div>
 
     {hopLines.length === 0 ? (

@@ -358,19 +358,13 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 )}
                 {viewModel.actionableApproval && onApprove && onDeny && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" onClick={onApprove}>
-                      Approve
-                    </Button>
+                    <Button onClick={onApprove}>Approve</Button>
                     {entry.supportsSessionApproval && onApproveSession && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={onApproveSession}
-                      >
+                      <Button variant="tonal" onClick={onApproveSession}>
                         Always allow (this session)
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm" onClick={onDeny}>
+                    <Button variant="ghost" onClick={onDeny}>
                       Deny
                     </Button>
                   </div>
@@ -580,10 +574,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
             {entry.action && onNoteAction ? (
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="mt-2"
+                variant="secondary"
                 onClick={() => onNoteAction(entry.action!)}
+                className="mt-2"
               >
                 Authorize for this account
               </Button>

@@ -200,12 +200,12 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
 
           <Button
             type="button"
-            variant={hailOpen ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-6 shrink-0 px-2 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+            variant={hailOpen ? 'tonal' : 'ghost'}
             aria-expanded={hailOpen}
             aria-label={`Hail ${session.name}`}
             onClick={() => onHail(card)}
+            size="xs"
+            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100 gap-2"
           >
             <Radio className="size-3" />
             Hail

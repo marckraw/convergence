@@ -14,6 +14,7 @@ import {
   within,
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import { useProjectStore } from '@/entities/project'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import { useSessionRelayStore } from '@/entities/session-relay'
@@ -2627,7 +2628,9 @@ describe('MissionControl', () => {
             'Crew settings',
             'History',
           ]) {
-            expect(screen.getByRole('button', { name })).toBeDisabled()
+            expect(isUnavailable(screen.getByRole('button', { name }))).toBe(
+              true,
+            )
           }
           expect(
             screen.getByText('0 conversations · 0 connections'),

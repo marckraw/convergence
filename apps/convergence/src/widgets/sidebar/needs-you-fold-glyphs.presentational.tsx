@@ -1,11 +1,5 @@
 import { cardStateTone, type FoldedSectionSummary } from '@/features/needs-you'
-import {
-  cn,
-  NO_DRAG_STYLE,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@convergence/ui'
+import { cn, TooltipCard } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 
 /**
@@ -15,41 +9,41 @@ import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
  */
 export function FoldedGlyphs({ summary }: { summary: FoldedSectionSummary }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          role="img"
-          aria-label={summary.names.join(', ')}
-          tabIndex={0}
-          data-fold-glyphs=""
-          className="flex shrink-0 items-center gap-0.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {summary.glyphs.map((glyph) => (
-            <span
-              key={glyph.sessionId}
-              data-fold-glyph=""
-              data-state={glyph.state}
-              className="flex"
-            >
-              <ProviderIcon
-                providerId={glyph.providerId}
-                title=""
-                className={cn('size-3', cardStateTone[glyph.state])}
-              />
-            </span>
-          ))}
-          {summary.overflow > 0 && (
-            <span className="tabular-nums">+{summary.overflow}</span>
-          )}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="right" style={NO_DRAG_STYLE}>
+    <TooltipCard
+      side="right"
+      content={
         <ul className="space-y-0.5">
           {summary.names.map((name, index) => (
             <li key={`${index}:${name}`}>{name}</li>
           ))}
         </ul>
-      </TooltipContent>
-    </Tooltip>
+      }
+    >
+      <span
+        role="img"
+        aria-label={summary.names.join(', ')}
+        tabIndex={0}
+        data-fold-glyphs=""
+        className="flex shrink-0 items-center gap-0.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {summary.glyphs.map((glyph) => (
+          <span
+            key={glyph.sessionId}
+            data-fold-glyph=""
+            data-state={glyph.state}
+            className="flex"
+          >
+            <ProviderIcon
+              providerId={glyph.providerId}
+              title=""
+              className={cn('size-3', cardStateTone[glyph.state])}
+            />
+          </span>
+        ))}
+        {summary.overflow > 0 && (
+          <span className="tabular-nums">+{summary.overflow}</span>
+        )}
+      </span>
+    </TooltipCard>
   )
 }

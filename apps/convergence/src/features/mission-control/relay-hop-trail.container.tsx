@@ -5,7 +5,7 @@ import {
   selectHopTrailForCrew,
   useSessionRelayStore,
 } from '@/entities/session-relay'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import { RelayHopRow } from './relay-hop-row.presentational'
 import {
   buildRelayHopLine,
@@ -92,11 +92,11 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
       <div className="flex items-center gap-1.5">
         <Button
           type="button"
-          variant="ghost"
-          size="sm"
+          variant="quiet"
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
-          className="h-6 gap-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
+          size="xs"
+          className="px-1"
         >
           {open ? (
             <ChevronDown className="size-3" />
@@ -125,26 +125,26 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             disabled={busy}
             onClick={() => {
               void confirmClear()
             }}
-            className="ml-auto h-6 shrink-0 px-2 text-[11px] text-red-400 hover:text-red-300"
+            size="xs"
+            className="ml-auto shrink-0 text-red-400 hover:text-red-300"
           >
             {formatClearTrailConfirm(alarming)}
           </Button>
         ) : (
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
+            variant="quiet"
             disabled={busy}
             onClick={() => {
               setKeptNote(null)
               setConfirmingClear(true)
             }}
-            className="ml-auto h-6 shrink-0 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+            size="xs"
+            className="ml-auto shrink-0"
           >
             Clear trail
           </Button>
@@ -171,13 +171,13 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
           {trail.hasMore ? (
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
+              variant="quiet"
               disabled={busy}
               onClick={() => {
                 void loadOlder()
               }}
-              className="h-6 self-start px-1 text-[11px] text-muted-foreground hover:text-foreground"
+              size="xs"
+              className="self-start px-1"
             >
               Load older
             </Button>

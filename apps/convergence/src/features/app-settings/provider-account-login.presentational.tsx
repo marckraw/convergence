@@ -84,13 +84,18 @@ export function ProviderAccountLoginProgress({
               }
             }}
           />
-          <Button type="button" disabled={!code.trim()} onClick={onSubmitCode}>
+          <Button
+            type="button"
+            disabled={!code.trim()}
+            onClick={onSubmitCode}
+            size="lg"
+          >
             Submit code
           </Button>
         </div>
       ) : null}
       {canCancel ? (
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onCancel} size="lg">
           Cancel sign-in
         </Button>
       ) : null}

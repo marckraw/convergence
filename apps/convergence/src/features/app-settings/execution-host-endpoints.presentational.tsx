@@ -70,7 +70,7 @@ export const ExecutionHostEndpointsFields: FC<
       />
     ))}
 
-    <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+    <Button type="button" variant="secondary" onClick={onAdd}>
       <Plus className="mr-2 h-4 w-4" />
       Add endpoint
     </Button>

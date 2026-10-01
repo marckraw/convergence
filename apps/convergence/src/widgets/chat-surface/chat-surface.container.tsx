@@ -26,7 +26,7 @@ import {
   ParallelWork,
   useParallelWork,
 } from '@/widgets/session-view'
-import { Button, Input } from '@convergence/ui'
+import { Button, IconButton, Input } from '@convergence/ui'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
   SpaceHome,
@@ -540,9 +540,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               onClick={onCancelSpaceAttempt}
-              className="ml-1 h-auto px-2 py-0 text-xs"
+              className="ml-1 h-auto px-2"
             >
               Open Space
             </Button>
@@ -731,10 +730,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                     <Button
                       ref={parallelButton}
                       variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
                       aria-expanded={parallelOpen}
                       onClick={toggleParallel}
+                      size="sm"
                     >
                       {parallelLabel}
                     </Button>
@@ -812,16 +810,14 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                   side: 'right' as const,
                   group: 'stop' as const,
                   node: (
-                    <Button
+                    <IconButton
+                      label={`Stop ${session.name}`}
                       variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title={`Stop ${session.name}`}
-                      aria-label={`Stop ${session.name}`}
                       onClick={() => stopSession(session.id)}
+                      size="sm"
                     >
                       <Square className="h-3 w-3" />
-                    </Button>
+                    </IconButton>
                   ),
                 },
               ]

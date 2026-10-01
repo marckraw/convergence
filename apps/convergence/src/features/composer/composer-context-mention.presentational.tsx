@@ -52,6 +52,7 @@ export const ComposerContextMentionPicker: FC<
               onMouseEnter={() => onHover(index)}
               onClick={() => onSelect(item)}
               data-testid={`composer-context-mention-item-${item.id}`}
+              size="lg"
               className={cn(
                 'flex h-auto w-full flex-col items-start gap-0.5 rounded px-2 py-1.5 text-left text-xs',
                 isActive && 'bg-accent text-accent-foreground',
@@ -73,10 +74,9 @@ export const ComposerContextMentionPicker: FC<
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         onClick={onDismiss}
-        className="sr-only"
         aria-label="Close context mention picker"
+        className="sr-only"
       >
         Close
       </Button>

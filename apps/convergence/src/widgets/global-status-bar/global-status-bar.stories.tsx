@@ -172,7 +172,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider>
         <div className="flex h-40 flex-col justify-end bg-background">
           <Story />
         </div>

@@ -14,7 +14,7 @@ import {
   type SeatDraftField,
   type SessionCrewMember,
 } from '@/entities/session-crew'
-import { Button, Input } from '@convergence/ui'
+import { Button, IconButton, Input } from '@convergence/ui'
 import { flowRunCeilingNote } from './crew-loop.pure'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
@@ -305,12 +305,12 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
     <>
       <Button
         type="button"
-        variant="outline"
-        size="sm"
+        variant="secondary"
         role={inMenu ? 'menuitem' : undefined}
         disabled={busy}
         onClick={onAddConversation}
-        className="h-7 gap-1.5 px-2.5 text-[11px]"
+        size="sm"
+        className="px-2.5 text-[11px]"
       >
         <MessageSquare aria-hidden className="size-3.5" />
         Add conversation…
@@ -319,12 +319,12 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
       <span title="Coming with MAR-3099" className="inline-flex">
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
           role={inMenu ? 'menuitem' : undefined}
           disabled
           aria-description="Coming with MAR-3099"
-          className="h-7 gap-1.5 px-2.5 text-[11px]"
+          size="sm"
+          className="px-2.5 text-[11px]"
         >
           <FlaskConical aria-hidden className="size-3.5" />
           New recipe
@@ -349,16 +349,16 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           <h3 className="truncate text-sm font-medium">{savedName}</h3>
           <p className="text-[11px] text-muted-foreground">Crew settings</p>
         </div>
-        <Button
+        <IconButton
+          label="Close crew settings"
           type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="Close crew settings"
+          variant="quiet"
           onClick={onClose}
-          className="size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+          size="sm"
+          className="shrink-0"
         >
           <X className="size-3.5" />
-        </Button>
+        </IconButton>
       </header>
 
       {updateError ? (
@@ -384,13 +384,13 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           {members.length > 0 ? (
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               aria-haspopup="menu"
               aria-expanded={addMenuOpen}
               disabled={busy}
               onClick={onAddMenuToggle}
-              className="h-7 gap-1 px-2 text-[11px]"
+              size="sm"
+              className="gap-1 text-[11px]"
             >
               <Plus aria-hidden className="size-3.5" />
               Add
@@ -603,11 +603,11 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             </label>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              className="h-7 text-xs"
+              variant="tonal"
               disabled={exporting}
               onClick={onExport}
+              size="sm"
+              className="px-3"
             >
               {exporting ? 'Exporting…' : 'Export crew…'}
             </Button>
@@ -638,21 +638,21 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 <div className="flex items-center gap-1.5">
                   <Button
                     type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="h-7 flex-1 text-xs"
+                    variant="danger"
                     disabled={busy}
                     onClick={onConfirmDelete}
+                    size="sm"
+                    className="flex-1 px-3"
                   >
                     Delete crew
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
                     disabled={busy}
                     onClick={onCancelDelete}
+                    size="sm"
+                    className="px-3"
                   >
                     Cancel
                   </Button>
@@ -661,10 +661,10 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             ) : (
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-normal text-destructive hover:text-destructive"
+                variant="danger-quiet"
                 onClick={onRequestDelete}
+                size="sm"
+                className="w-full justify-start font-normal"
               >
                 <Trash2 className="size-3.5" />
                 Delete crew

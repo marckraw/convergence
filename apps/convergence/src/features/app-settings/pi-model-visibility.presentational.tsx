@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ProviderModelOption } from '@/entities/session'
-import { Input, Button } from '@convergence/ui'
+import { Button, Input } from '@convergence/ui'
 
 interface PiModelVisibilityFieldsProps {
   providerExists: boolean
@@ -89,8 +89,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
           {selectedModelIdsSet.size > 0 && (
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={() => {
                 selectedModelIds.forEach((modelId) =>
                   onToggleModel(modelId, false),

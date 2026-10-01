@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { SplitSquareHorizontal, SplitSquareVertical, X } from 'lucide-react'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 
 interface PaneToolbarProps {
   onSplitHorizontal: () => void
@@ -17,39 +17,33 @@ export const PaneToolbar: FC<PaneToolbarProps> = ({
 }) => {
   return (
     <div className="flex items-center gap-0.5">
-      <Button
+      <IconButton
+        label="Split horizontal"
         type="button"
-        size="icon"
         variant="ghost"
-        className="h-6 w-6"
-        aria-label="Split horizontal"
-        title="Split horizontal"
         onClick={onSplitHorizontal}
+        size="xs"
       >
         <SplitSquareHorizontal className="h-3.5 w-3.5" />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
+        label="Split vertical"
         type="button"
-        size="icon"
         variant="ghost"
-        className="h-6 w-6"
-        aria-label="Split vertical"
-        title="Split vertical"
         onClick={onSplitVertical}
+        size="xs"
       >
         <SplitSquareVertical className="h-3.5 w-3.5" />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
+        label={closeLabel}
         type="button"
-        size="icon"
         variant="ghost"
-        className="h-6 w-6"
-        aria-label={closeLabel}
-        title={closeLabel}
         onClick={onClose}
+        size="xs"
       >
         <X className="h-3.5 w-3.5" />
-      </Button>
+      </IconButton>
     </div>
   )
 }

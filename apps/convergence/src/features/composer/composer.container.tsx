@@ -133,7 +133,7 @@ import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
-import { Button } from '@convergence/ui'
+import { Button, IconButton } from '@convergence/ui'
 import { X } from 'lucide-react'
 
 import type { ComposerSessionContext } from './composer.types'
@@ -2282,31 +2282,27 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
                   {input.state === 'failed' && !input.redeliveredBy ? (
                     <Button
                       type="button"
-                      size="sm"
                       variant="ghost"
-                      className="h-6 px-2 text-[11px]"
                       aria-label="Deliver now"
                       onClick={() => void redeliverQueuedInput(input.id)}
+                      size="xs"
                     >
                       Deliver now
                     </Button>
                   ) : null}
-                  <Button
+                  <IconButton
+                    label="Cancel queued input"
                     type="button"
-                    size="icon"
                     variant="ghost"
-                    className="h-6 w-6 shrink-0"
-                    aria-label="Cancel queued input"
-                    // A failed row is dismissible too, or it is the dead end
-                    // Marcin reported: a card with a disabled ✕ and no way
-                    // out (R3). Only a row already on the wire refuses.
                     disabled={
                       input.state !== 'queued' && input.state !== 'failed'
                     }
                     onClick={() => void cancelQueuedInput(input.id)}
+                    size="xs"
+                    className="shrink-0"
                   >
                     <X className="h-3.5 w-3.5" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
             ))}

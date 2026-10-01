@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MoreHorizontal } from 'lucide-react'
 import { expect, fn, screen } from 'storybook/test'
-import { Button } from '@convergence/ui'
+import { IconButton } from '@convergence/ui'
 import {
   cardContext,
   cardFixtures,
@@ -21,14 +21,9 @@ const meta = {
     card: cardOf(cardFixtures.pinned),
     compact: true,
     actions: (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Actions for Horse"
-      >
+      <IconButton type="button" size="lg" label="Actions for Horse">
         <MoreHorizontal aria-hidden className="size-4" />
-      </Button>
+      </IconButton>
     ),
     onSelect: fn(),
     onRename: fn(),

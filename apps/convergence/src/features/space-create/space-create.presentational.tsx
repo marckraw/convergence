@@ -91,13 +91,14 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
           <DialogFooter className="border-t border-white/10 px-6 py-4">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
+              size="lg"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!canSubmit}>
+            <Button type="submit" disabled={!canSubmit} size="lg">
               {isSubmitting ? 'Creating...' : 'Create Space'}
             </Button>
           </DialogFooter>

@@ -158,11 +158,7 @@ const meta = {
   args: {
     open: true,
     onOpenChange: fn(),
-    trigger: (
-      <Button variant="ghost" size="sm">
-        Skills
-      </Button>
-    ),
+    trigger: <Button variant="ghost">Skills</Button>,
     projectName: 'convergence',
     catalog,
     viewMode: 'overview',
@@ -206,7 +202,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider>
         <Story />
       </TooltipProvider>
     ),

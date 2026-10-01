@@ -5,7 +5,7 @@ import {
   openRouterCredentialsApi,
   type OpenRouterCredentialStatus,
 } from '@/entities/app-settings'
-import { Button, Input } from '@convergence/ui'
+import { Button, IconButton, Input } from '@convergence/ui'
 
 function statusText(status: OpenRouterCredentialStatus | null): string {
   if (!status) return 'Checking...'
@@ -95,7 +95,6 @@ export const ProviderCredentialsContainer: FC = () => {
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             onClick={handleRemove}
             disabled={isSaving || !status?.configured}
           >
@@ -125,26 +124,27 @@ export const ProviderCredentialsContainer: FC = () => {
                 disabled={isSaving}
                 className="pr-10"
               />
-              <Button
+              <IconButton
+                label={showToken ? 'Hide API key' : 'Show API key'}
                 type="button"
                 variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-9 w-9"
-                aria-label={showToken ? 'Hide API key' : 'Show API key'}
                 onClick={() => setShowToken((current) => !current)}
                 disabled={isSaving}
+                size="lg"
+                className="absolute right-0 top-0"
               >
                 {showToken ? (
                   <EyeOff className="h-4 w-4" />
                 ) : (
                   <Eye className="h-4 w-4" />
                 )}
-              </Button>
+              </IconButton>
             </div>
             <Button
               type="button"
               onClick={handleSave}
               disabled={isSaving || token.trim().length === 0}
+              size="lg"
             >
               {status?.configured ? 'Replace key' : 'Save key'}
             </Button>

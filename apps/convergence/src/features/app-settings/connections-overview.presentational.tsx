@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import {
   CONNECTION_SERVICES,
   connectionCell,
@@ -50,11 +50,10 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
       </h3>
       <Button
         type="button"
-        variant="outline"
-        size="sm"
-        className="min-h-10"
+        variant="secondary"
         disabled={isChecking}
         onClick={onCheckAll}
+        className="min-h-10"
       >
         <RefreshCw className="mr-2 size-3.5" aria-hidden="true" />
         {isChecking ? 'Checking all accounts…' : 'Check all accounts'}

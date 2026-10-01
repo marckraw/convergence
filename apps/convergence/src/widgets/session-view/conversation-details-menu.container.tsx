@@ -12,6 +12,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
+  Tooltip,
 } from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
 import { interactionKeepsFocusWhereItIs } from './conversation-header.pure'
@@ -74,17 +75,18 @@ export const ConversationDetailsMenu: FC<ConversationDetailsMenuProps> = ({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button
-          ref={triggerRef}
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          title="Session details, harness history, CPU and memory"
-        >
-          Details
-          <ChevronDown className="h-3 w-3" />
-        </Button>
+        <Tooltip label="Session details, harness history, CPU and memory">
+          <Button
+            ref={triggerRef}
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+          >
+            Details
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </Tooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

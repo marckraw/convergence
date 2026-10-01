@@ -224,9 +224,9 @@ describe('MAR-3361: the PR word opens GitHub, the card opens the detail', () => 
         'gap-2',
         'hover:bg-white/5',
         'focus-visible:bg-white/5',
-        'focus-visible:ring-1',
-        'focus-visible:ring-ring',
-        'transition-colors',
+        // The Button's own ring since MAR-3616: a drawn outline in --ring.
+        'focus-visible:outline-solid',
+        'focus-visible:outline-ring',
         'bg-foreground/[0.035]',
       ]) {
         expect(card).toHaveClass(token)

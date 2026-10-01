@@ -2,10 +2,11 @@ import { useCallback, useRef, useState } from 'react'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
 import {
   Button,
+  cn,
+  IconButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
 } from '@convergence/ui'
 import { RefreshCw } from 'lucide-react'
 import {
@@ -89,17 +90,17 @@ export function CodexUsagePillContainer({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className={cn(
-              'h-7 shrink-0 rounded-full border px-2 text-xs font-semibold shadow-none',
-              toneClass[tone],
-            )}
             aria-label={label.ariaLabel}
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
               openPanel()
             }}
+            size="sm"
+            className={cn(
+              'shrink-0 rounded-full border font-semibold shadow-none gap-2',
+              toneClass[tone],
+            )}
           >
             <CodexUsageRing
               value={remaining}
@@ -129,22 +130,21 @@ export function CodexUsagePillContainer({
                 : ''}
             </p>
           </div>
-          <Button
+          <IconButton
+            label="Refresh Codex usage"
             type="button"
             variant="ghost"
-            size="icon"
-            className="h-6 w-6"
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
               onRefresh()
             }}
-            aria-label="Refresh Codex usage"
+            size="xs"
           >
             <RefreshCw
               className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')}
             />
-          </Button>
+          </IconButton>
         </div>
 
         {snapshot?.status === 'available' ? (
@@ -190,13 +190,12 @@ export function CodexUsagePillContainer({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-auto px-0 py-0 text-[11px] font-medium text-blue-300 shadow-none hover:bg-transparent hover:text-blue-200"
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
               onOpenSettings()
             }}
+            className="h-auto px-0 text-[11px] font-medium text-blue-300 shadow-none hover:bg-transparent hover:text-blue-200"
           >
             Settings
           </Button>

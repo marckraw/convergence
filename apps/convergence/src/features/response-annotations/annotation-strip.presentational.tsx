@@ -119,7 +119,6 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               data-annotation-pill=""
               data-annotation-id={annotation.id}
               tabIndex={annotation.id === tabStopId ? 0 : -1}
@@ -128,7 +127,7 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
               onKeyDown={(event) =>
                 moveFocusAlongStrip(event, index, annotations.length)
               }
-              className="h-auto max-w-[14rem] justify-start gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-normal text-foreground hover:bg-primary/15 focus-visible:ring-2"
+              className="h-auto max-w-[14rem] justify-start gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-normal text-foreground hover:bg-primary/15 focus-visible:ring-2"
             >
               <span className="min-w-0 truncate italic text-muted-foreground">
                 {toPillQuote(annotation.quotedText)}

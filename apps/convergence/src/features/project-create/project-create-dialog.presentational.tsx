@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import { FolderOpen, GitBranch, Search } from 'lucide-react'
 import {
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -9,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  cn,
 } from '@convergence/ui'
 
 type ProjectOpenMode = 'local' | 'clone'
@@ -70,13 +70,14 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
             <Button
               type="button"
               variant="ghost"
+              onClick={() => onModeChange('local')}
+              size="lg"
               className={cn(
-                'h-9 rounded-sm shadow-none',
+                'rounded-sm shadow-none',
                 mode === 'local'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
-              onClick={() => onModeChange('local')}
             >
               <FolderOpen className="h-4 w-4" />
               Local folder
@@ -84,13 +85,14 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
             <Button
               type="button"
               variant="ghost"
+              onClick={() => onModeChange('clone')}
+              size="lg"
               className={cn(
-                'h-9 rounded-sm shadow-none',
+                'rounded-sm shadow-none',
                 mode === 'clone'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
-              onClick={() => onModeChange('clone')}
             >
               <GitBranch className="h-4 w-4" />
               Clone URL
@@ -101,9 +103,10 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
             <div className="rounded-md border border-border/70 bg-muted/20 p-4">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={onOpenLocalProject}
                 disabled={isOpeningLocal}
+                size="lg"
               >
                 <Search className="h-4 w-4" />
                 {isOpeningLocal ? 'Opening...' : 'Browse folders'}
@@ -152,9 +155,10 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
                   />
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={onSelectParentDirectory}
                     disabled={isCloning}
+                    size="lg"
                   >
                     Browse
                   </Button>
@@ -191,9 +195,10 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
         <DialogFooter className="border-t border-white/10 px-6 py-4">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={() => onOpenChange(false)}
             disabled={isOpeningLocal || isCloning}
+            size="lg"
           >
             Cancel
           </Button>
@@ -202,6 +207,7 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
               type="submit"
               form="project-clone-form"
               disabled={!canClone}
+              size="lg"
             >
               {isCloning ? 'Cloning...' : 'Clone project'}
             </Button>

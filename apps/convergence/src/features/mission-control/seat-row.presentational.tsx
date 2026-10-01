@@ -10,7 +10,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import {
   laneLabel,
   seatDisplayName,
@@ -55,12 +55,12 @@ export const SeatRow: FC<SeatRowProps> = ({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
       data-seat-row
       aria-label={seatRowAccessibleName({ member, source, host, refused })}
       onClick={onToggle}
+      size="lg"
       className={cn(
-        'flex h-9 w-full min-w-0 items-center justify-start gap-2 rounded-md border bg-white/[0.02] px-2.5 text-left font-normal transition-colors hover:border-white/20',
+        'flex w-full min-w-0 items-center justify-start rounded-md border bg-white/[0.02] px-2.5 text-left font-normal transition-colors hover:border-white/20 text-xs py-0',
         orphan ? 'border-amber-500/50' : 'border-white/10',
       )}
     >

@@ -29,9 +29,7 @@ const apps: ProjectOpenApp[] = [
 const InProjectMenu = (props: SectionProps) => (
   <DropdownMenu defaultOpen modal={false}>
     <DropdownMenuTrigger asChild>
-      <Button variant="ghost" size="sm">
-        convergence
-      </Button>
+      <Button variant="ghost">convergence</Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" className="min-w-52">
       <DropdownMenuItem>Project settings…</DropdownMenuItem>

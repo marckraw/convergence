@@ -21,8 +21,8 @@ export const SessionStartSelect: FC<SessionStartSelectProps> = ({
     onChange={onChange}
     searchPlaceholder="Search options..."
     emptyMessage="No matching options."
-    triggerVariant="outline"
-    triggerSize="sm"
+    triggerVariant="secondary"
+    triggerSize="md"
     triggerClassName="px-2 text-xs"
   />
 )

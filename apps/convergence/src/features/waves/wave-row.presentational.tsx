@@ -149,9 +149,26 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
   )
 
   return inertReason === null ? (
+    // A card, not a button: it holds a link of its own, so it renders as a
+    // div that acts as one (Base UI's `render`, MAR-3616).
     <Button
-      asChild
+      nativeButton={false}
+      render={
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            // Enter on the link belongs to the browser, not the card (MAR-3361).
+            if (event.target !== event.currentTarget) return
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              onOpen(entry)
+            }
+          }}
+        />
+      }
       variant="ghost"
+      size="lg"
       data-wave-row={key}
       className={cn(
         WAVE_ROW_CLASS,
@@ -161,20 +178,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
       )}
       onClick={() => onOpen(entry)}
     >
-      <div
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          // Enter on the link belongs to the browser, not the card (MAR-3361).
-          if (event.target !== event.currentTarget) return
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            onOpen(entry)
-          }
-        }}
-      >
-        {body}
-      </div>
+      {body}
     </Button>
   ) : (
     <div

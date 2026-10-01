@@ -31,8 +31,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
     return (
       <Button
         type="button"
-        variant="outline"
-        size="sm"
+        variant="secondary"
         disabled={isMutating}
         onClick={onStart}
       >
@@ -47,8 +46,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
       <>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
           disabled={isMutating}
           onClick={onRestart}
         >
@@ -57,8 +55,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
         </Button>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
           disabled={isMutating}
           onClick={onStop}
         >
@@ -73,8 +70,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
     return (
       <Button
         type="button"
-        variant="outline"
-        size="sm"
+        variant="secondary"
         disabled={isMutating}
         onClick={onStop}
       >
@@ -88,8 +84,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
     return (
       <Button
         type="button"
-        variant="outline"
-        size="sm"
+        variant="secondary"
         disabled={isMutating}
         onClick={onStart}
       >
@@ -101,7 +96,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
 
   if (state === 'external') {
     return (
-      <Button type="button" variant="outline" size="sm" onClick={onManage}>
+      <Button type="button" variant="secondary" onClick={onManage}>
         Manage
       </Button>
     )
@@ -110,8 +105,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
   return (
     <Button
       type="button"
-      variant="outline"
-      size="sm"
+      variant="secondary"
       disabled={isMutating}
       onClick={onStart}
     >

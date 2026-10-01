@@ -34,6 +34,7 @@ export const ConversationActionsFan: FC<ConversationActionsViewProps> = ({
       const Icon = GROUP_ICON[entry.id]
       return (
         <Button
+          size="lg"
           key={entry.id}
           type="button"
           variant="ghost"
@@ -49,6 +50,7 @@ export const ConversationActionsFan: FC<ConversationActionsViewProps> = ({
       )
     })}
     <Button
+      size="lg"
       type="button"
       variant="ghost"
       role="menuitem"

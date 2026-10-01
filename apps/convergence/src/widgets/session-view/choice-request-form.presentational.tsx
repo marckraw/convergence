@@ -58,6 +58,7 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
                   key={option.label}
                   type="button"
                   variant="ghost"
+                  size="lg"
                   aria-pressed={selected}
                   className={[
                     'h-auto w-full justify-start whitespace-normal rounded-md border px-3 py-2 text-left text-sm shadow-none',
@@ -90,7 +91,7 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
           </div>
         </fieldset>
       ))}
-      <Button size="sm" type="submit" disabled={!canSubmit}>
+      <Button type="submit" disabled={!canSubmit}>
         Answer
       </Button>
     </form>

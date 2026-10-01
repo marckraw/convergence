@@ -166,8 +166,8 @@ const meta = {
     models,
     totalModelCount: 4,
     isDisabled: false,
-    triggerVariant: 'outline',
-    triggerSize: 'sm',
+    triggerVariant: 'secondary',
+    triggerSize: 'md',
     triggerClassName: 'px-2 text-xs',
     // Never filled: HeldDialog renders the dialog with a ref of its own.
     inputRef: { current: null },

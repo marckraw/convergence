@@ -761,8 +761,10 @@ describe('SessionView', () => {
       .getState()
       .sessions.find((session) => session.id === 'session-1')!.name
     const stop = screen.getByRole('button', { name: /^Stop / })
+    // Its name is its tooltip (MAR-3616, R2), never a native title.
     expect(stop).toHaveAttribute('aria-label', `Stop ${name}`)
-    expect(stop).toHaveAttribute('title', `Stop ${name}`)
+    expect(stop).toHaveAttribute('data-tooltip', `Stop ${name}`)
+    expect(stop).not.toHaveAttribute('title')
   })
 
   it('MAR-3288 R5 says Compacting context… and never Finished while compacting — mutation drop the activity prop turns red', () => {
@@ -1443,7 +1445,7 @@ describe('SessionView', () => {
     )
 
     openGroup('Project')
-    fireEvent.click(await screen.findByTitle('Run Dev'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Dev' }))
 
     await waitFor(() => {
       expect(window.electronAPI.projectScripts.run).toHaveBeenCalledWith(
@@ -2701,8 +2703,8 @@ describe('SessionView', () => {
       })
       renderView()
       openGroup('Project')
-      fireEvent.click(await screen.findByTitle('Run Build'))
-      expect(screen.queryByTitle('Run Dev')).toBeNull()
+      fireEvent.click(await screen.findByRole('button', { name: 'Run Build' }))
+      expect(screen.queryByRole('button', { name: 'Run Dev' })).toBeNull()
       await waitFor(() =>
         expect(window.electronAPI.projectScripts.run).toHaveBeenCalledWith(
           'script-2',
@@ -2791,11 +2793,12 @@ describe('SessionView', () => {
       // The whole row: Parallel work, the harness chip, the three groups,
       // Stop and More.
       expect(buttons.length).toBeGreaterThanOrEqual(7)
+      // One size for the whole row, read from the part (MAR-3616): sm, 28 px.
       for (const button of buttons)
         expect(
-          button.className.split(/\s+/),
+          button.getAttribute('data-size'),
           button.textContent || button.getAttribute('aria-label') || '',
-        ).toContain('h-7')
+        ).toBe('sm')
       for (const button of buttons)
         expect(button.className).not.toMatch(/\bh-(8|9|10)\b/)
     })
@@ -2838,7 +2841,11 @@ describe('SessionView', () => {
         () => screen.findByRole('region', { name: 'Harness history' }),
       ],
       ['CPU and memory', 'Details', inRegion('Agent', 'CPU / memory')],
-      ['Project actions', 'Project', () => screen.findByTitle('Run Dev')],
+      [
+        'Project actions',
+        'Project',
+        () => screen.findByRole('button', { name: 'Run Dev' }),
+      ],
       [
         'Open',
         'Project',

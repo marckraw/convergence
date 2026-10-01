@@ -5,6 +5,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Tooltip,
 } from '@convergence/ui'
 import { ChevronDown, Code2, Folder } from 'lucide-react'
 
@@ -21,18 +22,19 @@ export function ProjectOpenMenuContainer({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          disabled={!!disabledReason}
-          title={disabledReason ?? 'Open project'}
-          aria-label="Open project"
-        >
-          <Code2 className="h-3.5 w-3.5" />
-          Open
-          <ChevronDown className="h-3 w-3" />
-        </Button>
+        <Tooltip label="Open project">
+          <Button
+            variant="ghost"
+            disabledReason={disabledReason ?? undefined}
+            aria-label="Open project"
+            size="sm"
+            className="gap-2"
+          >
+            <Code2 className="h-3.5 w-3.5" />
+            Open
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </Tooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
         {loading ? (

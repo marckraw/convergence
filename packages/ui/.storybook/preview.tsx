@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import type { Preview } from '@storybook/react-vite'
 import { applyTheme } from '../src/lib/theme'
+import { UiProvider } from '../src/ui-provider'
 import { finishScriptedAnimations, untilIdle } from './motion-testing'
 import './preview.css'
 
@@ -73,7 +74,12 @@ const preview: Preview = {
       root.dataset.reducedTransparency = String(
         globals.transparency === 'reduced',
       )
-      return <Story />
+      // What the app mounts once at its root (MAR-3616): the tooltip host.
+      return (
+        <UiProvider>
+          <Story />
+        </UiProvider>
+      )
     },
   ],
   // Runs after each play function and before the accessibility check

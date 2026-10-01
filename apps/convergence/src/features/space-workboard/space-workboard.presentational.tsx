@@ -34,6 +34,8 @@ import {
 } from '@/entities/space'
 import {
   Button,
+  buttonVariants,
+  cn,
   Dialog,
   DialogBody,
   DialogContent,
@@ -42,6 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  IconButton,
   Input,
   Select,
   SelectContent,
@@ -49,7 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
-  cn,
+  tooltipAttributes,
 } from '@convergence/ui'
 import {
   SELECT_EMPTY_VALUE,
@@ -251,15 +254,15 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                   disabled={isCreating}
                   aria-label="New Space title"
                 />
-                <Button
+                <IconButton
+                  label="Create Space"
                   type="submit"
-                  size="icon"
-                  variant="outline"
+                  variant="secondary"
                   disabled={createDisabled}
-                  aria-label="Create Space"
+                  size="lg"
                 >
                   <Plus className="h-4 w-4" />
-                </Button>
+                </IconButton>
               </form>
             </div>
 
@@ -279,13 +282,14 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       key={space.id}
                       type="button"
                       variant="ghost"
+                      onClick={() => onSelectSpace(space.id)}
+                      size="lg"
                       className={cn(
                         'h-auto w-full justify-start rounded-lg border px-3 py-3 text-left',
                         selectedSpace?.id === space.id
                           ? 'border-border bg-accent/70'
                           : 'border-transparent hover:border-border/60',
                       )}
-                      onClick={() => onSelectSpace(space.id)}
                     >
                       <span className="min-w-0 flex-1 space-y-2">
                         <span className="block truncate text-sm font-medium">
@@ -407,8 +411,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                     </span>
                     <Button
                       type="button"
-                      variant="outline"
-                      size="sm"
+                      variant="secondary"
                       onClick={onSynthesize}
                       disabled={isSynthesizing || selectedAttempts.length === 0}
                       aria-label="Synthesize Space brief"
@@ -443,16 +446,15 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                           stable Space state.
                         </div>
                       </div>
-                      <Button
+                      <IconButton
+                        label="Dismiss synthesis preview"
                         type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
+                        variant="secondary"
                         onClick={onDismissSynthesisPreview}
-                        aria-label="Dismiss synthesis preview"
+                        className="shrink-0"
                       >
                         <X className="h-4 w-4" />
-                      </Button>
+                      </IconButton>
                     </div>
 
                     {synthesisPreview.brief ? (
@@ -471,15 +473,13 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                         <div className="flex justify-end gap-2">
                           <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
+                            variant="secondary"
                             onClick={onRejectSynthesisBrief}
                           >
                             Reject
                           </Button>
                           <Button
                             type="button"
-                            size="sm"
                             onClick={onAcceptSynthesisBrief}
                           >
                             <Check className="h-4 w-4" />
@@ -516,8 +516,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                             </div>
                             <Button
                               type="button"
-                              variant="outline"
-                              size="sm"
+                              variant="secondary"
                               onClick={() =>
                                 onAcceptSynthesisArtifact(artifact.id)
                               }
@@ -577,8 +576,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                     <div className="flex items-center gap-2">
                       <Button
                         type="button"
-                        variant="outline"
-                        size="sm"
+                        variant="secondary"
                         onClick={onDiscoverArtifacts}
                         disabled={
                           isDiscoveringArtifacts ||
@@ -593,7 +591,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                         onOpenChange={onArtifactDialogOpenChange}
                       >
                         <DialogTrigger asChild>
-                          <Button type="button" variant="outline" size="sm">
+                          <Button type="button" variant="secondary">
                             <Plus className="h-4 w-4" />
                             Add Artifact
                           </Button>
@@ -751,16 +749,18 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                             <DialogFooter className="border-t border-border/70 px-6 py-4">
                               <Button
                                 type="button"
-                                variant="outline"
+                                variant="secondary"
                                 onClick={() =>
                                   onArtifactDialogOpenChange(false)
                                 }
+                                size="lg"
                               >
                                 Cancel
                               </Button>
                               <Button
                                 type="submit"
                                 disabled={artifactCreateDisabled}
+                                size="lg"
                               >
                                 <Plus className="h-4 w-4" />
                                 {isCreatingArtifact
@@ -796,8 +796,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                             <div className="flex shrink-0 items-center gap-2">
                               <Button
                                 type="button"
-                                variant="outline"
-                                size="sm"
+                                variant="secondary"
                                 onClick={() =>
                                   onAcceptArtifactSuggestion(suggestion.id)
                                 }
@@ -805,18 +804,16 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                 <Check className="h-4 w-4" />
                                 Accept
                               </Button>
-                              <Button
+                              <IconButton
+                                label={`Dismiss ${suggestion.title}`}
                                 type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8"
+                                variant="secondary"
                                 onClick={() =>
                                   onDismissArtifactSuggestion(suggestion.id)
                                 }
-                                aria-label={`Dismiss ${suggestion.title}`}
                               >
                                 <X className="h-4 w-4" />
-                              </Button>
+                              </IconButton>
                             </div>
                           </div>
                         </div>
@@ -861,12 +858,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
         ) : null}
 
         <DialogFooter className="border-t border-border/70 px-6 py-4">
-          <Button
-            type="button"
-            onClick={onSave}
-            disabled={saveDisabled}
-            size="sm"
-          >
+          <Button type="button" onClick={onSave} disabled={saveDisabled}>
             <Save className="h-4 w-4" />
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
@@ -910,8 +902,7 @@ function renderSynthesisNotes(input: {
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
           onClick={onAppendSynthesisNotes}
         >
           <Check className="h-4 w-4" />
@@ -1016,24 +1007,21 @@ function renderAttemptRow(input: {
           </Select>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={() => onSetPrimaryAttempt(attempt.id)}
             disabled={attempt.isPrimary}
           >
             <Star className="h-4 w-4" />
             Primary
           </Button>
-          <Button
+          <IconButton
+            label={`Detach ${view.sessionName}`}
             type="button"
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
+            variant="secondary"
             onClick={() => onDetachAttempt(attempt.id)}
-            aria-label={`Detach ${view.sessionName}`}
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </div>
     </div>
@@ -1148,16 +1136,14 @@ function renderArtifactRow(input: {
         </label>
 
         <div className="flex items-end">
-          <Button
+          <IconButton
+            label={`Remove Artifact ${artifact.label}`}
             type="button"
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
+            variant="secondary"
             onClick={() => onDeleteArtifact(artifact.id)}
-            aria-label={`Remove Artifact ${artifact.label}`}
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </div>
 
@@ -1178,22 +1164,25 @@ function renderArtifactRow(input: {
               aria-label={`Value for ${artifact.label}`}
             />
             {artifactUrl ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                asChild
+              // A link that looks like an icon button: it goes somewhere,
+              // so it stays a link (MAR-3616).
+              <a
+                href={artifactUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Open Artifact ${artifact.label}`}
+                {...tooltipAttributes(`Open Artifact ${artifact.label}`)}
+                className={cn(
+                  buttonVariants({
+                    variant: 'ghost',
+                    size: 'lg',
+                    shape: 'icon',
+                  }),
+                  'shrink-0',
+                )}
               >
-                <a
-                  href={artifactUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`Open Artifact ${artifact.label}`}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
+                <ExternalLink className="h-4 w-4" />
+              </a>
             ) : null}
           </div>
         </label>

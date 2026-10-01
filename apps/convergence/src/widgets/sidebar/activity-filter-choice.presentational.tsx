@@ -1,12 +1,5 @@
 import type { ReactNode } from 'react'
-import {
-  cn,
-  Button,
-  NO_DRAG_STYLE,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 
 export function FilterChoice({
   label,
@@ -29,7 +22,6 @@ export function FilterChoice({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
       aria-label={label}
       aria-description={
         count === undefined ? undefined : `${count} matching conversations`
@@ -53,12 +45,5 @@ export function FilterChoice({
       )}
     </Button>
   )
-  return tooltip ? (
-    <Tooltip>
-      <TooltipTrigger asChild>{control}</TooltipTrigger>
-      <TooltipContent style={NO_DRAG_STYLE}>{tooltip}</TooltipContent>
-    </Tooltip>
-  ) : (
-    control
-  )
+  return tooltip ? <Tooltip label={tooltip}>{control}</Tooltip> : control
 }

@@ -10,15 +10,13 @@ import type { SessionSummary } from '@/entities/session'
 import type { SpaceAttemptRole } from '@/entities/space'
 import {
   Button,
-  NO_DRAG_STYLE,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
+  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  cn,
+  IconButton,
+  Tooltip,
 } from '@convergence/ui'
 import {
   Archive,
@@ -147,51 +145,42 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
         activeSessionId === session.id && 'bg-accent',
       )}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onSelectSession(session.id)}
-            aria-label={`Open chat session ${session.name}`}
-            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-          >
-            <SessionStateBadge session={session} />
-            <span className="min-w-0 text-left">
-              <span className="block truncate">{session.name}</span>
-              {parallelWorkStatus(session) && (
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  {parallelWorkStatus(session)}
-                </span>
-              )}
-            </span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right" style={NO_DRAG_STYLE}>
-          {session.name}
-        </TooltipContent>
+      <Tooltip label={session.name} side="right">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => onSelectSession(session.id)}
+          aria-label={`Open chat session ${session.name}`}
+          size="lg"
+          className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+        >
+          <SessionStateBadge session={session} />
+          <span className="min-w-0 text-left">
+            <span className="block truncate">{session.name}</span>
+            {parallelWorkStatus(session) && (
+              <span className="block truncate text-[10px] text-muted-foreground">
+                {parallelWorkStatus(session)}
+              </span>
+            )}
+          </span>
+        </Button>
       </Tooltip>
 
       <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100"
-                aria-label={`Chat session actions ${session.name}`}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="left" style={NO_DRAG_STYLE}>
-            {`Chat session actions ${session.name}`}
-          </TooltipContent>
-        </Tooltip>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            label={`Chat session actions ${session.name}`}
+            type="button"
+            variant="quiet"
+            onClick={(event) => event.stopPropagation()}
+            tooltipSide="left"
+            size="xs"
+            className="shrink-0 opacity-0 transition-opacity group-hover/session:opacity-100 focus-visible:opacity-100"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </IconButton>
+        </DropdownMenuTrigger>
+
         <DropdownMenuContent align="end">
           {!session.archivedAt ? (
             <DropdownMenuItem
@@ -245,20 +234,18 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
         <div className="mb-3 space-y-2">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onNewSession}
-            className="w-full justify-start gap-2"
+            className="w-full justify-start"
           >
             <MessageSquarePlus className="h-4 w-4" />
             New chat
           </Button>
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="secondary"
             onClick={onNewSpace}
-            className="w-full justify-start gap-2"
+            className="w-full justify-start"
           >
             <FolderPlus className="h-4 w-4" />
             New Space
@@ -284,63 +271,54 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           selectedSpaceId === space.id && 'bg-accent',
                         )}
                       >
-                        <Button
+                        <IconButton
+                          label={`${expanded ? 'Collapse' : 'Expand'} Space ${space.title}`}
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0"
-                          aria-label={`${expanded ? 'Collapse' : 'Expand'} Space ${space.title}`}
                           onClick={() => onToggleSpace(space.id)}
+                          size="xs"
+                          className="shrink-0"
                         >
                           {expanded ? (
                             <ChevronDown className="h-3.5 w-3.5" />
                           ) : (
                             <ChevronRight className="h-3.5 w-3.5" />
                           )}
-                        </Button>
+                        </IconButton>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => onSelectSpace(space.id)}
-                              aria-label={`Open Space ${space.title}`}
-                              className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-                            >
-                              <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <span className="truncate">{space.title}</span>
-                              {space.attempts.length > 0 ? (
-                                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                                  {space.attempts.length}
-                                </span>
-                              ) : null}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right" style={NO_DRAG_STYLE}>
-                            {space.title}
-                          </TooltipContent>
+                        <Tooltip label={space.title} side="right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => onSelectSpace(space.id)}
+                            aria-label={`Open Space ${space.title}`}
+                            size="lg"
+                            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+                          >
+                            <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{space.title}</span>
+                            {space.attempts.length > 0 ? (
+                              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                                {space.attempts.length}
+                              </span>
+                            ) : null}
+                          </Button>
                         </Tooltip>
                         <DropdownMenu>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
-                                  aria-label={`Space actions ${space.title}`}
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="h-3.5 w-3.5" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent side="left" style={NO_DRAG_STYLE}>
-                              {`Space actions ${space.title}`}
-                            </TooltipContent>
-                          </Tooltip>
+                          <DropdownMenuTrigger asChild>
+                            <IconButton
+                              label={`Space actions ${space.title}`}
+                              type="button"
+                              variant="quiet"
+                              onClick={(event) => event.stopPropagation()}
+                              tooltipSide="left"
+                              size="xs"
+                              className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </IconButton>
+                          </DropdownMenuTrigger>
+
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               className="gap-2"
@@ -365,68 +343,54 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                                     'bg-accent',
                                 )}
                               >
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      onClick={() =>
-                                        onSelectSpaceAttempt(attempt.sessionId)
-                                      }
-                                      aria-label={`Open Space attempt ${attempt.sessionName}`}
-                                      className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-                                    >
-                                      <SessionStateBadge
-                                        session={attempt.session}
-                                      />
-                                      <span className="truncate">
-                                        {attempt.sessionName}
-                                        {attempt.session &&
-                                          parallelWorkStatus(
-                                            attempt.session,
-                                          ) && (
-                                            <span className="block truncate text-[10px] text-muted-foreground">
-                                              {parallelWorkStatus(
-                                                attempt.session,
-                                              )}
-                                            </span>
-                                          )}
-                                      </span>
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent
-                                    side="right"
-                                    style={NO_DRAG_STYLE}
+                                <Tooltip
+                                  label={attempt.sessionName}
+                                  side="right"
+                                >
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      onSelectSpaceAttempt(attempt.sessionId)
+                                    }
+                                    aria-label={`Open Space attempt ${attempt.sessionName}`}
+                                    size="lg"
+                                    className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                                   >
-                                    {attempt.sessionName}
-                                  </TooltipContent>
+                                    <SessionStateBadge
+                                      session={attempt.session}
+                                    />
+                                    <span className="truncate">
+                                      {attempt.sessionName}
+                                      {attempt.session &&
+                                        parallelWorkStatus(attempt.session) && (
+                                          <span className="block truncate text-[10px] text-muted-foreground">
+                                            {parallelWorkStatus(
+                                              attempt.session,
+                                            )}
+                                          </span>
+                                        )}
+                                    </span>
+                                  </Button>
                                 </Tooltip>
 
                                 <DropdownMenu>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/attempt:opacity-100 focus-visible:opacity-100"
-                                          aria-label={`Space attempt actions ${attempt.sessionName}`}
-                                          onClick={(event) =>
-                                            event.stopPropagation()
-                                          }
-                                        >
-                                          <MoreHorizontal className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                      side="left"
-                                      style={NO_DRAG_STYLE}
+                                  <DropdownMenuTrigger asChild>
+                                    <IconButton
+                                      label={`Space attempt actions ${attempt.sessionName}`}
+                                      type="button"
+                                      variant="quiet"
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      tooltipSide="left"
+                                      size="xs"
+                                      className="shrink-0 opacity-0 transition-opacity group-hover/attempt:opacity-100 focus-visible:opacity-100"
                                     >
-                                      {`Space attempt actions ${attempt.sessionName}`}
-                                    </TooltipContent>
-                                  </Tooltip>
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </IconButton>
+                                  </DropdownMenuTrigger>
+
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem
                                       className="gap-2"
@@ -511,24 +475,25 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
           {archivedSpaces.length > 0 ? (
             <div className="mb-3 ml-2 border-l border-border pl-2">
               <div className="group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-                <Button
+                <IconButton
+                  label={`${showArchivedSpaces ? 'Collapse' : 'Expand'} archived Spaces`}
                   type="button"
                   variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  aria-label={`${showArchivedSpaces ? 'Collapse' : 'Expand'} archived Spaces`}
                   onClick={onToggleArchivedSpaces}
+                  size="xs"
+                  className="shrink-0"
                 >
                   {showArchivedSpaces ? (
                     <ChevronDown className="h-3.5 w-3.5" />
                   ) : (
                     <ChevronRight className="h-3.5 w-3.5" />
                   )}
-                </Button>
+                </IconButton>
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={onToggleArchivedSpaces}
+                  size="lg"
                   className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                 >
                   <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -549,43 +514,34 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                         selectedSpaceId === space.id && 'bg-accent',
                       )}
                     >
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => onSelectSpace(space.id)}
-                            aria-label={`Open archived Space ${space.title}`}
-                            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-                          >
-                            <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{space.title}</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" style={NO_DRAG_STYLE}>
-                          {space.title}
-                        </TooltipContent>
+                      <Tooltip label={space.title} side="right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => onSelectSpace(space.id)}
+                          aria-label={`Open archived Space ${space.title}`}
+                          size="lg"
+                          className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+                        >
+                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{space.title}</span>
+                        </Button>
                       </Tooltip>
                       <DropdownMenu>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
-                                aria-label={`Archived Space actions ${space.title}`}
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" style={NO_DRAG_STYLE}>
-                            {`Archived Space actions ${space.title}`}
-                          </TooltipContent>
-                        </Tooltip>
+                        <DropdownMenuTrigger asChild>
+                          <IconButton
+                            label={`Archived Space actions ${space.title}`}
+                            type="button"
+                            variant="quiet"
+                            onClick={(event) => event.stopPropagation()}
+                            tooltipSide="left"
+                            size="xs"
+                            className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </IconButton>
+                        </DropdownMenuTrigger>
+
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
                             className="gap-2"

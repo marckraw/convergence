@@ -35,11 +35,13 @@ import type { ComposerInjectionRootItem } from './composer-injection-trigger.pur
 import { ModelPickerDialog } from '@/features/model-picker'
 import {
   Button,
+  cn,
+  IconButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
   Textarea,
-  cn,
+  Tooltip,
 } from '@convergence/ui'
 import {
   ArrowUp,
@@ -678,16 +680,16 @@ export const Composer: FC<ComposerProps> = ({
                   <span className="truncate">
                     {item.label?.trim() ? item.label : 'Untitled'}
                   </span>
-                  <Button
+                  <IconButton
+                    label={`Remove ${item.label?.trim() ? item.label : 'Untitled'} context`}
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 rounded-full"
-                    aria-label={`Remove ${item.label?.trim() ? item.label : 'Untitled'} context`}
                     onClick={() => onContextRemove(item.id)}
+                    size="xs"
+                    className="rounded-full"
                   >
                     <X className="h-3 w-3" />
-                  </Button>
+                  </IconButton>
                 </span>
               ))}
             </div>
@@ -778,11 +780,10 @@ export const Composer: FC<ComposerProps> = ({
                 <PopoverTrigger asChild>
                   <Button
                     type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    variant="quiet"
                     aria-label="Add composer resources"
                     disabled={disabled}
+                    size="sm"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add
@@ -807,12 +808,11 @@ export const Composer: FC<ComposerProps> = ({
                   </div>
                   <Button
                     type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-full justify-start gap-2 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    variant="quiet"
                     aria-label="Add attachment"
                     onClick={onAttachmentAdd}
                     disabled={attachmentsIngestInFlight}
+                    className="w-full justify-start px-2"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     Attach file
@@ -899,7 +899,7 @@ export const Composer: FC<ComposerProps> = ({
                     }
                     disabled={modelSelectionDisabled || !selection.provider}
                     triggerVariant="ghost"
-                    triggerSize="sm"
+                    triggerSize="md"
                     triggerClassName="px-2 text-xs text-muted-foreground hover:text-foreground"
                   />
                   {effortItems.length > 0 && (
@@ -994,16 +994,10 @@ export const Composer: FC<ComposerProps> = ({
                         className="px-2 text-xs text-muted-foreground hover:text-foreground"
                       />
                       {canCustomizePermissions ? (
-                        <Button
+                        <IconButton
+                          label="Advanced permission controls"
                           type="button"
-                          size="icon"
-                          variant="ghost"
-                          className={cn(
-                            'h-7 w-7 text-muted-foreground hover:text-foreground',
-                            permissionAdvancedOpen &&
-                              'bg-secondary text-foreground',
-                          )}
-                          aria-label="Advanced permission controls"
+                          variant="quiet"
                           aria-pressed={permissionAdvancedOpen}
                           onClick={() =>
                             onPermissionAdvancedOpenChange(
@@ -1011,9 +1005,14 @@ export const Composer: FC<ComposerProps> = ({
                             )
                           }
                           disabled={disabled || !selection.provider}
+                          size="sm"
+                          className={cn(
+                            permissionAdvancedOpen &&
+                              'bg-secondary text-foreground',
+                          )}
                         >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
-                        </Button>
+                        </IconButton>
                       ) : selection.providerId === 'pi' ? (
                         <span className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground">
                           Provider-managed
@@ -1024,28 +1023,30 @@ export const Composer: FC<ComposerProps> = ({
                 </>
               )}
               {armedOutgoingRelays > 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  role="switch"
-                  aria-checked={relaysMuted}
-                  aria-label="Send quiet"
-                  title={relayMuteTitle(relaysMuted, armedOutgoingRelays)}
-                  onClick={() => onRelaysMutedChange(!relaysMuted)}
-                  disabled={disabled}
-                  className={cn(
-                    'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
-                    relaysMuted && 'bg-secondary text-foreground',
-                  )}
+                <Tooltip
+                  label={relayMuteTitle(relaysMuted, armedOutgoingRelays)}
                 >
-                  {relaysMuted ? (
-                    <BellOff className="h-3.5 w-3.5" />
-                  ) : (
-                    <Bell className="h-3.5 w-3.5" />
-                  )}
-                  Quiet
-                </Button>
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    role="switch"
+                    aria-checked={relaysMuted}
+                    aria-label="Send quiet"
+                    onClick={() => onRelaysMutedChange(!relaysMuted)}
+                    disabled={disabled}
+                    size="sm"
+                    className={cn(
+                      relaysMuted && 'bg-secondary text-foreground',
+                    )}
+                  >
+                    {relaysMuted ? (
+                      <BellOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Bell className="h-3.5 w-3.5" />
+                    )}
+                    Quiet
+                  </Button>
+                </Tooltip>
               ) : null}
               {wiresSlot}
               {usagePill}
@@ -1061,17 +1062,16 @@ export const Composer: FC<ComposerProps> = ({
                       key={mode}
                       type="button"
                       variant="ghost"
-                      size="sm"
                       role="radio"
                       aria-checked={deliveryMode === mode}
+                      onClick={() => onDeliveryModeChange(mode)}
+                      disabled={disabled}
                       className={cn(
                         'h-5 rounded-sm px-2 text-[11px] font-medium text-muted-foreground shadow-none transition-colors',
                         deliveryMode === mode
                           ? 'bg-secondary text-secondary-foreground'
                           : 'hover:text-foreground',
                       )}
-                      onClick={() => onDeliveryModeChange(mode)}
-                      disabled={disabled}
                     >
                       {modeLabels[mode] ?? mode}
                     </Button>
@@ -1084,16 +1084,15 @@ export const Composer: FC<ComposerProps> = ({
                 </span>
               ) : null}
             </div>
-            <Button
+            <IconButton
+              label="Send message"
               type="button"
-              size="icon"
-              aria-label="Send message"
-              className="h-8 w-8 rounded-full"
               disabled={!canSend}
               onClick={onSubmit}
+              className="rounded-full"
             >
               <ArrowUp className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
           {accountNotice ? (
             <div className="mt-3 border-t border-border/60 pt-3">

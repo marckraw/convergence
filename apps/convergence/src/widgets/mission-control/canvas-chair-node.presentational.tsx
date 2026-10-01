@@ -6,7 +6,7 @@ import {
   CHAIR_NODE_EMOJI,
   CHAIR_NODE_LABEL,
 } from '@/features/mission-control'
-import { cn, Button } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasChairNodeData } from './session-canvas.types'
 
@@ -83,7 +83,6 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             aria-label={`Answer the hails for this crew`}
             onClick={() => chair.onAcknowledge(chair.crewId)}
             className="ml-auto h-5 shrink-0 px-1.5 text-[10px] text-amber-200/80 hover:text-amber-100"

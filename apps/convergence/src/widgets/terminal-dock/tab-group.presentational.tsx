@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { Plus, X } from 'lucide-react'
 import type { TerminalTab } from '@/entities/terminal'
-import { cn, Button } from '@convergence/ui'
+import { cn, IconButton } from '@convergence/ui'
 
 interface TabGroupProps {
   tabs: TerminalTab[]
@@ -55,36 +55,34 @@ export const TabGroup: FC<TabGroupProps> = ({
               >
                 <span className="truncate">{label}</span>
               </Tabs.Trigger>
-              <Button
+              <IconButton
+                label={`Close tab ${tab.title}`}
                 type="button"
-                size="icon"
                 variant="ghost"
-                className={cn(
-                  'h-4 w-4 opacity-0 group-hover:opacity-100',
-                  isActive && 'opacity-70',
-                )}
-                aria-label={`Close tab ${tab.title}`}
                 onClick={(event) => {
                   event.stopPropagation()
                   onCloseTab(tab.id)
                 }}
+                size="xs"
+                className={cn(
+                  'opacity-0 group-hover:opacity-100',
+                  isActive && 'opacity-70',
+                )}
               >
                 <X className="h-3 w-3" />
-              </Button>
+              </IconButton>
             </div>
           )
         })}
-        <Button
+        <IconButton
+          label="New tab"
           type="button"
-          size="icon"
           variant="ghost"
-          className="h-6 w-6"
-          aria-label="New tab"
-          title="New tab"
           onClick={onNewTab}
+          size="xs"
         >
           <Plus className="h-3.5 w-3.5" />
-        </Button>
+        </IconButton>
       </Tabs.List>
       {trailingSlot ? (
         <div className="flex shrink-0 items-center">{trailingSlot}</div>
