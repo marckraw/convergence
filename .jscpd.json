@@ -1,0 +1,17 @@
+{
+  "path": ["."],
+  "pattern": "apps/convergence/src/**/*.{ts,tsx}",
+  "format": ["typescript", "tsx"],
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.stories.tsx",
+    "**/*.gen.ts",
+    "**/generated/**",
+    "canaries/**"
+  ],
+  "minTokens": 100,
+  "minLines": 5,
+  "threshold": 1,
+  "exitCode": 1
+}
