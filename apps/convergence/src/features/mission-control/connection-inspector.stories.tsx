@@ -265,9 +265,15 @@ export const Disabled: Story = {
     }),
   },
   play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole('button', { name: 'Clear Opus conversation' }),
-    ).toBeDisabled()
+    // Clear is unavailable with a reason (R2, MAR-3616): focusable, and it
+    // says why.
+    const clear = canvas.getByRole('button', {
+      name: 'Clear Opus conversation',
+    })
+    await expect(clear).toHaveAttribute('aria-disabled', 'true')
+    await expect(clear).toHaveAccessibleDescription(
+      expect.stringContaining('Codex'),
+    )
     await expect(canvas.getByRole('switch', { name: 'On' })).toBeDisabled()
     await expect(
       canvas.getByRole('textbox', { name: 'Standing instructions' }),

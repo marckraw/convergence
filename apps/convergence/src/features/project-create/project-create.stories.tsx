@@ -26,12 +26,12 @@ export const Default: Story = {
 
 /** Small and outlined, as a toolbar holds it. */
 export const Outline: Story = {
-  args: { variant: 'outline', size: 'sm' },
+  args: { variant: 'secondary', size: 'md' },
 }
 
 /** Ghost, as the sidebar holds it. */
 export const Ghost: Story = {
-  args: { variant: 'ghost', size: 'sm' },
+  args: { variant: 'ghost', size: 'md' },
 }
 
 export const Dark: Story = {

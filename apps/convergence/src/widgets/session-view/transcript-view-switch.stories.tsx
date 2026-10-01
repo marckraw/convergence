@@ -19,9 +19,7 @@ const meta = {
   render: (args) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm">
-          View
-        </Button>
+        <Button variant="secondary">View</Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         <TranscriptViewMenuItems {...args} />

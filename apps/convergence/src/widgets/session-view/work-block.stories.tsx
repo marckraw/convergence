@@ -31,7 +31,9 @@ export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const row = canvas.getByRole('button', { name: args.label })
     await expect(row).toHaveAttribute('aria-expanded', 'false')
-    await expect(row).toHaveAttribute('title', '7 entries · open')
+    // The hint is the app's tooltip, and the row's description (MAR-3616).
+    await expect(row).toHaveAttribute('data-tooltip', '7 entries · open')
+    await expect(row).toHaveAccessibleDescription('7 entries · open')
     await userEvent.click(row)
     await expect(args.onToggle).toHaveBeenCalledOnce()
     // The keyboard reaches it too.
@@ -46,7 +48,7 @@ export const Open: Story = {
   play: async ({ args, canvas }) => {
     const row = canvas.getByRole('button', { name: args.label })
     await expect(row).toHaveAttribute('aria-expanded', 'true')
-    await expect(row).toHaveAttribute('title', '7 entries · fold')
+    await expect(row).toHaveAttribute('data-tooltip', '7 entries · fold')
   },
 }
 
@@ -67,7 +69,7 @@ export const Busy: Story = {
   play: async ({ canvas }) => {
     await expect(
       canvas.getByRole('button', { name: 'Running npm test' }),
-    ).toHaveAttribute('title', '1 entry · open')
+    ).toHaveAttribute('data-tooltip', '1 entry · open')
   },
 }
 

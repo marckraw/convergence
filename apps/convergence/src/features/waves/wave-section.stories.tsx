@@ -91,7 +91,7 @@ export const Long: Story = {
     count: 12,
     hint: 'QA and say done, by name',
     footer: (
-      <Button type="button" variant="ghost" size="sm">
+      <Button type="button" variant="ghost">
         Show all 12 awaiting QA
       </Button>
     ),

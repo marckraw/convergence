@@ -329,9 +329,14 @@ export const Disabled: Story = {
   },
   play: async ({ canvas }) => {
     const reconnect = canvas.getByRole('button', { name: 'Reconnect sentry' })
-    await expect(reconnect).toBeDisabled()
+    // Unavailable with a reason (R2, MAR-3616): focusable, the reason its
+    // tooltip and its description, never a native title.
+    await expect(reconnect).toHaveAttribute('aria-disabled', 'true')
     await expect(reconnect).toHaveAttribute(
-      'title',
+      'data-tooltip',
+      'no process is running; the next message starts one and reads its connectors afresh',
+    )
+    await expect(reconnect).toHaveAccessibleDescription(
       'no process is running; the next message starts one and reads its connectors afresh',
     )
   },

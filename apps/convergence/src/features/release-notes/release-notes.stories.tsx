@@ -55,11 +55,7 @@ const meta = {
     open: true,
     onOpenChange: fn(),
     bundle: { currentVersion: '0.98.0', releases },
-    trigger: (
-      <Button variant="ghost" size="sm">
-        About
-      </Button>
-    ),
+    trigger: <Button variant="ghost">About</Button>,
     historyItems: historyOf(releases),
     historyPage: 1,
     historyTotalPages: 1,

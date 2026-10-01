@@ -39,11 +39,7 @@ const meta = {
     onEnvOverwriteChange: fn(),
     onEnvPatternsTextChange: fn(),
     onSave: fn(),
-    trigger: (
-      <Button variant="ghost" size="sm">
-        Project settings
-      </Button>
-    ),
+    trigger: <Button variant="ghost">Project settings</Button>,
   },
 } satisfies Meta<typeof ProjectSettingsDialog>
 

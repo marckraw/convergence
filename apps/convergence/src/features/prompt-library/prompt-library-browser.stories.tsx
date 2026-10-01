@@ -114,11 +114,7 @@ const meta = {
   args: {
     open: true,
     onOpenChange: fn(),
-    trigger: (
-      <Button variant="ghost" size="sm">
-        Prompts
-      </Button>
-    ),
+    trigger: <Button variant="ghost">Prompts</Button>,
     projectName: 'convergence',
     catalog,
     prompts,

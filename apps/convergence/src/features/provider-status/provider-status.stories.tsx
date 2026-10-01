@@ -171,7 +171,7 @@ const meta = {
     open: true,
     onOpenChange: fn(),
     trigger: (
-      <Button type="button" variant="outline" size="sm">
+      <Button type="button" variant="secondary">
         Providers
       </Button>
     ),
