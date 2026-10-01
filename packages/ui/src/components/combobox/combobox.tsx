@@ -1,6 +1,6 @@
 import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox'
 import { CheckIcon, ChevronDownIcon } from 'lucide-react'
-import { Fragment, useId, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 import type { ControlSize } from '#lib/control-frame.styles'
 import { popupMotion } from '../../motion/popup.styles'
@@ -133,6 +133,23 @@ const CHEVRON = 'size-3 shrink-0 text-ink-muted'
 const RADIX_DIALOG = '[data-slot="dialog-content"][data-state]'
 
 /**
+ * While the list is open inside a Radix dialog, Escape is the list's: the
+ * dialog hears it first (a capture listener on the document) and would close
+ * too. Marked handled before it gets there (on the window, earlier in the
+ * capture), the dialog lets it pass and the list closes as it should.
+ */
+function useEscapeStaysInList(active: boolean) {
+  useEffect(() => {
+    if (!active) return
+    const claim = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault()
+    }
+    window.addEventListener('keydown', claim, true)
+    return () => window.removeEventListener('keydown', claim, true)
+  }, [active])
+}
+
+/**
  * One choice from a long or loaded list, with a search (MAR-3616 DS3e, R9):
  * branches, models, projects, hosts. Up to about eight fixed options is a
  * Select; this is for the rest. It replaces SearchableSelect and keeps its
@@ -199,6 +216,7 @@ function Combobox(props: ComboboxProps) {
   const visible = filterComboboxItems(items, query)
   const listShown = loadingMessage === undefined && !error && visible.length > 0
   const container = trigger?.closest<HTMLElement>(RADIX_DIALOG) ?? undefined
+  useEscapeStaysInList(open && container !== undefined)
   const message =
     typeof emptyMessage === 'function' ? emptyMessage(query) : emptyMessage
 

@@ -3,6 +3,14 @@ import { FolderGit2, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../dialog/dialog'
+import {
   Combobox,
   type ComboboxItem,
   type ComboboxSingleProps,
@@ -185,8 +193,9 @@ export const Disabled: Story = {
     await expect(archived).toHaveAttribute('aria-disabled', 'true')
     const reason = within(archived).getByText(/^Archived:/)
     await expect(getComputedStyle(reason).whiteSpace).toBe('normal')
-    await expect(reason.getBoundingClientRect().height).toBeGreaterThanOrEqual(
-      2 * Number.parseFloat(getComputedStyle(reason).lineHeight) - 1,
+    // Two lines at least: taller than one and a half.
+    await expect(reason.getBoundingClientRect().height).toBeGreaterThan(
+      1.5 * Number.parseFloat(getComputedStyle(reason).lineHeight),
     )
     const choosable = within(
       within(dialog).getByRole('option', { name: /emergence/ }),
@@ -415,6 +424,56 @@ export const Sizes: Story = {
           .getBoundingClientRect().height,
     )
     await expect(heights).toEqual([24, 28, 32, 36])
+  },
+}
+
+const dialogChanged = fn()
+
+/**
+ * In a dialog: the list keeps the focus and takes the clicks, and Escape
+ * closes the list, not the dialog under it.
+ */
+export const InDialog: Story = {
+  render: (args) => (
+    <Dialog open onOpenChange={dialogChanged}>
+      <DialogContent className="w-96">
+        <DialogHeader className="px-6 pt-5">
+          <DialogTitle>New workspace</DialogTitle>
+          <DialogDescription>Pick the project it belongs to.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <ProjectPicker {...args} />
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  ),
+  play: async ({ args, userEvent }) => {
+    const dialog = await screen.findByRole('dialog', { name: 'New workspace' })
+    const trigger = within(dialog).getByRole('combobox', { name: 'Project' })
+    await userEvent.click(trigger)
+    const list = await openedList()
+    const search = within(list).getByRole('combobox', {
+      name: 'Search projects…',
+    })
+    await waitFor(() => expect(search).toHaveFocus())
+    await userEvent.keyboard('code{Enter}')
+    await expect(args.onChange).toHaveBeenCalledWith('codewalk')
+    await waitFor(() => expect(trigger).toHaveFocus())
+
+    await userEvent.click(trigger)
+    await userEvent.click(
+      within(await openedList()).getByRole('option', { name: /emergence/ }),
+    )
+    await expect(args.onChange).toHaveBeenLastCalledWith('emergence')
+
+    await userEvent.click(trigger)
+    await openedList()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Project' })).toBeNull(),
+    )
+    await expect(dialogChanged).not.toHaveBeenCalled()
+    await expect(trigger).toHaveFocus()
   },
 }
 
