@@ -185,7 +185,7 @@ function DialogHeader({
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">{children}</div>
           <div
             data-slot="dialog-header-actions"
-            className="flex shrink-0 items-center gap-2"
+            className="inline-flex shrink-0 items-center gap-2"
           >
             {actions}
           </div>
