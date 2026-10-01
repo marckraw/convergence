@@ -515,6 +515,27 @@
 }
 
 /*
+ * A grid of cards that takes as many columns as fit, each at least N spacing
+ * steps wide and never wider than the row (MAR-3617): Mission Control's card
+ * grid, Loom's wide sheets, Learn Loom's lesson. `fill` keeps the spare
+ * columns (cards keep their width), `fit` lets the cards stretch into them.
+ * `grid-cols-fill-65` is columns of at least 260 px.
+ */
+@utility grid-cols-fill-* {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, calc(var(--spacing) * --value(integer))), 1fr)
+  );
+}
+
+@utility grid-cols-fit-* {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * --value(integer))), 1fr)
+  );
+}
+
+/*
  * A box that travels or resizes, its edge and fill with it (MAR-3617): Loom's
  * folding shell, its paper stack, Learn Loom's sheets. Tailwind has no
  * utility for size and place, so each wrote its own transition-[…] list.

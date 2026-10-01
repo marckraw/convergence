@@ -93,6 +93,12 @@ describe('cn with the Convergence theme', () => {
     expect(cn('transition-layout', 'transition-none')).toBe('transition-none')
   })
 
+  it('knows the card grids are column templates', () => {
+    expect(cn('grid-cols-2', 'grid-cols-fill-65')).toBe('grid-cols-fill-65')
+    expect(cn('grid-cols-fit-80', 'grid-cols-1')).toBe('grid-cols-1')
+    expect(cn('grid-cols-fill-65', 'grid-cols-fit-90')).toBe('grid-cols-fit-90')
+  })
+
   it('keeps motion that only applies in another state', () => {
     expect(cn('duration-panel', 'data-[state=closed]:duration-exit')).toBe(
       'duration-panel data-[state=closed]:duration-exit',
