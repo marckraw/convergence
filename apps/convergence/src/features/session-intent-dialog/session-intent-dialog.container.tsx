@@ -39,7 +39,9 @@ export const SessionIntentDialogContainer: FC<
   const handleSelectTerminal = useCallback(async () => {
     if (creating) return
     if (!activeProject) {
-      toast.error('No active project. Open a project first.')
+      toast.error('Couldn’t create the session.', {
+        description: 'No project is open. Open a project first.',
+      })
       closeDialog()
       return
     }
@@ -57,11 +59,10 @@ export const SessionIntentDialogContainer: FC<
       closeDialog()
       onSelectCodeSession?.(session.id)
     } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? `Failed to create terminal session: ${err.message}`
-          : 'Failed to create terminal session',
-      )
+      // R10: what failed, then why, underneath.
+      toast.error('Couldn’t create the terminal session.', {
+        description: err instanceof Error ? err.message : undefined,
+      })
     } finally {
       setCreating(false)
     }

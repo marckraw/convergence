@@ -112,10 +112,8 @@ export const Default: Story = {
       'attempt-1',
       'space-ds4',
     )
-    const footerClose = within(dialog)
-      .getAllByRole('button', { name: 'Close' })
-      .find((button) => button.textContent === 'Close')
-    await userEvent.click(footerClose as HTMLElement)
+    // Each change is kept as it is made, so it ends in Done (R6).
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
     await expect(args.onOpenChange).toHaveBeenCalledWith(false)
   },
 }
@@ -192,9 +190,9 @@ export const Busy: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByText('Loading linked Spaces...'),
-    ).toBeVisible()
+    await waitFor(() =>
+      expect(within(dialog).getByText('Loading linked Spaces…')).toBeVisible(),
+    )
     await expect(
       within(dialog).getByRole('button', { name: 'Attach' }),
     ).toBeDisabled()
@@ -204,14 +202,14 @@ export const Busy: Story = {
   },
 }
 
-/** Failed: the error sits above the footer. */
+/** Failed: the error is announced above the footer. */
 export const Failed: Story = {
-  args: { error: 'Could not link the session: the Space was archived.' },
+  args: { error: "Couldn't link the session: the Space was archived." },
   play: async () => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByText(/the Space was archived/),
-    ).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /the Space was archived/,
+    )
   },
 }
 
