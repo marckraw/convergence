@@ -14,6 +14,7 @@ import type {
   UpdateSpaceInput,
   UpdateSpaceArtifactInput,
 } from './space.types'
+import { removeById, upsertById } from '@/shared/lib/by-id.pure'
 
 interface SpaceState {
   spaces: Space[]
@@ -73,22 +74,6 @@ interface SpaceActions {
 
 export type SpaceStore = SpaceState & SpaceActions
 
-function upsertSpace(spaces: Space[], next: Space): Space[] {
-  return spaces.some((space) => space.id === next.id)
-    ? spaces.map((space) => (space.id === next.id ? next : space))
-    : [next, ...spaces]
-}
-
-function upsertById<T extends { id: string }>(items: T[], next: T): T[] {
-  return items.some((item) => item.id === next.id)
-    ? items.map((item) => (item.id === next.id ? next : item))
-    : [next, ...items]
-}
-
-function removeById<T extends { id: string }>(items: T[], id: string): T[] {
-  return items.filter((item) => item.id !== id)
-}
-
 export const useSpaceStore = create<SpaceStore>((set) => ({
   spaces: [],
   attemptsBySpaceId: {},
@@ -116,7 +101,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
     try {
       const space = await spaceApi.create(input)
       set((state) => ({
-        spaces: upsertSpace(state.spaces, space),
+        spaces: upsertById(state.spaces, space),
       }))
       return space
     } catch (err) {
@@ -132,7 +117,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
     try {
       const space = await spaceApi.update(id, input)
       set((state) => ({
-        spaces: upsertSpace(state.spaces, space),
+        spaces: upsertById(state.spaces, space),
       }))
       return space
     } catch (err) {
@@ -148,7 +133,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
     try {
       const space = await spaceApi.archive(id)
       set((state) => ({
-        spaces: upsertSpace(state.spaces, space),
+        spaces: upsertById(state.spaces, space),
       }))
       return space
     } catch (err) {
@@ -164,7 +149,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
     try {
       const space = await spaceApi.unarchive(id)
       set((state) => ({
-        spaces: upsertSpace(state.spaces, space),
+        spaces: upsertById(state.spaces, space),
       }))
       return space
     } catch (err) {

@@ -15,6 +15,7 @@ import { Badge } from '../badge/badge'
 import { Button, type ButtonVariant } from '../button/button'
 import { EmptyState } from '../empty-state/empty-state'
 import { SearchField } from '../search-field/search-field'
+import { Tooltip } from '../tooltip/tooltip'
 import {
   comboboxFooter,
   comboboxGroupLabel,
@@ -38,7 +39,7 @@ type ComboboxItem = {
   /** A word on a warning tint after the label (an ALPHA provider); it is searched too. */
   badge?: {
     label: string
-    /** More about it, for a pointer that rests on it. */
+    /** More about it, in our tooltip for a pointer that rests on it (R2). */
     title?: string
   }
   /**
@@ -267,9 +268,11 @@ function Combobox(props: ComboboxProps) {
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate font-medium">{item.label}</span>
             {item.badge ? (
-              <Badge tone="warning" shape="label" title={item.badge.title}>
-                {item.badge.label}
-              </Badge>
+              <Tooltip label={item.badge.title}>
+                <Badge tone="warning" shape="label">
+                  {item.badge.label}
+                </Badge>
+              </Tooltip>
             ) : null}
           </span>
           {item.description ? (
@@ -395,9 +398,11 @@ function Combobox(props: ComboboxProps) {
           {triggerIcon}
           <span className="truncate">{value}</span>
           {chosen?.badge && !props.multiple ? (
-            <Badge tone="warning" shape="label" title={chosen.badge.title}>
-              {chosen.badge.label}
-            </Badge>
+            <Tooltip label={chosen.badge.title}>
+              <Badge tone="warning" shape="label">
+                {chosen.badge.label}
+              </Badge>
+            </Tooltip>
           ) : null}
         </span>
         {chevron ? <ChevronDownIcon aria-hidden className={CHEVRON} /> : null}

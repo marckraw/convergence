@@ -608,6 +608,11 @@
   --layout-dialog-2xl: 80rem;
   /* A picker's popup at its widest and tallest: the Combobox, today's SearchableSelect (24 rem) */
   --layout-picker: 24rem;
+  /*
+   * An attachment's preview at its tallest, the picture, the PDF or the text: the window less the
+   * dialog's frame round it (h-(--layout-preview-height), three places in attachment-preview)
+   */
+  --layout-preview-height: calc(100vh - 8rem);
 
   /*
    * Motion -------------------------------------------------------------------------------------

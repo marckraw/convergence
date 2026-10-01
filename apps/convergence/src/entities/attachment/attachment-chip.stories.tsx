@@ -38,8 +38,9 @@ type Story = StoryObj<typeof meta>
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
+    // Its name promises no Delete key (CONV-16): the cross is the way to remove.
     const preview = canvas.getByRole('button', {
-      name: 'Preview sidebar-overflow.png. Press to open preview or Delete to remove.',
+      name: 'Preview sidebar-overflow.png',
     })
     await expect(preview).toHaveTextContent('sidebar-overflow.png')
     await userEvent.click(preview)
@@ -90,10 +91,14 @@ export const Failed: Story = {
     },
     capabilityError: 'This model does not accept PDF attachments.',
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(
       canvas.getByRole('button', { name: /^Preview quarterly-report\.pdf/ }),
     ).toHaveAccessibleDescription('This model does not accept PDF attachments.')
+    // R1: a file that can't go wears the danger tone.
+    await expect(
+      canvasElement.querySelector('[data-slot="chip"]'),
+    ).toHaveAttribute('data-tone', 'danger')
   },
 }
 

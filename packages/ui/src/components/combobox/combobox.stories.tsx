@@ -331,6 +331,13 @@ export const Grouped: Story = {
     await expect(within(only).getByRole('option')).toHaveTextContent(
       /Gemini 3\.5 Flash/,
     )
+    // The badge says more in our tooltip, never a native title (R2).
+    const badge = within(only).getByText('Alpha')
+    await expect(badge).not.toHaveAttribute('title')
+    await userEvent.hover(badge)
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('Early provider support')
   },
 }
 

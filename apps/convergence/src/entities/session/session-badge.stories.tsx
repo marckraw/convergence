@@ -4,9 +4,8 @@ import { SessionBadge } from './session-badge.presentational'
 
 /**
  * Each attention the record can hold, as the glyph shows it. The app draws
- * this glyph only through the session entity's SessionStateBadge, which
- * answers `compacting` from the record; it is drawn bare here to show the
- * shared part on its own.
+ * this glyph only through SessionStateBadge, which answers `compacting` from
+ * the record; it is drawn bare here to show the glyph on its own.
  */
 const ATTENTIONS = [
   ['needs-approval', 'Needs approval'],
@@ -33,7 +32,7 @@ function AllAttentions() {
 }
 
 const meta = {
-  title: 'Components/Shared/Session badge',
+  title: 'Entities/Session/Session badge',
   component: SessionBadge,
   args: { attention: 'finished', status: 'completed' },
 } satisfies Meta<typeof SessionBadge>

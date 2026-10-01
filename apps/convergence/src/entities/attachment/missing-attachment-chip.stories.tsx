@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect } from 'storybook/test'
+import { expect, screen } from 'storybook/test'
 import { MissingAttachmentChip } from './missing-attachment-chip.presentational'
 
 const meta = {
@@ -15,11 +15,24 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** A sent attachment whose file is gone: its name, and nothing to open. */
+/**
+ * A sent attachment whose file is gone: its name on a dashed chip, and
+ * nothing to open. Resting the pointer on it says why, in our tooltip.
+ */
 export const Default: Story = {
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     await expect(canvas.getByText('sidebar-overflow.png')).toBeVisible()
     await expect(canvas.queryByRole('button')).toBeNull()
+    const chip = canvasElement.querySelector('[data-slot="chip"]')!
+    await expect(chip).toHaveAttribute('data-missing')
+    await expect(chip).not.toHaveAttribute('title')
+    await expect(chip).toHaveTextContent(
+      'Attachment file is no longer available',
+    )
+    await userEvent.hover(chip)
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('Attachment file is no longer available')
   },
 }
 
@@ -43,7 +56,8 @@ export const Long: Story = {
       'Screenshot 2026-09-30 at 09.12.44 — the sidebar overflowing on a small window.png',
   },
   play: async ({ canvas }) => {
-    const name = canvas.getByText(/^Screenshot 2026-09-30/)
-    await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth)
+    // The chip cuts its name short (the name's own line is inline in it).
+    const cut = canvas.getByText(/^Screenshot 2026-09-30/).parentElement!
+    await expect(cut.scrollWidth).toBeGreaterThan(cut.clientWidth)
   },
 }
