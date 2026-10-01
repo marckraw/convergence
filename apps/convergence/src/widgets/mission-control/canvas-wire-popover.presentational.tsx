@@ -42,7 +42,7 @@ export const CanvasWirePopover: FC<CanvasWirePopoverProps> = ({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <p className="text-xs leading-snug text-foreground">{sentence.text}</p>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-2xs text-muted-foreground">
           {formatArmedLabel(armed)}
         </span>
       </div>
@@ -60,7 +60,7 @@ export const CanvasWirePopover: FC<CanvasWirePopoverProps> = ({
     </div>
 
     {hopLines.length === 0 ? (
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-2xs text-muted-foreground">
         This wire has not fired yet.
       </p>
     ) : (

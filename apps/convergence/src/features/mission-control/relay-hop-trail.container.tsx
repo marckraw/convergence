@@ -83,7 +83,7 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
     // The note survives the trail it described: clearing the last hop empties
     // this section, and "kept 2 from a running flow" would vanish with it.
     return keptNote ? (
-      <p className="text-[11px] text-muted-foreground">{keptNote}</p>
+      <p className="text-2xs text-muted-foreground">{keptNote}</p>
     ) : null
   }
 
@@ -111,7 +111,7 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
           <span
             title={formatAlarmSummary(alarming)}
             className={cn(
-              'flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none',
+              'flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium leading-none',
               'bg-red-500/20 text-red-400 ring-1 ring-red-500/40',
             )}
           >
@@ -152,7 +152,7 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
       </div>
 
       {keptNote ? (
-        <p className="text-[11px] text-muted-foreground">{keptNote}</p>
+        <p className="text-2xs text-muted-foreground">{keptNote}</p>
       ) : null}
 
       {open ? (

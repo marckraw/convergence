@@ -178,7 +178,7 @@ export const LEARN_LOOM_TICKET_CLASS =
  * `559:1841`, `559:2091` are all the same blue), and 11 px, not 12.
  */
 export const LEARN_LOOM_TICKET_ID_CLASS =
-  'text-[11px] font-semibold whitespace-nowrap text-blue-500'
+  'text-2xs font-semibold whitespace-nowrap text-blue-500'
 export const LEARN_LOOM_TICKET_TITLE_CLASS =
   'text-[15px] font-medium break-words text-foreground'
 /**
@@ -192,7 +192,7 @@ export const LEARN_LOOM_TICKET_STATUS_CLASS =
   'text-xs break-words text-foreground'
 /** Sentence case, muted, and last in the card: a note, not a label. */
 export const LEARN_LOOM_TICKET_NOTE_CLASS =
-  'text-[10px] break-words text-muted-foreground'
+  'text-3xs break-words text-muted-foreground'
 
 /**
  * The three emphases, on the app's own tokens (R10).

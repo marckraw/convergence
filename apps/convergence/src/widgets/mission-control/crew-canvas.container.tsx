@@ -1563,7 +1563,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 })
               }
               size="sm"
-              className="text-[11px]"
+              className="text-2xs"
             >
               Import crew…
             </Button>
@@ -1694,7 +1694,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           panel rather than only in one inspector, because "run", "lap" and
           "delivery" are the three words the whole surface is written in. */}
           {historyOpen && selectedRun?.status.word === 'handed-back' ? (
-            <p className="border-t border-white/10 px-5 py-1.5 text-[10px] text-muted-foreground/70">
+            <p className="border-t border-hairline px-5 py-1.5 text-3xs text-muted-foreground/70">
               {RUN_LAP_DELIVERY_GLOSSARY.join(' ')}
             </p>
           ) : null}
@@ -2210,10 +2210,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           <div
             role="alertdialog"
             aria-label="Discard this draft?"
-            className="flex w-80 flex-col gap-2 rounded-lg border border-white/15 bg-card px-4 py-3"
+            className="flex w-80 flex-col gap-2 rounded-lg border border-hairline-strong bg-card px-4 py-3"
           >
             <p className="text-sm font-medium">Discard this draft?</p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               This connection has not been saved. Leaving it will discard the
               draft.
             </p>
@@ -2222,7 +2222,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 type="button"
                 variant="tonal"
                 onClick={() => setConfirmDiscard(null)}
-                className="text-[11px]"
+                className="text-2xs"
               >
                 Keep editing
               </Button>
@@ -2242,7 +2242,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                   // guard only asked.
                   leaving.run()
                 }}
-                className="text-[11px]"
+                className="text-2xs"
               >
                 Discard draft
               </Button>

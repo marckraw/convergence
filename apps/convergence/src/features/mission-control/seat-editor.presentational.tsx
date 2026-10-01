@@ -146,8 +146,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       data-seat-editor
       aria-label={`Seat ${label}`}
       className={cn(
-        'flex flex-col gap-3 rounded-md border bg-white/[0.02] p-3',
-        orphan ? 'border-amber-500/50' : 'border-white/20',
+        'flex flex-col gap-3 rounded-md border bg-fill-quiet p-3',
+        orphan ? 'border-amber-500/50' : 'border-hairline-strong',
       )}
     >
       {orphan ? (
@@ -155,10 +155,10 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           data-seat-orphan
           className="flex flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5"
         >
-          <p className="text-[11px] font-medium text-amber-400">
+          <p className="text-2xs font-medium text-amber-400">
             {label}’s conversation no longer exists
           </p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             The seat keeps its name, role and card, but a wire that reaches{' '}
             {label} has nobody to wake. Nothing is removed automatically.
           </p>
@@ -168,7 +168,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             disabled={busy}
             onClick={onRemove}
             size="sm"
-            className="self-start px-2.5 text-[11px]"
+            className="self-start px-2.5 text-2xs"
           >
             Remove seat
           </Button>
@@ -217,14 +217,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
         </div>
         {refusalFor('batonName')}
         {nameNotice ? (
-          <p
-            data-seat-name-notice
-            className="text-[11px] text-muted-foreground"
-          >
+          <p data-seat-name-notice className="text-2xs text-muted-foreground">
             {nameNotice}
           </p>
         ) : null}
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-3xs text-muted-foreground">
           {batonNameHelper(nameValue, recipe)}
         </p>
       </div>
@@ -246,9 +243,9 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               }}
               size="xs"
               className={cn(
-                'rounded px-1 text-[10px] font-normal transition-colors py-2',
+                'rounded px-1 text-3xs font-normal transition-colors py-2',
                 member.role === role
-                  ? 'border border-white/15 bg-white/10 text-foreground'
+                  ? 'border border-hairline-strong bg-white/10 text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
@@ -266,14 +263,14 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           <span
             data-seat-card-count
             className={cn(
-              'text-[10px] tabular-nums',
+              'text-3xs tabular-nums',
               cardOver ? 'text-amber-400' : 'text-muted-foreground',
             )}
           >
             {formatRoleCardCount(cardText.length)}
           </span>
         </div>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-3xs text-muted-foreground">
           Leads the first message of every run this seat is woken for.
         </p>
         {writingCard ? (
@@ -284,8 +281,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             onChange={(event) => onCardChange(event.target.value)}
             onBlur={onCardCommit}
             className={cn(
-              'min-h-40 resize-y rounded-md border bg-transparent p-2 text-[11px] leading-relaxed',
-              cardOver ? 'border-amber-500/70' : 'border-white/10',
+              'min-h-40 resize-y rounded-md border bg-transparent p-2 text-2xs leading-relaxed',
+              cardOver ? 'border-amber-500/70' : 'border-hairline',
             )}
           />
         ) : (
@@ -293,10 +290,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             data-seat-no-card
             className="flex flex-col gap-1.5 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 p-2.5"
           >
-            <p className="text-[11px] font-medium text-amber-400">
-              No card yet
-            </p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs font-medium text-amber-400">No card yet</p>
+            <p className="text-2xs text-muted-foreground">
               This seat starts every run without being told who it is. The first
               message will be the payload alone.
             </p>
@@ -306,7 +301,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               disabled={busy}
               onClick={onWriteCard}
               size="sm"
-              className="self-start px-2.5 text-[11px]"
+              className="self-start px-2.5 text-2xs"
             >
               Write a card
             </Button>
@@ -316,12 +311,12 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       </div>
 
       <section aria-label="Policy" className="flex flex-col gap-2">
-        <h5 className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        <h5 className="text-3xs uppercase tracking-wide text-muted-foreground">
           Policy
         </h5>
         {recipe ? (
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               Host — where each spawn runs
             </span>
             <select
@@ -331,7 +326,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               onChange={(event) =>
                 onSeatEdit({ hostPolicy: event.target.value })
               }
-              className="h-8 rounded-md border border-white/15 bg-transparent px-2 text-xs"
+              className="h-8 rounded-md border border-hairline-strong bg-transparent px-2 text-xs"
             >
               {hostChoices.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -343,11 +338,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           </div>
         ) : null}
         <div className="flex flex-col gap-1">
-          <span className="text-[11px] text-muted-foreground">Lane</span>
+          <span className="text-2xs text-muted-foreground">Lane</span>
           <div
             role="group"
             aria-label={`Lane for ${label}`}
-            className="grid grid-cols-3 gap-0.5 rounded-md border border-white/10 p-0.5"
+            className="grid grid-cols-3 gap-0.5 rounded-md border border-hairline p-0.5"
           >
             {LANES.map((lane) => (
               <Button
@@ -361,9 +356,9 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 }}
                 size="xs"
                 className={cn(
-                  'rounded px-1 text-[10px] font-normal transition-colors py-2',
+                  'rounded px-1 text-3xs font-normal transition-colors py-2',
                   member.lanePolicy === lane.value
-                    ? 'border border-white/15 bg-white/10 text-foreground'
+                    ? 'border border-hairline-strong bg-white/10 text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -371,14 +366,14 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               </Button>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-3xs text-muted-foreground">
             Applied when a recipe is spawned.
           </p>
           {refusalFor('lanePolicy')}
         </div>
         {member.lanePolicy === 'own-worktree' ? (
           <div className="flex flex-col gap-1" data-seat-lane-path>
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-2xs text-muted-foreground">
               Worktree path
               <Input
                 size="md"
@@ -398,10 +393,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <div className="flex flex-1 flex-col">
-              <span className="text-[11px] text-muted-foreground">
-                WIP limit
-              </span>
-              <span className="text-[10px] text-muted-foreground/80">
+              <span className="text-2xs text-muted-foreground">WIP limit</span>
+              <span className="text-3xs text-muted-foreground/80">
                 Issues this seat may hold at once
               </span>
             </div>
@@ -410,7 +403,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 'flex h-8 items-center rounded-md border',
                 problems.wipLimit !== undefined
                   ? 'border-amber-500/70'
-                  : 'border-white/15',
+                  : 'border-hairline-strong',
               )}
             >
               <IconButton
@@ -479,8 +472,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
 
       {orphan ? null : <SeatFacts heading={factsHeading} facts={facts} />}
 
-      <div className="flex items-center gap-2 border-t border-white/10 pt-2">
-        <p className="flex-1 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-2 border-t border-hairline pt-2">
+        <p className="flex-1 text-3xs text-muted-foreground">
           Typed fields save when you leave them
         </p>
         <Button
@@ -489,7 +482,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           disabled={busy}
           onClick={onRemove}
           size="sm"
-          className="shrink-0 gap-1 px-1 text-[11px] font-normal disabled:opacity-50"
+          className="shrink-0 gap-1 px-1 text-2xs font-normal disabled:opacity-50"
         >
           <Trash2 aria-hidden className="size-3.5" />
           {recipe ? 'Delete recipe' : 'Remove from crew'}

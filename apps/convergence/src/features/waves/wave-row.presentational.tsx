@@ -44,7 +44,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
   const cardClass = loom
     ? cn(
         layout === 'list' && 'mb-2',
-        'gap-2 rounded-lg border border-foreground/5 bg-foreground/[0.035] p-3',
+        'gap-2 rounded-lg border border-foreground/5 bg-fill-quiet p-3',
       )
     : undefined
   const body = (
@@ -64,7 +64,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
         {/* One unbreakable token (MAR-3155 R5): at the old fixed width
             `MAR-3085` wrapped after the dash, which is the one thing a row
             exists to say. It never shrinks; the title takes what is left. */}
-        <span className="shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+        <span className="shrink-0 whitespace-nowrap font-mono text-2xs text-muted-foreground">
           {entry.issueIdentifier}
         </span>
         {/* Two lines rather than one cut short, and the whole title one hover
@@ -112,7 +112,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
           : null}
       </span>
       {loom ? (
-        <span className="flex max-w-full flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+        <span className="flex max-w-full flex-wrap gap-1.5 text-2xs text-muted-foreground">
           <span
             data-loom-chip="status"
             className={cn(

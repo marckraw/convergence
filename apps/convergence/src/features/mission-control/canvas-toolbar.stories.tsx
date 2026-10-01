@@ -9,7 +9,7 @@ const meta = {
   component: CanvasToolbar,
   args: {
     importCrew: (
-      <Button type="button" variant="ghost" size="sm" className="text-[11px]">
+      <Button type="button" variant="ghost" size="sm" className="text-2xs">
         <Upload aria-hidden className="size-3" />
         Import crew
       </Button>

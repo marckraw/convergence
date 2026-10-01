@@ -48,7 +48,7 @@ export function NeedsYouCard({
                 type="button"
                 variant="secondary"
                 onClick={() => onDismiss(session.id)}
-                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-2xs"
               >
                 <CheckCheck aria-hidden="true" className="size-3.5" />
                 {card.dismissLabel}
@@ -59,7 +59,7 @@ export function NeedsYouCard({
                 type="button"
                 variant="secondary"
                 onClick={() => onArchive(session.id)}
-                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-2xs"
               >
                 <Archive aria-hidden="true" className="size-3.5" />
                 Archive

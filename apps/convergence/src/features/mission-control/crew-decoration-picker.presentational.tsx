@@ -47,7 +47,7 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
               'rounded-md border text-xs leading-none',
               emoji === choice
                 ? 'border-white/40 bg-white/10'
-                : 'border-transparent hover:border-white/20',
+                : 'border-transparent hover:border-hairline-strong',
             )}
           >
             {choice}
@@ -78,7 +78,7 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
               'rounded-full border-2 transition-transform hover:bg-transparent',
               accentColor === choice.value
                 ? 'scale-110 border-white/70'
-                : 'border-transparent hover:border-white/30',
+                : 'border-transparent hover:border-hairline-strong',
             )}
           />
         ))}
@@ -90,7 +90,7 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
             variant="quiet"
             onClick={() => onAccentColorChange(null)}
             size="xs"
-            className="rounded-full border border-white/15"
+            className="rounded-full border border-hairline-strong"
           >
             <Ban className="size-3" />
           </IconButton>

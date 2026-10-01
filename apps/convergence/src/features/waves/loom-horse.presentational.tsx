@@ -99,7 +99,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           LOOM_HORSE_CARD_CLASS,
           LOOM_HORSE_TINT_CLASS[horse.runtime],
           'relative',
-          openable && 'hover:bg-white/5',
+          openable && 'hover:bg-fill-hover',
         )}
       >
         {openable ? (

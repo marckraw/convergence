@@ -42,10 +42,10 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
             onClick={() => onToggle(state)}
             size="sm"
             className={cn(
-              'rounded-full border px-2.5 text-[11px] font-normal',
+              'rounded-full border px-2.5 text-2xs font-normal',
               active
                 ? STATE_CHIP_STYLES[state]
-                : 'border-white/10 text-muted-foreground hover:border-white/20',
+                : 'border-hairline text-muted-foreground hover:border-hairline-strong',
               count === 0 && !active && 'opacity-50',
             )}
           >
@@ -61,7 +61,7 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
           variant="link"
           onClick={onClear}
           size="sm"
-          className="h-7 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
+          className="h-7 px-2 text-2xs font-normal text-muted-foreground hover:text-foreground"
         >
           Clear
         </Button>

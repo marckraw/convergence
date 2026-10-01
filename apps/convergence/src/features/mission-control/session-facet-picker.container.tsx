@@ -73,10 +73,10 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
       variant="ghost"
       size="sm"
       className={cn(
-        'max-w-56 rounded-full border px-2.5 text-[11px] font-normal',
+        'max-w-56 rounded-full border px-2.5 text-2xs font-normal',
         selected.length > 0
-          ? 'border-white/25 bg-white/10 text-foreground'
-          : 'border-white/10 text-muted-foreground hover:border-white/20',
+          ? 'border-hairline-strong bg-white/10 text-foreground'
+          : 'border-hairline text-muted-foreground hover:border-hairline-strong',
       )}
       contentClassName="w-64"
       footer={

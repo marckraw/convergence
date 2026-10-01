@@ -40,7 +40,7 @@ export const LoomOutsideGroupView: FC<{
         onClick={onToggle}
         className={cn(
           WAVE_SECTION_TITLE_CLASS,
-          'h-auto justify-start gap-1 rounded-md hover:bg-white/5',
+          'h-auto justify-start gap-1 rounded-md hover:bg-fill-hover',
         )}
       >
         <ChevronRight
@@ -72,11 +72,11 @@ export const LoomOutsideGroupView: FC<{
             className={cn(
               WAVE_ROW_CLASS,
               WAVE_ROW_OPENABLE_CLASS,
-              'mb-2 gap-2 rounded-lg border border-foreground/5 bg-foreground/[0.02] p-3',
+              'mb-2 gap-2 rounded-lg border border-foreground/5 bg-fill-quiet p-3',
             )}
           >
             <span className="flex w-full flex-wrap items-baseline gap-1.5">
-              <span className="shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+              <span className="shrink-0 whitespace-nowrap font-mono text-2xs text-muted-foreground">
                 {issue.identifier}
               </span>
               <span
@@ -86,7 +86,7 @@ export const LoomOutsideGroupView: FC<{
                 {issue.title}
               </span>
             </span>
-            <span className="flex max-w-full flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+            <span className="flex max-w-full flex-wrap gap-1.5 text-2xs text-muted-foreground">
               <span className="rounded bg-foreground/5 px-1.5 py-0.5">
                 Linear: {issue.status || 'not seen'}
               </span>

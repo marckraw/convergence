@@ -55,10 +55,10 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
             style={accentStyle(option.accentColor, active)}
             size="sm"
             className={cn(
-              'max-w-44 rounded-full border px-2.5 text-[11px] font-normal',
+              'max-w-44 rounded-full border px-2.5 text-2xs font-normal',
               active
                 ? 'text-foreground'
-                : 'border-white/10 text-muted-foreground hover:border-white/20',
+                : 'border-hairline text-muted-foreground hover:border-hairline-strong',
               option.count === 0 && !active && 'opacity-50',
             )}
           >
@@ -81,7 +81,7 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
           variant="link"
           onClick={onClear}
           size="sm"
-          className="h-7 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
+          className="h-7 px-2 text-2xs font-normal text-muted-foreground hover:text-foreground"
         >
           Clear
         </Button>

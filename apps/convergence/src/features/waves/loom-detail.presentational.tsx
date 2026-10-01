@@ -36,7 +36,7 @@ export const LoomDetailView = <TSession,>({
   <div className={LOOM_DETAIL_CLASS} data-loom-detail={detail.key}>
     <div className="flex items-start gap-2">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="font-mono text-[11px] text-muted-foreground">
+        <span className="font-mono text-2xs text-muted-foreground">
           {detail.identifier}
         </span>
         {/* Wrapping, never truncated: the title is the thing being read. */}

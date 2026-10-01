@@ -122,7 +122,7 @@ export function SessionActivityCard({
               </span>
               {!compact && (
                 <span
-                  className="block truncate text-[11px] text-muted-foreground"
+                  className="block truncate text-2xs text-muted-foreground"
                   title={card.projectName}
                 >
                   {card.projectName}
@@ -130,7 +130,7 @@ export function SessionActivityCard({
               )}
               {!compact && (
                 <span
-                  className="block break-words text-[11px] text-foreground"
+                  className="block break-words text-2xs text-foreground"
                   title={session.model || 'Model not recorded'}
                 >
                   {session.model || 'Model not recorded'}
@@ -140,7 +140,7 @@ export function SessionActivityCard({
           </Button>
         </Tooltip>
         {compact && (
-          <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-normal leading-3 text-muted-foreground">
+          <div className="mt-1 flex min-w-0 items-center gap-1 text-3xs font-normal leading-3 text-muted-foreground">
             <NeedsYouCardIcon label={provider.label} compact>
               <ProviderIcon
                 providerId={session.providerId}
@@ -169,7 +169,7 @@ export function SessionActivityCard({
         )}
         {compact && card.hostLiveness && (
           <time
-            className="block text-[10px] text-muted-foreground"
+            className="block text-3xs text-muted-foreground"
             title={session.executionHostLastEventAt ?? undefined}
             dateTime={session.executionHostLastEventAt ?? undefined}
           >
@@ -181,7 +181,7 @@ export function SessionActivityCard({
           <div className="mt-1 space-y-1">
             {session.pullRequest && <NeedsYouPr pr={session.pullRequest} />}
             <NeedsYouCardStatus card={card} />
-            <span className="block text-[10px] font-normal text-muted-foreground">
+            <span className="block text-3xs font-normal text-muted-foreground">
               {card.hostLiveness ? (
                 <time
                   title={session.executionHostLastEventAt ?? undefined}

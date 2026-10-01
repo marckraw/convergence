@@ -29,7 +29,7 @@ export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
       data-crew-parked={cluster.parked ? 'true' : 'false'}
       style={{ width: cluster.width, height: cluster.height, ...accentStyle }}
       className={cn(
-        'rounded-xl border bg-foreground/[0.03]',
+        'rounded-xl border bg-fill-quiet',
         cluster.parked
           ? 'border-amber-400/70 bg-amber-400/[0.04]'
           : 'border-border',

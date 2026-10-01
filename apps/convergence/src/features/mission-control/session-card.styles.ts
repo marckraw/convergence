@@ -12,7 +12,7 @@ export const CARD_ATTENTION_STYLES: Record<AttentionState, string> = {
   finished: 'border-emerald-500/50 bg-emerald-500/[0.04]',
   // Amber, not red: the run is not broken, the view of it is (MAR-3051).
   'host-unreachable': 'border-amber-500/60 bg-amber-500/[0.04]',
-  none: 'border-white/10',
+  none: 'border-hairline',
 }
 
 /**
@@ -46,7 +46,7 @@ export const STATE_CHIP_STYLES: Record<SessionCardState, string> = {
   'host-unreachable': 'border-warning/60 bg-warning/10 text-foreground',
   working: 'border-emerald-500/60 bg-emerald-500/10 text-foreground',
   'needs-you': 'border-blue-500/60 bg-blue-500/10 text-foreground',
-  idle: 'border-white/25 bg-white/10 text-foreground',
+  idle: 'border-hairline-strong bg-white/10 text-foreground',
   finished: 'border-emerald-500/50 bg-emerald-500/[0.07] text-foreground',
   failed: 'border-red-500/60 bg-red-500/10 text-foreground',
 }

@@ -19,7 +19,7 @@ export const LoomStatusView: FC<{
       <span
         role="status"
         className={cn(
-          'flex items-center gap-1.5 text-[11px]',
+          'flex items-center gap-1.5 text-2xs',
           header.kind === 'outage'
             ? 'text-amber-300/90'
             : 'text-muted-foreground',

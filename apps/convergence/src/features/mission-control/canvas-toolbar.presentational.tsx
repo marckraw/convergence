@@ -45,10 +45,10 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
 }) => (
   <div
     data-canvas-toolbar
-    className="flex flex-wrap items-center gap-3 border-b border-white/10 px-5 py-2"
+    className="flex flex-wrap items-center gap-3 border-b border-hairline px-5 py-2"
   >
     <h2 className="text-sm font-medium">{crewName}</h2>
-    <p className="text-[11px] text-muted-foreground">{summary}</p>
+    <p className="text-2xs text-muted-foreground">{summary}</p>
 
     <div className="ml-auto flex flex-wrap items-center gap-1.5">
       <Button
@@ -57,7 +57,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onAddConversation}
         size="sm"
-        className="gap-1 text-[11px]"
+        className="gap-1 text-2xs"
       >
         <Plus className="size-3" />
         Add conversation
@@ -76,7 +76,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         onClick={onToggleConnect}
         size="sm"
         className={cn(
-          'gap-1 text-[11px]',
+          'gap-1 text-2xs',
           connecting && 'bg-white/10 text-foreground',
         )}
       >
@@ -90,7 +90,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onCrewSettings}
         size="sm"
-        className="gap-1 text-[11px]"
+        className="gap-1 text-2xs"
       >
         <Settings2 className="size-3" />
         Crew settings
@@ -102,7 +102,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onHistory}
         size="sm"
-        className="gap-1 text-[11px]"
+        className="gap-1 text-2xs"
       >
         <History className="size-3" />
         History

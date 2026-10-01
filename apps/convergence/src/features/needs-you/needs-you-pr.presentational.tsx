@@ -45,7 +45,7 @@ export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {
     <Tooltip label={presentation.tooltip}>
       {presentation.href ? (
         <a
-          className="relative z-10 flex w-fit max-w-full items-center gap-1 rounded py-0.5 text-[10px] font-normal hover:underline focus-visible:outline focus-visible:outline-2"
+          className="relative z-10 flex w-fit max-w-full items-center gap-1 rounded py-0.5 text-3xs font-normal hover:underline focus-visible:outline focus-visible:outline-2"
           href={presentation.href}
           target="_blank"
           rel="noreferrer"
@@ -56,7 +56,7 @@ export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {
       ) : (
         <span
           tabIndex={0}
-          className="relative z-10 flex items-center gap-1 text-[10px]"
+          className="relative z-10 flex items-center gap-1 text-3xs"
         >
           {content}
         </span>

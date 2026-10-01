@@ -75,7 +75,7 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
   <section
     data-history-event-inspector
     aria-label="Recorded event"
-    className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/10 px-4 py-3"
+    className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-hairline px-4 py-3"
   >
     <div className="flex items-start justify-between gap-2">
       <div className="flex flex-col gap-0.5">
@@ -85,7 +85,7 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
         <time
           dateTime={facts.timestamp}
           title={facts.timestamp}
-          className="text-[11px] text-muted-foreground"
+          className="text-2xs text-muted-foreground"
         >
           {new Date(facts.timestamp).toLocaleString()}
         </time>
@@ -103,13 +103,13 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
     </div>
 
     {facts.message ? (
-      <div className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
-        <Markdown content={facts.message} className="text-[11px]" />
+      <div className="rounded-md border border-hairline bg-fill-quiet px-3 py-2">
+        <Markdown content={facts.message} className="text-2xs" />
       </div>
     ) : null}
 
     <div className="flex flex-col gap-1">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+      <p className="text-2xs uppercase tracking-wide text-muted-foreground">
         Recorded event
       </p>
       <HistoryFact label="Source" value={facts.source} />
@@ -119,10 +119,10 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
     </div>
 
     <div className="flex flex-col gap-1">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+      <p className="text-2xs uppercase tracking-wide text-muted-foreground">
         Response preview
       </p>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-2xs text-muted-foreground">
         {facts.responsePreview ?? 'No response preview was recorded.'}
       </p>
     </div>
@@ -133,7 +133,7 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
           type="button"
           variant="tonal"
           onClick={onOpenRecipient}
-          className="text-[11px]"
+          className="text-2xs"
         >
           Open {openRecipientLabel} conversation
         </Button>
@@ -144,7 +144,7 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
           type="button"
           variant="ghost"
           onClick={onViewCurrentConnection}
-          className="text-[11px]"
+          className="text-2xs"
         >
           View current connection
         </Button>
@@ -157,11 +157,11 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
             variant="ghost"
             disabled={busy || acknowledged}
             onClick={onMarkSeen}
-            className="text-[11px]"
+            className="text-2xs"
           >
             {acknowledged ? 'Seen' : 'Mark seen'}
           </Button>
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className="text-3xs text-muted-foreground/70">
             Mark seen acknowledges this call. It does not send a reply or
             restart the run.
           </p>
@@ -170,12 +170,12 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
     </div>
 
     {earlierCallCount > 0 ? (
-      <p className="text-[10px] text-muted-foreground/70">
+      <p className="text-3xs text-muted-foreground/70">
         Earlier calls · {earlierCallCount}. Earlier calls remain in history.
       </p>
     ) : null}
 
-    <p className="mt-auto text-[10px] text-muted-foreground/70">
+    <p className="mt-auto text-3xs text-muted-foreground/70">
       These are the facts recorded when this happened. The connection’s current
       settings are shown separately.
     </p>

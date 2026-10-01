@@ -69,7 +69,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3">
         <div className="flex items-baseline gap-3">
           <h1 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <Satellite className="size-4" />
@@ -86,7 +86,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
           <div
             role="group"
             aria-label="Mission Control layout"
-            className="flex items-center gap-0.5 rounded-full border border-white/10 p-0.5"
+            className="flex items-center gap-0.5 rounded-full border border-hairline p-0.5"
           >
             {modes.map((entry) => (
               <Button
@@ -97,7 +97,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
                 onClick={() => onModeChange(entry.value)}
                 size="sm"
                 className={cn(
-                  'rounded-full px-3 text-[11px] font-normal',
+                  'rounded-full px-3 text-2xs font-normal',
                   mode === entry.value
                     ? 'bg-white/10 text-foreground'
                     : 'text-muted-foreground hover:text-foreground',

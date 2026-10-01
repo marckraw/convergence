@@ -11,7 +11,7 @@ export const LoomRefreshView: FC<{
   blocked: boolean
   onRefresh: () => void
 }> = ({ label, blocked, onRefresh }) => (
-  <span data-loom-refresh className="flex items-center gap-1.5 text-[11px]">
+  <span data-loom-refresh className="flex items-center gap-1.5 text-2xs">
     <Button
       type="button"
       variant="ghost"

@@ -60,7 +60,7 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
         alarm && 'bg-red-500/10 ring-1 ring-red-500/30',
       )}
     >
-      <div className="flex items-center gap-1.5 text-[11px] leading-tight">
+      <div className="flex items-center gap-1.5 text-2xs leading-tight">
         <span
           aria-hidden
           className={cn('size-1.5 shrink-0 rounded-full', TONE_DOT[line.tone])}
@@ -137,7 +137,7 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
       {line.error ? (
         <p
           className={cn(
-            'mt-0.5 pl-3 text-[11px] leading-snug',
+            'mt-0.5 pl-3 text-2xs leading-snug',
             TONE_NOTE[line.tone],
           )}
         >
@@ -146,7 +146,7 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
       ) : null}
 
       {expanded && line.payloadPreview ? (
-        <p className="mt-1 rounded bg-black/20 px-2 py-1 text-[11px] leading-snug text-muted-foreground">
+        <p className="mt-1 rounded bg-black/20 px-2 py-1 text-2xs leading-snug text-muted-foreground">
           {line.payloadPreview}
         </p>
       ) : null}

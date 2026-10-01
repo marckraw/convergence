@@ -45,7 +45,7 @@ interface TrackerBindingFormProps {
   onTest: () => void
 }
 
-const LABEL = 'text-[11px] text-muted-foreground'
+const LABEL = 'text-2xs text-muted-foreground'
 
 /**
  * The crew's tracker binding (MAR-3084 R9): four fields, whether a key is
@@ -78,10 +78,10 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
     <section
       aria-label="Tracker"
       data-crew-tracker
-      className="flex flex-col gap-2 border-t border-white/10 pt-2"
+      className="flex flex-col gap-2 border-t border-hairline pt-2"
     >
       <section aria-label="Dispatch" className="flex flex-col gap-2">
-        <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        <h4 className="text-2xs uppercase tracking-wide text-muted-foreground">
           Dispatch
         </h4>
         <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
@@ -93,13 +93,13 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           Auto-dispatch — send issues labeled groomed, grounded, their seat and
           dispatch into their seats' conversations
         </label>
-        <p className="text-[11px] tabular-nums text-muted-foreground">
+        <p className="text-2xs tabular-nums text-muted-foreground">
           {dispatchCandidates.length
             ? `${dispatchCandidates.length} issue(s) would start now: ${dispatchCandidates.join(', ')}`
             : 'Nothing would start now'}
         </p>
       </section>
-      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+      <h4 className="text-2xs uppercase tracking-wide text-muted-foreground">
         Tracker
       </h4>
 
@@ -240,21 +240,21 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         >
           Test
         </Button>
-        <p className="flex-1 text-[11px]" data-tracker-probe>
+        <p className="flex-1 text-2xs" data-tracker-probe>
           {lastProbe ? trackerProbeSentence(lastProbe) : 'Not tested yet'}
         </p>
       </div>
       {lastProbe ? (
-        <p className="text-[10px] text-muted-foreground/70">
+        <p className="text-3xs text-muted-foreground/70">
           Tested at {probeTimeLabel(lastProbe.at)}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="text-[11px] text-destructive">
+        <p role="alert" className="text-2xs text-destructive">
           {error}
         </p>
       ) : null}
-      <p className="text-[10px] text-muted-foreground/70">
+      <p className="text-3xs text-muted-foreground/70">
         Read only: the app watches this project once a minute and never writes
         to it; with auto-dispatch on it sends issues into your seats'
         conversations.

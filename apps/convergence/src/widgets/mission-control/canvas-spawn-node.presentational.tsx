@@ -30,7 +30,7 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
         'flex flex-col justify-center gap-0.5 rounded-lg border border-dashed px-3 py-2',
         spawn.armed
           ? 'border-emerald-500/40 bg-emerald-500/[0.04]'
-          : 'border-border bg-foreground/[0.03] opacity-70',
+          : 'border-border bg-fill-quiet opacity-70',
       )}
     >
       <Handle
@@ -77,7 +77,7 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
         </span>
       </div>
 
-      <p className="truncate pl-[18px] text-[11px] text-muted-foreground">
+      <p className="truncate pl-[18px] text-2xs text-muted-foreground">
         starts a new session · {formatSpawnNodeSpec(spawn)}
       </p>
     </div>

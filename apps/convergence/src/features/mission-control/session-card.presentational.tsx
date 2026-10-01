@@ -95,7 +95,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
           </span>
           {needsYou ? (
             <span
-              className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
+              className="flex shrink-0 items-center gap-1 text-2xs text-muted-foreground"
               title={formatSessionAttentionLabel(session)}
             >
               <SessionStateBadge session={session} />
@@ -115,7 +115,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted-foreground">
           <span className="truncate font-medium">{card.projectName}</span>
           <span aria-hidden>·</span>
           {card.hostLiveness && (
@@ -162,7 +162,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
                       }
                     : undefined
                 }
-                className="flex max-w-full items-center gap-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+                className="flex max-w-full items-center gap-1 rounded-full border border-hairline px-1.5 py-0.5 text-3xs leading-none text-muted-foreground"
               >
                 {crew.emoji ? (
                   <span aria-hidden className="leading-none">
@@ -176,7 +176,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-white/5 px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-t border-hairline px-3 py-2">
         <span
           className={cn(
             'flex min-w-0 items-center gap-1.5 text-xs',

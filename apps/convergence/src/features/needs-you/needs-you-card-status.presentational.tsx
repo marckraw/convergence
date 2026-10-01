@@ -30,7 +30,7 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
   return (
     <span
       className={cn(
-        'flex items-center gap-1 text-[11px]',
+        'flex items-center gap-1 text-2xs',
         waiting || failed || card.working
           ? 'text-foreground'
           : 'text-muted-foreground',

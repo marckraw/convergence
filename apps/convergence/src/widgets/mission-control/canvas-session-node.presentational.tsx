@@ -119,7 +119,7 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
           </span>
           {needsYou ? (
             <span
-              className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
+              className="flex shrink-0 items-center gap-1 text-2xs text-muted-foreground"
               title={formatSessionAttentionLabel(session)}
             >
               <SessionStateBadge session={session} />
@@ -136,14 +136,14 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-1.5 text-2xs text-muted-foreground">
           <span className="truncate font-medium">{card.projectName}</span>
           <span aria-hidden>·</span>
           <ProviderIcon providerId={session.providerId} className="size-3.5" />
           <span className="truncate">{card.providerLabel}</span>
         </div>
 
-        <p className="mt-auto truncate text-[11px] text-muted-foreground">
+        <p className="mt-auto truncate text-2xs text-muted-foreground">
           {parallelWorkStatus(session) ?? card.activityLabel}
         </p>
       </div>

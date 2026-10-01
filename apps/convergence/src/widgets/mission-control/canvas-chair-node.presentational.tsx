@@ -32,7 +32,7 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
         'flex flex-col justify-center gap-0.5 rounded-lg border px-3 py-2',
         chair.lit
           ? 'border-amber-400/70 bg-amber-400/[0.10]'
-          : 'border-border bg-foreground/[0.03]',
+          : 'border-border bg-fill-quiet',
       )}
     >
       <Handle
@@ -85,7 +85,7 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
             variant="ghost"
             aria-label={`Answer the hails for this crew`}
             onClick={() => chair.onAcknowledge(chair.crewId)}
-            className="ml-auto h-5 shrink-0 px-1.5 text-[10px] text-amber-200/80 hover:text-amber-100"
+            className="ml-auto h-5 shrink-0 px-1.5 text-3xs text-amber-200/80 hover:text-amber-100"
           >
             Seen
           </Button>
@@ -94,7 +94,7 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
 
       <p
         className={cn(
-          'truncate text-[11px]',
+          'truncate text-2xs',
           chair.lit ? 'text-amber-200/80' : 'text-muted-foreground',
         )}
       >

@@ -13,10 +13,10 @@ export const HISTORY_TONE_TEXT: Record<HistoryTone, string> = {
 
 export const HISTORY_TONE_BORDER: Record<HistoryTone, string> = {
   delivered: 'border-emerald-500/40',
-  held: 'border-white/10',
+  held: 'border-hairline',
   alarm: 'border-red-500/40',
   terminal: 'border-amber-500/40',
-  unknown: 'border-white/10',
+  unknown: 'border-hairline',
 }
 
 interface HistoryEventRowViewProps {
@@ -39,25 +39,25 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
   const content = (
     <>
       <span className="flex w-full items-baseline gap-2">
-        <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
+        <span className="shrink-0 tabular-nums text-3xs text-muted-foreground">
           {event.timeLabel}
         </span>
-        <span className="min-w-0 flex-1 whitespace-normal break-words text-[12px]">
+        <span className="min-w-0 flex-1 whitespace-normal break-words text-xs">
           {event.title}
         </span>
         <span
-          className={cn('shrink-0 text-[11px]', HISTORY_TONE_TEXT[event.tone])}
+          className={cn('shrink-0 text-2xs', HISTORY_TONE_TEXT[event.tone])}
         >
           {event.outcomeLabel}
         </span>
       </span>
       {event.reason && (
-        <span className="w-full whitespace-normal break-words text-[10px] text-muted-foreground">
+        <span className="w-full whitespace-normal break-words text-3xs text-muted-foreground">
           {event.reason}
         </span>
       )}
       {event.preview && (
-        <span className="w-full whitespace-normal break-words text-[10px] text-muted-foreground">
+        <span className="w-full whitespace-normal break-words text-3xs text-muted-foreground">
           {event.preview}
         </span>
       )}

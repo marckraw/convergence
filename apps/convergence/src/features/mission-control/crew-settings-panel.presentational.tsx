@@ -310,7 +310,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         disabled={busy}
         onClick={onAddConversation}
         size="sm"
-        className="px-2.5 text-[11px]"
+        className="px-2.5 text-2xs"
       >
         <MessageSquare aria-hidden className="size-3.5" />
         Add conversation…
@@ -324,7 +324,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           disabled
           aria-description="Coming with MAR-3099"
           size="sm"
-          className="px-2.5 text-[11px]"
+          className="px-2.5 text-2xs"
         >
           <FlaskConical aria-hidden className="size-3.5" />
           New recipe
@@ -337,7 +337,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
     <section
       data-crew-settings-panel
       aria-label="Crew settings"
-      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/10 px-4 py-3"
+      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-hairline px-4 py-3"
     >
       <header data-crew-settings-header className="flex items-start gap-2">
         <span
@@ -347,7 +347,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <h3 className="truncate text-sm font-medium">{savedName}</h3>
-          <p className="text-[11px] text-muted-foreground">Crew settings</p>
+          <p className="text-2xs text-muted-foreground">Crew settings</p>
         </div>
         <IconButton
           label="Close crew settings"
@@ -390,7 +390,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               disabled={busy}
               onClick={onAddMenuToggle}
               size="sm"
-              className="gap-1 text-[11px]"
+              className="gap-1 text-2xs"
             >
               <Plus aria-hidden className="size-3.5" />
               Add
@@ -404,7 +404,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           <div
             role="menu"
             aria-label="Add a seat"
-            className="flex flex-wrap gap-1.5 rounded-md border border-white/10 bg-white/[0.02] p-1.5"
+            className="flex flex-wrap gap-1.5 rounded-md border border-hairline bg-fill-quiet p-1.5"
           >
             {addActions(true)}
           </div>
@@ -431,10 +431,10 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         {members.length === 0 ? (
           <div
             data-crew-no-seats
-            className="flex flex-col gap-2 rounded-md border border-dashed border-white/15 p-3"
+            className="flex flex-col gap-2 rounded-md border border-dashed border-hairline-strong p-3"
           >
             <p className="text-xs font-medium">No seats yet</p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               A seat is a conversation that lives in this crew, or a recipe the
               crew spawns when a wire reaches it. Seat the mastermind first —
               wires need somewhere to leave from.
@@ -449,7 +449,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               data-seat-group={group.role}
               className="flex flex-col gap-1"
             >
-              <h5 className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <h5 className="text-3xs uppercase tracking-wide text-muted-foreground">
                 {group.title} {group.count}
               </h5>
               <ul className="flex flex-col gap-1">
@@ -462,16 +462,16 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
 
       <details
         data-crew-details
-        className="group border-t border-white/10 pt-2"
+        className="group border-t border-hairline pt-2"
       >
-        <summary className="cursor-pointer list-none text-[11px] text-muted-foreground hover:text-foreground">
+        <summary className="cursor-pointer list-none text-2xs text-muted-foreground hover:text-foreground">
           Crew details — name, decoration, loop limits, tracker, export
         </summary>
         <div className="mt-3 flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <label
               htmlFor="crew-name"
-              className="text-[11px] uppercase tracking-wide text-muted-foreground"
+              className="text-2xs uppercase tracking-wide text-muted-foreground"
             >
               Crew name
             </label>
@@ -486,7 +486,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           </div>
 
           <section aria-label="Decoration" className="flex flex-col gap-1.5">
-            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <h4 className="text-2xs uppercase tracking-wide text-muted-foreground">
               Decoration
             </h4>
             <CrewDecorationPicker
@@ -498,13 +498,13 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           </section>
 
           <div className="flex flex-col gap-1.5">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground">
               Loop limits
             </p>
             <div className="flex items-center gap-2">
               <label
                 htmlFor="crew-delivery-limit"
-                className="flex-1 text-[11px] text-muted-foreground"
+                className="flex-1 text-2xs text-muted-foreground"
               >
                 Delivery limit
               </label>
@@ -522,15 +522,15 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 }
                 className="w-16 text-xs"
               />
-              <span className="text-[11px] text-muted-foreground">per run</span>
+              <span className="text-2xs text-muted-foreground">per run</span>
             </div>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className="text-3xs text-muted-foreground/70">
               {flowRunCeilingNote(deliveryLimit ?? defaultDeliveryLimit)}
             </p>
             <div className="flex items-center gap-2">
               <label
                 htmlFor="crew-attention-minutes"
-                className="flex-1 text-[11px] text-muted-foreground"
+                className="flex-1 text-2xs text-muted-foreground"
               >
                 Ask for attention after
               </label>
@@ -548,16 +548,16 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 }
                 className="w-16 text-xs"
               />
-              <span className="text-[11px] text-muted-foreground">minutes</span>
+              <span className="text-2xs text-muted-foreground">minutes</span>
             </div>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className="text-3xs text-muted-foreground/70">
               The timer watches for a reply still owed. It is not a total
               run-duration limit.
             </p>
             <div className="flex items-center gap-2">
               <label
                 htmlFor="crew-lap-cap"
-                className="flex-1 text-[11px] text-muted-foreground"
+                className="flex-1 text-2xs text-muted-foreground"
               >
                 Lap cap
               </label>
@@ -575,11 +575,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 }
                 className="w-16 text-xs"
               />
-              <span className="text-[11px] text-muted-foreground">
-                per issue
-              </span>
+              <span className="text-2xs text-muted-foreground">per issue</span>
             </div>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className="text-3xs text-muted-foreground/70">
               Shown on Loom as &ldquo;lap N of C&rdquo;. Empty means no cap on
               the row. Distinct from the delivery limit (hop budget).
             </p>
@@ -589,9 +587,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
 
           <section
             aria-label="Recipe"
-            className="flex flex-col gap-2 border-t border-white/10 pt-2"
+            className="flex flex-col gap-2 border-t border-hairline pt-2"
           >
-            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <h4 className="text-2xs uppercase tracking-wide text-muted-foreground">
               Recipe
             </h4>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -614,7 +612,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             </Button>
             {lastExportPath ? (
               <p
-                className="truncate text-[11px] text-muted-foreground"
+                className="truncate text-2xs text-muted-foreground"
                 title={lastExportPath}
               >
                 Last exported to …/
@@ -624,14 +622,14 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           </section>
           <section
             aria-label="Danger"
-            className="border-t border-white/10 pt-2"
+            className="border-t border-hairline pt-2"
           >
-            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <h4 className="text-2xs uppercase tracking-wide text-muted-foreground">
               Danger
             </h4>
             {confirmingDelete ? (
               <div className="flex flex-col gap-2">
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Delete “{savedName}” with {formatCrewMemberCount(memberCount)}
                   ? Only the crew disappears; the conversations stay exactly
                   where they are.
@@ -673,11 +671,11 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             )}
           </section>
 
-          <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
-            <p className="text-[11px] font-medium">
+          <div className="flex flex-col gap-1 rounded-md border border-hairline bg-fill-quiet px-3 py-2">
+            <p className="text-2xs font-medium">
               A run can contain several laps
             </p>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-3xs text-muted-foreground">
               Correction laps stay in the same run until a human handoff. The
               delivery limit spans all laps.
             </p>
@@ -686,7 +684,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           {/* R7: says everything, enforces nothing. The engine reads a source's
             wires at settle time, so an edit saved now applies from the next
             delivery and cannot rewrite a hop already recorded. */}
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className="text-3xs text-muted-foreground/70">
             {running
               ? 'Crew is running — changes apply from the next delivery.'
               : 'Crew is idle · settings can be edited.'}
@@ -694,7 +692,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         </div>
       </details>
 
-      <p className="text-[10px] text-muted-foreground/70">
+      <p className="text-3xs text-muted-foreground/70">
         Removing a seat never deletes its conversation — it stays in Flat.
       </p>
     </section>

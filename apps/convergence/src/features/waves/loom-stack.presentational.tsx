@@ -96,7 +96,7 @@ export function LoomStackView({
                 wide && open && 'px-6 pt-5 text-sm',
                 wide &&
                   !open &&
-                  'h-full flex-col justify-start gap-3 px-1 pt-5 text-center text-[11px]',
+                  'h-full flex-col justify-start gap-3 px-1 pt-5 text-center text-2xs',
               )}
             >
               <Icon
@@ -106,7 +106,7 @@ export function LoomStackView({
               {wide && !open ? (
                 <>
                   <span>{LOOM_SHEET_NAMES[sheet]}</span>
-                  <span className="text-[10px] leading-relaxed text-muted-foreground">
+                  <span className="text-3xs leading-relaxed text-muted-foreground">
                     {title.split(' · ').slice(1).join(' · ')}
                   </span>
                 </>

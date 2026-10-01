@@ -21,10 +21,10 @@ interface SeatFactsProps {
  */
 export const SeatFacts: FC<SeatFactsProps> = ({ heading, facts }) => (
   <section aria-label="Facts" data-seat-facts className="flex flex-col gap-1.5">
-    <h5 className="text-[10px] uppercase tracking-wide text-muted-foreground">
+    <h5 className="text-3xs uppercase tracking-wide text-muted-foreground">
       {heading}
     </h5>
-    <dl className="grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-[11px]">
+    <dl className="grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-2xs">
       {facts.map((fact) => (
         <div key={fact.term} className="contents">
           <dt className="text-muted-foreground">{fact.term}</dt>

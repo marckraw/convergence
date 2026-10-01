@@ -764,7 +764,7 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
       {authoring?.runBanner ? (
         <p
           data-run-banner
-          className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-md border border-white/10 bg-background/90 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground shadow-sm"
+          className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-md border border-hairline bg-background/90 px-3 py-1 text-3xs uppercase tracking-wide text-muted-foreground shadow-sm"
         >
           {authoring.runBanner}
         </p>
@@ -774,7 +774,7 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
         <p
           data-connect-hint
           role="status"
-          className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto w-fit rounded-md border border-white/10 bg-background/90 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm"
+          className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto w-fit rounded-md border border-hairline bg-background/90 px-3 py-1.5 text-2xs text-muted-foreground shadow-sm"
         >
           {authoring.hint}
         </p>

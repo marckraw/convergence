@@ -35,7 +35,7 @@ export function LoomMastermindCard({
           LOOM_HORSE_CARD_CLASS,
           LOOM_HORSE_TINT_CLASS[mastermind.runtime],
           'relative',
-          openable && 'hover:bg-white/5',
+          openable && 'hover:bg-fill-hover',
         )}
       >
         {openable ? (
