@@ -92,6 +92,26 @@ describe('Button', () => {
     expect(button).toHaveAttribute('data-tooltip-detail', 'No editor found')
   })
 
+  it('hears its tooltip as its description, as a native title was heard', () => {
+    render(
+      <>
+        <Tooltip label="Project actions">
+          <Button>Run tests</Button>
+        </Tooltip>
+        <Tooltip label="Expand Loom">
+          <Button aria-label="Expand Loom">Expand</Button>
+        </Tooltip>
+      </>,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Run tests' }),
+    ).toHaveAccessibleDescription('Project actions')
+    // A tooltip that only repeats the name adds nothing to hear twice.
+    expect(
+      screen.getByRole('button', { name: 'Expand Loom' }),
+    ).not.toHaveAttribute('aria-description')
+  })
+
   it('is busy with aria-busy, and its name says so only when it is', () => {
     const { rerender } = render(
       <Button pending={false} pendingLabel="Saving…">

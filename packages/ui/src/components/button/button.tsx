@@ -176,7 +176,9 @@ function ButtonBase({
       {...reasonTooltip}
       // The reason is its description: an attribute, not text in the page,
       // so it never doubles a line that says the same thing beside it.
-      aria-description={reason ?? describedAs(props)}
+      aria-description={
+        reason ?? describedAs(props) ?? hintOf(shape, tooltip, props)
+      }
       disabled={disabled || Boolean(reason)}
       focusableWhenDisabled={reason ? true : focusableWhenDisabled}
     >
@@ -198,6 +200,23 @@ function ButtonBase({
 /** A description the caller set itself, kept when there is no reason. */
 const describedAs = (props: object): string | undefined =>
   (props as { 'aria-description'?: string })['aria-description']
+
+/**
+ * A text button's tooltip is the hint a native title used to be, and a title
+ * was also its description: so is the tooltip, unless it only repeats the
+ * button's name. An icon button's tooltip is its name already.
+ */
+const hintOf = (
+  shape: ButtonShape,
+  tooltip: TooltipData,
+  props: object,
+): string | undefined => {
+  const hint = tooltip['data-tooltip']
+  if (shape !== 'text' || !hint) return undefined
+  return hint === (props as { 'aria-label'?: string })['aria-label']
+    ? undefined
+    : hint
+}
 
 /** Both looks in one grid cell, the one not shown hidden, so the wider sets the width. */
 const busyLayer =

@@ -44,7 +44,10 @@ function TooltipCard({
           collisionPadding={5}
           className="z-50 app-no-drag"
         >
+          {/* Base UI gives the popup no role; a tooltip is what it is, as
+              Radix's said and the label host's bubble says. */}
           <TooltipPrimitive.Popup
+            role="tooltip"
             data-slot="tooltip-card"
             className={cn(tooltipSurface, popupMotion, className)}
           >
