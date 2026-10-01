@@ -79,6 +79,42 @@ export const Compact: Story = {
   },
 }
 
+/**
+ * Labelled: the same provider's row in two lists keeps one heading, and each
+ * region is named for its list, so no two share a name.
+ */
+export const Labelled: Story = {
+  render: () => (
+    <div className="flex flex-col gap-3">
+      <SettingsSection
+        compact
+        title="Anthropic"
+        label="Session naming: Anthropic"
+      >
+        <span className="text-sm">Claude Haiku 4.5</span>
+      </SettingsSection>
+      <SettingsSection
+        compact
+        title="Anthropic"
+        label="Session forking: Anthropic"
+      >
+        <span className="text-sm">Claude Opus 5.5</span>
+      </SettingsSection>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('region', { name: 'Session naming: Anthropic' }),
+    ).toHaveTextContent('Claude Haiku 4.5')
+    await expect(
+      canvas.getByRole('region', { name: 'Session forking: Anthropic' }),
+    ).toHaveTextContent('Claude Opus 5.5')
+    await expect(
+      canvas.getAllByRole('heading', { name: 'Anthropic' }),
+    ).toHaveLength(2)
+  },
+}
+
 export const Dark: Story = {
   globals: { theme: 'dark' },
 }
