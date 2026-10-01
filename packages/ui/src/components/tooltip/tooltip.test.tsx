@@ -67,12 +67,16 @@ describe('the tooltip host (MAR-3616)', () => {
     expect(bubble).toHaveClass('app-no-drag', 'pointer-events-none')
   })
 
-  it('moves with the popups: scale and travel only when motion is welcome', () => {
+  it('moves on the motion tokens, which reduced motion zeroes (DS2)', () => {
+    // Every scale and travel reads a token that tokens.css sets to 1 or 0 px
+    // under reduced motion, so the fade stays and nothing grows or travels.
     for (const token of popupMotion.split(' ')) {
-      if (/scale-|translate-/.test(token) && token.includes('data-'))
-        expect(token).toMatch(/^motion-safe:/)
+      if (/scale-|translate-/.test(token))
+        expect(token).toMatch(/\(--motion-(scale-from|shift)\)$/)
     }
     expect(popupMotion).toContain('data-starting-style:opacity-0')
+    expect(popupMotion).toContain('duration-fast')
+    expect(popupMotion).toContain('data-ending-style:duration-exit')
   })
 
   it('puts the tooltip away on Escape and on a press', async () => {

@@ -9,7 +9,7 @@ const meta = {
   args: { open: false, onToggle: fn() },
   decorators: [
     (Story) => (
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider>
         <Story />
       </TooltipProvider>
     ),

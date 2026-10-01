@@ -24,7 +24,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider>
         <div className="relative h-[36rem] bg-background">
           <Story />
         </div>
