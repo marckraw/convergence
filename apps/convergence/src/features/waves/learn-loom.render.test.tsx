@@ -475,12 +475,12 @@ describe('MAR-3201 R7 + R10: a modal, accessibly, that does not move', () => {
     expect(positionOf()).toBe(first)
   })
 
-  it('the backdrop is the one the design asked for', () => {
+  it('the backdrop is the dialogs’ one scrim: the handoff’s 68% takes the nearest token (R11, MAR-3616)', () => {
     open()
-    const overlay = document.querySelector('[data-slot="dialog-overlay"]')!
-    expect(overlay.className).toContain('bg-black/[0.68]')
-    expect(overlay.className).toContain('backdrop-blur-none')
-    expect(overlay.className).not.toContain('backdrop-blur-sm')
+    const backdrop = document.querySelector('[data-slot="dialog-backdrop"]')!
+    // Mutation: put a one-off backdrop back on the guide -> red.
+    expect(backdrop.className).toContain('bg-scrim')
+    expect(backdrop.className).not.toContain('bg-black/[0.68]')
   })
 })
 

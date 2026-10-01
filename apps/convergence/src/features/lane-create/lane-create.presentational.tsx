@@ -69,7 +69,7 @@ export const LaneCreateDialog: FC<LaneCreateDialogProps> = ({
       }}
     >
       <DialogContent>
-        <DialogHeader className="border-b border-white/10 px-6 py-5">
+        <DialogHeader>
           <DialogTitle>New lane</DialogTitle>
           <DialogDescription>
             A copy of {rootName} with its own git and its own sessions, ignored
@@ -176,7 +176,7 @@ export const LaneCreateDialog: FC<LaneCreateDialogProps> = ({
               )}
             </div>
 
-            <DialogFooter className="border-t border-white/10 px-6 py-4">
+            <DialogFooter>
               <Button
                 type="button"
                 variant="secondary"
@@ -194,7 +194,7 @@ export const LaneCreateDialog: FC<LaneCreateDialogProps> = ({
         )}
 
         {stage.kind === 'done' ? (
-          <DialogFooter className="border-t border-white/10 px-6 py-4">
+          <DialogFooter>
             <Button
               type="button"
               variant="secondary"

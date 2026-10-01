@@ -40,7 +40,7 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
   triggerClassName,
   onToggleItem,
 }) => (
-  <Popover open={open} onOpenChange={onOpenChange}>
+  <Popover open={open} onOpenChange={(open) => onOpenChange(open)}>
     <PopoverTrigger
       render={
         <Button

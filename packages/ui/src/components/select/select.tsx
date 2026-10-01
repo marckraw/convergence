@@ -100,9 +100,9 @@ function SelectTrigger({
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon
-        render={<ChevronDownIcon aria-hidden className="text-ink-muted" />}
-      />
+      <SelectPrimitive.Icon className="flex text-ink-muted">
+        <ChevronDownIcon aria-hidden />
+      </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
 }

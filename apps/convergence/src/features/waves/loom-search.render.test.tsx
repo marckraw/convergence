@@ -15,6 +15,7 @@ import type {
 import { WavePanel } from './wave-panel.container'
 import { loomSearchRows } from './loom-search.pure'
 import { boundCrewWith, ledgerEntry, residentSeat } from './wave-rows.fixture'
+import { pressOption } from '@/shared/testing/select-option'
 
 /**
  * Loom's search, rendered (MAR-3234; the MAR-2280 law): through the real
@@ -599,14 +600,10 @@ describe('MAR-3234 R8: nothing is stored or asked', () => {
 
     // Another crew is another Loom.
     await act(async () => {
-      fireEvent.keyDown(screen.getByRole('combobox', { name: 'Crew' }), {
-        key: 'Enter',
-      })
+      fireEvent.click(screen.getByRole('combobox', { name: 'Crew' }))
     })
     await act(async () => {
-      fireEvent.keyDown(screen.getByRole('option', { name: 'Studio' }), {
-        key: 'Enter',
-      })
+      pressOption(screen.getByRole('option', { name: 'Studio' }))
     })
     // Mutation: keep the query across a switch -> 'EX-PLAN' here, red.
     expect(field().value).toBe('')

@@ -29,6 +29,14 @@
   #root {
     min-height: 100%;
   }
+  /*
+   * The app is its own stacking context, so a popup portalled to <body> (a
+   * menu, a dialog, a select's list) sits above every z-index inside it
+   * (MAR-3616, as Base UI asks of its portals).
+   */
+  #root {
+    isolation: isolate;
+  }
 
   * {
     @apply border-border;

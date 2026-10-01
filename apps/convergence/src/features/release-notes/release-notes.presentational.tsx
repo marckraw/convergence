@@ -1,5 +1,4 @@
-import type { FC } from 'react'
-import type { ReactNode } from 'react'
+import type { FC, ReactElement } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type {
   ReleaseNotesBundle,
@@ -27,7 +26,7 @@ interface ReleaseNotesProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   bundle: ReleaseNotesBundle
-  trigger: ReactNode
+  trigger: ReactElement
   historyItems: ReleaseHistoryPageItem[]
   historyPage: number
   historyTotalPages: number
@@ -48,10 +47,10 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
   const showPagination = historyTotalPages > 1
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogTrigger render={trigger} />
+      <DialogContent>
+        <DialogHeader>
           <DialogTitle>About Convergence</DialogTitle>
           <DialogDescription>
             Version {bundle.currentVersion}
@@ -161,16 +160,18 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
           ) : (
             <span aria-hidden />
           )}
-          <DialogClose asChild>
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="sm:w-auto"
-            >
-              Close
-            </Button>
-          </DialogClose>
+          <DialogClose
+            render={
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="sm:w-auto"
+              >
+                Close
+              </Button>
+            }
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

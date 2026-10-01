@@ -298,11 +298,18 @@ export const GridDetail: Story = {
     await expect(
       within(dialog).getByRole('heading', { name: 'mrck-ship-it' }),
     ).toBeVisible()
-    const closers = within(dialog).getAllByRole('button', {
+    // The details are a Sheet over the grid since MAR-3616: a dialog of its
+    // own, named for the skill, closed by its one Close (the scrim beside it
+    // is no longer a second button), by Escape, or by a press beside it.
+    const sheet = await screen.findByRole('dialog', {
+      name: 'mrck-ship-it details',
+    })
+    await expect(dialog.contains(sheet)).toBe(true)
+    const closers = within(sheet).getAllByRole('button', {
       name: 'Close details',
     })
-    await expect(closers).toHaveLength(2)
-    await userEvent.click(closers[1] as HTMLElement)
+    await expect(closers).toHaveLength(1)
+    await userEvent.click(closers[0] as HTMLElement)
     await expect(args.onCloseDetail).toHaveBeenCalledOnce()
   },
 }

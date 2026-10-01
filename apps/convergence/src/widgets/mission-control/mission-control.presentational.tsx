@@ -119,15 +119,21 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
             />
 
             <Select
+              items={Object.fromEntries(
+                SESSION_CARD_ORDER_PRESETS.map((preset) => [
+                  preset,
+                  formatSessionCardOrderPreset(preset),
+                ]),
+              )}
               value={order}
               onValueChange={(value) =>
                 onOrderChange(value as SessionCardOrderPreset)
               }
             >
               <SelectTrigger
-                size="sm"
+                size="md"
                 aria-label="Order session cards"
-                className="h-8 gap-1.5 text-xs"
+                className="gap-1.5 text-xs"
               >
                 <ArrowDownWideNarrow className="size-3.5" />
                 <SelectValue />

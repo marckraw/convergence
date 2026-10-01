@@ -68,7 +68,7 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogContent>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <DialogHeader className="border-b border-border px-6 py-4">

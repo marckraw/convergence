@@ -39,19 +39,21 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
     ).length ?? 0
   const running = busy || !!plan?.running
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={!props.enabled}
-          className="min-h-10"
-        >
-          Merge reviewed…
-        </Button>
-      </DialogTrigger>
+    <Dialog open={props.open} onOpenChange={(open) => props.onOpenChange(open)}>
+      <DialogTrigger
+        render={
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!props.enabled}
+            className="min-h-10"
+          >
+            Merge reviewed…
+          </Button>
+        }
+      />
       <DialogContent onKeyDown={(event) => event.stopPropagation()}>
-        <DialogHeader className="p-6 pr-12">
+        <DialogHeader className="border-b-0 p-6 pr-12">
           <DialogTitle>Merge reviewed</DialogTitle>
           <DialogDescription>
             Reviewed PRs in Awaiting QA. Untick rows to choose a partial set.
@@ -118,7 +120,7 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             ))}
           </div>
         </DialogBody>
-        <DialogFooter className="p-6">
+        <DialogFooter className="border-t-0 p-6">
           <Button
             variant="secondary"
             onClick={props.onRefresh}

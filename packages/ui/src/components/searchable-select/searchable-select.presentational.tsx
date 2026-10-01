@@ -9,11 +9,7 @@ import { Check, ChevronDown } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
 import { cn } from '#lib/cn.pure'
 import { Button, type ButtonProps } from '../button/button'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../popover/popover.radix'
+import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover'
 
 export interface SearchableSelectItem {
   id: string
@@ -118,32 +114,34 @@ export function SearchableSelectPresentational({
 }: SearchableSelectPresentationalProps) {
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant={triggerVariant}
-          size={triggerSize}
-          disabled={isDisabled}
-          role="combobox"
-          aria-label={ariaLabel ?? value}
-          aria-expanded={open}
-          className={cn('justify-between', triggerClassName)}
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            {icon}
-            <span className="truncate">{value}</span>
-            {selectedBadge ? (
-              <span
-                title={selectedBadge.title}
-                className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
-              >
-                {selectedBadge.label}
-              </span>
-            ) : null}
-          </span>
-          <ChevronDown className="h-3 w-3 shrink-0" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant={triggerVariant}
+            size={triggerSize}
+            disabled={isDisabled}
+            role="combobox"
+            aria-label={ariaLabel ?? value}
+            aria-expanded={open}
+            className={cn('justify-between', triggerClassName)}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              {icon}
+              <span className="truncate">{value}</span>
+              {selectedBadge ? (
+                <span
+                  title={selectedBadge.title}
+                  className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
+                >
+                  {selectedBadge.label}
+                </span>
+              ) : null}
+            </span>
+            <ChevronDown className="h-3 w-3 shrink-0" />
+          </Button>
+        }
+      />
       <PopoverContent
         // The popover is a dialog to assistive tech; it takes its trigger's
         // name, so it is announced as the field it belongs to (MAR-3611).
@@ -151,13 +149,10 @@ export function SearchableSelectPresentational({
         align="start"
         collisionPadding={16}
         className={cn(
-          'flex min-h-0 flex-col min-w-52 w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] max-h-[min(24rem,var(--radix-popover-content-available-height))] p-0',
+          'flex min-h-0 flex-col min-w-52 w-(--anchor-width) max-w-[min(24rem,calc(100vw-2rem))] max-h-[min(24rem,var(--available-height))] p-0',
           contentClassName,
         )}
-        onOpenAutoFocus={(event: Event) => {
-          event.preventDefault()
-          inputRef.current?.focus()
-        }}
+        initialFocus={inputRef}
       >
         <Command
           shouldFilter={false}

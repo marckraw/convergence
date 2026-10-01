@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { FC, ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import type { FC } from 'react'
 import { Bot } from 'lucide-react'
 import {
   providerApi,
@@ -16,7 +16,7 @@ import { Button } from '@convergence/ui'
 import { ProviderStatusDialog } from './provider-status.presentational'
 
 interface ProviderStatusDialogContainerProps {
-  trigger?: ReactNode
+  trigger?: ReactElement
 }
 
 export const ProviderStatusDialogContainer: FC<

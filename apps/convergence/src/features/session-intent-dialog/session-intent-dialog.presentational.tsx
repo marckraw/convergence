@@ -22,9 +22,9 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
   onSelectConversation,
   onSelectTerminal,
 }) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="p-0 sm:max-w-[560px]">
-      <DialogHeader className="border-b border-border/70 px-6 py-5">
+  <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+    <DialogContent size="md">
+      <DialogHeader>
         <DialogTitle>New session</DialogTitle>
         <DialogDescription>
           Pick how you want this session to run.

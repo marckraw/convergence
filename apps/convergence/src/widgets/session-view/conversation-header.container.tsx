@@ -577,7 +577,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
             .filter((slot) => slot.side === 'right' && inRow1(slot))
             .map(renderSlot)}
           {moreShown && (
-            <Menu open={moreOpen} onOpenChange={setMoreOpen}>
+            <Menu open={moreOpen} onOpenChange={(open) => setMoreOpen(open)}>
               <MenuTrigger
                 render={
                   <IconButton

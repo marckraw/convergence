@@ -79,7 +79,7 @@ export const ModelPickerDialogPresentational: FC<
   onSelect,
   onToggleFavorite,
 }) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
+  <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
     <Button
       type="button"
       variant={triggerVariant}
@@ -99,11 +99,8 @@ export const ModelPickerDialogPresentational: FC<
     </Button>
 
     <DialogContent
-      className="h-[min(620px,calc(100vh-2rem))] w-[min(860px,calc(100vw-2rem))] p-0"
-      onOpenAutoFocus={(event) => {
-        event.preventDefault()
-        inputRef.current?.focus()
-      }}
+      className="h-[min(620px,calc(100vh-2rem))] w-[min(860px,calc(100vw-2rem))]"
+      initialFocus={inputRef}
     >
       <DialogTitle className="sr-only">Select model</DialogTitle>
       <DialogDescription className="sr-only">

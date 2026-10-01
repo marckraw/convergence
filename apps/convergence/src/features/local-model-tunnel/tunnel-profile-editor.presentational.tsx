@@ -158,8 +158,12 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             <span className="text-xs font-medium text-muted-foreground">
               Runtime
             </span>
-            <Select value={connectionKind} onValueChange={updateConnectionKind}>
-              <SelectTrigger className="w-full">
+            <Select
+              items={CONNECTION_KIND_ITEMS}
+              value={connectionKind}
+              onValueChange={(kind) => updateConnectionKind(kind)}
+            >
+              <SelectTrigger size="lg" className="w-full" aria-label="Runtime">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -489,6 +493,12 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
       </div>
     </div>
   )
+}
+
+/** The two places a tunnel's model can run, as the runtime choice names them. */
+const CONNECTION_KIND_ITEMS = {
+  'local-runtime': 'This Mac',
+  'ssh-tunnel': 'SSH tunnel',
 }
 
 function renderSectionLabel(label: string) {

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { FC, ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import type { FC } from 'react'
 import { Cable } from 'lucide-react'
 import { mcpServerApi } from '@/entities/mcp-server'
 import { useProjectStore } from '@/entities/project'
@@ -10,7 +10,7 @@ import { Button } from '@convergence/ui'
 import { McpServersDialog } from './mcp-servers.presentational'
 
 interface McpServersDialogContainerProps {
-  trigger?: ReactNode
+  trigger?: ReactElement
 }
 
 export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({

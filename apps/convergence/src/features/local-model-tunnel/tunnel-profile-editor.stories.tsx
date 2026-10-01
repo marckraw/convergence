@@ -86,19 +86,6 @@ const draftOf = ({
   routeCandidates,
 })
 
-/**
- * The Runtime select is a combobox with no name: the "Runtime" text beside it
- * is a span, not its label, and a combobox takes no name from its value.
- */
-const unnamedRuntimeSelect = {
-  a11y: {
-    config: {
-      // a11y-known: the Runtime select's combobox has no accessible name (its "Runtime" text is not a label) — fixed by the sweep (DS4)
-      rules: [{ id: 'button-name', enabled: false }],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/LocalModelTunnel/TunnelProfileEditor',
   component: TunnelProfileEditor,
@@ -126,7 +113,6 @@ type Story = StoryObj<typeof meta>
  * the command it runs; Save profile and Delete end it.
  */
 export const Default: Story = {
-  parameters: unnamedRuntimeSelect,
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.type(canvas.getByLabelText('Display name'), '!')
     await expect(args.onDraftChange).toHaveBeenLastCalledWith({
@@ -156,7 +142,6 @@ export const Default: Story = {
 /** The runtime is a select; choosing This Mac turns the SSH options off. */
 export const ChooseRuntime: Story = {
   name: 'Choose runtime',
-  parameters: unnamedRuntimeSelect,
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('combobox'))
     await userEvent.click(
@@ -174,7 +159,6 @@ export const ChooseRuntime: Story = {
 
 /** Several routes, tried in order; each can be edited or removed. */
 export const Routes: Story = {
-  parameters: unnamedRuntimeSelect,
   args: {
     draft: draftOf({
       ...profile,
@@ -227,7 +211,6 @@ export const Routes: Story = {
 /** Ollama on this Mac: no SSH target, no forwarding, no command. */
 export const LocalRuntime: Story = {
   name: 'Local runtime',
-  parameters: unnamedRuntimeSelect,
   args: {
     item: {
       profile: { ...profile, name: 'Ollama', connectionKind: 'local-runtime' },
@@ -253,7 +236,6 @@ export const LocalRuntime: Story = {
  * warning that the health URL points at another port.
  */
 export const Failed: Story = {
-  parameters: unnamedRuntimeSelect,
   args: {
     item: {
       profile,
@@ -295,7 +277,6 @@ export const Failed: Story = {
 
 /** Busy: while a change is in flight, Save and Delete wait. */
 export const Busy: Story = {
-  parameters: unnamedRuntimeSelect,
   args: { isMutating: true },
   play: async ({ canvas }) => {
     await expect(

@@ -1,5 +1,4 @@
-import type { FC, ReactNode } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { useRef, type FC, type ReactElement, type ReactNode } from 'react'
 import {
   BookOpen,
   LayoutDashboard,
@@ -33,6 +32,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Sheet,
+  SheetContent,
 } from '@convergence/ui'
 import type {
   SkillBrowserFilters,
@@ -49,13 +50,10 @@ import { SkillDetailPane } from './skills-detail.presentational'
 
 export type SkillsViewMode = 'overview' | 'grid' | 'list'
 
-// Animated scrim that stays a real (accessible) Button rather than a bare div.
-const MotionButton = motion.create(Button)
-
 interface SkillsBrowserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactNode
+  trigger: ReactElement
   projectName: string | null
   catalog: ProjectSkillCatalog | null
   viewMode: SkillsViewMode
@@ -156,9 +154,13 @@ function renderFilterSelect({
   className?: string
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select
+      items={options}
+      value={value}
+      onValueChange={(next) => onChange(next)}
+    >
       <SelectTrigger
-        size="sm"
+        size="md"
         aria-label={label}
         className={cn('w-[150px] normal-case tracking-normal', className)}
       >
@@ -338,6 +340,8 @@ function renderCatalogPlaceholder({
 }
 
 export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
+  // The grid's area: a skill's details slide in over it, not over the window.
+  const detailArea = useRef<HTMLDivElement>(null)
   const {
     open,
     onOpenChange,
@@ -385,9 +389,9 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
   const showToolbar = viewMode !== 'overview' && !placeholder
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="h-[min(92vh,1120px)] max-h-[min(92vh,1120px)] w-[min(1680px,calc(100vw-3rem))] p-0">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogTrigger render={trigger} />
+      <DialogContent className="h-[min(92vh,1120px)] max-h-[min(92vh,1120px)] w-[min(1680px,calc(100vw-3rem))]">
         <DialogHeader className="border-b border-border/70 px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
@@ -421,7 +425,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
 
         {showToolbar ? renderFilterToolbar(props) : null}
 
-        <div className="relative min-h-0 flex-1">
+        <div ref={detailArea} className="relative min-h-0 flex-1">
           {placeholder ? (
             <div className="p-6">{placeholder}</div>
           ) : viewMode === 'overview' ? (
@@ -441,54 +445,48 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
                   showGroupHeaders={groupBy !== 'none'}
                 />
               </div>
-              <AnimatePresence>
-                {isDetailOpen && selectedSkill
-                  ? [
-                      <MotionButton
-                        key="scrim"
-                        type="button"
-                        variant="ghost"
-                        aria-label="Close details"
-                        className="absolute inset-0 z-10 h-auto w-auto rounded-none bg-black/30 p-0 hover:bg-black/30"
-                        onClick={onCloseDetail}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                      />,
-                      <motion.div
-                        key="panel"
-                        className="absolute inset-y-0 right-0 z-20 flex w-[min(760px,88%)] flex-col border-l border-border/70 bg-background shadow-2xl"
-                        initial={{ x: '100%' }}
-                        animate={{ x: 0 }}
-                        exit={{ x: '100%' }}
-                        transition={{
-                          type: 'spring',
-                          duration: 0.3,
-                          bounce: 0,
-                        }}
-                      >
-                        <SkillDetailPane
-                          projectName={projectName}
-                          catalog={catalog}
-                          selectedSkill={selectedSkill}
-                          selectedDetails={selectedDetails}
-                          isDetailsLoading={isDetailsLoading}
-                          detailsError={detailsError}
-                          onOpenMcpServers={onOpenMcpServers}
-                          onReveal={onRevealSkill}
-                          onOpenFile={onOpenSkillFile}
-                          isRevealing={isRevealing}
-                          isOpeningFile={isOpeningFile}
-                          editorApps={editorApps}
-                          editorAppsLoading={editorAppsLoading}
-                          onOpenInEditor={onOpenInEditor}
-                          onClose={onCloseDetail}
-                        />
-                      </motion.div>,
-                    ]
-                  : null}
-              </AnimatePresence>
+              {/*
+                A skill's details slide in over the grid, inside the dialog:
+                a Sheet held to the grid's area, over its lighter scrim. A
+                press beside it, Escape or its own Close closes it.
+              */}
+              <Sheet
+                open={isDetailOpen && selectedSkill !== null}
+                onOpenChange={(open) => {
+                  if (!open) onCloseDetail()
+                }}
+              >
+                <SheetContent
+                  aria-label={
+                    selectedSkill
+                      ? `${selectedSkill.name} details`
+                      : 'Skill details'
+                  }
+                  container={detailArea}
+                  showClose={false}
+                  className="w-[min(760px,88%)] border-border/70 bg-background"
+                >
+                  {selectedSkill ? (
+                    <SkillDetailPane
+                      projectName={projectName}
+                      catalog={catalog}
+                      selectedSkill={selectedSkill}
+                      selectedDetails={selectedDetails}
+                      isDetailsLoading={isDetailsLoading}
+                      detailsError={detailsError}
+                      onOpenMcpServers={onOpenMcpServers}
+                      onReveal={onRevealSkill}
+                      onOpenFile={onOpenSkillFile}
+                      isRevealing={isRevealing}
+                      isOpeningFile={isOpeningFile}
+                      editorApps={editorApps}
+                      editorAppsLoading={editorAppsLoading}
+                      onOpenInEditor={onOpenInEditor}
+                      onClose={onCloseDetail}
+                    />
+                  ) : null}
+                </SheetContent>
+              </Sheet>
             </>
           ) : (
             <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)]">

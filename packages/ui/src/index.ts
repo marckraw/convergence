@@ -32,14 +32,26 @@ export {
 export {
   Dialog,
   DialogBody,
+  type DialogBodyProps,
   DialogClose,
+  type DialogCloseProps,
   DialogContent,
+  type DialogContentProps,
   DialogDescription,
+  type DialogDescriptionProps,
+  DialogError,
+  type DialogErrorProps,
   DialogFooter,
+  type DialogFooterProps,
   DialogHeader,
+  type DialogHeaderProps,
+  type DialogProps,
+  type DialogSize,
   DialogTitle,
+  type DialogTitleProps,
   DialogTrigger,
-} from './components/dialog/dialog.radix'
+  type DialogTriggerProps,
+} from './components/dialog/dialog'
 export {
   FormDialog,
   type FormDialogProps,
@@ -106,15 +118,22 @@ export type {
 export {
   Select,
   SelectContent,
+  type SelectContentProps,
   SelectGroup,
+  type SelectGroupProps,
   SelectItem,
+  type SelectItemProps,
   SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
+  type SelectLabelProps,
+  type SelectOption,
+  type SelectProps,
   SelectSeparator,
+  type SelectSeparatorProps,
   SelectTrigger,
+  type SelectTriggerProps,
   SelectValue,
-} from './components/select/select.radix'
+  type SelectValueProps,
+} from './components/select/select'
 export {
   Sheet,
   SheetContent,

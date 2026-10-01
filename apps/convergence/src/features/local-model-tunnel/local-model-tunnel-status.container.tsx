@@ -209,9 +209,9 @@ export const LocalModelTunnelStatusContainer: FC = () => {
         </PopoverContent>
       </Popover>
 
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-        <DialogContent className="h-[min(88vh,780px)] w-[min(980px,calc(100vw-2rem))] max-h-[min(88vh,780px)] p-0">
-          <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+      <Dialog open={manageOpen} onOpenChange={(open) => setManageOpen(open)}>
+        <DialogContent className="h-[min(88vh,780px)] w-[min(980px,calc(100vw-2rem))] max-h-[min(88vh,780px)]">
+          <DialogHeader>
             <DialogTitle>Local model tunnels</DialogTitle>
             <DialogDescription>
               Manage SSH forwards for local or remote model runtimes.
@@ -285,7 +285,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
               </div>
             </div>
           </DialogBody>
-          <DialogFooter className="border-t border-border/70 px-6 py-4">
+          <DialogFooter>
             <Button
               type="button"
               variant="secondary"

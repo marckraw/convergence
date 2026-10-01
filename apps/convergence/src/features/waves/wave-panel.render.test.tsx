@@ -30,6 +30,7 @@ import {
   LOOM_STRIP_WIDTH_PX,
 } from './wave-panel.styles'
 import { crewMember, ledgerEntry, residentSeat } from './wave-rows.fixture'
+import { pressOption } from '@/shared/testing/select-option'
 
 /**
  * The wave panel, rendered (MAR-3097; the MAR-2280 law): what a person reads
@@ -3896,19 +3897,17 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     const crewPicker = () => screen.getByRole('combobox', { name: 'Crew' })
 
-    /** Opens the picker by keyboard, as jsdom has no pointer capture. */
+    /** Opens the picker with a press, as Base UI's Select opens (MAR-3616). */
     const openPicker = async () => {
       await act(async () => {
-        fireEvent.keyDown(crewPicker(), { key: 'Enter' })
+        fireEvent.click(crewPicker())
       })
     }
 
     const pickCrew = async (name: string) => {
       await openPicker()
       await act(async () => {
-        fireEvent.keyDown(screen.getByRole('option', { name }), {
-          key: 'Enter',
-        })
+        pressOption(screen.getByRole('option', { name }))
       })
     }
 
@@ -4503,12 +4502,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     const pickCrew = async (name: string) => {
       await act(async () => {
-        fireEvent.keyDown(crewPicker(), { key: 'Enter' })
+        fireEvent.click(crewPicker())
       })
       await act(async () => {
-        fireEvent.keyDown(screen.getByRole('option', { name }), {
-          key: 'Enter',
-        })
+        pressOption(screen.getByRole('option', { name }))
       })
     }
 

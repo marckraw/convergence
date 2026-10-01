@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react'
+import type { FC, ReactElement } from 'react'
 import {
   CalendarClock,
   Check,
@@ -110,7 +110,7 @@ export interface SpaceSynthesisPreview {
 
 interface SpaceWorkboardProps {
   open: boolean
-  trigger?: ReactNode
+  trigger?: ReactElement
   spaces: Space[]
   selectedSpace: Space | null
   selectedDraft: SpaceDraft
@@ -227,10 +227,10 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
     isCreatingArtifact
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent className="w-[min(1040px,calc(100vw-2rem))] p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      {trigger ? <DialogTrigger render={trigger} /> : null}
+      <DialogContent className="w-[min(1040px,calc(100vw-2rem))]">
+        <DialogHeader>
           <DialogTitle>Spaces</DialogTitle>
           <DialogDescription>
             Global work tracking for agent-driven delivery.
@@ -356,6 +356,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       Status
                     </span>
                     <Select
+                      items={spaceStatusLabels}
                       value={selectedDraft.status}
                       onValueChange={(status) =>
                         onDraftChange({
@@ -364,7 +365,11 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                         })
                       }
                     >
-                      <SelectTrigger className="w-full" aria-label="Status">
+                      <SelectTrigger
+                        size="lg"
+                        className="w-full"
+                        aria-label="Status"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -382,6 +387,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       Attention
                     </span>
                     <Select
+                      items={spaceAttentionLabels}
                       value={selectedDraft.attention}
                       onValueChange={(attention) =>
                         onDraftChange({
@@ -390,7 +396,11 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                         })
                       }
                     >
-                      <SelectTrigger className="w-full" aria-label="Attention">
+                      <SelectTrigger
+                        size="lg"
+                        className="w-full"
+                        aria-label="Attention"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -588,15 +598,19 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       </Button>
                       <Dialog
                         open={artifactDialogOpen}
-                        onOpenChange={onArtifactDialogOpenChange}
+                        onOpenChange={(open) =>
+                          onArtifactDialogOpenChange(open)
+                        }
                       >
-                        <DialogTrigger asChild>
-                          <Button type="button" variant="secondary">
-                            <Plus className="h-4 w-4" />
-                            Add Artifact
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="w-[min(720px,calc(100vw-2rem))] p-0">
+                        <DialogTrigger
+                          render={
+                            <Button type="button" variant="secondary">
+                              <Plus className="h-4 w-4" />
+                              Add Artifact
+                            </Button>
+                          }
+                        />
+                        <DialogContent>
                           <form
                             className="flex min-h-0 flex-1 flex-col"
                             onSubmit={(event) => {
@@ -604,7 +618,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                               if (!artifactCreateDisabled) onCreateArtifact()
                             }}
                           >
-                            <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+                            <DialogHeader>
                               <DialogTitle>Add Artifact</DialogTitle>
                               <DialogDescription>
                                 Attach a concrete artifact produced by this
@@ -618,6 +632,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   Kind
                                 </span>
                                 <Select
+                                  items={spaceArtifactKindLabels}
                                   value={artifactDraft.kind}
                                   onValueChange={(kind) =>
                                     onArtifactDraftChange({
@@ -627,6 +642,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   }
                                 >
                                   <SelectTrigger
+                                    size="lg"
                                     className="w-full"
                                     aria-label="New Artifact kind"
                                   >
@@ -664,6 +680,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   Status
                                 </span>
                                 <Select
+                                  items={spaceArtifactStatusLabels}
                                   value={artifactDraft.status}
                                   onValueChange={(status) =>
                                     onArtifactDraftChange({
@@ -673,6 +690,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   }
                                 >
                                   <SelectTrigger
+                                    size="lg"
                                     className="w-full"
                                     aria-label="New Artifact status"
                                   >
@@ -695,6 +713,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   Source
                                 </span>
                                 <Select
+                                  items={sourceSessionItems(selectedAttempts)}
                                   value={toSelectValue(
                                     artifactDraft.sourceSessionId,
                                   )}
@@ -707,6 +726,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   }
                                 >
                                   <SelectTrigger
+                                    size="lg"
                                     className="w-full"
                                     aria-label="New Artifact source session"
                                   >
@@ -746,7 +766,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                               </label>
                             </DialogBody>
 
-                            <DialogFooter className="border-t border-border/70 px-6 py-4">
+                            <DialogFooter>
                               <Button
                                 type="button"
                                 variant="secondary"
@@ -857,7 +877,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
           </div>
         ) : null}
 
-        <DialogFooter className="border-t border-border/70 px-6 py-4">
+        <DialogFooter>
           <Button type="button" onClick={onSave} disabled={saveDisabled}>
             <Save className="h-4 w-4" />
             {isSaving ? 'Saving...' : 'Save'}
@@ -866,6 +886,16 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
       </DialogContent>
     </Dialog>
   )
+}
+
+/** A source-session choice's labels: none, or one of the Space's attempts. */
+function sourceSessionItems(attempts: SpaceAttemptView[]) {
+  return {
+    [SELECT_EMPTY_VALUE]: 'No source Attempt',
+    ...Object.fromEntries(
+      attempts.map((view) => [view.attempt.sessionId, view.sessionName]),
+    ),
+  }
 }
 
 function renderStatusBadge(status: SpaceStatus) {
@@ -986,13 +1016,14 @@ function renderAttemptRow(input: {
 
         <div className="flex shrink-0 items-center gap-2">
           <Select
+            items={spaceAttemptRoleLabels}
             value={attempt.role}
             onValueChange={(role) =>
               onAttemptRoleChange(attempt.id, role as SpaceAttemptRole)
             }
           >
             <SelectTrigger
-              size="sm"
+              size="md"
               aria-label={`Role for ${view.sessionName}`}
             >
               <SelectValue />
@@ -1070,13 +1101,14 @@ function renderArtifactRow(input: {
             Kind
           </span>
           <Select
+            items={spaceArtifactKindLabels}
             value={artifact.kind}
             onValueChange={(kind) =>
               onArtifactKindChange(artifact.id, kind as SpaceArtifactKind)
             }
           >
             <SelectTrigger
-              size="sm"
+              size="md"
               className="w-full"
               aria-label={`Kind for ${artifact.label}`}
             >
@@ -1113,13 +1145,14 @@ function renderArtifactRow(input: {
             Status
           </span>
           <Select
+            items={spaceArtifactStatusLabels}
             value={artifact.status}
             onValueChange={(status) =>
               onArtifactStatusChange(artifact.id, status as SpaceArtifactStatus)
             }
           >
             <SelectTrigger
-              size="sm"
+              size="md"
               className="w-full"
               aria-label={`Status for ${artifact.label}`}
             >
@@ -1192,6 +1225,7 @@ function renderArtifactRow(input: {
             Source
           </span>
           <Select
+            items={sourceSessionItems(attempts)}
             value={toSelectValue(artifact.sourceSessionId ?? '')}
             onValueChange={(sourceSessionId) =>
               onArtifactSourceSessionChange(
@@ -1201,6 +1235,7 @@ function renderArtifactRow(input: {
             }
           >
             <SelectTrigger
+              size="lg"
               className="w-full"
               aria-label={`Source for ${artifact.label}`}
             >

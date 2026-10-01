@@ -99,7 +99,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
   onToggleSkill,
   onBrowseAll,
 }) => (
-  <Popover open={open} onOpenChange={onOpenChange}>
+  <Popover open={open} onOpenChange={(open) => onOpenChange(open)}>
     <PopoverTrigger
       render={
         <Button

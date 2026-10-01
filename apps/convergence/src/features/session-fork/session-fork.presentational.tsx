@@ -125,9 +125,9 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
       (preview.status === 'ready' && seedMarkdown.trim().length > 0))
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader className="border-b border-white/10 px-6 py-5">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitFork className="h-4 w-4" />
             Fork session
@@ -385,7 +385,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           )}
         </div>
 
-        <DialogFooter className="border-t border-white/10 px-6 py-4">
+        <DialogFooter>
           <Button
             type="button"
             variant="secondary"

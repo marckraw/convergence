@@ -430,6 +430,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       Kind
                     </span>
                     <Select
+                      items={spaceArtifactKindLabels}
                       value={artifactDraft.kind}
                       onValueChange={(kind) =>
                         onArtifactDraftChange({
@@ -439,6 +440,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       }
                     >
                       <SelectTrigger
+                        size="lg"
                         className="w-full"
                         aria-label="Artifact kind"
                       >
@@ -474,6 +476,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       Status
                     </span>
                     <Select
+                      items={spaceArtifactStatusLabels}
                       value={artifactDraft.status}
                       onValueChange={(status) =>
                         onArtifactDraftChange({
@@ -483,6 +486,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       }
                     >
                       <SelectTrigger
+                        size="lg"
                         className="w-full"
                         aria-label="Artifact status"
                       >
@@ -502,6 +506,15 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       Source attempt
                     </span>
                     <Select
+                      items={{
+                        [SELECT_EMPTY_VALUE]: 'None',
+                        ...Object.fromEntries(
+                          sourceAttemptOptions.map(({ attempt, session }) => [
+                            attempt.sessionId,
+                            session?.name ?? attempt.sessionId,
+                          ]),
+                        ),
+                      }}
                       value={toSelectValue(artifactDraft.sourceSessionId)}
                       onValueChange={(sourceSessionId) =>
                         onArtifactDraftChange({
@@ -511,6 +524,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                       }
                     >
                       <SelectTrigger
+                        size="lg"
                         className="w-full"
                         aria-label="Artifact source attempt"
                       >

@@ -104,8 +104,8 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0">
+    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
+      <DialogContent>
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <DialogDescription className="sr-only">
           Jump to projects, workspaces, sessions, or dialogs.
