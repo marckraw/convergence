@@ -57,7 +57,9 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="bg-[#0b0b0f] text-zinc-100 dark">
+      // The dock forces dark in both themes the app's way, with a subtree
+      // data-theme (R12), not a `.dark` class, which no longer themes (DS2).
+      <div data-theme="dark" className="bg-[#0b0b0f] text-zinc-100">
         <Story />
       </div>
     ),
