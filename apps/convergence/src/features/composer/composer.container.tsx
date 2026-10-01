@@ -65,6 +65,14 @@ import {
   type ProviderQuotaSnapshot,
 } from '@/entities/provider-quota'
 import {
+  CODEX_STANDARD_SPEED_ID,
+  canonicalCodexSpeedId,
+  codexSpeedAfterChange,
+  codexSpeedApi,
+  codexSpeedChoices,
+  type CodexSpeedSnapshot,
+} from '@/entities/codex-speed'
+import {
   AttachmentPreviewContainer,
   useAttachmentDraft,
   resolveAttachmentCapabilityForModel,
@@ -207,7 +215,9 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
-  const [codexFastMode, setCodexFastMode] = useState(false)
+  // The Codex speed a new conversation starts with: Standard unless chosen
+  // (MAR-3574 R5, Marcin's (a)) -- never the account's own default.
+  const [codexSpeedId, setCodexSpeedId] = useState(CODEX_STANDARD_SPEED_ID)
   const [providerAccounts, setProviderAccounts] = useState<ProviderAccount[]>(
     [],
   )
@@ -793,9 +803,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
   // Null on a daemon, and null is the honest value: the session record would
   // otherwise claim a service tier for a run this app never chose one for.
   const serviceTier = showCodexBillingControls
-    ? codexFastMode
-      ? 'fast'
-      : 'default'
+    ? canonicalCodexSpeedId(codexSpeedId)
     : null
   const midRunPolicy = useMemo(
     () =>
@@ -1324,7 +1332,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
   const seededProviderId = activeSession?.providerId ?? null
   const seededModelId = activeSession?.model ?? ''
   const seededEffortId = activeSession?.effort ?? ''
-  const seededFastMode = activeSession?.serviceTier === 'fast'
+  const seededSpeedId = canonicalCodexSpeedId(activeSession?.serviceTier)
   const seededPermissionKey = sessionPermissionConfigKey(
     activeSession?.permissionConfig,
   )
@@ -1333,7 +1341,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
       setProviderId(seededProviderId)
       setModelId(seededModelId)
       setEffortId(seededEffortId)
-      setCodexFastMode(seededFastMode)
+      setCodexSpeedId(seededSpeedId)
       setPermissionConfig(
         sessionPermissionConfigFromKey(seededPermissionKey) ??
           resolveSimplePermissionConfig('ask'),
@@ -1353,7 +1361,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     seededProviderId,
     seededModelId,
     seededEffortId,
-    seededFastMode,
+    seededSpeedId,
     seededPermissionKey,
     selection.providerId,
     selection.modelId,
@@ -1461,6 +1469,82 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     codexUsageScopeSettled,
     loadCodexUsage,
     showCodexBillingControls,
+  ])
+
+  /**
+   * Which speeds Codex offers the account this composer would send on
+   * (MAR-3574 R1). Asked of that account, never the ambient list: Codex drops
+   * a tier it does not offer without an error. Same scope and same settle gate
+   * as the pill, and the same rule for a stale answer -- only the question
+   * still being asked may land.
+   */
+  const [codexSpeedSnapshot, setCodexSpeedSnapshot] =
+    useState<CodexSpeedSnapshot | null>(null)
+  const codexSpeedRequestRef = useRef(0)
+  useEffect(() => {
+    const generation = (codexSpeedRequestRef.current += 1)
+    setCodexSpeedSnapshot(null)
+    if (!showCodexBillingControls || !codexUsageScopeSettled) return undefined
+    let retry: number | undefined
+    const load = async () => {
+      try {
+        const snapshot = await codexSpeedApi.list(false, codexUsageScope)
+        if (generation !== codexSpeedRequestRef.current) return
+        setCodexSpeedSnapshot(snapshot)
+        // A cold server answers "warming up"; ask again once it is up.
+        if (snapshot.status === 'warming-up') {
+          retry = window.setTimeout(() => void load(), 3_000)
+        }
+      } catch {
+        if (generation === codexSpeedRequestRef.current)
+          setCodexSpeedSnapshot(null)
+      }
+    }
+    void load()
+    return () => {
+      if (retry !== undefined) window.clearTimeout(retry)
+    }
+  }, [codexUsageScope, codexUsageScopeSettled, showCodexBillingControls])
+
+  const codexSpeedModelId = selection.modelId || null
+  const codexSpeedChoiceList = useMemo(
+    () =>
+      codexSpeedChoices({
+        snapshot: codexSpeedSnapshot,
+        modelId: codexSpeedModelId,
+        selectedId: codexSpeedId,
+      }),
+    [codexSpeedSnapshot, codexSpeedModelId, codexSpeedId],
+  )
+
+  /**
+   * A model or account that no longer offers the chosen tier puts the choice
+   * back to Standard, visibly (MAR-3574 R4). A draft resets here; an open
+   * conversation writes Standard to its row. An unread list changes nothing.
+   */
+  const codexSpeedTarget = showCodexBillingControls
+    ? codexSpeedAfterChange({
+        snapshot: codexSpeedSnapshot,
+        modelId: codexSpeedModelId,
+        currentId: codexSpeedId,
+      })
+    : canonicalCodexSpeedId(codexSpeedId)
+  const codexSpeedActiveSessionId =
+    activeSession && selectionLocks.canContinue ? activeSession.id : null
+  useEffect(() => {
+    if (codexSpeedTarget === canonicalCodexSpeedId(codexSpeedId)) return
+    if (codexSpeedActiveSessionId) {
+      void setSessionServiceTier(codexSpeedActiveSessionId, {
+        serviceTier: codexSpeedTarget,
+      }).catch(() => {})
+      return
+    }
+    setCodexSpeedId(codexSpeedTarget)
+  }, [
+    codexSpeedActiveSessionId,
+    codexSpeedId,
+    codexSpeedTarget,
+    setSessionServiceTier,
   ])
 
   const isSessionDone =
@@ -1673,7 +1757,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
-    setCodexFastMode(false)
+    setCodexSpeedId(CODEX_STANDARD_SPEED_ID)
     setPermissionAdvancedOpen(false)
     if (permissionConfig.preset === 'custom') {
       setPermissionConfig(
@@ -1894,20 +1978,19 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
   }
 
   /**
-   * Fast lives on a live conversation's row, like its model (MAR-3572). A
-   * flip used to change only this switch: the send carried no tier and the row
-   * kept the one the conversation was created with. Persist, and let the
-   * returned row re-seed the switch -- if the write is refused, the switch
-   * keeps showing the tier the next turn will actually use.
+   * The speed lives on a live conversation's row, like its model (MAR-3572).
+   * Persist, and let the returned row re-seed the choice -- if the door refuses
+   * (a tier this account is not offered, MAR-3574 R3), the choice keeps
+   * showing the tier the next turn will actually use.
    */
-  const handleCodexFastModeChange = (nextFastMode: boolean) => {
+  const handleCodexSpeedChange = (nextSpeedId: string) => {
     if (activeSession && selectionLocks.canContinue) {
       void setSessionServiceTier(activeSession.id, {
-        serviceTier: nextFastMode ? 'fast' : 'default',
+        serviceTier: nextSpeedId,
       }).catch(() => {})
       return
     }
-    setCodexFastMode(nextFastMode)
+    setCodexSpeedId(nextSpeedId)
   }
 
   const handleSkillsBrowse = useCallback(() => {
@@ -1972,8 +2055,9 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
                 })
             : undefined
         }
-        codexFastMode={codexFastMode}
-        onCodexFastModeChange={handleCodexFastModeChange}
+        codexSpeedChoices={codexSpeedChoiceList}
+        codexSpeedId={canonicalCodexSpeedId(codexSpeedId)}
+        onCodexSpeedChange={handleCodexSpeedChange}
         codexBillingControlsAvailable={showCodexBillingControls}
         wiresSlot={wiresSlot}
         armedOutgoingRelays={armedOutgoingRelays}

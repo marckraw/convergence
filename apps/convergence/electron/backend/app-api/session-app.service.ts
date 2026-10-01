@@ -1,6 +1,16 @@
 import type { AppSettingsService } from '../app-settings/app-settings.service'
 import type { CrewService } from '../crew/crew.service'
 import type { RelayService } from '../relay/relay.service'
+import {
+  CODEX_STANDARD_TIER_ID,
+  canonicalCodexTierId,
+  isCodexTierOffered,
+} from '../provider/codex/codex-service-tiers.pure'
+import type { CodexServiceTiersService } from '../provider/codex/codex-service-tiers.service'
+import {
+  describeServiceTierRefusal,
+  parseServiceTierInput,
+} from '../session/session-service-tier.pure'
 import type { ConversationItem } from '../session/conversation-item.types'
 import type {
   SendMessageInput,
@@ -25,6 +35,8 @@ export type SessionAppBackend = Pick<
   | 'getAllSummaries'
   | 'getGlobalSummaries'
   | 'getSummaryById'
+  | 'getById'
+  | 'getLastTurnProviderAccountId'
   | 'getConversation'
   | 'archive'
   | 'unarchive'
@@ -61,6 +73,10 @@ export class SessionAppService {
     private readonly defaults: SessionDefaultsResolver,
     private readonly relays: Pick<RelayService, 'removeForSession'>,
     private readonly crews: Pick<CrewService, 'removeMembershipsForSession'>,
+    private readonly serviceTiers: Pick<
+      CodexServiceTiersService,
+      'getTiers'
+    > | null = null,
   ) {}
 
   async createSession(input: CreateSessionInput): Promise<Session> {
@@ -182,10 +198,45 @@ export class SessionAppService {
     return this.sessions.setModelSelection(sessionId, input)
   }
 
-  setSessionServiceTier(
+  /**
+   * The door for a speed change on an open conversation (MAR-3572, MAR-3574 R3).
+   *
+   * Standard always passes. Any other tier must be one the account that runs
+   * the next turn is offered for this conversation's model: Codex drops a tier
+   * it does not offer without an error and inherits the account default
+   * (measured 2026-10-01), so accepting it here would store a speed the turn
+   * never runs at. An unread list offers nothing, so it refuses too.
+   */
+  async setSessionServiceTier(
     sessionId: string,
     input: { serviceTier: unknown },
-  ): Session {
+  ): Promise<Session> {
+    const tier = parseServiceTierInput(input.serviceTier)
+    if (tier !== CODEX_STANDARD_TIER_ID) {
+      const session = this.sessions.getById(sessionId)
+      if (!session) throw new Error(`Session not found: ${sessionId}`)
+      const refusal = describeServiceTierRefusal(session)
+      if (refusal) throw new Error(refusal)
+      const snapshot = this.serviceTiers
+        ? await this.serviceTiers.getTiers({
+            scope: {
+              executionHostId: 'local',
+              providerAccountId:
+                this.sessions.getLastTurnProviderAccountId(sessionId),
+            },
+          })
+        : null
+      if (snapshot?.status !== 'available') {
+        throw new Error(
+          "Couldn't check which speeds this account offers. Try again in a moment.",
+        )
+      }
+      if (!isCodexTierOffered(snapshot, session.model, tier)) {
+        throw new Error(
+          `This account isn't offered the ${canonicalCodexTierId(tier)} speed for ${session.model ?? 'this model'}.`,
+        )
+      }
+    }
     return this.sessions.setServiceTier(sessionId, input)
   }
 

@@ -41,6 +41,7 @@ import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
+import { CodexServiceTiersService } from '../backend/provider/codex/codex-service-tiers.service'
 import { ProviderQuotaService } from '../backend/provider-quota/provider-quota.service'
 import { createDefaultProviderQuotaSources } from '../backend/provider-quota/provider-quota.sources'
 import type { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
@@ -192,6 +193,8 @@ export function registerIpcHandlers(
   },
   providerQuota?: {
     codex: Pick<CodexQuotaService, 'getQuota'>
+    /** Which speeds Codex offers each account (MAR-3574). */
+    codexServiceTiers?: Pick<CodexServiceTiersService, 'getTiers'>
   },
   executionHostRemote?: {
     credentials: ExecutionHostDaemonCredentialsService
@@ -201,6 +204,8 @@ export function registerIpcHandlers(
   const quotaServices = providerQuota ?? {
     codex: new CodexQuotaService(),
   }
+  const codexServiceTiers =
+    providerQuota?.codexServiceTiers ?? new CodexServiceTiersService()
   const providerQuotaService = new ProviderQuotaService(
     createDefaultProviderQuotaSources(quotaServices),
   )
@@ -209,6 +214,7 @@ export function registerIpcHandlers(
     appSettingsService,
     relayService,
     crewService,
+    codexServiceTiers,
   )
 
   let conversationWireMemory: ConversationWireMemory = new Map()
@@ -1299,6 +1305,19 @@ export function registerIpcHandlers(
       scope?: { executionHostId: string; providerAccountId: string | null },
     ) =>
       providerQuotaService.list({
+        forceRefresh: forceRefresh === true,
+        scope,
+      }),
+  )
+
+  ipcMain.handle(
+    'codexSpeed:list',
+    (
+      _event,
+      forceRefresh?: boolean,
+      scope?: { executionHostId: string; providerAccountId: string | null },
+    ) =>
+      codexServiceTiers.getTiers({
         forceRefresh: forceRefresh === true,
         scope,
       }),

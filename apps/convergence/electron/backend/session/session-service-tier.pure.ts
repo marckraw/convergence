@@ -9,24 +9,17 @@ import { isRemoteExecutionHost } from '../execution-host-endpoint/execution-host
  */
 export const CODEX_STANDARD_SERVICE_TIER = 'default'
 
-/** What the Fast switch writes when it is on. Codex answers it as `priority`. */
-export const CODEX_FAST_SERVICE_TIER = 'fast'
-
 /**
- * Exactly the tiers the switch can show. A stored tier it cannot display --
- * `priority` would read as Off while the next turn ran Fast -- is the lie this
- * slice exists to end, so the door refuses it. CS2 (MAR-3574) widens this to
- * the tiers Codex's own model list offers, together with the picker that can
- * show them.
+ * A tier id as Codex spells them (`default`, `priority`, `ultrafast`, and the
+ * legacy `fast`): one lowercase token. Only the shape is checked here. Whether
+ * the account offers the tier is the app layer's question (MAR-3574 R3),
+ * because Codex drops a tier it does not offer without an error.
  */
-const SERVICE_TIERS_THE_SWITCH_CAN_SHOW: ReadonlySet<string> = new Set([
-  CODEX_STANDARD_SERVICE_TIER,
-  CODEX_FAST_SERVICE_TIER,
-])
+const SERVICE_TIER_ID = /^[a-z][a-z0-9_-]{0,31}$/
 
 export function parseServiceTierInput(value: unknown): string {
   const tier = typeof value === 'string' ? value.trim() : ''
-  if (!SERVICE_TIERS_THE_SWITCH_CAN_SHOW.has(tier)) {
+  if (!SERVICE_TIER_ID.test(tier)) {
     throw new Error(`Unknown speed tier: ${String(value)}`)
   }
   return tier
