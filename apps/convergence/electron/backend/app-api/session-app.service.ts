@@ -209,7 +209,7 @@ export class SessionAppService {
    */
   async setSessionServiceTier(
     sessionId: string,
-    input: { serviceTier: unknown },
+    input: { serviceTier: unknown; providerAccountId?: string | null },
   ): Promise<Session> {
     const tier = parseServiceTierInput(input.serviceTier)
     if (tier !== CODEX_STANDARD_TIER_ID) {
@@ -221,8 +221,12 @@ export class SessionAppService {
         ? await this.serviceTiers.getTiers({
             scope: {
               executionHostId: 'local',
+              // The account the composer will send the next turn on; the
+              // last turn's when the caller does not say.
               providerAccountId:
-                this.sessions.getLastTurnProviderAccountId(sessionId),
+                input.providerAccountId !== undefined
+                  ? input.providerAccountId
+                  : this.sessions.getLastTurnProviderAccountId(sessionId),
             },
           })
         : null
@@ -237,7 +241,9 @@ export class SessionAppService {
         )
       }
     }
-    return this.sessions.setServiceTier(sessionId, input)
+    return this.sessions.setServiceTier(sessionId, {
+      serviceTier: input.serviceTier,
+    })
   }
 
   onEvidenceUpdate(listener: (event: { sessionId: string }) => void): void {

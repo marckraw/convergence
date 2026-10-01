@@ -1196,8 +1196,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:setServiceTier',
-    (_event, id: string, input: { serviceTier: unknown }) =>
-      sessionApp.setSessionServiceTier(id, input),
+    (
+      _event,
+      id: string,
+      input: { serviceTier: unknown; providerAccountId?: string | null },
+    ) => sessionApp.setSessionServiceTier(id, input),
   )
 
   // Provider handlers

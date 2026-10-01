@@ -247,7 +247,7 @@ interface SessionActions {
   /** The Codex speed tier the conversation's next turn starts with (MAR-3572). */
   setSessionServiceTier: (
     id: string,
-    input: { serviceTier: string },
+    input: { serviceTier: string; providerAccountId?: string | null },
   ) => Promise<SessionSummary>
   clearError: () => void
 }

@@ -1478,33 +1478,51 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
    * as the pill, and the same rule for a stale answer -- only the question
    * still being asked may land.
    */
-  const [codexSpeedSnapshot, setCodexSpeedSnapshot] =
-    useState<CodexSpeedSnapshot | null>(null)
+  // Tagged with the scope it answered: the composer is not remounted per
+  // conversation, so for one render after a switch the previous answer is
+  // still in state -- and it is another account's, or another moment's.
+  const codexSpeedScopeKey = `${codexUsageScope.executionHostId}::${codexUsageScope.providerAccountId ?? ''}`
+  const [codexSpeedAnswer, setCodexSpeedAnswer] = useState<{
+    scopeKey: string
+    snapshot: CodexSpeedSnapshot
+  } | null>(null)
+  const codexSpeedSnapshot =
+    codexUsageScopeSettled && codexSpeedAnswer?.scopeKey === codexSpeedScopeKey
+      ? codexSpeedAnswer.snapshot
+      : null
   const codexSpeedRequestRef = useRef(0)
   useEffect(() => {
     const generation = (codexSpeedRequestRef.current += 1)
-    setCodexSpeedSnapshot(null)
     if (!showCodexBillingControls || !codexUsageScopeSettled) return undefined
     let retry: number | undefined
     const load = async () => {
       try {
         const snapshot = await codexSpeedApi.list(false, codexUsageScope)
         if (generation !== codexSpeedRequestRef.current) return
-        setCodexSpeedSnapshot(snapshot)
-        // A cold server answers "warming up"; ask again once it is up.
-        if (snapshot.status === 'warming-up') {
-          retry = window.setTimeout(() => void load(), 3_000)
+        setCodexSpeedAnswer({ scopeKey: codexSpeedScopeKey, snapshot })
+        // A cold server answers "warming up", a failed read "unavailable":
+        // ask again rather than offer Standard alone until the scope moves.
+        if (snapshot.status !== 'available') {
+          retry = window.setTimeout(
+            () => void load(),
+            snapshot.status === 'warming-up' ? 3_000 : 30_000,
+          )
         }
       } catch {
-        if (generation === codexSpeedRequestRef.current)
-          setCodexSpeedSnapshot(null)
+        // No answer is not an answer: the previous one stays tagged with its
+        // own scope, and this scope reads as unknown.
       }
     }
     void load()
     return () => {
       if (retry !== undefined) window.clearTimeout(retry)
     }
-  }, [codexUsageScope, codexUsageScopeSettled, showCodexBillingControls])
+  }, [
+    codexSpeedScopeKey,
+    codexUsageScope,
+    codexUsageScopeSettled,
+    showCodexBillingControls,
+  ])
 
   const codexSpeedModelId = selection.modelId || null
   const codexSpeedChoiceList = useMemo(
@@ -1521,29 +1539,39 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
    * A model or account that no longer offers the chosen tier puts the choice
    * back to Standard, visibly (MAR-3574 R4). A draft resets here; an open
    * conversation writes Standard to its row. An unread list changes nothing.
+   *
+   * An open conversation is judged by its ROW's tier, never by this
+   * component's state: the composer outlives a conversation switch, and for a
+   * render its state still holds the previous conversation's speed while the
+   * model is already the new one's (the blind reader's probe, round 1).
    */
+  const codexSpeedActiveSessionId =
+    activeSession && selectionLocks.canContinue ? activeSession.id : null
+  const codexSpeedCurrentId = codexSpeedActiveSessionId
+    ? seededSpeedId
+    : canonicalCodexSpeedId(codexSpeedId)
   const codexSpeedTarget = showCodexBillingControls
     ? codexSpeedAfterChange({
         snapshot: codexSpeedSnapshot,
         modelId: codexSpeedModelId,
-        currentId: codexSpeedId,
+        currentId: codexSpeedCurrentId,
       })
-    : canonicalCodexSpeedId(codexSpeedId)
-  const codexSpeedActiveSessionId =
-    activeSession && selectionLocks.canContinue ? activeSession.id : null
+    : codexSpeedCurrentId
   useEffect(() => {
-    if (codexSpeedTarget === canonicalCodexSpeedId(codexSpeedId)) return
+    if (codexSpeedTarget === codexSpeedCurrentId) return
     if (codexSpeedActiveSessionId) {
       void setSessionServiceTier(codexSpeedActiveSessionId, {
         serviceTier: codexSpeedTarget,
+        providerAccountId: effectiveProviderAccountId,
       }).catch(() => {})
       return
     }
     setCodexSpeedId(codexSpeedTarget)
   }, [
     codexSpeedActiveSessionId,
-    codexSpeedId,
+    codexSpeedCurrentId,
     codexSpeedTarget,
+    effectiveProviderAccountId,
     setSessionServiceTier,
   ])
 
@@ -1987,6 +2015,9 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     if (activeSession && selectionLocks.canContinue) {
       void setSessionServiceTier(activeSession.id, {
         serviceTier: nextSpeedId,
+        // The account the next turn runs on, which is what the door asks
+        // about -- a staged handoff makes it not the last turn's.
+        providerAccountId: effectiveProviderAccountId,
       }).catch(() => {})
       return
     }

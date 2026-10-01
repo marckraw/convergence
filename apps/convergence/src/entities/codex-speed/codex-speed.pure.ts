@@ -30,8 +30,18 @@ export function isCodexSpeedOffered(
   )
 }
 
+/**
+ * A name for a tier while the account's list is unread: Codex's own names for
+ * the ids it has served (`priority` has always been called Fast), else the id.
+ * Only ever used for the tier already chosen -- it labels, it never offers.
+ */
+const KNOWN_TIER_NAMES: Readonly<Record<string, string>> = {
+  priority: 'Fast',
+  ultrafast: 'Ultrafast',
+}
+
 function labelFromId(id: string): string {
-  return id.charAt(0).toUpperCase() + id.slice(1)
+  return KNOWN_TIER_NAMES[id] ?? id.charAt(0).toUpperCase() + id.slice(1)
 }
 
 /**
@@ -60,7 +70,22 @@ export function codexSpeedChoices(input: {
         description: tier.description || null,
       }),
     )
-    return [standard, ...offered]
+    // A chosen tier the list does not offer stays visible and says so, so the
+    // label never claims Standard over a row that still holds another speed.
+    const keepsChosen =
+      selected === CODEX_STANDARD_SPEED_ID ||
+      offered.some((choice) => choice.id === selected)
+    return keepsChosen
+      ? [standard, ...offered]
+      : [
+          standard,
+          ...offered,
+          {
+            id: selected,
+            label: `${labelFromId(selected)} (not offered)`,
+            description: null,
+          },
+        ]
   }
   return selected === CODEX_STANDARD_SPEED_ID
     ? [standard]

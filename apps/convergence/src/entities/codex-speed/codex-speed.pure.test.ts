@@ -86,9 +86,27 @@ describe('the Codex speed choice (MAR-3574)', () => {
         }),
       ).toEqual([
         { id: 'default', label: 'Standard', description: null },
-        { id: 'priority', label: 'Priority', description: null },
+        { id: 'priority', label: 'Fast', description: null },
       ])
     }
+  })
+
+  it('R2: a chosen tier the list does not offer stays visible and says so', () => {
+    expect(
+      codexSpeedChoices({
+        snapshot: pro500,
+        modelId: 'gpt-6.1-sol',
+        selectedId: 'ultrafast',
+      }),
+    ).toEqual([
+      { id: 'default', label: 'Standard', description: null },
+      {
+        id: 'priority',
+        label: 'Fast',
+        description: '2x speed, increased usage',
+      },
+      { id: 'ultrafast', label: 'Ultrafast (not offered)', description: null },
+    ])
   })
 
   it("R3: the legacy fast is Codex's priority", () => {

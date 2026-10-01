@@ -448,7 +448,12 @@ describe('ComposerContainer', () => {
     codexSpeedModels = {
       'gpt-5.5': { tiers: [FAST_TIER], defaultTier: null },
     }
-    codexSpeedList.mockClear()
+    codexSpeedList.mockReset()
+    codexSpeedList.mockImplementation(async () => ({
+      status: 'available' as const,
+      checkedAt: '2026-10-01T00:00:00.000Z',
+      models: codexSpeedModels,
+    }))
     providerAccountsMock = []
     sessionTurnsMock = []
     turnDeltaListener = undefined
@@ -2177,7 +2182,7 @@ describe('ComposerContainer', () => {
     )
 
     expect(
-      screen.getByRole('combobox', { name: 'Standard' }),
+      screen.getByRole('combobox', { name: 'Speed: Standard' }),
     ).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
@@ -2230,7 +2235,7 @@ describe('ComposerContainer', () => {
 
     await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
     expect(
-      screen.getByRole('combobox', { name: 'Standard' }),
+      screen.getByRole('combobox', { name: 'Speed: Standard' }),
     ).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
@@ -2261,9 +2266,11 @@ describe('ComposerContainer', () => {
     )
 
     await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
-    fireEvent.click(screen.getByRole('combobox', { name: 'Standard' }))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
     fireEvent.click(await screen.findByText('Fast'))
-    expect(screen.getByRole('combobox', { name: 'Fast' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('combobox', { name: 'Speed: Fast' }),
+    ).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, {
@@ -2870,6 +2877,143 @@ describe('ComposerContainer', () => {
       ),
     }))
   }
+
+  it('MAR-3574 R1: asks the speed list of the account the composer would send on, not the ambient one', async () => {
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    await waitFor(() =>
+      expect(codexSpeedList).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-b',
+      }),
+    )
+    expect(codexSpeedList).not.toHaveBeenCalledWith(false, {
+      executionHostId: 'local',
+      providerAccountId: null,
+    })
+  })
+
+  it("MAR-3574 R4: another account's answer never judges the conversation just opened", async () => {
+    // The scope tag's own input (the blind reader, round 1): A runs on acct-a,
+    // whose list offers GPT-5.5 nothing; B runs on acct-b at Fast, and acct-b's
+    // list has not answered yet. Untagged, A's answer would judge B's Fast as
+    // not offered and write Standard over it.
+    const setSessionServiceTier = vi.fn().mockResolvedValue(undefined)
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-a',
+        providerId: 'codex',
+        email: 'a@example.com',
+      }),
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    ;(
+      window.electronAPI.turns as unknown as {
+        listForSession: (id: string) => Promise<unknown[]>
+      }
+    ).listForSession = vi.fn((id: string) =>
+      Promise.resolve([
+        {
+          id: `turn-${id}`,
+          providerAccountId: id === 'session-1' ? 'acct-a' : 'acct-b',
+        },
+      ]),
+    )
+    codexSpeedList.mockImplementation(((
+      _force: boolean,
+      scope?: { providerAccountId: string | null },
+    ) =>
+      scope?.providerAccountId === 'acct-b'
+        ? new Promise(() => {})
+        : Promise.resolve({
+            status: 'available' as const,
+            checkedAt: '2026-10-01T00:00:00.000Z',
+            models: { 'gpt-5.5': { tiers: [], defaultTier: null } },
+          })) as never)
+    useSessionStore.setState((state) => ({
+      setSessionServiceTier,
+      providerCatalogs: localProviderCatalogs([
+        ...seededProviders(),
+        codexProvider,
+      ]),
+      sessions: [
+        ...state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? {
+                ...session,
+                providerId: 'codex',
+                model: 'gpt-5.5',
+                serviceTier: 'default',
+                status: 'completed' as const,
+                attention: 'finished' as const,
+              }
+            : session,
+        ),
+        {
+          ...state.sessions.find((session) => session.id === 'session-1')!,
+          id: 'session-2',
+          providerId: 'codex',
+          model: 'gpt-5.5',
+          serviceTier: 'priority',
+          status: 'completed' as const,
+          attention: 'finished' as const,
+        },
+      ],
+    }))
+    const context = (id: string) => ({
+      kind: 'project' as const,
+      projectId: 'project-1',
+      workspaceId: null,
+      activeSessionId: id,
+    })
+    const { rerender } = render(
+      <ComposerContainer context={context('session-1')} />,
+    )
+    await waitFor(() =>
+      expect(codexSpeedList).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-a',
+      }),
+    )
+
+    rerender(<ComposerContainer context={context('session-2')} />)
+    await waitFor(() =>
+      expect(codexSpeedList).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-b',
+      }),
+    )
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(setSessionServiceTier).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('combobox', { name: 'Speed: Fast' }),
+    ).toBeInTheDocument()
+  })
 
   it('asks about the account the composer would send on, not the ambient default', async () => {
     // MAR-2826 round 1, M3. The read was unscoped, so a session running on a
@@ -4096,36 +4240,42 @@ describe('ComposerContainer', () => {
       renderComposer()
 
       await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
-      fireEvent.click(screen.getByRole('combobox', { name: 'Standard' }))
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
       fireEvent.click(await screen.findByText('Fast'))
 
       await waitFor(() => {
         expect(setSessionServiceTier).toHaveBeenCalledWith('session-1', {
           serviceTier: 'priority',
+          providerAccountId: null,
         })
       })
       // Nothing optimistic: until the row says Fast, the choice says what the
       // next turn will actually run on.
       expect(
-        screen.getByRole('combobox', { name: 'Standard' }),
+        screen.getByRole('combobox', { name: 'Speed: Standard' }),
       ).toBeInTheDocument()
 
       // The legacy `fast` a CS1 row holds reads as Codex's Fast.
       act(() => setSessionState({ serviceTier: 'fast' }))
-      expect(screen.getByRole('combobox', { name: 'Fast' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('combobox', { name: 'Speed: Fast' }),
+      ).toBeInTheDocument()
 
-      fireEvent.click(screen.getByRole('combobox', { name: 'Fast' }))
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Fast' }))
       fireEvent.click(await screen.findByText('Standard'))
       await waitFor(() => {
         expect(setSessionServiceTier).toHaveBeenLastCalledWith('session-1', {
           serviceTier: 'default',
+          providerAccountId: null,
         })
       })
 
       // Held like the model while a turn runs, not like the provider for the
       // conversation's whole life.
       act(() => setSessionState({ status: 'running', attention: 'none' }))
-      expect(screen.getByRole('combobox', { name: 'Fast' })).toBeDisabled()
+      expect(
+        screen.getByRole('combobox', { name: 'Speed: Fast' }),
+      ).toBeDisabled()
       expect(screen.getByRole('combobox', { name: 'GPT-5.5' })).toBeDisabled()
     })
 
@@ -4153,7 +4303,7 @@ describe('ComposerContainer', () => {
         executionHostId: 'local',
         providerAccountId: null,
       })
-      fireEvent.click(screen.getByRole('combobox', { name: 'Standard' }))
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
       expect(await screen.findByText('Ultrafast')).toBeInTheDocument()
       expect(screen.getByText('Fast')).toBeInTheDocument()
       expect(
@@ -4178,7 +4328,7 @@ describe('ComposerContainer', () => {
       renderComposer()
 
       await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
-      fireEvent.click(screen.getByRole('combobox', { name: 'Standard' }))
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
       expect(await screen.findByText('Fast')).toBeInTheDocument()
       expect(screen.queryByText('Ultrafast')).toBeNull()
     })
@@ -4204,8 +4354,83 @@ describe('ComposerContainer', () => {
       await waitFor(() => {
         expect(setSessionServiceTier).toHaveBeenCalledWith('session-1', {
           serviceTier: 'default',
+          providerAccountId: null,
         })
       })
+    })
+
+    it("MAR-3574 R4: switching conversations never writes Standard over the new conversation's speed", async () => {
+      // The blind reader's probe, round 1: the composer outlives the switch,
+      // so for a render its state held A's Ultrafast while the model was
+      // already B's GPT-5.5 -- and R4 wrote Standard over B's Fast.
+      const setSessionServiceTier = vi.fn().mockResolvedValue(undefined)
+      codexSpeedModels = {
+        'gpt-6-astra': {
+          tiers: [FAST_TIER, ULTRAFAST_TIER],
+          defaultTier: null,
+        },
+        'gpt-5.5': { tiers: [FAST_TIER], defaultTier: null },
+      }
+      const astraModel = {
+        id: 'gpt-6-astra',
+        label: 'GPT-6 Astra',
+        defaultEffort: 'medium' as const,
+        effortOptions: [{ id: 'medium' as const, label: 'Medium' }],
+      }
+      useSessionStore.setState((state) => ({
+        setSessionServiceTier,
+        providerCatalogs: localProviderCatalogs([
+          ...seededProviders(),
+          {
+            ...codexProvider,
+            modelOptions: [...codexProvider.modelOptions, astraModel],
+          },
+        ]),
+        sessions: [
+          ...state.sessions.map((session) =>
+            session.id === 'session-1'
+              ? {
+                  ...session,
+                  providerId: 'codex',
+                  model: 'gpt-6-astra',
+                  serviceTier: 'ultrafast',
+                  status: 'completed' as const,
+                  attention: 'finished' as const,
+                }
+              : session,
+          ),
+          {
+            ...state.sessions.find((session) => session.id === 'session-1')!,
+            id: 'session-2',
+            providerId: 'codex',
+            model: 'gpt-5.5',
+            serviceTier: 'priority',
+            status: 'completed' as const,
+            attention: 'finished' as const,
+          },
+        ],
+      }))
+      const context = (id: string) => ({
+        kind: 'project' as const,
+        projectId: 'project-1',
+        workspaceId: null,
+        activeSessionId: id,
+      })
+      const { rerender } = render(
+        <ComposerContainer context={context('session-1')} />,
+      )
+      expect(
+        await screen.findByRole('combobox', { name: 'Speed: Ultrafast' }),
+      ).toBeInTheDocument()
+
+      rerender(<ComposerContainer context={context('session-2')} />)
+      expect(
+        await screen.findByRole('combobox', { name: 'Speed: Fast' }),
+      ).toBeInTheDocument()
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect(setSessionServiceTier).not.toHaveBeenCalled()
     })
 
     it('keeps showing the old model when the backend refuses the change', async () => {

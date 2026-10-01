@@ -15,6 +15,7 @@ export function SearchableSelect({
   triggerVariant = 'outline',
   triggerSize = 'sm',
   triggerClassName,
+  ariaLabel,
   contentClassName,
   icon,
   action,
@@ -67,6 +68,7 @@ export function SearchableSelect({
       triggerVariant={triggerVariant}
       triggerSize={triggerSize}
       triggerClassName={triggerClassName}
+      ariaLabel={ariaLabel}
       contentClassName={contentClassName}
       icon={icon ?? items.find((item) => item.id === selectedId)?.icon}
       action={action}

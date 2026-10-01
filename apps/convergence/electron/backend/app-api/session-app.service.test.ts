@@ -351,6 +351,17 @@ describe('the speed door (MAR-3574 R3)', () => {
     })
   })
 
+  it('asks the account the composer names, when it names one (a staged handoff)', async () => {
+    const { app, getTiers } = door(proOffer, 'last-turn-account')
+    await app.setSessionServiceTier('codex-1', {
+      serviceTier: 'priority',
+      providerAccountId: 'staged-account',
+    })
+    expect(getTiers).toHaveBeenCalledWith({
+      scope: { executionHostId: 'local', providerAccountId: 'staged-account' },
+    })
+  })
+
   it('refuses a tier the account is not offered, because Codex would drop it silently', async () => {
     const { app, setServiceTier } = door(proOffer)
     await expect(

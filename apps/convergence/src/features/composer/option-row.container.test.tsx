@@ -830,7 +830,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     renderComposer()
     // Local Codex: both controls are real, because this app owns that CLI.
     expect(
-      await screen.findByRole('combobox', { name: 'Standard' }),
+      await screen.findByRole('combobox', { name: 'Speed: Standard' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /Codex usage/ }),
@@ -840,13 +840,15 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     await screen.findByRole('combobox', { name: 'Daemon GPT' })
 
     // Same provider, different machine: gone. Not disabled — absent.
-    expect(screen.queryByRole('combobox', { name: 'Standard' })).toBeNull()
+    expect(
+      screen.queryByRole('combobox', { name: 'Speed: Standard' }),
+    ).toBeNull()
     expect(screen.queryByRole('button', { name: /Codex usage/ })).toBeNull()
 
     // Back here, and both return.
     await chooseHost(/kuba-vps/, 'Local')
     expect(
-      await screen.findByRole('combobox', { name: 'Standard' }),
+      await screen.findByRole('combobox', { name: 'Speed: Standard' }),
     ).toBeInTheDocument()
   })
 

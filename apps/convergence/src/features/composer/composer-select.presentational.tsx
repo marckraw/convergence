@@ -10,6 +10,7 @@ interface ComposerSelectProps {
   disabled?: boolean
   className?: string
   icon?: ReactNode
+  ariaLabel?: string
 }
 
 export const ComposerSelect: FC<ComposerSelectProps> = ({
@@ -20,6 +21,7 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
   disabled = false,
   className,
   icon,
+  ariaLabel,
 }) => (
   <SearchableSelect
     selectedId={selectedId}
@@ -33,5 +35,6 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
     triggerSize="sm"
     triggerClassName={className}
     icon={icon}
+    ariaLabel={ariaLabel}
   />
 )

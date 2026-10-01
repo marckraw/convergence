@@ -364,6 +364,11 @@ export const Composer: FC<ComposerProps> = ({
   onMentionDismiss,
   onSelectionChange,
 }) => {
+  // The choices always carry the chosen tier (MAR-3574), so the label never
+  // falls back to a speed the next turn is not running at.
+  const codexSpeedLabel =
+    codexSpeedChoices.find((choice) => choice.id === codexSpeedId)?.label ??
+    codexSpeedId
   /**
    * Whether this composer may send at all — one derivation, read by both ways
    * of sending.
@@ -933,11 +938,8 @@ export const Composer: FC<ComposerProps> = ({
                   {codexBillingControlsAvailable ? (
                     <ComposerSelect
                       selectedId={codexSpeedId}
-                      value={
-                        codexSpeedChoices.find(
-                          (choice) => choice.id === codexSpeedId,
-                        )?.label ?? 'Standard'
-                      }
+                      value={codexSpeedLabel}
+                      ariaLabel={`Speed: ${codexSpeedLabel}`}
                       items={codexSpeedChoices.map((choice) => ({
                         id: choice.id,
                         label: choice.label,

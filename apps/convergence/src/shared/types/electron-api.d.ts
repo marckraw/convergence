@@ -2167,7 +2167,7 @@ interface ElectronAPI {
     ) => Promise<SessionSummaryData>
     setServiceTier: (
       id: string,
-      input: { serviceTier: string },
+      input: { serviceTier: string; providerAccountId?: string | null },
     ) => Promise<SessionSummaryData>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
