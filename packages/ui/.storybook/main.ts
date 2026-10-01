@@ -66,6 +66,12 @@ const config: StorybookConfig = {
       resolve: {
         alias: { '@': appSource },
       },
+      // As in the app's own build (electron.vite.config.ts): the diff viewer
+      // starts a Web Worker, and Vite's default IIFE worker cannot be split
+      // into chunks, so `build-storybook` fails without it.
+      worker: {
+        format: 'es',
+      },
       optimizeDeps: {
         // Prebundled up front: a dependency Vite only discovers while a story
         // runs makes it reload the page mid-test, which fails every story in
