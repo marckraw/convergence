@@ -97,7 +97,6 @@ const config: StorybookConfig = {
           '@radix-ui/react-popover',
           'class-variance-authority',
           'clsx',
-          'cmdk',
           'lucide-react',
           'radix-ui',
           'tailwind-merge',
