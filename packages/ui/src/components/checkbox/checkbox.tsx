@@ -13,13 +13,17 @@ export type CheckboxProps = Omit<CheckboxPrimitive.Root.Props, 'className'> & {
  * look everywhere, where the app drew five OS checkboxes: a 16 px box on the
  * control line, filled with the strong colour when on. Give it its words with
  * a ChoiceField, or wrap it and its text in a <label>; Space toggles it, and
- * its hit area reaches a little past the box. Read `onCheckedChange`: it is a
- * <span role="checkbox">, not an <input>, so there's no `event.target.checked`.
+ * its hit area reaches a little past the box. It is a <button role="checkbox">
+ * (so it is `disabled` as a button is, and its own aria-label outranks a
+ * label around it, as an input's does), not an <input>: read
+ * `onCheckedChange`, there's no `event.target.checked`.
  */
 export function Checkbox({ className, ...props }: CheckboxProps) {
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
+      nativeButton
+      render={<button type="button" />}
       className={cn(
         'relative flex size-4 shrink-0 items-center justify-center rounded-sm border border-control-line',
         'bg-transparent text-on-strong transition-colors',

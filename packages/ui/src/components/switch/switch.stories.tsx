@@ -65,7 +65,7 @@ export const Disabled: Story = {
     const toggle = canvas.getByRole('switch', {
       name: 'Check for updates automatically',
     })
-    await expect(toggle).toHaveAttribute('aria-disabled', 'true')
+    await expect(toggle).toBeDisabled()
     await expect(toggle).toBeChecked()
     await userEvent.tab()
     await expect(toggle).not.toHaveFocus()

@@ -14,7 +14,7 @@ import {
   type SeatDraftField,
   type SessionCrewMember,
 } from '@/entities/session-crew'
-import { Button, IconButton, Input } from '@convergence/ui'
+import { Button, Checkbox, IconButton, Input } from '@convergence/ui'
 import { flowRunCeilingNote } from './crew-loop.pure'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
@@ -590,14 +590,10 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               Recipe
             </h4>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Input
-                type="checkbox"
-                className="size-3.5 rounded-sm p-0"
+              <Checkbox
                 checked={includePositions}
                 disabled={exporting}
-                onChange={(event) =>
-                  onIncludePositionsChange(event.target.checked)
-                }
+                onCheckedChange={(checked) => onIncludePositionsChange(checked)}
               />
               Include positions
             </label>

@@ -26,7 +26,7 @@ import {
   ParallelWork,
   useParallelWork,
 } from '@/widgets/session-view'
-import { Button, IconButton, Input } from '@convergence/ui'
+import { Button, Checkbox, IconButton } from '@convergence/ui'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
   SpaceHome,
@@ -553,28 +553,24 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             </div>
             <div className="space-y-2 text-sm">
               <label className="flex items-center gap-2">
-                <Input
-                  type="checkbox"
-                  className="h-4 w-4"
+                <Checkbox
                   checked={contextSelection.includeBrief}
-                  onChange={(event) =>
+                  onCheckedChange={(checked) =>
                     setContextSelection({
                       ...contextSelection,
-                      includeBrief: event.target.checked,
+                      includeBrief: checked,
                     })
                   }
                 />
                 <span>Space brief</span>
               </label>
               <label className="flex items-center gap-2">
-                <Input
-                  type="checkbox"
-                  className="h-4 w-4"
+                <Checkbox
                   checked={contextSelection.includeMemory}
-                  onChange={(event) =>
+                  onCheckedChange={(checked) =>
                     setContextSelection({
                       ...contextSelection,
-                      includeMemory: event.target.checked,
+                      includeMemory: checked,
                     })
                   }
                 />
@@ -590,12 +586,10 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                       key={source.id}
                       className="flex min-w-0 items-center gap-2"
                     >
-                      <Input
-                        type="checkbox"
-                        className="h-4 w-4 shrink-0"
+                      <Checkbox
                         checked={selectedSourceSet.has(source.id)}
-                        onChange={(event) => {
-                          const nextSourceIds = event.target.checked
+                        onCheckedChange={(checked) => {
+                          const nextSourceIds = checked
                             ? [...contextSelection.selectedSourceIds, source.id]
                             : contextSelection.selectedSourceIds.filter(
                                 (id) => id !== source.id,

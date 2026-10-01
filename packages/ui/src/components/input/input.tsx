@@ -31,8 +31,7 @@ export type InputProps = Omit<
   'className' | 'type' | 'size' | 'ref'
 > & {
   className?: string
-  type?: InputType | 'checkbox'
-  defaultChecked?: boolean
+  type?: InputType
   /** R3: 24, 28, 32 or 36 px. `md` (32) unless said. */
   size?: ControlSize
   ref?: Ref<HTMLInputElement>

@@ -10,7 +10,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { Button, cn, IconButton, Input } from '@convergence/ui'
+import { Button, Checkbox, cn, IconButton, Input } from '@convergence/ui'
 import {
   LOCAL_HOST_ID,
   ROLE_CARD_LIMIT,
@@ -441,13 +441,10 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           </div>
           {refusalFor('wipLimit')}
           <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-            <Input
-              className="size-3.5 shrink-0 rounded-sm p-0"
-              type="checkbox"
-              role="switch"
+            <Checkbox
               checked={member.paused}
               disabled={busy}
-              onChange={(event) => onSeatEdit({ paused: event.target.checked })}
+              onCheckedChange={(checked) => onSeatEdit({ paused: checked })}
             />
             Pause automatic dispatch to this seat
           </label>
@@ -455,13 +452,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           {member.role === 'mastermind' && (
             <>
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Input
-                  className="size-3.5 shrink-0 rounded-sm p-0"
-                  type="checkbox"
+                <Checkbox
                   checked={member.drillAuto}
                   disabled={busy}
-                  onChange={(event) =>
-                    onSeatEdit({ drillAuto: event.target.checked })
+                  onCheckedChange={(checked) =>
+                    onSeatEdit({ drillAuto: checked })
                   }
                 />
                 Run the drill by itself when the context passes the alert

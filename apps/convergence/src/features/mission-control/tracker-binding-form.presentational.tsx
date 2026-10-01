@@ -3,7 +3,7 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
-import { Button, Input } from '@convergence/ui'
+import { Button, Checkbox, Input } from '@convergence/ui'
 import {
   probeAsksForKey,
   probeTimeLabel,
@@ -85,13 +85,10 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           Dispatch
         </h4>
         <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-          <Input
-            className="size-3.5 shrink-0 rounded-sm p-0"
-            type="checkbox"
-            role="switch"
+          <Checkbox
             checked={autoDispatch}
             disabled={busy || !bound}
-            onChange={(event) => onAutoDispatchChange?.(event.target.checked)}
+            onCheckedChange={(checked) => onAutoDispatchChange?.(checked)}
           />
           Auto-dispatch — send issues labeled groomed, grounded, their seat and
           dispatch into their seats' conversations

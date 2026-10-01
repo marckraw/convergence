@@ -61,12 +61,12 @@ it('shows reconciliation and defaults updates on (mutation: omit the update deci
   const checkbox = screen.getByRole('checkbox', {
     name: 'Update horse to file',
   })
+  expect(checkbox).toBeChecked()
   expect({
-    checked: (checkbox as HTMLInputElement).checked,
     apply: (screen.getByRole('button', { name: 'Apply' }) as HTMLButtonElement)
       .disabled,
     kept: screen.getByText('local wire').textContent,
-  }).toEqual({ checked: true, apply: false, kept: 'local wire' })
+  }).toEqual({ apply: false, kept: 'local wire' })
   fireEvent.click(checkbox)
   expect(update).toHaveBeenCalledWith('horse', false)
 })

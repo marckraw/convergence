@@ -3,7 +3,7 @@ import type {
   InteractionFormField,
   InteractionResponse,
 } from '@/entities/session'
-import { Button, Input, Textarea } from '@convergence/ui'
+import { Button, Checkbox, Input, Textarea } from '@convergence/ui'
 
 interface FormRequestFormProps {
   fields: InteractionFormField[]
@@ -54,11 +54,9 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
           </span>
         ) : null}
         {field.type === 'boolean' ? (
-          <Input
-            className="h-4 w-4 rounded border-border"
+          <Checkbox
             defaultChecked={field.defaultValue === true}
             name={field.id}
-            type="checkbox"
           />
         ) : field.multiline ? (
           <Textarea

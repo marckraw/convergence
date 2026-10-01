@@ -65,12 +65,31 @@ export const Invalid: Story = {
   },
 }
 
+/**
+ * Named: its own aria-label outranks the label around it, as an input's
+ * does, while a click anywhere on the row still toggles it.
+ */
+export const Named: Story = {
+  render: (args) => (
+    <label className="flex w-72 items-start gap-3 text-sm">
+      <Checkbox {...args} aria-label="Select PR #12" className="mt-0.5" />
+      <span>#12 · Tokens for the terminal strip, merged when green</span>
+    </label>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', { name: 'Select PR #12' })
+    await userEvent.click(canvas.getByText(/Tokens for the terminal strip/))
+    await expect(box).toBeChecked()
+    await expect(args.onCheckedChange).toHaveBeenCalledTimes(1)
+  },
+}
+
 /** Disabled: shows how it's set and can't be changed. */
 export const Disabled: Story = {
   args: { disabled: true, defaultChecked: true },
   play: async ({ args, canvas, userEvent }) => {
     const box = canvas.getByRole('checkbox', { name: 'Merge when reviewed' })
-    await expect(box).toHaveAttribute('aria-disabled', 'true')
+    await expect(box).toBeDisabled()
     await expect(box).toBeChecked()
     await userEvent.click(canvas.getByText('Merge when reviewed'))
     await expect(box).toBeChecked()

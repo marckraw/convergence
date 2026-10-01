@@ -164,13 +164,13 @@ export const Disabled: Story = {
     const updates = canvas.getByRole('switch', {
       name: 'Check for updates automatically',
     })
-    await expect(updates).toHaveAttribute('aria-disabled', 'true')
+    await expect(updates).toBeDisabled()
     await userEvent.click(canvas.getByText('Check for updates automatically'))
     await expect(updates).toBeChecked()
     await expect(args.onUpdatesChange).not.toHaveBeenCalled()
     await expect(
       canvas.getByRole('checkbox', { name: 'Merge when reviewed' }),
-    ).toHaveAttribute('aria-disabled', 'true')
+    ).toBeDisabled()
     await expect(canvas.getByRole('radio', { name: 'master' })).toHaveAttribute(
       'aria-disabled',
       'true',
