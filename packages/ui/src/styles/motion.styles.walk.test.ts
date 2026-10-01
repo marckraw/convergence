@@ -27,7 +27,7 @@ function sourceFiles(directory: string): string[] {
 
 it('no plugin motion token survives in any non-test source file', () => {
   const files = sourceFiles(sourceRoot)
-  expect(files).toContain(join(sourceRoot, 'components/tooltip/tooltip.tsx'))
+  expect(files).toContain(join(sourceRoot, 'components/dialog/dialog.tsx'))
   expect(
     files
       .filter((path) => pluginTokens.test(readFileSync(path, 'utf8')))

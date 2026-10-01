@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@convergence/ui'
+import { hoverForTooltip } from '@/shared/testing/tooltip'
 import { SidebarSearchToggle } from './sidebar-search-toggle.presentational'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
 import {
@@ -17,16 +18,11 @@ import type { SessionSummary } from '@/entities/session'
 /**
  * One rendered hover per sidebar file that converted a hint (MAR-3314 R1).
  *
- * `pointermove` with a mouse pointer is the event Radix's trigger reads;
- * `findByRole('tooltip')` waits out the provider delay. Read off `screen`:
- * the content is portalled to `document.body`.
+ * `pointerover` with a mouse pointer is the event the tooltip host reads
+ * (MAR-3616); `findByRole('tooltip')` waits out the provider delay. Read off
+ * `screen`: the bubble is portalled to `document.body`.
  */
-const hover = async (control: Element) => {
-  await act(async () => {
-    fireEvent.pointerMove(control, { pointerType: 'mouse' })
-  })
-  return screen.findByRole('tooltip')
-}
+const hover = hoverForTooltip
 
 const baseSession = {
   contextKind: 'project' as const,

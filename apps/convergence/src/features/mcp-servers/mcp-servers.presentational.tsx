@@ -6,6 +6,7 @@ import type {
   ProviderMcpVisibility,
 } from '@/shared/types/mcp.types'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -13,11 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Button,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+  TooltipCard,
 } from '@convergence/ui'
 import {
   Ban,
@@ -70,24 +67,20 @@ function renderStatusBadge(status: McpServerStatus, label: string) {
 
 function renderProviderHelp(ariaLabel: string, content: ReactNode) {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={ariaLabel}
-            className="h-6 w-6 text-muted-foreground"
-          >
-            <CircleHelp className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-[280px] space-y-1.5 text-xs leading-relaxed">
-          {content}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <TooltipCard
+      content={content}
+      className="max-w-[280px] space-y-1.5 leading-relaxed"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={ariaLabel}
+        className="h-6 w-6 text-muted-foreground"
+      >
+        <CircleHelp className="h-3.5 w-3.5" />
+      </Button>
+    </TooltipCard>
   )
 }
 

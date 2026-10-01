@@ -1,109 +1,172 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Settings } from 'lucide-react'
 import { expect, screen, waitFor } from 'storybook/test'
-import { settled } from '../../../.storybook/motion-testing'
-import { Button } from '../button/button'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from './tooltip'
+  settled,
+  snapshotWhileAnimating,
+} from '../../../.storybook/motion-testing'
+import { Button } from '../button/button'
+import { Tooltip, type TooltipSide } from './tooltip'
 
-type SettingsHintProps = {
-  /** What the tooltip says. */
-  hint: string
+type HintsProps = {
+  /** What the first control's tooltip says. */
+  label: string
 }
 
-/** The sidebar's settings button and its hint. */
-function SettingsHint({ hint }: SettingsHintProps) {
+const SIDES: TooltipSide[] = ['top', 'right', 'bottom', 'left']
+
+/** A row of text buttons, one tooltip on each side, and a clamped name. */
+function Hints({ label }: HintsProps) {
   return (
-    <TooltipProvider delayDuration={0}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Settings">
-            <Settings aria-hidden />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-64">
-          {hint}
-        </TooltipContent>
+    <div className="flex flex-col items-center gap-6 p-16">
+      <div className="flex items-center gap-2">
+        {SIDES.map((side, index) => (
+          <Tooltip
+            key={side}
+            label={index === 0 ? label : `Opens ${side}`}
+            side={side}
+          >
+            <Button variant="outline">{`Show ${side}`}</Button>
+          </Tooltip>
+        ))}
+      </div>
+      <Tooltip
+        label="feature/a-branch-name-long-enough-to-be-cut-short"
+        when="truncated"
+      >
+        <p
+          tabIndex={0}
+          className="w-40 truncate rounded-sm text-sm text-muted-foreground"
+        >
+          feature/a-branch-name-long-enough-to-be-cut-short
+        </p>
       </Tooltip>
-    </TooltipProvider>
+    </div>
   )
 }
 
 const meta = {
   title: 'Primitives/Tooltip',
-  component: SettingsHint,
-  args: { hint: 'Settings (⌘,)' },
-} satisfies Meta<typeof SettingsHint>
+  component: Hints,
+  args: { label: 'Opens above' },
+} satisfies Meta<typeof Hints>
 
 export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** Pointing at the trigger shows the hint; moving away hides it. */
-export const Default: Story = {
-  play: async ({ args, canvas, userEvent }) => {
-    const trigger = canvas.getByRole('button', { name: 'Settings' })
-    await userEvent.hover(trigger)
-    const tooltip = await screen.findByRole('tooltip')
-    await expect(tooltip).toHaveTextContent(args.hint)
-    await settled(tooltip.parentElement as HTMLElement)
-    await userEvent.unhover(trigger)
-    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
-  },
-}
+const bubble = () => screen.findByRole('tooltip', {}, { timeout: 2000 })
 
-/** The keyboard shows it too: focus the trigger and the hint appears. */
-export const KeyboardFocus: Story = {
-  play: async ({ args, canvas, userEvent }) => {
-    await userEvent.tab()
-    await expect(canvas.getByRole('button', { name: 'Settings' })).toHaveFocus()
-    const tooltip = await screen.findByRole('tooltip')
-    await expect(tooltip).toHaveTextContent(args.hint)
+/**
+ * Hovering waits a moment, then the tooltip grows from its control on the
+ * side asked for. The next one opens at once. Escape puts it away, and so
+ * does pressing the control. It is never a native `title`.
+ */
+export const Default: Story = {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    await expect(canvasElement.querySelector('[title]')).toBeNull()
+    const top = canvas.getByRole('button', { name: 'Show top' })
+    await userEvent.hover(top)
+    const tooltip = await bubble()
+    await expect(tooltip).toHaveTextContent(args.label)
+    const anchor = top.getBoundingClientRect()
+    await waitFor(() =>
+      expect(tooltip.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        anchor.top,
+      ),
+    )
+    for (const side of ['right', 'bottom', 'left'] as const) {
+      await userEvent.hover(
+        canvas.getByRole('button', { name: `Show ${side}` }),
+      )
+      await waitFor(() =>
+        expect(screen.getByRole('tooltip')).toHaveTextContent(`Opens ${side}`),
+      )
+      await expect(screen.getByRole('tooltip')).toHaveAttribute(
+        'data-instant',
+        'delay',
+      )
+    }
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
+
+    const left = canvas.getByRole('button', { name: 'Show left' })
+    await userEvent.unhover(left)
+    await userEvent.hover(top)
+    await bubble()
+    await userEvent.click(top)
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
   },
 }
 
-/** Long: a long hint wraps inside the tooltip's width. */
+/** Keyboard focus shows it at once, with no animation. */
+export const Dark: Story = {
+  globals: { theme: 'dark' },
+  play: async ({ args, userEvent }) => {
+    await userEvent.tab()
+    const tooltip = await bubble()
+    await expect(tooltip).toHaveTextContent(args.label)
+    await expect(tooltip).toHaveAttribute('data-instant', 'focus')
+    await settled(tooltip)
+  },
+}
+
+/** Long: a long hint wraps inside the tooltip's width (20rem). */
 export const Long: Story = {
   args: {
-    hint: 'Settings: providers, accounts, connectors, notifications, the dispatch board and everything else that belongs to this device rather than to a project.',
+    label:
+      'Opens above: providers, accounts, connectors, notifications and everything else that belongs to this device rather than to a project.',
   },
   play: async ({ canvas, userEvent }) => {
-    await userEvent.hover(canvas.getByRole('button', { name: 'Settings' }))
-    await screen.findByRole('tooltip')
-    const surface = document.querySelector<HTMLElement>(
-      '[data-radix-popper-content-wrapper] > *',
+    await userEvent.hover(canvas.getByRole('button', { name: 'Show top' }))
+    const tooltip = await bubble()
+    await settled(tooltip)
+    await expect(tooltip.getBoundingClientRect().width).toBeLessThanOrEqual(320)
+    await expect(tooltip.getBoundingClientRect().height).toBeGreaterThan(30)
+  },
+}
+
+/**
+ * Disabled: a control that is unavailable stays focusable (aria-disabled),
+ * so the keyboard reaches it and its tooltip says why (R2).
+ */
+export const Disabled: Story = {
+  render: () => (
+    <Tooltip label="Open a project first">
+      <Button variant="outline" aria-disabled="true">
+        New conversation
+      </Button>
+    </Tooltip>
+  ),
+  play: async ({ userEvent }) => {
+    await userEvent.tab()
+    const tooltip = await bubble()
+    await expect(tooltip).toHaveTextContent('Open a project first')
+  },
+}
+
+/** Truncated: a name cut short shows in full, and only while it is cut. */
+export const Truncated: Story = {
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.hover(
+      canvas.getByText('feature/a-branch-name-long-enough-to-be-cut-short'),
     )
-    await expect(surface).not.toBeNull()
-    await settled(surface as HTMLElement)
-    await expect(surface!.getBoundingClientRect().width).toBeLessThanOrEqual(
-      256,
+    const tooltip = await bubble()
+    await expect(tooltip).toHaveTextContent(
+      'feature/a-branch-name-long-enough-to-be-cut-short',
     )
   },
 }
 
-export const Dark: Story = {
-  ...Default,
-  globals: { theme: 'dark' },
-}
-
-/** Reduced motion: the hint arrives without its pop or slide. */
+/** Reduced motion: the tooltip fades in; it doesn't grow or travel. */
 export const ReducedMotion: Story = {
   globals: { motion: 'reduced' },
   play: async ({ canvas, userEvent }) => {
-    await userEvent.hover(canvas.getByRole('button', { name: 'Settings' }))
-    await screen.findByRole('tooltip')
-    const surface = document.querySelector<HTMLElement>(
-      '[data-radix-popper-content-wrapper] > *',
-    )
-    await expect(surface).not.toBeNull()
-    await expect(getComputedStyle(surface as HTMLElement).animationName).toBe(
-      'none',
-    )
+    await userEvent.hover(canvas.getByRole('button', { name: 'Show top' }))
+    const tooltip = await bubble()
+    const opening = await snapshotWhileAnimating(tooltip, 'opacity')
+    await expect(opening.opacity).toBeLessThan(1)
+    await expect(opening.scale).toBe(1)
+    await expect(opening.shiftY).toBe(0)
+    await settled(tooltip)
   },
 }

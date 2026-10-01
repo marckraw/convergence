@@ -83,7 +83,6 @@ const config: StorybookConfig = {
           '@radix-ui/react-dropdown-menu',
           '@radix-ui/react-popover',
           '@radix-ui/react-slot',
-          '@radix-ui/react-tooltip',
           'class-variance-authority',
           'clsx',
           'cmdk',

@@ -18,10 +18,13 @@ import { Sidebar } from './sidebar.container'
  * - `commits`: React <Profiler> commits of the whole sidebar (R1), phases
  *   `mount` and `update`;
  * - `nestedCommits`: the Profiler's `nested-update` phase, kept apart. Every
- *   render of a Radix `asChild` trigger (tooltips, the tools dropdown)
- *   re-attaches its composed ref, and that ref callback's setState commits
- *   once more inside the same act (a bail-out, ~0.07 ms). It follows every
- *   render, on master and here, so it is counted and reported, not hidden;
+ *   render of a Radix `asChild` trigger (the tools dropdown) re-attaches its
+ *   composed ref, and that ref callback's setState commits once more inside
+ *   the same act (a bail-out, ~0.07 ms). It follows every render, so it is
+ *   counted and reported, not hidden. Until MAR-3616 the sidebar's tooltips
+ *   were such triggers too, and their nested commit also carried the
+ *   sidebar shell's own follow-up render after a rename; with the tooltip
+ *   host that follow-up is a commit of its own (see the rename test);
  * - `conversationRenders`: renders of `SidebarConversations`, counted through
  *   the search hook it calls exactly once per render (the memo boundary);
  * - `cardModels`: calls of `needsYouCardModel` (R2).
@@ -385,7 +388,14 @@ describe('MAR-3378 F1b R3 — the features still move', () => {
     render(<Harness />)
     resetCounts()
     summarize({ ...sessions[0], name: 'Renamed B', updatedAt: iso(T0 + 10) })
-    expect(counts.commits).toBe(1)
+    // One commit draws the rename; at most one more is the sidebar shell's
+    // own follow-up, which renders no conversation list again (MAR-3616: it
+    // used to ride inside the Radix tooltips' nested commit).
+    // Mutation: drop memo on SidebarConversations -> the follow-up renders
+    // the lists a second time, red.
+    expect(counts.commits).toBeGreaterThanOrEqual(1)
+    expect(counts.commits).toBeLessThanOrEqual(2)
+    expect(counts.conversationRenders).toBe(1)
     expect(
       within(screen.getByRole('region', { name: 'Working' })).getByText(
         'Renamed B',

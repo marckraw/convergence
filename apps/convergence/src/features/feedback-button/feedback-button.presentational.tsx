@@ -2,8 +2,8 @@ import type { FormEvent } from 'react'
 import type { FeedbackPriority } from '@/entities/feedback'
 import { Loader2, MessageSquarePlus, Send } from 'lucide-react'
 import {
-  cn,
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -13,8 +13,6 @@ import {
   Input,
   Textarea,
   Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@convergence/ui'
 import { FLOATING_CORNER_BUTTON_CLASS } from '@/shared/ui/floating-corner.pure'
 
@@ -68,22 +66,19 @@ export function FeedbackButton({
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            size="icon"
-            aria-label="Send feedback"
-            onClick={() => onOpenChange(true)}
-            className={cn(
-              FLOATING_CORNER_BUTTON_CLASS,
-              'z-40 rounded-full border border-foreground/20 bg-background/90 text-foreground shadow-xl shadow-black/15 backdrop-blur-xl hover:border-foreground/35 hover:bg-accent dark:border-white/20 dark:bg-white/8 dark:text-zinc-100 dark:hover:border-white/35 dark:hover:bg-white/12',
-            )}
-          >
-            <MessageSquarePlus className="h-5 w-5 stroke-[2.25]" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="left">Send feedback</TooltipContent>
+      <Tooltip label="Send feedback" side="left">
+        <Button
+          type="button"
+          size="icon"
+          aria-label="Send feedback"
+          onClick={() => onOpenChange(true)}
+          className={cn(
+            FLOATING_CORNER_BUTTON_CLASS,
+            'z-40 rounded-full border border-foreground/20 bg-background/90 text-foreground shadow-xl shadow-black/15 backdrop-blur-xl hover:border-foreground/35 hover:bg-accent dark:border-white/20 dark:bg-white/8 dark:text-zinc-100 dark:hover:border-white/35 dark:hover:bg-white/12',
+          )}
+        >
+          <MessageSquarePlus className="h-5 w-5 stroke-[2.25]" />
+        </Button>
       </Tooltip>
 
       <Dialog open={open} onOpenChange={onOpenChange}>

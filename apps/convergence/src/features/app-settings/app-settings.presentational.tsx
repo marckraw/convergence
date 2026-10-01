@@ -17,6 +17,8 @@ import type {
 import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import {
+  Button,
+  cn,
   Dialog,
   DialogClose,
   DialogContent,
@@ -24,9 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  cn,
-  Button,
-  TooltipProvider,
   SwitchRow,
 } from '@convergence/ui'
 import { SettingsSubsection } from './settings-subsection.presentational'
@@ -445,14 +444,13 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="h-[min(92vh,960px)] w-[min(1280px,calc(100vw-2rem))] max-h-[min(92vh,960px)] p-0">
-        <TooltipProvider delayDuration={150}>
+        <>
           <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
             <DialogTitle>Settings</DialogTitle>
             <DialogDescription>
               App-wide defaults used every time you start a new session.
             </DialogDescription>
           </DialogHeader>
-
           <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
             <aside className="shrink-0 border-b border-border/70 bg-card/30 sm:w-64 sm:border-r sm:border-b-0">
               <nav
@@ -540,7 +538,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
               </div>
             </div>
           </div>
-
           <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border/70 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               {currentSection.id === 'session-defaults' ? (
@@ -580,7 +577,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
               )}
             </div>
           </div>
-        </TooltipProvider>
+        </>
       </DialogContent>
     </Dialog>
   )

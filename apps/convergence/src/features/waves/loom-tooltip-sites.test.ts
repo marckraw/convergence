@@ -37,18 +37,17 @@ describe('MAR-3311 R3: the folded column cannot grow an OS hint again', () => {
 })
 
 /**
- * The provider those tooltips hang from (MAR-3311 R1).
+ * The provider those tooltips hang from (MAR-3311 R1, MAR-3616).
  *
- * Radix throws "`Tooltip` must be used within `TooltipProvider`" with no
- * provider above it, so removing the root one does not degrade Loom -- it
- * takes the panel out with an exception. Nothing else would catch that: the
- * suites that mount Loom alone bring their own provider
- * (`loom-tooltip.fixture.tsx`), which is exactly why the real one has to be
- * pinned where it actually lives. One provider, so one delay and one look for
- * the whole app -- Loom deliberately does not mount its own.
+ * The tooltip host lives in `UiProvider`: without one above it a control
+ * keeps its name but shows no tooltip at all, and nothing would catch that,
+ * because the suites that mount Loom alone bring their own provider
+ * (`loom-tooltip.fixture.tsx`). So the real one is pinned where it lives.
+ * One provider, so one delay and one look for the whole app -- Loom
+ * deliberately does not mount its own.
  */
 describe('MAR-3311 R1: the app mounts the one provider, above the shell', () => {
-  it('App.container wraps AppShell in a TooltipProvider', () => {
+  it('App.container wraps AppShell in the UiProvider', () => {
     const source = readFileSync(
       resolve(__dirname, '../../app/App.container.tsx'),
       'utf8',
@@ -58,7 +57,7 @@ describe('MAR-3311 R1: the app mounts the one provider, above the shell', () => 
     // adjacent would go red the day something legitimately sits between
     // them, which is not the question this asks.
     // Mutation: drop the provider, or move it below AppShell -> red.
-    const provider = source.indexOf('<TooltipProvider')
+    const provider = source.indexOf('<UiProvider')
     const shell = source.indexOf('<AppShell')
     expect(provider).toBeGreaterThan(-1)
     expect(shell).toBeGreaterThan(provider)
@@ -68,36 +67,17 @@ describe('MAR-3311 R1: the app mounts the one provider, above the shell', () => 
 /**
  * The no-drag rule is about every tooltip, not one of them (MAR-3311 R2).
  *
- * `TooltipContent` renders into a portal that floats over Loom's title-bar
- * region, where an element without `NO_DRAG_STYLE` is draggable chrome:
- * the click lands on the window, not on what is underneath it
- * (MAR-3284's law). A rendered test can only read the one tooltip it opens,
- * so six of the seven contents could lose the style and every suite would
- * stay green -- which is how a per-site obligation quietly becomes a
- * per-site accident.
- *
- * So the pin is count equality, not a named site: every `<TooltipContent`
- * these three files write carries the style, and there is at least one.
- * A new tooltip added without it moves one count and not the other.
+ * A tooltip floats over Loom's title-bar region, where an element that is
+ * not `no-drag` is draggable chrome: the click lands on the window, not on
+ * what is underneath it (MAR-3284's law). Since MAR-3616 the one tooltip
+ * host carries `app-no-drag` itself (pinned in @convergence/ui's tooltip
+ * tests), so the per-site obligation is gone; what stays pinned here is that
+ * no site goes back to a tooltip of its own, which would need the style again.
  */
-const TOOLTIP_CONTENT = /<TooltipContent\b/g
-
-// The opening tag, read to its `>`: `[^>]` crosses newlines, so a tag broken
-// over several lines still matches as one.
-const TOOLTIP_CONTENT_TAG = /<TooltipContent\b[^>]*>/g
-
-const NO_DRAG = 'style={NO_DRAG_STYLE}'
-
-describe('MAR-3311 R2: every Loom tooltip is no-drag, not just the read one', () => {
-  it.each(FOLDED_COLUMN)('%s gives every tooltip the no-drag style', (file) => {
+describe('MAR-3311 R2: every Loom tooltip is the host, which is no-drag', () => {
+  it.each(FOLDED_COLUMN)('%s builds no tooltip of its own', (file) => {
     const source = readFileSync(resolve(__dirname, file), 'utf8')
-    const written = source.match(TOOLTIP_CONTENT) ?? []
-    const noDrag = (source.match(TOOLTIP_CONTENT_TAG) ?? []).filter((tag) =>
-      tag.includes(NO_DRAG),
-    )
-    // Mutation: drop the style from ANY one `TooltipContent` in any of the
-    // three files -> red here, and nowhere else.
-    expect(written.length).toBeGreaterThan(0)
-    expect(noDrag.length).toBe(written.length)
+    // Mutation: bring back a per-instance `TooltipContent` -> red.
+    expect(source).not.toMatch(/<TooltipContent\b/)
   })
 })

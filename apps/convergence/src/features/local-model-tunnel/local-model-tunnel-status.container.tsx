@@ -22,8 +22,6 @@ import {
   PopoverContent,
   PopoverTrigger,
   Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@convergence/ui'
 import { Pencil, Plus } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
@@ -140,29 +138,27 @@ export const LocalModelTunnelStatusContainer: FC = () => {
   return (
     <>
       <Popover>
-        <Tooltip delayDuration={120}>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
-                data-testid="local-model-tunnel-pill"
-              >
-                <StatusDot state={aggregate.state} />
-                <span className="min-w-0 truncate text-foreground">
-                  {aggregate.label}
-                </span>
-                <span className="truncate text-muted-foreground/85">
-                  {aggregate.detail}
-                </span>
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            Local model tunnels. Click to view status and controls.
-          </TooltipContent>
+        <Tooltip
+          label="Local model tunnels. Click to view status and controls."
+          side="top"
+        >
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
+              data-testid="local-model-tunnel-pill"
+            >
+              <StatusDot state={aggregate.state} />
+              <span className="min-w-0 truncate text-foreground">
+                {aggregate.label}
+              </span>
+              <span className="truncate text-muted-foreground/85">
+                {aggregate.detail}
+              </span>
+            </Button>
+          </PopoverTrigger>
         </Tooltip>
         <PopoverContent
           align="start"

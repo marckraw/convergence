@@ -1,12 +1,6 @@
 import type { FC } from 'react'
 import { Maximize2, PanelLeftClose } from 'lucide-react'
-import {
-  Button,
-  cn,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -61,22 +55,17 @@ export const LoomCompactView: FC<
     <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3">
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
       <div className="flex shrink-0 items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={EXPAND_LOOM}
-              className="h-10 gap-2 px-2 text-xs"
-              onClick={onExpand}
-            >
-              Expand <Maximize2 className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
-            {EXPAND_LOOM}
-          </TooltipContent>
+        <Tooltip label={EXPAND_LOOM} side="bottom">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={EXPAND_LOOM}
+            className="h-10 gap-2 px-2 text-xs"
+            onClick={onExpand}
+          >
+            Expand <Maximize2 className="size-3.5" />
+          </Button>
         </Tooltip>
         {/* Icon-only, and named apart from the two controls that were
             already here (MAR-3292 R4): "Expand Loom" goes wider, "Fold
@@ -85,23 +74,18 @@ export const LoomCompactView: FC<
             because a control inside a drag strip is not a control -- the
             column declares no region of its own, so this says it for
             itself rather than inheriting whatever is above it. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={COLLAPSE_LOOM}
-              className={LOOM_COLLAPSE_BUTTON_CLASS}
-              style={NO_DRAG_STYLE}
-              onClick={onCollapse}
-            >
-              <PanelLeftClose className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
-            {COLLAPSE_LOOM}
-          </TooltipContent>
+        <Tooltip label={COLLAPSE_LOOM} side="bottom">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={COLLAPSE_LOOM}
+            className={LOOM_COLLAPSE_BUTTON_CLASS}
+            style={NO_DRAG_STYLE}
+            onClick={onCollapse}
+          >
+            <PanelLeftClose className="size-3.5" />
+          </Button>
         </Tooltip>
       </div>
     </div>

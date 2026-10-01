@@ -9,7 +9,7 @@ import {
   Server,
 } from 'lucide-react'
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { Button, TooltipProvider, cn } from '@convergence/ui'
+import { Button, cn } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
@@ -134,34 +134,32 @@ export function SessionActivityCard({
           </span>
         </Button>
         {compact && (
-          <TooltipProvider delayDuration={200}>
-            <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-normal leading-3 text-muted-foreground">
-              <NeedsYouCardIcon label={provider.label} compact>
-                <ProviderIcon
-                  providerId={session.providerId}
-                  title=""
-                  className="size-3"
-                />
-              </NeedsYouCardIcon>
-              <span
-                className="min-w-0 flex-1 truncate"
-                title={session.model || 'Model not recorded'}
+          <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-normal leading-3 text-muted-foreground">
+            <NeedsYouCardIcon label={provider.label} compact>
+              <ProviderIcon
+                providerId={session.providerId}
+                title=""
+                className="size-3"
+              />
+            </NeedsYouCardIcon>
+            <span
+              className="min-w-0 flex-1 truncate"
+              title={session.model || 'Model not recorded'}
+            >
+              {session.model || 'Model not recorded'}
+            </span>
+            <NeedsYouCardIcon label={card.host} compact>
+              <HostIcon aria-hidden="true" className="size-3" />
+            </NeedsYouCardIcon>
+            {card.kind && (
+              <NeedsYouCardIcon
+                label={card.kind === 'resident' ? 'Resident' : 'Errand'}
+                compact
               >
-                {session.model || 'Model not recorded'}
-              </span>
-              <NeedsYouCardIcon label={card.host} compact>
-                <HostIcon aria-hidden="true" className="size-3" />
+                <KindIcon aria-hidden="true" className="size-3" />
               </NeedsYouCardIcon>
-              {card.kind && (
-                <NeedsYouCardIcon
-                  label={card.kind === 'resident' ? 'Resident' : 'Errand'}
-                  compact
-                >
-                  <KindIcon aria-hidden="true" className="size-3" />
-                </NeedsYouCardIcon>
-              )}
-            </div>
-          </TooltipProvider>
+            )}
+          </div>
         )}
         {compact && card.hostLiveness && (
           <time
@@ -175,11 +173,7 @@ export function SessionActivityCard({
         {compact && card.hostUnreachable && <NeedsYouCardStatus card={card} />}
         {!compact && (
           <div className="mt-1 space-y-1">
-            {session.pullRequest && (
-              <TooltipProvider delayDuration={200}>
-                <NeedsYouPr pr={session.pullRequest} />
-              </TooltipProvider>
-            )}
+            {session.pullRequest && <NeedsYouPr pr={session.pullRequest} />}
             <NeedsYouCardStatus card={card} />
             <span className="block text-[10px] font-normal text-muted-foreground">
               {card.hostLiveness ? (
@@ -205,33 +199,31 @@ export function SessionActivityCard({
           </div>
         )}
       </div>
-      <TooltipProvider delayDuration={200}>
-        <div
-          className={cn(
-            'relative z-10 flex w-10 shrink-0 flex-col items-center',
-            compact ? 'py-1' : 'pb-1',
-          )}
-        >
-          {actions}
-          {!compact && (
-            <>
-              <NeedsYouCardIcon label={provider.label}>
-                <ProviderIcon providerId={session.providerId} title="" />
+      <div
+        className={cn(
+          'relative z-10 flex w-10 shrink-0 flex-col items-center',
+          compact ? 'py-1' : 'pb-1',
+        )}
+      >
+        {actions}
+        {!compact && (
+          <>
+            <NeedsYouCardIcon label={provider.label}>
+              <ProviderIcon providerId={session.providerId} title="" />
+            </NeedsYouCardIcon>
+            <NeedsYouCardIcon label={card.host}>
+              <HostIcon aria-hidden="true" className="size-4" />
+            </NeedsYouCardIcon>
+            {card.kind && (
+              <NeedsYouCardIcon
+                label={card.kind === 'resident' ? 'Resident' : 'Errand'}
+              >
+                <KindIcon aria-hidden="true" className="size-4" />
               </NeedsYouCardIcon>
-              <NeedsYouCardIcon label={card.host}>
-                <HostIcon aria-hidden="true" className="size-4" />
-              </NeedsYouCardIcon>
-              {card.kind && (
-                <NeedsYouCardIcon
-                  label={card.kind === 'resident' ? 'Resident' : 'Errand'}
-                >
-                  <KindIcon aria-hidden="true" className="size-4" />
-                </NeedsYouCardIcon>
-              )}
-            </>
-          )}
-        </div>
-      </TooltipProvider>
+            )}
+          </>
+        )}
+      </div>
       {footer && <div className="relative z-10 w-full">{footer}</div>}
     </article>
   )

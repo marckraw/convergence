@@ -1,12 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Info } from 'lucide-react'
-import {
-  cn,
-  Button,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 
 interface SettingsControlFieldProps {
   title: string
@@ -30,21 +24,16 @@ export const SettingsControlField: FC<SettingsControlFieldProps> = ({
     <div className="flex min-w-0 items-center gap-1.5">
       <p className="truncate text-sm font-medium text-foreground">{title}</p>
       {description ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`About ${title}`}
-              className="size-5 shrink-0 rounded-full text-muted-foreground/60 hover:text-foreground"
-            >
-              <Info className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-xs leading-relaxed">
-            {description}
-          </TooltipContent>
+        <Tooltip label={description} side="top">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`About ${title}`}
+            className="size-5 shrink-0 rounded-full text-muted-foreground/60 hover:text-foreground"
+          >
+            <Info className="size-3.5" />
+          </Button>
         </Tooltip>
       ) : null}
     </div>

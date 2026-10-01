@@ -1,4 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { TooltipProvider } from '@convergence/ui'
+import { blurTooltip, focusForTooltip } from '@/shared/testing/tooltip'
 import { expect, it, vi } from 'vitest'
 import {
   cardContext,
@@ -24,7 +26,9 @@ it.each(Object.entries(cardFixtures))(
       pullRequest: { getForSession: fetch, refreshForSession: fetch },
     })
     const card = needsYouCardModel(session, cardContext)
-    render(<NeedsYouCard card={card} {...actions()} />)
+    render(<NeedsYouCard card={card} {...actions()} />, {
+      wrapper: TooltipProvider,
+    })
     expect(screen.getByText('Horse')).toBeInTheDocument()
     expect(screen.getByText('Convergence')).toBeInTheDocument()
     expect(screen.getByText('gpt-6')).toBeInTheDocument()
@@ -37,13 +41,11 @@ it.each(Object.entries(cardFixtures))(
     const hostIcon = screen.getByRole('img', {
       name: session.executionHost === 'lm' ? 'little-monster' : 'laptop',
     })
-    fireEvent.focus(hostIcon)
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(card.host)
-    fireEvent.blur(hostIcon)
+    expect(await focusForTooltip(hostIcon)).toHaveTextContent(card.host)
+    await blurTooltip(hostIcon)
     const providerIcon = screen.getByRole('img', { name: 'OpenAI' })
-    fireEvent.focus(providerIcon)
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('OpenAI')
-    fireEvent.blur(providerIcon)
+    expect(await focusForTooltip(providerIcon)).toHaveTextContent('OpenAI')
+    await blurTooltip(providerIcon)
     if (session.executionHost === 'lm')
       expect(screen.getByText('host · not recorded')).toBeInTheDocument()
     else
@@ -63,9 +65,8 @@ it.each(Object.entries(cardFixtures))(
           ? 'Errand'
           : 'Resident'
       const kindIcon = screen.getByRole('img', { name: label })
-      fireEvent.focus(kindIcon)
-      expect(await screen.findByRole('tooltip')).toHaveTextContent(label)
-      fireEvent.blur(kindIcon)
+      expect(await focusForTooltip(kindIcon)).toHaveTextContent(label)
+      await blurTooltip(kindIcon)
     }
     expect(fetch).not.toHaveBeenCalled()
     vi.unstubAllGlobals()

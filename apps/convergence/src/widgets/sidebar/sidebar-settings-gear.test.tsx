@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { TooltipProvider } from '@convergence/ui'
+import { hoverForTooltip } from '@/shared/testing/tooltip'
 import { Sidebar } from './sidebar.container'
 
 vi.mock('@/features', async () => {
@@ -28,12 +29,7 @@ vi.mock('@/features', async () => {
   }
 })
 
-const hover = async (control: Element) => {
-  await act(async () => {
-    fireEvent.pointerMove(control, { pointerType: 'mouse' })
-  })
-  return screen.findByRole('tooltip')
-}
+const hover = hoverForTooltip
 
 const noop = vi.fn()
 

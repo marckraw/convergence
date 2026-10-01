@@ -2,7 +2,7 @@ import type { AgentMeterSnapshot } from '@/shared/types/agent-meter.types'
 import { formatMeterUsage, formatSessionMeter } from '@/entities/agent-meter'
 import type { SessionSummary } from '@/entities/session'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@convergence/ui'
+import { TooltipCard } from '@convergence/ui'
 
 export function AgentMeterSummary({
   snapshot,
@@ -20,18 +20,10 @@ export function AgentMeterSummary({
       session.status === 'running',
   )
   return (
-    <Tooltip delayDuration={120}>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          className="shrink-0 whitespace-nowrap tabular-nums"
-          data-testid="agent-meter-total"
-        >
-          Agents {formatMeterUsage(snapshot.agents)} · Convergence{' '}
-          {formatMeterUsage(snapshot.convergence)}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-lg">
+    <TooltipCard
+      side="top"
+      className="max-w-lg"
+      content={
         <div className="space-y-1 tabular-nums" data-testid="agent-meter-list">
           {rows.map((row) => (
             <div key={row.sessionId}>
@@ -49,7 +41,16 @@ export function AgentMeterSummary({
             per-turn agents are not metered.
           </p>
         </div>
-      </TooltipContent>
-    </Tooltip>
+      }
+    >
+      <span
+        tabIndex={0}
+        className="shrink-0 whitespace-nowrap tabular-nums"
+        data-testid="agent-meter-total"
+      >
+        Agents {formatMeterUsage(snapshot.agents)} · Convergence{' '}
+        {formatMeterUsage(snapshot.convergence)}
+      </span>
+    </TooltipCard>
   )
 }

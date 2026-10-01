@@ -55,10 +55,18 @@ export { SwitchRow } from './components/switch/switch'
 export { Textarea, type TextareaProps } from './components/textarea/textarea'
 export {
   Tooltip,
-  TooltipContent,
+  type TooltipOptions,
+  type TooltipProps,
   TooltipProvider,
-  TooltipTrigger,
+  type TooltipProviderProps,
+  type TooltipSide,
+  tooltipAttributes,
 } from './components/tooltip/tooltip'
+export {
+  TooltipCard,
+  type TooltipCardProps,
+} from './components/tooltip/tooltip-card'
+export { tooltipSurface } from './components/tooltip/tooltip.styles'
 export { cn } from './lib/cn.pure'
 export {
   focusRing,
@@ -89,6 +97,7 @@ export {
   nextLoadingChange,
 } from './motion/delayed-loading/delayed-loading.pure'
 export { useDelayedLoading } from './motion/delayed-loading/useDelayedLoading'
+export { popupMotion } from './motion/popup.styles'
 export { press } from './motion/press/press.styles'
 export { usePrefersReducedMotion } from './motion/reduced-motion'
 export {
@@ -96,3 +105,4 @@ export {
   type SpinnerProps,
   type SpinnerSize,
 } from './motion/spinner/spinner'
+export { UiProvider, type UiProviderProps } from './ui-provider'

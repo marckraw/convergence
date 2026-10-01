@@ -1,11 +1,6 @@
 import type { FC } from 'react'
 import { Minimize2, PanelLeftClose } from 'lucide-react'
-import {
-  Button,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@convergence/ui'
+import { Button, Tooltip } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -92,45 +87,35 @@ export const LoomExpandedView: FC<
       >
         {LEARN_LOOM_ENTRY}
       </Button>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={FOLD_LOOM}
-            className="h-10 shrink-0 gap-2 px-3 text-xs"
-            style={NO_DRAG_STYLE}
-            onClick={onFold}
-          >
-            <Minimize2 className="size-3.5" />
-            {FOLD_LOOM}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
+      <Tooltip label={FOLD_LOOM} side="bottom">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={FOLD_LOOM}
+          className="h-10 shrink-0 gap-2 px-3 text-xs"
+          style={NO_DRAG_STYLE}
+          onClick={onFold}
+        >
+          <Minimize2 className="size-3.5" />
           {FOLD_LOOM}
-        </TooltipContent>
+        </Button>
       </Tooltip>
       {/* Past Fold Loom, because it goes one step further (MAR-3292 R4):
           Fold gives the column back, Collapse takes it away. `no-drag` like
           every other control in this header row. */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={COLLAPSE_LOOM}
-            className={LOOM_COLLAPSE_BUTTON_CLASS}
-            style={NO_DRAG_STYLE}
-            onClick={onCollapse}
-          >
-            <PanelLeftClose className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" style={NO_DRAG_STYLE}>
-          {COLLAPSE_LOOM}
-        </TooltipContent>
+      <Tooltip label={COLLAPSE_LOOM} side="bottom">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={COLLAPSE_LOOM}
+          className={LOOM_COLLAPSE_BUTTON_CLASS}
+          style={NO_DRAG_STYLE}
+          onClick={onCollapse}
+        >
+          <PanelLeftClose className="size-3.5" />
+        </Button>
       </Tooltip>
     </div>
     <div className="shrink-0 px-6 pb-3">

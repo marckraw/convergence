@@ -21,15 +21,13 @@ import type {
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import {
   Button,
+  cn,
   CopyButton,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import {
@@ -76,11 +74,8 @@ interface SkillDetailPaneProps {
 /** Wraps an action in a hover tooltip so each icon's purpose is legible. */
 function withTooltip(label: string, node: ReactNode) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">{node}</span>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+    <Tooltip label={label}>
+      <span className="inline-flex">{node}</span>
     </Tooltip>
   )
 }

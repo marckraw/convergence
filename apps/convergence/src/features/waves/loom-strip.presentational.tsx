@@ -9,13 +9,7 @@ import {
   NotebookPen,
   PanelLeftOpen,
 } from 'lucide-react'
-import {
-  Button,
-  cn,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
 import {
@@ -125,9 +119,10 @@ const EXPAND_LOOM = 'Expand Loom'
  * attribute is kept out of this file entirely so no control can whisper
  * twice. The provider is the root's (`App.container`) -- this column never
  * mounts outside it, so the delay and the look are the app's everywhere, and
- * Loom needs no second copy of either. Each `TooltipContent` repeats
- * `no-drag` because the portal lands on `document.body`, outside this aside's
- * region and over the title strip.
+ * Loom needs no second copy of either. The tooltip lands on
+ * `document.body`, outside this aside's region and over the title strip, so
+ * the one tooltip host is `app-no-drag` itself (MAR-3616): no call site
+ * repeats it.
  *
  * `no-drag` on the aside, with no `drag` child (MAR-3284's law): Electron
  * builds its draggable region from the DOM in tree order and knows nothing
@@ -153,24 +148,19 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
     className={cn(WAVE_RAIL_CLASS, className)}
     style={NO_DRAG_STYLE}
   >
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          ref={openRef}
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={OPEN_LOOM}
-          className={LOOM_STRIP_BUTTON_CLASS}
-          style={NO_DRAG_STYLE}
-          onClick={onOpen}
-        >
-          <PanelLeftOpen className="size-3.5" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" style={NO_DRAG_STYLE}>
-        {OPEN_LOOM}
-      </TooltipContent>
+    <Tooltip label={OPEN_LOOM} side="right">
+      <Button
+        ref={openRef}
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-label={OPEN_LOOM}
+        className={LOOM_STRIP_BUTTON_CLASS}
+        style={NO_DRAG_STYLE}
+        onClick={onOpen}
+      >
+        <PanelLeftOpen className="size-3.5" />
+      </Button>
     </Tooltip>
     {outage ? (
       <span
@@ -186,27 +176,22 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
       const count = stripCount(sheets, sheet, now, horses, dispatchPlan)
       const name = `${LOOM_SHEET_NAMES[sheet]}: ${count}`
       return (
-        <Tooltip key={sheet}>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              data-loom-strip-sheet={sheet}
-              aria-label={name}
-              className={LOOM_STRIP_SHEET_CLASS}
-              style={NO_DRAG_STYLE}
-              onClick={() => onSelectSheet(sheet)}
-            >
-              <Icon className="size-3.5" />
-              <span data-wave-count={sheet} className={LOOM_STRIP_COUNT_CLASS}>
-                {count}
-              </span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right" style={NO_DRAG_STYLE}>
-            {name}
-          </TooltipContent>
+        <Tooltip key={sheet} label={name} side="right">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-loom-strip-sheet={sheet}
+            aria-label={name}
+            className={LOOM_STRIP_SHEET_CLASS}
+            style={NO_DRAG_STYLE}
+            onClick={() => onSelectSheet(sheet)}
+          >
+            <Icon className="size-3.5" />
+            <span data-wave-count={sheet} className={LOOM_STRIP_COUNT_CLASS}>
+              {count}
+            </span>
+          </Button>
         </Tooltip>
       )
     })}
@@ -216,23 +201,18 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
         nothing. Expand puts Loom in the content area instead -- there is no
         width left to refuse, so refusing would be the strip claiming a limit
         the mechanism no longer has. */}
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={EXPAND_LOOM}
-          className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
-          style={NO_DRAG_STYLE}
-          onClick={onExpand}
-        >
-          <Maximize2 className="size-3.5" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" style={NO_DRAG_STYLE}>
-        {EXPAND_LOOM}
-      </TooltipContent>
+    <Tooltip label={EXPAND_LOOM} side="right">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-label={EXPAND_LOOM}
+        className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
+        style={NO_DRAG_STYLE}
+        onClick={onExpand}
+      >
+        <Maximize2 className="size-3.5" />
+      </Button>
     </Tooltip>
   </aside>
 )

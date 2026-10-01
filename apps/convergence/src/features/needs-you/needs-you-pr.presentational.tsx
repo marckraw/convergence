@@ -7,7 +7,7 @@ import {
   MessageSquareWarning,
 } from 'lucide-react'
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@convergence/ui'
+import { Tooltip } from '@convergence/ui'
 import { pullRequestPresentation } from './pull-request-presentation.pure'
 
 export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {
@@ -42,30 +42,25 @@ export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {
     </>
   )
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {presentation.href ? (
-          <a
-            className="relative z-10 flex w-fit max-w-full items-center gap-1 rounded py-0.5 text-[10px] font-normal hover:underline focus-visible:outline focus-visible:outline-2"
-            href={presentation.href}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Pull request #${pr.number}, ${presentation.label}`}
-          >
-            {content}
-          </a>
-        ) : (
-          <span
-            tabIndex={0}
-            className="relative z-10 flex items-center gap-1 text-[10px]"
-          >
-            {content}
-          </span>
-        )}
-      </TooltipTrigger>
-      <TooltipContent className="max-w-72 whitespace-pre-line">
-        {presentation.tooltip}
-      </TooltipContent>
+    <Tooltip label={presentation.tooltip}>
+      {presentation.href ? (
+        <a
+          className="relative z-10 flex w-fit max-w-full items-center gap-1 rounded py-0.5 text-[10px] font-normal hover:underline focus-visible:outline focus-visible:outline-2"
+          href={presentation.href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Pull request #${pr.number}, ${presentation.label}`}
+        >
+          {content}
+        </a>
+      ) : (
+        <span
+          tabIndex={0}
+          className="relative z-10 flex items-center gap-1 text-[10px]"
+        >
+          {content}
+        </span>
+      )}
     </Tooltip>
   )
 }

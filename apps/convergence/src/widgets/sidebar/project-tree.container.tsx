@@ -17,17 +17,14 @@ import {
 } from '@/features/needs-you'
 import {
   Button,
+  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
-  NO_DRAG_STYLE,
   Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
 } from '@convergence/ui'
 import {
   Archive,
@@ -177,28 +174,23 @@ export const ProjectTree = memo(function ProjectTree({
 
     return (
       <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={
-                  card
-                    ? 'h-10 w-10 shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
-                    : 'h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
-                }
-                aria-label={`Session actions ${session.name}`}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="left" style={NO_DRAG_STYLE}>
-            {`Session actions ${session.name}`}
-          </TooltipContent>
+        <Tooltip label={`Session actions ${session.name}`} side="left">
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={
+                card
+                  ? 'h-10 w-10 shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
+                  : 'h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
+              }
+              aria-label={`Session actions ${session.name}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
         </Tooltip>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
@@ -267,24 +259,22 @@ export const ProjectTree = memo(function ProjectTree({
 
     return (
       <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100"
-                aria-label={`Workspace actions ${workspace.branchName}`}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="left" style={NO_DRAG_STYLE}>
-            {`Workspace actions ${workspace.branchName}`}
-          </TooltipContent>
+        <Tooltip
+          label={`Workspace actions ${workspace.branchName}`}
+          side="left"
+        >
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100"
+              aria-label={`Workspace actions ${workspace.branchName}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
         </Tooltip>
         <DropdownMenuContent align="end">
           {isArchived ? (
@@ -402,53 +392,53 @@ export const ProjectTree = memo(function ProjectTree({
             />
           </form>
         ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onSelectSession(session.id)}
-                onDoubleClick={() => {
-                  setRenamingSessionId(session.id)
-                  setRenameDraft(session.name)
-                }}
-                className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-              >
-                {session.providerId === 'shell' ? (
-                  <TerminalSquare
-                    className="h-3 w-3 shrink-0 text-muted-foreground"
-                    aria-label="Terminal session"
-                  />
-                ) : (
-                  <SessionStateBadge session={session} />
-                )}
-                <span className="min-w-0 text-left">
-                  <span className="block truncate">{session.name}</span>
-                  {parallelWorkStatus(session) && (
-                    <span className="block truncate text-[10px] text-muted-foreground">
-                      {parallelWorkStatus(session)}
-                    </span>
-                  )}
-                </span>
-                {isRemoteExecutionHost(session.executionHost) && (
-                  <Cloud
-                    className="h-3 w-3 shrink-0 text-sky-500/80"
-                    aria-label="Runs on remote execution host"
-                  />
-                )}
-                {isRegeneratingName && (
-                  <Loader2
-                    className="ml-auto h-3 w-3 shrink-0 animate-spin text-muted-foreground"
-                    aria-label="Regenerating name"
-                  />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right" style={NO_DRAG_STYLE}>
-              {isRegeneratingName
+          <Tooltip
+            label={
+              isRegeneratingName
                 ? `${session.name} (regenerating name…)`
-                : session.name}
-            </TooltipContent>
+                : session.name
+            }
+            side="right"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onSelectSession(session.id)}
+              onDoubleClick={() => {
+                setRenamingSessionId(session.id)
+                setRenameDraft(session.name)
+              }}
+              className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+            >
+              {session.providerId === 'shell' ? (
+                <TerminalSquare
+                  className="h-3 w-3 shrink-0 text-muted-foreground"
+                  aria-label="Terminal session"
+                />
+              ) : (
+                <SessionStateBadge session={session} />
+              )}
+              <span className="min-w-0 text-left">
+                <span className="block truncate">{session.name}</span>
+                {parallelWorkStatus(session) && (
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {parallelWorkStatus(session)}
+                  </span>
+                )}
+              </span>
+              {isRemoteExecutionHost(session.executionHost) && (
+                <Cloud
+                  className="h-3 w-3 shrink-0 text-sky-500/80"
+                  aria-label="Runs on remote execution host"
+                />
+              )}
+              {isRegeneratingName && (
+                <Loader2
+                  className="ml-auto h-3 w-3 shrink-0 animate-spin text-muted-foreground"
+                  aria-label="Regenerating name"
+                />
+              )}
+            </Button>
           </Tooltip>
         )}
         {renderSessionActions(session)}
@@ -470,16 +460,11 @@ export const ProjectTree = memo(function ProjectTree({
       {/* Root sessions (on main branch) */}
       {!searching || rootSessions.length > 0 ? (
         <div className="mb-1 ml-2 border-l border-border pl-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <p className="mb-0.5 truncate text-xs text-muted-foreground">
-                {(baseBranchName || 'main') +
-                  (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
-              </p>
-            </TooltipTrigger>
-            <TooltipContent side="right" style={NO_DRAG_STYLE}>
-              {baseBranchName || 'main'}
-            </TooltipContent>
+          <Tooltip label={baseBranchName || 'main'} side="right">
+            <p className="mb-0.5 truncate text-xs text-muted-foreground">
+              {(baseBranchName || 'main') +
+                (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
+            </p>
           </Tooltip>
           {rootSessions.map(renderSessionRow)}
           {!searching ? (
@@ -501,48 +486,46 @@ export const ProjectTree = memo(function ProjectTree({
         return (
           <div key={ws.id} className="ml-2 border-l border-border pl-2">
             <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={searching}
-                    onClick={() => {
-                      if (!searching) toggleWorkspace(ws.id)
-                    }}
-                    className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
-                  >
-                    <ChevronRight
-                      className={cn(
-                        'h-3 w-3 shrink-0 transition-transform',
-                        isExpanded && 'rotate-90',
-                      )}
-                    />
-                    <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{ws.branchName}</span>
-                    {isMerged ? (
-                      <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
-                        Merged
-                      </span>
-                    ) : null}
-                    {ws.worktreeRemovedAt ? (
-                      <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        Worktree removed
-                      </span>
-                    ) : null}
-                    {wsSessions.length > 0 && (
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                        {wsSessions.length}
-                      </span>
+              <Tooltip
+                side="right"
+                label={ws.branchName}
+                detail={
+                  searching ? BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH : undefined
+                }
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={searching}
+                  onClick={() => {
+                    if (!searching) toggleWorkspace(ws.id)
+                  }}
+                  className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                >
+                  <ChevronRight
+                    className={cn(
+                      'h-3 w-3 shrink-0 transition-transform',
+                      isExpanded && 'rotate-90',
                     )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" style={NO_DRAG_STYLE}>
-                  <p>{ws.branchName}</p>
-                  {searching ? (
-                    <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
+                  />
+                  <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{ws.branchName}</span>
+                  {isMerged ? (
+                    <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
+                      Merged
+                    </span>
                   ) : null}
-                </TooltipContent>
+                  {ws.worktreeRemovedAt ? (
+                    <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Worktree removed
+                    </span>
+                  ) : null}
+                  {wsSessions.length > 0 && (
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                      {wsSessions.length}
+                    </span>
+                  )}
+                </Button>
               </Tooltip>
               {renderWorkspaceActions(ws)}
             </div>
@@ -570,43 +553,41 @@ export const ProjectTree = memo(function ProjectTree({
           archivedRootSessions.length > 0)) ? (
         <div className="mt-3 ml-2 border-l border-border pl-2">
           <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  aria-label={`${archivedExpanded ? 'Collapse' : 'Expand'} archived workspaces and sessions`}
-                  disabled={searching}
-                  onClick={() => {
-                    if (!searching) setShowArchived((current) => !current)
-                  }}
-                  className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
-                >
-                  <ChevronRight
-                    className={cn(
-                      'h-3 w-3 shrink-0 transition-transform',
-                      archivedExpanded && 'rotate-90',
-                    )}
-                  />
-                  <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">Archived</span>
-                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {searching
-                      ? archivedWorkspaces.reduce(
-                          (count, ws) =>
-                            count + getWorkspaceSessions(ws.id).length,
-                          0,
-                        ) + archivedRootSessions.length
-                      : archivedWorkspaces.length + archivedRootSessions.length}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right" style={NO_DRAG_STYLE}>
-                <p>Archived workspaces and sessions</p>
-                {searching ? (
-                  <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
-                ) : null}
-              </TooltipContent>
+            <Tooltip
+              side="right"
+              label="Archived workspaces and sessions"
+              detail={
+                searching ? BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH : undefined
+              }
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={`${archivedExpanded ? 'Collapse' : 'Expand'} archived workspaces and sessions`}
+                disabled={searching}
+                onClick={() => {
+                  if (!searching) setShowArchived((current) => !current)
+                }}
+                className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+              >
+                <ChevronRight
+                  className={cn(
+                    'h-3 w-3 shrink-0 transition-transform',
+                    archivedExpanded && 'rotate-90',
+                  )}
+                />
+                <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span className="truncate">Archived</span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  {searching
+                    ? archivedWorkspaces.reduce(
+                        (count, ws) =>
+                          count + getWorkspaceSessions(ws.id).length,
+                        0,
+                      ) + archivedRootSessions.length
+                    : archivedWorkspaces.length + archivedRootSessions.length}
+                </span>
+              </Button>
             </Tooltip>
           </div>
 
@@ -622,48 +603,48 @@ export const ProjectTree = memo(function ProjectTree({
                 return (
                   <div key={ws.id}>
                     <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            disabled={searching}
-                            onClick={() => {
-                              if (!searching) toggleWorkspace(ws.id)
-                            }}
-                            className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
-                          >
-                            <ChevronRight
-                              className={cn(
-                                'h-3 w-3 shrink-0 transition-transform',
-                                isExpanded && 'rotate-90',
-                              )}
-                            />
-                            <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{ws.branchName}</span>
-                            {isMerged ? (
-                              <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
-                                Merged
-                              </span>
-                            ) : null}
-                            {ws.worktreeRemovedAt ? (
-                              <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                Worktree removed
-                              </span>
-                            ) : null}
-                            {wsSessions.length > 0 && (
-                              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                                {wsSessions.length}
-                              </span>
+                      <Tooltip
+                        side="right"
+                        label={ws.branchName}
+                        detail={
+                          searching
+                            ? BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH
+                            : undefined
+                        }
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={searching}
+                          onClick={() => {
+                            if (!searching) toggleWorkspace(ws.id)
+                          }}
+                          className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                        >
+                          <ChevronRight
+                            className={cn(
+                              'h-3 w-3 shrink-0 transition-transform',
+                              isExpanded && 'rotate-90',
                             )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" style={NO_DRAG_STYLE}>
-                          <p>{ws.branchName}</p>
-                          {searching ? (
-                            <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
+                          />
+                          <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{ws.branchName}</span>
+                          {isMerged ? (
+                            <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
+                              Merged
+                            </span>
                           ) : null}
-                        </TooltipContent>
+                          {ws.worktreeRemovedAt ? (
+                            <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Worktree removed
+                            </span>
+                          ) : null}
+                          {wsSessions.length > 0 && (
+                            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                              {wsSessions.length}
+                            </span>
+                          )}
+                        </Button>
                       </Tooltip>
                       {renderWorkspaceActions(ws)}
                     </div>
