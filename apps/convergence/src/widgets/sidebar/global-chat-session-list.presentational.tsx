@@ -11,16 +11,18 @@ import type { SpaceAttemptRole } from '@/entities/space'
 import {
   Button,
   cn,
+  EmptyState,
+  ListRow,
   Menu,
   MenuContent,
   MenuItem,
   MenuTrigger,
   IconButton,
+  SectionHeader,
   Tooltip,
 } from '@convergence/ui'
 import {
   Archive,
-  ChevronDown,
   ChevronRight,
   Folder,
   FolderPlus,
@@ -31,6 +33,7 @@ import {
   Unlink,
   Undo2,
 } from 'lucide-react'
+import { disclosureChevronClass, emptyListLine } from './sidebar.styles'
 
 export interface ChatSidebarSpaceAttempt {
   attemptId: string
@@ -137,91 +140,167 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
     activeSessions.length === 0 &&
     archivedSessions.length === 0
 
+  const disclosureChevron = (open: boolean) => (
+    <ChevronRight
+      aria-hidden
+      className={cn(disclosureChevronClass, 'size-3.5', open && 'rotate-90')}
+    />
+  )
+
   const renderSessionRow = (session: SessionSummary) => (
-    <div
-      key={session.id}
-      className={cn(
-        'group/session flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
-        activeSessionId === session.id && 'bg-accent',
-      )}
-    >
-      <Tooltip label={session.name} side="right">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => onSelectSession(session.id)}
-          aria-label={`Open chat session ${session.name}`}
-          size="lg"
-          className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-        >
-          <SessionStateBadge session={session} />
-          <span className="min-w-0 text-left">
-            <span className="block truncate">{session.name}</span>
-            {parallelWorkStatus(session) && (
-              <span className="block truncate text-[10px] text-muted-foreground">
-                {parallelWorkStatus(session)}
-              </span>
-            )}
-          </span>
-        </Button>
-      </Tooltip>
+    <Tooltip key={session.id} label={session.name} side="right">
+      <ListRow
+        density="compact"
+        selected={activeSessionId === session.id}
+        render={<button type="button" />}
+        onClick={() => onSelectSession(session.id)}
+        aria-label={`Open chat session ${session.name}`}
+        leading={<SessionStateBadge session={session} />}
+        title={session.name}
+        meta={parallelWorkStatus(session) || undefined}
+        actions={
+          <Menu>
+            <MenuTrigger
+              render={
+                <IconButton
+                  label={`Chat session actions ${session.name}`}
+                  type="button"
+                  variant="quiet"
+                  onClick={(event) => event.stopPropagation()}
+                  tooltipSide="left"
+                  size="xs"
+                  className="shrink-0"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </IconButton>
+              }
+            />
 
-      <Menu>
-        <MenuTrigger
-          render={
-            <IconButton
-              label={`Chat session actions ${session.name}`}
-              type="button"
-              variant="quiet"
-              onClick={(event) => event.stopPropagation()}
-              tooltipSide="left"
-              size="xs"
-              className="shrink-0 opacity-0 transition-opacity group-hover/session:opacity-100 focus-visible:opacity-100"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </IconButton>
-          }
-        />
+            <MenuContent align="end">
+              {!session.archivedAt ? (
+                <MenuItem onClick={() => onManageSessionSpaces(session.id)}>
+                  <Link2 className="h-3.5 w-3.5" />
+                  <span>Add to Space…</span>
+                </MenuItem>
+              ) : null}
+              {session.archivedAt ? (
+                <MenuItem onClick={() => onUnarchiveSession(session.id)}>
+                  <Undo2 className="h-3.5 w-3.5" />
+                  <span>Unarchive session</span>
+                </MenuItem>
+              ) : (
+                <MenuItem onClick={() => onArchiveSession(session.id)}>
+                  <Archive className="h-3.5 w-3.5" />
+                  <span>Archive session</span>
+                </MenuItem>
+              )}
+              <MenuItem
+                variant="danger"
+                onClick={() => onDeleteSession(session.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete session…</span>
+              </MenuItem>
+            </MenuContent>
+          </Menu>
+        }
+      />
+    </Tooltip>
+  )
 
-        <MenuContent align="end">
-          {!session.archivedAt ? (
-            <MenuItem onClick={() => onManageSessionSpaces(session.id)}>
-              <Link2 className="h-3.5 w-3.5" />
-              <span>Add to Space…</span>
-            </MenuItem>
-          ) : null}
-          {session.archivedAt ? (
-            <MenuItem onClick={() => onUnarchiveSession(session.id)}>
-              <Undo2 className="h-3.5 w-3.5" />
-              <span>Unarchive session</span>
-            </MenuItem>
-          ) : (
-            <MenuItem onClick={() => onArchiveSession(session.id)}>
-              <Archive className="h-3.5 w-3.5" />
-              <span>Archive session</span>
-            </MenuItem>
-          )}
-          <MenuItem
-            variant="danger"
-            onClick={() => onDeleteSession(session.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete session…</span>
-          </MenuItem>
-        </MenuContent>
-      </Menu>
-    </div>
+  const renderAttemptRow = (
+    space: ChatSidebarSpace,
+    attempt: ChatSidebarSpaceAttempt,
+  ) => (
+    <Tooltip key={attempt.attemptId} label={attempt.sessionName} side="right">
+      <ListRow
+        density="compact"
+        selected={activeSessionId === attempt.sessionId}
+        render={<button type="button" />}
+        onClick={() => onSelectSpaceAttempt(attempt.sessionId)}
+        aria-label={`Open Space attempt ${attempt.sessionName}`}
+        leading={<SessionStateBadge session={attempt.session} />}
+        title={attempt.sessionName}
+        meta={
+          (attempt.session && parallelWorkStatus(attempt.session)) || undefined
+        }
+        actions={
+          <Menu>
+            <MenuTrigger
+              render={
+                <IconButton
+                  label={`Space attempt actions ${attempt.sessionName}`}
+                  type="button"
+                  variant="quiet"
+                  onClick={(event) => event.stopPropagation()}
+                  tooltipSide="left"
+                  size="xs"
+                  className="shrink-0"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </IconButton>
+              }
+            />
+
+            <MenuContent align="end">
+              <MenuItem
+                onClick={() => onManageSessionSpaces(attempt.sessionId)}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                <span>Manage Spaces…</span>
+              </MenuItem>
+              {attempt.session ? (
+                attempt.session.archivedAt ? (
+                  <MenuItem
+                    onClick={() => onUnarchiveSession(attempt.sessionId)}
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    <span>Unarchive session</span>
+                  </MenuItem>
+                ) : (
+                  <MenuItem onClick={() => onArchiveSession(attempt.sessionId)}>
+                    <Archive className="h-3.5 w-3.5" />
+                    <span>Archive session</span>
+                  </MenuItem>
+                )
+              ) : null}
+              <MenuItem
+                onClick={() =>
+                  onDetachSpaceAttempt(
+                    attempt.attemptId,
+                    space.id,
+                    attempt.sessionId,
+                  )
+                }
+              >
+                <Unlink className="h-3.5 w-3.5" />
+                <span>Detach from Space</span>
+              </MenuItem>
+              {attempt.session ? (
+                <MenuItem
+                  variant="danger"
+                  onClick={() => onDeleteSession(attempt.sessionId)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Delete session…</span>
+                </MenuItem>
+              ) : null}
+            </MenuContent>
+          </Menu>
+        }
+      />
+    </Tooltip>
   )
 
   return (
     <div className="px-3">
       {nothingMatched ? (
-        <p
-          role="status"
-          className="mb-3 rounded-lg border border-dashed border-border p-3 text-[11px] text-muted-foreground"
-        >
-          {noConversationMatchesLine(nameSearchQuery.trim())}
-        </p>
+        <div role="status" className="mb-3">
+          <EmptyState
+            size="compact"
+            title={noConversationMatchesLine(nameSearchQuery.trim())}
+          />
+        </div>
       ) : null}
       {!searching ? (
         <div className="mb-3 space-y-2">
@@ -249,21 +328,18 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
       {!nothingMatched ? (
         <>
           <div className="mb-3 ml-2 border-l border-border pl-2">
-            <p className="mb-0.5 truncate text-xs text-muted-foreground">
-              Spaces{activeSpaces.length > 0 ? ` (${activeSpaces.length})` : ''}
-            </p>
+            <SectionHeader
+              label="Spaces"
+              count={activeSpaces.length > 0 ? activeSpaces.length : undefined}
+            />
             {activeSpaces.length > 0 ? (
               <div className="space-y-0.5">
                 {activeSpaces.map((space) => {
                   const expanded = expandedSpaceIds.has(space.id)
                   return (
                     <div key={space.id}>
-                      <div
-                        className={cn(
-                          'group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
-                          selectedSpaceId === space.id && 'bg-accent',
-                        )}
-                      >
+                      <div className="flex min-w-0 items-center gap-0.5">
+                        {/* Its own control: the row opens the Space, this folds its attempts. */}
                         <IconButton
                           label={`${expanded ? 'Collapse' : 'Expand'} Space ${space.title}`}
                           type="button"
@@ -272,182 +348,65 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           size="xs"
                           className="shrink-0"
                         >
-                          {expanded ? (
-                            <ChevronDown className="h-3.5 w-3.5" />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5" />
-                          )}
+                          {disclosureChevron(expanded)}
                         </IconButton>
 
                         <Tooltip label={space.title} side="right">
-                          <Button
-                            type="button"
-                            variant="ghost"
+                          <ListRow
+                            density="compact"
+                            selected={selectedSpaceId === space.id}
+                            render={<button type="button" />}
                             onClick={() => onSelectSpace(space.id)}
                             aria-label={`Open Space ${space.title}`}
-                            size="lg"
-                            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-                          >
-                            <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{space.title}</span>
-                            {space.attempts.length > 0 ? (
-                              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                                {space.attempts.length}
-                              </span>
-                            ) : null}
-                          </Button>
-                        </Tooltip>
-                        <Menu>
-                          <MenuTrigger
-                            render={
-                              <IconButton
-                                label={`Space actions ${space.title}`}
-                                type="button"
-                                variant="quiet"
-                                onClick={(event) => event.stopPropagation()}
-                                tooltipSide="left"
-                                size="xs"
-                                className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
-                              >
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                              </IconButton>
+                            leading={<Folder aria-hidden />}
+                            title={space.title}
+                            trailing={
+                              space.attempts.length > 0
+                                ? space.attempts.length
+                                : undefined
+                            }
+                            actions={
+                              <Menu>
+                                <MenuTrigger
+                                  render={
+                                    <IconButton
+                                      label={`Space actions ${space.title}`}
+                                      type="button"
+                                      variant="quiet"
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      tooltipSide="left"
+                                      size="xs"
+                                      className="shrink-0"
+                                    >
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </IconButton>
+                                  }
+                                />
+
+                                <MenuContent align="end">
+                                  <MenuItem
+                                    onClick={() => onArchiveSpace(space.id)}
+                                  >
+                                    <Archive className="h-3.5 w-3.5" />
+                                    <span>Archive Space…</span>
+                                  </MenuItem>
+                                </MenuContent>
+                              </Menu>
                             }
                           />
-
-                          <MenuContent align="end">
-                            <MenuItem onClick={() => onArchiveSpace(space.id)}>
-                              <Archive className="h-3.5 w-3.5" />
-                              <span>Archive Space…</span>
-                            </MenuItem>
-                          </MenuContent>
-                        </Menu>
+                        </Tooltip>
                       </div>
 
                       {expanded ? (
                         <div className="ml-6 mt-0.5 space-y-0.5">
                           {space.attempts.length > 0 ? (
-                            space.attempts.map((attempt) => (
-                              <div
-                                key={attempt.attemptId}
-                                className={cn(
-                                  'group/attempt flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
-                                  activeSessionId === attempt.sessionId &&
-                                    'bg-accent',
-                                )}
-                              >
-                                <Tooltip
-                                  label={attempt.sessionName}
-                                  side="right"
-                                >
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      onSelectSpaceAttempt(attempt.sessionId)
-                                    }
-                                    aria-label={`Open Space attempt ${attempt.sessionName}`}
-                                    size="lg"
-                                    className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-                                  >
-                                    <SessionStateBadge
-                                      session={attempt.session}
-                                    />
-                                    <span className="truncate">
-                                      {attempt.sessionName}
-                                      {attempt.session &&
-                                        parallelWorkStatus(attempt.session) && (
-                                          <span className="block truncate text-[10px] text-muted-foreground">
-                                            {parallelWorkStatus(
-                                              attempt.session,
-                                            )}
-                                          </span>
-                                        )}
-                                    </span>
-                                  </Button>
-                                </Tooltip>
-
-                                <Menu>
-                                  <MenuTrigger
-                                    render={
-                                      <IconButton
-                                        label={`Space attempt actions ${attempt.sessionName}`}
-                                        type="button"
-                                        variant="quiet"
-                                        onClick={(event) =>
-                                          event.stopPropagation()
-                                        }
-                                        tooltipSide="left"
-                                        size="xs"
-                                        className="shrink-0 opacity-0 transition-opacity group-hover/attempt:opacity-100 focus-visible:opacity-100"
-                                      >
-                                        <MoreHorizontal className="h-3.5 w-3.5" />
-                                      </IconButton>
-                                    }
-                                  />
-
-                                  <MenuContent align="end">
-                                    <MenuItem
-                                      onClick={() =>
-                                        onManageSessionSpaces(attempt.sessionId)
-                                      }
-                                    >
-                                      <Link2 className="h-3.5 w-3.5" />
-                                      <span>Manage Spaces…</span>
-                                    </MenuItem>
-                                    {attempt.session ? (
-                                      attempt.session.archivedAt ? (
-                                        <MenuItem
-                                          onClick={() =>
-                                            onUnarchiveSession(
-                                              attempt.sessionId,
-                                            )
-                                          }
-                                        >
-                                          <Undo2 className="h-3.5 w-3.5" />
-                                          <span>Unarchive session</span>
-                                        </MenuItem>
-                                      ) : (
-                                        <MenuItem
-                                          onClick={() =>
-                                            onArchiveSession(attempt.sessionId)
-                                          }
-                                        >
-                                          <Archive className="h-3.5 w-3.5" />
-                                          <span>Archive session</span>
-                                        </MenuItem>
-                                      )
-                                    ) : null}
-                                    <MenuItem
-                                      onClick={() =>
-                                        onDetachSpaceAttempt(
-                                          attempt.attemptId,
-                                          space.id,
-                                          attempt.sessionId,
-                                        )
-                                      }
-                                    >
-                                      <Unlink className="h-3.5 w-3.5" />
-                                      <span>Detach from Space</span>
-                                    </MenuItem>
-                                    {attempt.session ? (
-                                      <MenuItem
-                                        variant="danger"
-                                        onClick={() =>
-                                          onDeleteSession(attempt.sessionId)
-                                        }
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                        <span>Delete session…</span>
-                                      </MenuItem>
-                                    ) : null}
-                                  </MenuContent>
-                                </Menu>
-                              </div>
-                            ))
+                            space.attempts.map((attempt) =>
+                              renderAttemptRow(space, attempt),
+                            )
                           ) : (
-                            <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                              No attempts yet
-                            </p>
+                            <p className={emptyListLine}>No attempts yet</p>
                           )}
                         </div>
                       ) : null}
@@ -456,92 +415,71 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                 })}
               </div>
             ) : searching ? null : (
-              <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                No Spaces yet
-              </p>
+              <p className={emptyListLine}>No Spaces yet</p>
             )}
           </div>
 
           {archivedSpaces.length > 0 ? (
             <div className="mb-3 ml-2 border-l border-border pl-2">
-              <div className="group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-                <IconButton
-                  label={`${showArchivedSpaces ? 'Collapse' : 'Expand'} archived Spaces`}
-                  type="button"
-                  variant="ghost"
-                  onClick={onToggleArchivedSpaces}
-                  size="xs"
-                  className="shrink-0"
-                >
-                  {showArchivedSpaces ? (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  )}
-                </IconButton>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={onToggleArchivedSpaces}
-                  size="lg"
-                  className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-                >
-                  <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">Archived Spaces</span>
-                  <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                    {archivedSpaces.length}
+              {/* One control folds the archived Spaces (NAV-13: it was two side by side). */}
+              <ListRow
+                density="compact"
+                render={<button type="button" />}
+                onClick={onToggleArchivedSpaces}
+                aria-label={`${showArchivedSpaces ? 'Collapse' : 'Expand'} archived Spaces`}
+                aria-expanded={showArchivedSpaces}
+                leading={
+                  <span className="flex items-center gap-1">
+                    {disclosureChevron(showArchivedSpaces)}
+                    <Archive aria-hidden className="size-3.5 shrink-0" />
                   </span>
-                </Button>
-              </div>
+                }
+                title="Archived Spaces"
+                trailing={archivedSpaces.length}
+              />
 
               {showArchivedSpaces ? (
                 <div className="ml-6 mt-0.5 space-y-0.5">
                   {archivedSpaces.map((space) => (
-                    <div
-                      key={space.id}
-                      className={cn(
-                        'group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
-                        selectedSpaceId === space.id && 'bg-accent',
-                      )}
-                    >
-                      <Tooltip label={space.title} side="right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => onSelectSpace(space.id)}
-                          aria-label={`Open archived Space ${space.title}`}
-                          size="lg"
-                          className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-                        >
-                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{space.title}</span>
-                        </Button>
-                      </Tooltip>
-                      <Menu>
-                        <MenuTrigger
-                          render={
-                            <IconButton
-                              label={`Archived Space actions ${space.title}`}
-                              type="button"
-                              variant="quiet"
-                              onClick={(event) => event.stopPropagation()}
-                              tooltipSide="left"
-                              size="xs"
-                              className="shrink-0 opacity-0 transition-opacity group-hover/space:opacity-100 focus-visible:opacity-100"
-                            >
-                              <MoreHorizontal className="h-3.5 w-3.5" />
-                            </IconButton>
-                          }
-                        />
+                    <Tooltip key={space.id} label={space.title} side="right">
+                      <ListRow
+                        density="compact"
+                        selected={selectedSpaceId === space.id}
+                        render={<button type="button" />}
+                        onClick={() => onSelectSpace(space.id)}
+                        aria-label={`Open archived Space ${space.title}`}
+                        leading={<Folder aria-hidden />}
+                        title={space.title}
+                        actions={
+                          <Menu>
+                            <MenuTrigger
+                              render={
+                                <IconButton
+                                  label={`Archived Space actions ${space.title}`}
+                                  type="button"
+                                  variant="quiet"
+                                  onClick={(event) => event.stopPropagation()}
+                                  tooltipSide="left"
+                                  size="xs"
+                                  className="shrink-0"
+                                >
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </IconButton>
+                              }
+                            />
 
-                        <MenuContent align="end">
-                          <MenuItem onClick={() => onUnarchiveSpace(space.id)}>
-                            <Undo2 className="h-3.5 w-3.5" />
-                            <span>Unarchive Space</span>
-                          </MenuItem>
-                        </MenuContent>
-                      </Menu>
-                    </div>
+                            <MenuContent align="end">
+                              <MenuItem
+                                onClick={() => onUnarchiveSpace(space.id)}
+                              >
+                                <Undo2 className="h-3.5 w-3.5" />
+                                <span>Unarchive Space</span>
+                              </MenuItem>
+                            </MenuContent>
+                          </Menu>
+                        }
+                      />
+                    </Tooltip>
                   ))}
                 </div>
               ) : null}
@@ -549,28 +487,22 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
           ) : null}
 
           <div className="mb-1 ml-2 border-l border-border pl-2">
-            <p className="mb-0.5 truncate text-xs text-muted-foreground">
-              Ungrouped chats
-              {activeSessions.length > 0 ? ` (${activeSessions.length})` : ''}
-            </p>
+            <SectionHeader
+              label="Ungrouped chats"
+              count={
+                activeSessions.length > 0 ? activeSessions.length : undefined
+              }
+            />
             {activeSessions.length > 0 ? (
               activeSessions.map(renderSessionRow)
             ) : searching ? null : (
-              <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                No chats yet
-              </p>
+              <p className={emptyListLine}>No chats yet</p>
             )}
           </div>
 
           {archivedSessions.length > 0 ? (
             <div className="mt-3 ml-2 border-l border-border pl-2">
-              <div className="flex items-center gap-1 px-1.5 py-1 text-sm text-muted-foreground">
-                <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span className="truncate">Archived</span>
-                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                  {archivedSessions.length}
-                </span>
-              </div>
+              <SectionHeader label="Archived" count={archivedSessions.length} />
               <div className="ml-4 space-y-0.5">
                 {archivedSessions.map(renderSessionRow)}
               </div>

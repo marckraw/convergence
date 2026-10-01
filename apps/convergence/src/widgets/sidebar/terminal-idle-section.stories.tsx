@@ -54,18 +54,6 @@ type Story = StoryObj<typeof meta>
  * acknowledged without opening it.
  */
 export const Default: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the section heading (muted-foreground/80) and each
-          // row's project name (muted-foreground/60) are below 4.5:1 —
-          // fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('Terminals Idle')).toBeVisible()
     await userEvent.click(
@@ -94,18 +82,6 @@ export const Dark: Story = {
 
 /** Long names are cut short; the row stays one line in the sidebar. */
 export const Long: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the section heading (muted-foreground/80) and each
-          // row's project name (muted-foreground/60) are below 4.5:1 —
-          // fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     notices: Array.from({ length: 6 }, (_, index) =>
       notice(

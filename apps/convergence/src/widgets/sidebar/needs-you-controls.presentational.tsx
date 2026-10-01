@@ -20,13 +20,14 @@ import {
   type FeedView,
   type buildFeedView,
 } from '@/features/needs-you'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, EmptyState } from '@convergence/ui'
 import {
   noConversationMatchesLine,
   normalizeNameQuery,
 } from '@/shared/lib/name-search.pure'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { FilterChoice } from './activity-filter-choice.presentational'
+import { filterChoices, filterRowLabel } from './sidebar.styles'
 
 interface Props {
   controlsId: string
@@ -61,10 +62,11 @@ export function NeedsYouControls({
   const activeNameSearch = normalizeNameQuery(nameSearchQuery)
   return (
     <div
-      className="space-y-2.5 border-b border-border/60 pb-3 text-[11px]"
+      role="group"
+      className="space-y-2.5 border-b border-border/60 pb-3 text-2xs"
       aria-label="Activity controls"
     >
-      <div className="flex h-[30px] items-center justify-between gap-2">
+      <div className="flex h-control-sm items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <span className="font-medium">Activity</span>
           <span
@@ -83,7 +85,7 @@ export function NeedsYouControls({
             onClick={onReset}
             aria-label="Clear activity filters"
             size="sm"
-            className="gap-1 px-1.5 text-[11px] font-normal"
+            className="gap-1 px-1.5 text-2xs font-normal"
           >
             <X aria-hidden="true" className="size-3" /> Clear
           </Button>
@@ -98,7 +100,7 @@ export function NeedsYouControls({
         aria-controls={controlsId}
         aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
         size="lg"
-        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 text-left text-[11px] font-normal"
+        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 text-left text-2xs font-normal"
       >
         <SlidersHorizontal
           aria-hidden="true"
@@ -149,7 +151,7 @@ export function NeedsYouControls({
                         : toggleFeedChoice(view.activities, value),
                   })
                 }
-                className="h-9 min-w-0 px-1"
+                className="h-control-lg min-w-0 px-1"
               >
                 {Icon && (
                   <Icon
@@ -167,10 +169,8 @@ export function NeedsYouControls({
           aria-label="Host filters"
           className="flex items-start gap-1"
         >
-          <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
-            Host
-          </span>
-          <div className="flex min-w-0 flex-wrap gap-1">
+          <span className={filterRowLabel}>Host</span>
+          <div className={filterChoices}>
             <FilterChoice
               label="All hosts"
               selected={!view.hosts.length}
@@ -212,10 +212,8 @@ export function NeedsYouControls({
           aria-label="Provider filters"
           className="flex items-start gap-1"
         >
-          <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
-            Provider
-          </span>
-          <div className="flex min-w-0 flex-wrap gap-1">
+          <span className={filterRowLabel}>Provider</span>
+          <div className={filterChoices}>
             <FilterChoice
               label="All providers"
               selected={!view.providers.length}
@@ -251,10 +249,8 @@ export function NeedsYouControls({
           aria-label="Order by"
           className="flex items-start gap-1"
         >
-          <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
-            Order
-          </span>
-          <div className="flex min-w-0 flex-wrap gap-1">
+          <span className={filterRowLabel}>Order</span>
+          <div className={filterChoices}>
             {feedOrders.map((order) => (
               <FilterChoice
                 key={order}
@@ -273,7 +269,7 @@ export function NeedsYouControls({
             type="button"
             variant="ghost"
             onClick={onCollapse}
-            className="text-[11px] font-normal"
+            className="text-2xs font-normal"
           >
             Collapse filters
           </Button>
@@ -286,16 +282,18 @@ export function NeedsYouControls({
         </p>
       )}
       {result.shown === 0 && (
-        <p
-          role="status"
-          className="rounded-lg border border-dashed border-border p-3 text-muted-foreground"
-        >
-          {activeNameSearch.length > 0
-            ? noConversationMatchesLine(nameSearchQuery.trim())
-            : result.filtered
-              ? 'No activity matches these filters. Edit or clear filters to see your activity.'
-              : 'No activity cards yet.'}
-        </p>
+        <div role="status">
+          <EmptyState
+            size="compact"
+            title={
+              activeNameSearch.length > 0
+                ? noConversationMatchesLine(nameSearchQuery.trim())
+                : result.filtered
+                  ? 'No activity matches these filters. Edit or clear filters to see your activity.'
+                  : 'No activity cards yet.'
+            }
+          />
+        </div>
       )}
     </div>
   )

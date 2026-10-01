@@ -36,7 +36,7 @@ export function FoldedLine({
     <p
       data-fold-line=""
       className={cn(
-        'truncate text-[10px] font-normal text-muted-foreground',
+        'truncate text-3xs font-normal text-muted-foreground',
         className,
       )}
     >

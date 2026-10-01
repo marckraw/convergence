@@ -17,3 +17,20 @@ export const railMarkRing: Record<
   warning: 'border-warning-solid',
   danger: 'border-danger-solid',
 }
+
+/**
+ * A disclosure's chevron (NAV-13): it turns a quarter when its rows are open
+ * (add rotate-90), and stands still under reduced motion.
+ */
+export const disclosureChevronClass =
+  'shrink-0 transition-transform motion-reduce:transition-none'
+
+/** A row of the Activity filters: its 10 px label, as tall as the choices beside it. */
+export const filterRowLabel =
+  'flex h-control-sm w-11 shrink-0 items-center text-3xs text-muted-foreground'
+
+/** The choices on a filter row, wrapping when the sidebar is narrow. */
+export const filterChoices = 'flex min-w-0 flex-wrap gap-1'
+
+/** The line an empty list says in the sidebar: "No chats yet". */
+export const emptyListLine = 'px-1.5 py-1 text-xs text-muted-foreground'
