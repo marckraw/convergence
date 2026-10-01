@@ -1,6 +1,7 @@
-import type { FC, FormEvent } from 'react'
+import type { FC } from 'react'
 import type { InteractionResponse } from '@/entities/session'
 import { Button } from '@convergence/ui'
+import { submitterValue } from './request-card.pure'
 
 interface UrlRequestFormProps {
   onSubmit: (response: InteractionResponse, displayText: string) => void
@@ -11,7 +12,8 @@ export const UrlRequestForm: FC<UrlRequestFormProps> = ({ onSubmit }) => (
     className="mt-4 flex flex-wrap gap-2"
     onSubmit={(event) => {
       event.preventDefault()
-      const action = getSubmitAction(event)
+      const action =
+        submitterValue(event.nativeEvent) === 'decline' ? 'decline' : 'accept'
       onSubmit(
         {
           kind: 'url',
@@ -29,13 +31,3 @@ export const UrlRequestForm: FC<UrlRequestFormProps> = ({ onSubmit }) => (
     </Button>
   </form>
 )
-
-function getSubmitAction(
-  event: FormEvent<HTMLFormElement>,
-): 'accept' | 'decline' {
-  const nativeEvent = event.nativeEvent as SubmitEvent
-  const submitter = nativeEvent.submitter
-  return submitter instanceof HTMLButtonElement && submitter.value === 'decline'
-    ? 'decline'
-    : 'accept'
-}

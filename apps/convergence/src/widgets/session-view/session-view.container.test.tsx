@@ -1631,18 +1631,16 @@ describe('SessionView', () => {
     expect(
       await screen.findByText('do you have a chaperone project path ?'),
     ).toBeInTheDocument()
-    expect(screen.getByTestId('injected-context-details')).not.toHaveAttribute(
-      'open',
-    )
+    // A Collapsible (CONV-12): its trigger says whether it is open.
+    const trigger = screen.getByRole('button', { name: 'Injected context' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
 
-    fireEvent.click(screen.getByText('Injected context'))
+    fireEvent.click(trigger)
 
     expect(screen.getByTestId('injected-context-details')).toHaveTextContent(
       '/Users/marckraw/Projects/OpenSource/chaperone',
     )
-    expect(screen.getByTestId('injected-context-details')).toHaveAttribute(
-      'open',
-    )
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
   })
 
   describe('MAR-3377 R2 a status update reloads nothing', () => {

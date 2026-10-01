@@ -33,7 +33,7 @@ type Story = StoryObj<typeof meta>
 /** A line across the transcript where the harness compacted the context. */
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('note')).toHaveTextContent(
+    await expect(canvas.getByRole('separator')).toHaveTextContent(
       'Compacted (auto) · 167.4k → 12.3k tokens',
     )
   },
@@ -55,7 +55,7 @@ export const Long: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('note')).toHaveTextContent(
+    await expect(canvas.getByRole('separator')).toHaveTextContent(
       'Compacted (manual) · 98k tokens before · record truncated · text truncated',
     )
   },
@@ -75,7 +75,7 @@ export const Empty: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('note')).toHaveTextContent(
+    await expect(canvas.getByRole('separator')).toHaveTextContent(
       'Compacted (not reported)',
     )
   },

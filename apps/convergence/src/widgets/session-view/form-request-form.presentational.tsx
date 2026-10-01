@@ -1,9 +1,10 @@
-import type { FC, FormEvent } from 'react'
+import type { FC } from 'react'
 import type {
   InteractionFormField,
   InteractionResponse,
 } from '@/entities/session'
 import { Button, Checkbox, Input, Textarea } from '@convergence/ui'
+import { submitterValue } from './request-card.pure'
 
 interface FormRequestFormProps {
   fields: InteractionFormField[]
@@ -18,7 +19,7 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
     className="mt-4 space-y-4"
     onSubmit={(event) => {
       event.preventDefault()
-      const decision = getSubmitDecision(event)
+      const decision = submitterValue(event.nativeEvent) ?? 'accept'
       if (decision === 'decline') {
         onSubmit(
           {
@@ -100,12 +101,6 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
     </div>
   </form>
 )
-
-function getSubmitDecision(event: FormEvent<HTMLFormElement>): string {
-  const nativeEvent = event.nativeEvent as SubmitEvent
-  const submitter = nativeEvent.submitter
-  return submitter instanceof HTMLButtonElement ? submitter.value : 'accept'
-}
 
 function valuesFromForm(
   fields: InteractionFormField[],

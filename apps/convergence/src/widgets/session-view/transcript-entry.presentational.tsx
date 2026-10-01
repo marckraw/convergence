@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { CSSProperties, FC, ReactNode } from 'react'
 import type {
   ConversationNoteAction,
   InteractionResponse,
@@ -11,14 +11,24 @@ import {
   Terminal,
   AlertTriangle,
   Info,
-  ChevronRight,
   Library,
   FileText,
   Link,
   RotateCcw,
   Shuffle,
 } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  Chip,
+  cn,
+  CodeBlock,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+  Divider,
+} from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { ANNOTATION_MESSAGE_ID_ATTRIBUTE } from '@/features/response-annotations'
 import {
@@ -36,6 +46,11 @@ import { PlanRequestForm } from './plan-request-form.presentational'
 import { FormRequestForm } from './form-request-form.presentational'
 import { UrlRequestForm } from './url-request-form.presentational'
 import type { TranscriptEntryViewModel } from './transcript-entry.pure'
+import {
+  agentAttributionLabel,
+  approvalCardTitle,
+  inputCardTitle,
+} from './request-card.pure'
 
 interface ConversationItemViewProps {
   viewModel: TranscriptEntryViewModel
@@ -57,11 +72,202 @@ const attentionPromptMarkdownClassName =
 function getHistoryImageAttachmentsClassName(count: number): string {
   return cn(
     'mt-2 grid max-w-full gap-2',
-    count === 1
-      ? 'grid-cols-1 sm:max-w-md'
-      : 'grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]',
-    count === 2 && 'sm:max-w-[36rem]',
-    count >= 3 && 'sm:max-w-[55rem]',
+    count === 1 && 'grid-cols-1 sm:max-w-md',
+    count === 2 && 'sm:max-w-144',
+    count >= 3 && 'sm:max-w-220',
+  )
+}
+
+/**
+ * Two or more images: equal columns at least 14 rem (spacing 56) wide, as many
+ * as fit. A layout formula, not a size, so it is a style on the spacing scale
+ * rather than an arbitrary class.
+ */
+function getHistoryImageAttachmentsStyle(
+  count: number,
+): CSSProperties | undefined {
+  if (count < 2) return undefined
+  return {
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(min(100%, calc(var(--spacing) * 56)), 1fr))',
+  }
+}
+
+/** Who speaks a transcript entry: a 28 px disc with its glyph (CONV-11). */
+const AVATARS = {
+  user: 'bg-strong text-on-strong',
+  agent: 'bg-avatar-agent text-on-avatar-agent',
+  quiet: 'bg-surface-muted text-ink-muted',
+} as const
+
+function Avatar({
+  of,
+  children,
+}: {
+  of: keyof typeof AVATARS
+  children: ReactNode
+}) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        'flex size-7 shrink-0 items-center justify-center rounded-full',
+        AVATARS[of],
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+/** The pill a folded block opens from: injected context, requested prompts. */
+const foldPill =
+  'rounded-full border border-line-soft px-2 py-0.5 text-xs text-ink-muted hover:bg-fill-hover hover:text-ink'
+
+/** "↳ description (type)": which subagent made it. */
+function AgentAttribution({
+  attribution,
+}: {
+  attribution: Parameters<typeof agentAttributionLabel>[0]
+}) {
+  return (
+    <div className="mb-1 truncate text-xs text-muted-foreground">
+      {agentAttributionLabel(attribution)}
+    </div>
+  )
+}
+
+/**
+ * A tool call or its result (CONV-11): a disc, the time and the visibility
+ * badge, and the call folded to one line that opens on the whole text.
+ */
+function ToolEntry({
+  viewModel,
+  icon,
+  text,
+  attribution,
+}: {
+  viewModel: TranscriptEntryViewModel
+  icon: ReactNode
+  text: string
+  attribution?: ReactNode
+}) {
+  const { item: entry } = viewModel
+  return (
+    <ConversationItemShell copyText={viewModel.copyText}>
+      <div className="flex gap-3 py-2">
+        <Avatar of="quiet">{icon}</Avatar>
+        <div className="min-w-0 flex-1 pt-1">
+          {attribution}
+          <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">
+            <ConversationItemTimestamp
+              createdAt={entry.createdAt}
+              timing={viewModel.timing}
+            />
+            <ToolVisibilityBadge
+              label={viewModel.toolVisibilityLabel}
+              title={viewModel.toolVisibilityTitle}
+            />
+          </div>
+          <Collapsible className="min-w-0">
+            <CollapsibleTrigger className="flex w-full gap-2 rounded-md border border-line-soft bg-surface-muted/20 px-2 py-1.5 pr-10 text-ink-muted hover:bg-fill-hover">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                {viewModel.toolPreview}
+              </span>
+            </CollapsibleTrigger>
+            <CollapsiblePanel keepMounted>
+              <CodeBlock
+                label={
+                  entry.kind === 'tool-call' ? 'Tool input' : 'Tool output'
+                }
+                wrap
+                className="mt-1"
+              >
+                {text}
+              </CodeBlock>
+            </CollapsiblePanel>
+          </Collapsible>
+        </div>
+      </div>
+    </ConversationItemShell>
+  )
+}
+
+/**
+ * A card where the agent waits on you (CONV-8): an approval, a plan, a form,
+ * a link, a question. Each is the warning tone (R1: waiting on you), with its
+ * glyph, its title (which also names it) and its time; what it asks goes
+ * under them.
+ */
+function RequestCard({
+  title,
+  icon,
+  timestamp,
+  testId,
+  children,
+}: {
+  title: string
+  icon: ReactNode
+  timestamp: ReactNode
+  testId?: string
+  children: ReactNode
+}) {
+  return (
+    <Card
+      tone="warning"
+      padding="md"
+      className="my-2 max-w-full overflow-hidden"
+      data-testid={testId}
+      role="group"
+      aria-label={title}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <span
+          aria-hidden
+          className="mt-0.5 flex shrink-0 text-warning-ink [&_svg]:size-5"
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
+            <p className="text-sm font-medium">{title}</p>
+            {timestamp}
+          </div>
+          {children}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/** A boundary across the transcript: a restart, a model change (CONV-13). */
+function Boundary({
+  testId,
+  icon,
+  tone,
+  children,
+}: {
+  testId: string
+  icon: ReactNode
+  tone: 'warning' | 'info'
+  children: ReactNode
+}) {
+  return (
+    <Divider
+      data-testid={testId}
+      className={cn(
+        'py-3 text-2xs leading-snug',
+        tone === 'warning' ? 'text-warning-ink' : 'text-info-ink',
+      )}
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="flex shrink-0 [&_svg]:size-3">
+            {icon}
+          </span>
+          {children}
+        </span>
+      }
+    />
   )
 }
 
@@ -91,9 +297,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
             <div className="flex gap-3 py-3">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <User className="h-4 w-4" />
-              </div>
+              <Avatar of="user">
+                <User className="size-4" />
+              </Avatar>
               <div className="min-w-0 flex-1 pt-0.5">
                 <ConversationItemHeader
                   createdAt={entry.createdAt}
@@ -101,29 +307,34 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   timing={viewModel.timing}
                 >
                   {viewModel.deliveryModeLabel && (
-                    <span
+                    <Badge
+                      tone="warning"
                       data-testid="user-message-delivery-mode"
-                      className="inline-flex items-center rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning-foreground"
+                      className="font-medium uppercase tracking-eyebrow"
                     >
                       {viewModel.deliveryModeLabel}
-                    </span>
+                    </Badge>
                   )}
                 </ConversationItemHeader>
                 {renderSkillSelections(entry.skillSelections)}
                 {viewModel.injectedContextText ? (
-                  <details
-                    className="group/context mt-1 max-w-full"
+                  <Collapsible
+                    className="mt-1 max-w-full"
                     data-testid="injected-context-details"
                   >
-                    <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground">
-                      <FileText className="h-3 w-3" />
+                    <CollapsibleTrigger
+                      chevron="end"
+                      className={cn(foldPill, 'gap-1.5 bg-surface-muted/30')}
+                    >
+                      <FileText aria-hidden className="size-3" />
                       <span>Injected context</span>
-                      <ChevronRight className="h-3 w-3 transition-transform group-open/context:rotate-90" />
-                    </summary>
-                    <pre className="app-scrollbar mt-2 max-h-56 overflow-auto rounded-md border border-border/70 bg-muted/20 p-3 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                      {viewModel.injectedContextText}
-                    </pre>
-                  </details>
+                    </CollapsibleTrigger>
+                    <CollapsiblePanel keepMounted>
+                      <CodeBlock label="Injected context" wrap className="mt-2">
+                        {viewModel.injectedContextText}
+                      </CodeBlock>
+                    </CollapsiblePanel>
+                  </Collapsible>
                 ) : null}
                 <Markdown
                   className="mt-1 text-foreground"
@@ -133,6 +344,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 {hasImageAttachments && (
                   <div
                     className={getHistoryImageAttachmentsClassName(
+                      imageAttachments.length,
+                    )}
+                    style={getHistoryImageAttachmentsStyle(
                       imageAttachments.length,
                     )}
                     data-testid="history-image-attachments"
@@ -172,9 +386,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-600 text-white">
-              <Bot className="h-4 w-4" />
-            </div>
+            <Avatar of="agent">
+              <Bot className="size-4" />
+            </Avatar>
             <div className="min-w-0 flex-1 pt-0.5">
               <ConversationItemHeader
                 createdAt={entry.createdAt}
@@ -209,9 +423,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <Bot className="h-4 w-4" />
-            </div>
+            <Avatar of="quiet">
+              <Bot className="size-4" />
+            </Avatar>
             <div className="min-w-0 flex-1 pt-0.5">
               <ConversationItemHeader
                 createdAt={entry.createdAt}
@@ -230,284 +444,184 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
 
     case 'tool-call':
       return (
-        <ConversationItemShell copyText={viewModel.copyText}>
-          <div className="flex gap-3 py-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="min-w-0 flex-1 pt-1">
-              {entry.agentRunId && (
-                <div className="mb-1 truncate text-xs text-muted-foreground">
-                  {entry.agentAttribution?.description?.trim()
-                    ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
-                    : '↳ subagent'}
-                </div>
-              )}
-              <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                <ConversationItemTimestamp
-                  createdAt={entry.createdAt}
-                  timing={viewModel.timing}
-                />
-                <ToolVisibilityBadge
-                  label={viewModel.toolVisibilityLabel}
-                  title={viewModel.toolVisibilityTitle}
-                />
-              </div>
-              <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
-                <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
-                  <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                    {viewModel.toolPreview}
-                  </span>
-                </summary>
-                <pre className="app-scrollbar overflow-x-auto border-t border-border/60 px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                  {entry.inputText}
-                </pre>
-              </details>
-            </div>
-          </div>
-        </ConversationItemShell>
+        <ToolEntry
+          viewModel={viewModel}
+          icon={<Wrench className="size-3.5" />}
+          text={entry.inputText}
+          attribution={
+            entry.agentRunId ? (
+              <AgentAttribution attribution={entry.agentAttribution} />
+            ) : undefined
+          }
+        />
       )
 
     case 'tool-result':
       return (
-        <ConversationItemShell copyText={viewModel.copyText}>
-          <div className="flex gap-3 py-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div className="min-w-0 flex-1 pt-1">
-              <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                <ConversationItemTimestamp
-                  createdAt={entry.createdAt}
-                  timing={viewModel.timing}
-                />
-                <ToolVisibilityBadge
-                  label={viewModel.toolVisibilityLabel}
-                  title={viewModel.toolVisibilityTitle}
-                />
-              </div>
-              <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
-                <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
-                  <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                    {viewModel.toolPreview}
-                  </span>
-                </summary>
-                <pre className="app-scrollbar overflow-x-auto border-t border-border/60 px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                  {entry.outputText}
-                </pre>
-              </details>
-            </div>
-          </div>
-        </ConversationItemShell>
+        <ToolEntry
+          viewModel={viewModel}
+          icon={<Terminal className="size-3.5" />}
+          text={entry.outputText}
+        />
       )
 
     case 'approval-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
           {entry.agentRunId && (
-            <div className="mb-1 truncate text-xs text-muted-foreground">
-              {entry.agentAttribution?.description?.trim()
-                ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
-                : '↳ subagent'}
-            </div>
+            <AgentAttribution attribution={entry.agentAttribution} />
           )}
-          <div
-            className="my-2 max-w-full overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4"
-            data-testid="approval-request-card"
-            role="group"
-            aria-label={
-              entry.resolution === 'denied'
-                ? 'Denied'
-                : entry.resolution === 'approved'
-                  ? 'Approved'
-                  : 'Approval needed'
+          <RequestCard
+            testId="approval-request-card"
+            title={approvalCardTitle(entry.resolution)}
+            icon={<AlertTriangle />}
+            timestamp={
+              <ConversationItemTimestamp
+                createdAt={entry.createdAt}
+                timing={viewModel.timing}
+              />
             }
           >
-            <div className="flex min-w-0 items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
-                  <p className="text-sm font-medium">
-                    {entry.resolution === 'denied'
-                      ? 'Denied'
-                      : entry.resolution === 'approved'
-                        ? 'Approved'
-                        : 'Approval needed'}
-                  </p>
-                  <ConversationItemTimestamp
-                    createdAt={entry.createdAt}
-                    timing={viewModel.timing}
-                  />
-                </div>
-                <Markdown
-                  className={attentionPromptMarkdownClassName}
-                  content={entry.description}
-                  size="sm"
-                />
-                {entry.permissionDetails && (
-                  <p className="mt-1 break-words text-xs text-muted-foreground">
-                    {[
-                      entry.permissionDetails.blockedPath,
-                      entry.permissionDetails.decisionReason,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
+            <Markdown
+              className={attentionPromptMarkdownClassName}
+              content={entry.description}
+              size="sm"
+            />
+            {entry.permissionDetails && (
+              <p className="mt-1 break-words text-xs text-muted-foreground">
+                {[
+                  entry.permissionDetails.blockedPath,
+                  entry.permissionDetails.decisionReason,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
+            {viewModel.actionableApproval && onApprove && onDeny && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button onClick={onApprove}>Approve</Button>
+                {entry.supportsSessionApproval && onApproveSession && (
+                  <Button variant="tonal" onClick={onApproveSession}>
+                    Always allow (this session)
+                  </Button>
                 )}
-                {viewModel.actionableApproval && onApprove && onDeny && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button onClick={onApprove}>Approve</Button>
-                    {entry.supportsSessionApproval && onApproveSession && (
-                      <Button variant="tonal" onClick={onApproveSession}>
-                        Always allow (this session)
-                      </Button>
-                    )}
-                    <Button variant="ghost" onClick={onDeny}>
-                      Deny
-                    </Button>
-                  </div>
-                )}
+                {/* R10: a permission is refused with Deny. */}
+                <Button variant="ghost" onClick={onDeny}>
+                  Deny
+                </Button>
               </div>
-            </div>
-          </div>
+            )}
+          </RequestCard>
         </ConversationItemShell>
       )
 
     case 'input-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
-          <div
-            className={[
-              'my-2 max-w-full overflow-hidden rounded-lg border p-4',
-              entry.request?.kind === 'plan'
-                ? 'border-warning/30 bg-warning/5'
-                : entry.request?.kind === 'form' ||
-                    entry.request?.kind === 'url'
-                  ? 'border-emerald-500/30 bg-emerald-500/5'
-                  : 'border-blue-500/30 bg-blue-500/5',
-            ].join(' ')}
-            role="group"
-            aria-label={
-              entry.request?.kind === 'plan'
-                ? 'Plan review needed'
-                : entry.request?.kind === 'form'
-                  ? 'Form input needed'
-                  : entry.request?.kind === 'url'
-                    ? 'URL confirmation needed'
-                    : 'Input needed'
-            }
-          >
-            <div className="flex min-w-0 items-start gap-3">
-              {entry.request?.kind === 'plan' ? (
-                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+          <RequestCard
+            title={inputCardTitle(entry.request?.kind)}
+            icon={
+              entry.request?.kind === 'plan' ? (
+                <FileText />
               ) : entry.request?.kind === 'form' ||
                 entry.request?.kind === 'url' ? (
-                <Link className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                <Link />
               ) : (
-                <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
-                  <p className="text-sm font-medium">
-                    {entry.request?.kind === 'plan'
-                      ? 'Plan review needed'
-                      : entry.request?.kind === 'form'
-                        ? 'Form input needed'
-                        : entry.request?.kind === 'url'
-                          ? 'URL confirmation needed'
-                          : 'Input needed'}
+                <Info />
+              )
+            }
+            timestamp={
+              <ConversationItemTimestamp
+                createdAt={entry.createdAt}
+                timing={viewModel.timing}
+              />
+            }
+          >
+            {entry.request?.kind === 'plan' ? (
+              <>
+                {entry.request.planPath ? (
+                  <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                    {entry.request.planPath}
                   </p>
-                  <ConversationItemTimestamp
-                    createdAt={entry.createdAt}
-                    timing={viewModel.timing}
+                ) : null}
+                <Markdown
+                  className={attentionPromptMarkdownClassName}
+                  content={entry.request.plan}
+                  size="sm"
+                />
+                {entry.request.allowedPrompts &&
+                entry.request.allowedPrompts.length > 0 ? (
+                  <Collapsible className="mt-3 max-w-full">
+                    <CollapsibleTrigger
+                      className={cn(foldPill, 'gap-1.5 bg-canvas/60')}
+                    >
+                      Requested prompts
+                    </CollapsibleTrigger>
+                    <CollapsiblePanel keepMounted>
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-ink-muted">
+                        {entry.request.allowedPrompts.map((prompt) => (
+                          <li key={prompt}>{prompt}</li>
+                        ))}
+                      </ul>
+                    </CollapsiblePanel>
+                  </Collapsible>
+                ) : null}
+                {viewModel.actionableInput && onInputAnswer ? (
+                  <PlanRequestForm onSubmit={onInputAnswer} />
+                ) : null}
+              </>
+            ) : entry.request?.kind === 'form' ? (
+              <>
+                <p className="mt-1 break-words text-sm font-medium">
+                  {entry.request.title}
+                </p>
+                <Markdown
+                  className={attentionPromptMarkdownClassName}
+                  content={entry.request.message}
+                  size="sm"
+                />
+                {viewModel.actionableInput && onInputAnswer ? (
+                  <FormRequestForm
+                    fields={entry.request.fields}
+                    onSubmit={onInputAnswer}
                   />
-                </div>
-                {entry.request?.kind === 'plan' ? (
-                  <>
-                    {entry.request.planPath ? (
-                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                        {entry.request.planPath}
-                      </p>
-                    ) : null}
-                    <Markdown
-                      className={attentionPromptMarkdownClassName}
-                      content={entry.request.plan}
-                      size="sm"
+                ) : null}
+              </>
+            ) : entry.request?.kind === 'url' ? (
+              <>
+                <p className="mt-1 break-words text-sm font-medium">
+                  {entry.request.title}
+                </p>
+                <Markdown
+                  className={attentionPromptMarkdownClassName}
+                  content={entry.request.message}
+                  size="sm"
+                />
+                <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+                  {entry.request.url}
+                </p>
+                {viewModel.actionableInput && onInputAnswer ? (
+                  <UrlRequestForm onSubmit={onInputAnswer} />
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Markdown
+                  className={attentionPromptMarkdownClassName}
+                  content={entry.prompt}
+                  size="sm"
+                />
+                {entry.request?.kind === 'choice' &&
+                  viewModel.actionableInput &&
+                  onInputAnswer && (
+                    <ChoiceRequestForm
+                      questions={entry.request.questions}
+                      onSubmit={onInputAnswer}
                     />
-                    {entry.request.allowedPrompts &&
-                    entry.request.allowedPrompts.length > 0 ? (
-                      <details className="group/prompts mt-3 max-w-full">
-                        <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground">
-                          <ChevronRight className="h-3 w-3 transition-transform group-open/prompts:rotate-90" />
-                          <span>Requested prompts</span>
-                        </summary>
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-                          {entry.request.allowedPrompts.map((prompt) => (
-                            <li key={prompt}>{prompt}</li>
-                          ))}
-                        </ul>
-                      </details>
-                    ) : null}
-                    {viewModel.actionableInput && onInputAnswer ? (
-                      <PlanRequestForm onSubmit={onInputAnswer} />
-                    ) : null}
-                  </>
-                ) : entry.request?.kind === 'form' ? (
-                  <>
-                    <p className="mt-1 break-words text-sm font-medium">
-                      {entry.request.title}
-                    </p>
-                    <Markdown
-                      className={attentionPromptMarkdownClassName}
-                      content={entry.request.message}
-                      size="sm"
-                    />
-                    {viewModel.actionableInput && onInputAnswer ? (
-                      <FormRequestForm
-                        fields={entry.request.fields}
-                        onSubmit={onInputAnswer}
-                      />
-                    ) : null}
-                  </>
-                ) : entry.request?.kind === 'url' ? (
-                  <>
-                    <p className="mt-1 break-words text-sm font-medium">
-                      {entry.request.title}
-                    </p>
-                    <Markdown
-                      className={attentionPromptMarkdownClassName}
-                      content={entry.request.message}
-                      size="sm"
-                    />
-                    <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
-                      {entry.request.url}
-                    </p>
-                    {viewModel.actionableInput && onInputAnswer ? (
-                      <UrlRequestForm onSubmit={onInputAnswer} />
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <Markdown
-                      className={attentionPromptMarkdownClassName}
-                      content={entry.prompt}
-                      size="sm"
-                    />
-                    {entry.request?.kind === 'choice' &&
-                      viewModel.actionableInput &&
-                      onInputAnswer && (
-                        <ChoiceRequestForm
-                          questions={entry.request.questions}
-                          onSubmit={onInputAnswer}
-                        />
-                      )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+                  )}
+              </>
+            )}
+          </RequestCard>
         </ConversationItemShell>
       )
 
@@ -520,17 +634,13 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       if (entry.providerMeta?.providerEventType === 'session.restarted') {
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
-            <div
-              data-testid="session-restart-boundary"
-              className="flex items-center gap-2 py-3"
+            <Boundary
+              testId="session-restart-boundary"
+              tone="warning"
+              icon={<RotateCcw />}
             >
-              <span aria-hidden className="h-px flex-1 bg-amber-400/30" />
-              <span className="flex items-center gap-1.5 text-center text-[11px] leading-snug text-amber-400/90">
-                <RotateCcw aria-hidden className="size-3 shrink-0" />
-                {entry.text}
-              </span>
-              <span aria-hidden className="h-px flex-1 bg-amber-400/30" />
-            </div>
+              {entry.text}
+            </Boundary>
           </ConversationItemShell>
         )
       }
@@ -543,17 +653,13 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       if (entry.providerMeta?.providerEventType === 'session.model-changed') {
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
-            <div
-              data-testid="session-model-change-boundary"
-              className="flex items-center gap-2 py-3"
+            <Boundary
+              testId="session-model-change-boundary"
+              tone="info"
+              icon={<Shuffle />}
             >
-              <span aria-hidden className="h-px flex-1 bg-sky-400/30" />
-              <span className="flex items-center gap-1.5 text-center text-[11px] leading-snug text-sky-400/90">
-                <Shuffle aria-hidden className="size-3 shrink-0" />
-                {entry.text}
-              </span>
-              <span aria-hidden className="h-px flex-1 bg-sky-400/30" />
-            </div>
+              {entry.text}
+            </Boundary>
           </ConversationItemShell>
         )
       }
@@ -601,16 +707,12 @@ function renderSkillSelections(selections: SkillSelection[] | undefined) {
       data-testid="message-skill-selections"
     >
       {selections.map((selection) => (
-        <span
-          key={selection.id}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary"
-        >
-          <Library className="h-3 w-3 shrink-0" />
-          <span className="truncate">{selection.displayName}</span>
-          <span className="shrink-0 text-[10px] uppercase text-primary/70">
+        <Chip key={selection.id} icon={<Library />}>
+          {selection.displayName}
+          <span className="ml-1.5 text-3xs uppercase opacity-70">
             {selection.status}
           </span>
-        </span>
+        </Chip>
       ))}
     </div>
   )

@@ -35,17 +35,17 @@ export const Default: Story = {
 export const Rejected: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.type(
-      canvas.getByRole('textbox', { name: 'Plan rejection instructions' }),
+      canvas.getByRole('textbox', { name: 'Why you deny the plan' }),
       'Keep the migration out of this PR.',
     )
-    await userEvent.click(canvas.getByRole('button', { name: 'Reject plan' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Deny plan' }))
     await expect(args.onSubmit).toHaveBeenCalledWith(
       {
         kind: 'plan',
         decision: 'reject',
         message: 'Keep the migration out of this PR.',
       },
-      'Rejected plan\n\nKeep the migration out of this PR.',
+      'Denied plan\n\nKeep the migration out of this PR.',
     )
   },
 }
@@ -53,10 +53,10 @@ export const Rejected: Story = {
 /** Reject with nothing written: a bare rejection. */
 export const Empty: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Reject plan' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Deny plan' }))
     await expect(args.onSubmit).toHaveBeenCalledWith(
       { kind: 'plan', decision: 'reject', message: undefined },
-      'Rejected plan',
+      'Denied plan',
     )
   },
 }
