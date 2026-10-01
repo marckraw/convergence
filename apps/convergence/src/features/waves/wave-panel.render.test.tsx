@@ -127,6 +127,7 @@ function setWindowWidth(width: number) {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   delete (window as unknown as { electronAPI?: unknown }).electronAPI
   localStorage.clear()
   setWindowWidth(1024)
@@ -1628,6 +1629,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
   })
 
   it('MAR-3195 R1: every sheet’s rows can be read, not only the open one’s', async () => {
+    // Before keeps 14 days of the fixture's 17 Sep rows: on the real clock
+    // they aged out on 1 Oct and the EX-DONE row stopped drawing (MAR-3619).
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(NOW)
     snapshots = {
       'crew-1': {
         crewId: 'crew-1',
@@ -3694,6 +3699,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
     })
 
     it('R8: illustrative — no crew, no ledger, and the real counts untouched', async () => {
+      // Pinned to the fixture's day: on the real clock Before's 14-day window
+      // had dropped both rows by 1 Oct (MAR-3619).
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      vi.setSystemTime(NOW)
       // A busy board first: the titles behind the dialog keep their numbers.
       snapshots = {
         'crew-1': {
