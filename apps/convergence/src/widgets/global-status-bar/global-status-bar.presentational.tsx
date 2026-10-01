@@ -5,16 +5,18 @@ import type { ProjectActivity } from '@/entities/session'
 import { summarizeAttentionRequests } from '@/entities/session'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
-import { Button, cn, Tooltip, TooltipCard } from '@convergence/ui'
+import { Button, cn, StatusDot, Tooltip, TooltipCard } from '@convergence/ui'
 import { AggregateSummary } from './aggregate-summary.presentational'
 import { ProjectSummary } from './project-summary.presentational'
 import {
   aggregateChipClass,
+  aggregateZoneClass,
   barClass,
-  dotClass,
+  barTone,
   projectChipAttentionClass,
   projectChipClass,
   recencyBadgeClass,
+  statusChipButtonClass,
   zoneClass,
 } from './global-status-bar.styles'
 
@@ -77,9 +79,17 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
               />
             }
           >
-            <div className={zoneClass} data-testid="global-status-aggregate">
+            {/* A stop for the keyboard: its focus opens the summary, as the
+                pointer's hover does (NAV-26). */}
+            <div
+              role="group"
+              tabIndex={0}
+              aria-label={`Agents: ${runningCount} running, ${attentionCount} need you`}
+              className={aggregateZoneClass}
+              data-testid="global-status-aggregate"
+            >
               <div className={aggregateChipClass}>
-                <CircleDot className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                <CircleDot className="h-3 w-3 text-info-ink" />
                 <span>
                   <span className="font-medium text-foreground">
                     {runningCount}
@@ -91,14 +101,14 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                 className={cn(
                   aggregateChipClass,
                   attentionCount > 0 &&
-                    'border-warning/40 bg-warning/10 text-warning-foreground',
+                    'border-warning-line bg-warning-soft text-warning-ink',
                 )}
               >
                 <CircleAlert
                   className={cn(
                     'h-3 w-3',
                     attentionCount > 0
-                      ? 'text-warning-foreground'
+                      ? 'text-warning-ink'
                       : 'text-muted-foreground',
                   )}
                 />
@@ -107,7 +117,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                     className={cn(
                       'font-medium',
                       attentionCount > 0
-                        ? 'text-warning-foreground'
+                        ? 'text-warning-ink'
                         : 'text-foreground',
                     )}
                   >
@@ -142,29 +152,29 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                   data-testid={`global-status-chip-${project.projectId}`}
                   aria-label={formatProjectChipLabel(project)}
                   className={cn(
-                    'h-auto px-1.5 py-0.5 text-[11px] font-medium shadow-none',
+                    statusChipButtonClass,
                     projectChipClass,
                     project.needsAttention.length > 0 &&
                       projectChipAttentionClass,
                   )}
                 >
-                  <span
-                    className={cn(
-                      dotClass,
+                  <StatusDot
+                    size="sm"
+                    tone={
                       project.needsAttention.length > 0
-                        ? 'bg-warning'
-                        : 'bg-emerald-500 dark:bg-emerald-400',
-                    )}
+                        ? barTone.waiting
+                        : barTone.running
+                    }
                   />
                   <span className="max-w-32 truncate">
                     {project.projectName}
                   </span>
-                  <span className="text-muted-foreground/80">
+                  <span className="text-muted-foreground">
                     {project.running.length > 0 && (
                       <span>{project.running.length}▸</span>
                     )}
                     {project.needsAttention.length > 0 && (
-                      <span className="ml-1 text-warning-foreground">
+                      <span className="ml-1 text-warning-ink">
                         {project.needsAttention.length}!
                       </span>
                     )}
@@ -189,18 +199,15 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
             onClick={() => onSelectProject(recency.session.projectId)}
             data-testid="global-status-recency"
             aria-label={`Switch to project ${recency.projectName}`}
-            className={cn(
-              'h-auto px-1.5 py-0.5 text-[11px] font-medium shadow-none',
-              recencyBadgeClass,
-            )}
+            className={cn(statusChipButtonClass, recencyBadgeClass)}
           >
             {recency.kind === 'completed' ? (
-              <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+              <CheckCircle2 className="h-3 w-3 text-success-ink" />
             ) : (
-              <CircleAlert className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+              <CircleAlert className="h-3 w-3 text-danger-ink" />
             )}
             <span className="max-w-28 truncate">{recency.session.name}</span>
-            <span className="text-muted-foreground/70">
+            <span className="text-muted-foreground">
               · {recency.projectName}
             </span>
           </Button>
