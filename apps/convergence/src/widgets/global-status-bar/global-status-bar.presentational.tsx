@@ -60,7 +60,8 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
   }
 
   return (
-    <div className={barClass} data-testid="global-status-bar">
+    // The window's foot: the shell's contentinfo landmark (NAV-26).
+    <footer className={barClass} data-testid="global-status-bar">
       {localModelTunnelSlot}
       {isEmpty ? (
         <div className={zoneClass}>
@@ -215,7 +216,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
       ) : (
         <span className="ml-auto" aria-hidden />
       )}
-    </div>
+    </footer>
   )
 }
 

@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isEditableTarget } from '@/shared/lib/editable-target.pure'
+import {
+  detectShortcutPlatform,
+  formatShortcutLabel,
+} from '@/shared/lib/keyboard-shortcut.pure'
 import type { SessionSummary } from '@/entities/session'
 import { narrowSidebarSessionLists } from '@/shared/lib/name-search.pure'
 import { SidebarSearchField } from './sidebar-search-field.presentational'
 import { SidebarSearchToggle } from './sidebar-search-toggle.presentational'
+
+/** ⌘F (Ctrl+F off the Mac): what useSidebarSearchShortcut listens for, in words. */
+const SEARCH_SHORTCUT_LABEL = formatShortcutLabel(
+  { key: 'f', shiftKey: false, altKey: false },
+  detectShortcutPlatform(
+    typeof navigator === 'undefined' ? undefined : navigator.platform,
+  ),
+)
 
 export function useSidebarSearchShortcut({
   collapsed,
@@ -117,7 +129,13 @@ export function useSidebarConversationSearch(options: {
     setOpen(false)
   }, [query])
 
-  const toggleControl = <SidebarSearchToggle open={open} onToggle={toggle} />
+  const toggleControl = (
+    <SidebarSearchToggle
+      open={open}
+      onToggle={toggle}
+      shortcut={SEARCH_SHORTCUT_LABEL}
+    />
+  )
 
   const field = open ? (
     <SidebarSearchField

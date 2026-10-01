@@ -126,17 +126,3 @@ export const TerminalOnly: Story = {
     ).toHaveTextContent(/workspace\.$/)
   },
 }
-
-/** Once converting exists, the placeholder says it is coming. */
-export const TerminalOnlyConvertible: Story = {
-  name: 'Terminal only, convertible',
-  args: {
-    mainSlot: terminal,
-    dockSlot: <ConversationDockPlaceholder onConvert={() => undefined} />,
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByText(/Convert it to a conversation session/),
-    ).toHaveTextContent(/\(coming soon\)\.$/)
-  },
-}

@@ -90,8 +90,9 @@ export const AppShell: FC<AppShellProps> = ({
    * not rendered.
    */
   const [loomExpanded, setLoomExpanded] = useState(false)
-  const [mainPanelElement, setMainPanelElement] =
-    useState<HTMLDivElement | null>(null)
+  const [mainPanelElement, setMainPanelElement] = useState<HTMLElement | null>(
+    null,
+  )
   const [fallbackSelectedChatSpaceId, setFallbackSelectedChatSpaceId] =
     useState<string | null>(null)
   const [fallbackDraftChatSpaceId, setFallbackDraftChatSpaceId] = useState<
@@ -252,7 +253,9 @@ export const AppShell: FC<AppShellProps> = ({
             width: sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth,
           }}
         >
-          <div
+          {/* The shell's landmarks (NAV-26): the sidebar, the main panel, the status bar. */}
+          <aside
+            aria-label="Sidebar"
             className={cn(
               'app-sidebar-panel h-full border-r border-hairline',
               sidebarCollapsed && sidebarPeekOpen
@@ -291,7 +294,7 @@ export const AppShell: FC<AppShellProps> = ({
               onPeek={handlePeekSidebar}
               onPinPeek={handlePinSidebarPeek}
             />
-          </div>
+          </aside>
         </div>
 
         {sidebarCollapsed ? null : (
@@ -319,7 +322,7 @@ export const AppShell: FC<AppShellProps> = ({
           />
         </PerfProfiler>
 
-        <div
+        <main
           ref={setMainPanelElement}
           className="app-main-panel relative flex min-w-0 flex-1 flex-col"
         >
@@ -400,7 +403,7 @@ export const AppShell: FC<AppShellProps> = ({
               </div>
             )}
           </div>
-        </div>
+        </main>
       </div>
 
       <GlobalStatusBar onSelectProject={onSelectProjectRoot} />

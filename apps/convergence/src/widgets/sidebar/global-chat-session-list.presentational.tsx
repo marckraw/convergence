@@ -16,6 +16,7 @@ import {
   Menu,
   MenuContent,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
   IconButton,
   SectionHeader,
@@ -194,6 +195,8 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                   <span>Archive session</span>
                 </MenuItem>
               )}
+              {/* Deleting stands apart, as in the code tree's menu (NAV-14). */}
+              <MenuSeparator />
               <MenuItem
                 variant="danger"
                 onClick={() => onDeleteSession(session.id)}
@@ -276,6 +279,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                 <Unlink className="h-3.5 w-3.5" />
                 <span>Detach from Space</span>
               </MenuItem>
+              {attempt.session ? <MenuSeparator /> : null}
               {attempt.session ? (
                 <MenuItem
                   variant="danger"
