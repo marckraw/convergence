@@ -32,24 +32,12 @@ const prompts: PromptLibraryEntry[] = [
   },
 ]
 
-const knownListboxIssues = {
-  a11y: {
-    config: {
-      rules: [
-        // a11y-known: the picker's listbox has no accessible name — fixed by the sweep (DS4)
-        { id: 'aria-input-field-name', enabled: false },
-        // a11y-known: the listbox also holds its heading, its visually hidden Close button and its messages, which are not options — fixed by the sweep (DS4)
-        { id: 'aria-required-children', enabled: false },
-      ],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Composer/ComposerPromptInjectionPicker',
   component: ComposerPromptInjectionPicker,
   args: {
     open: true,
+    listId: 'prompts',
     items: prompts,
     highlightedIndex: 0,
     isLoading: false,
@@ -75,8 +63,9 @@ type Story = StoryObj<typeof meta>
 
 /** The prompt library, under ::prompt::; picking one injects it. */
 export const Default: Story = {
-  parameters: knownListboxIssues,
   play: async ({ args, canvas, userEvent }) => {
+    // A named list that holds only its options (MAR-3616 DS3e).
+    await expect(canvas.getByRole('listbox')).toHaveAccessibleName('Prompts')
     const review = canvas.getByRole('option', { name: /Independent review/ })
     await expect(review).toHaveAttribute('aria-selected', 'true')
     // At most three tags, and the path when nothing describes it.
@@ -89,7 +78,6 @@ export const Default: Story = {
 
 /** Reading the library. */
 export const Busy: Story = {
-  parameters: knownListboxIssues,
   args: { items: [], isLoading: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Loading prompts...')).toBeVisible()
@@ -98,7 +86,6 @@ export const Busy: Story = {
 
 /** The library could not be read. */
 export const Failed: Story = {
-  parameters: knownListboxIssues,
   args: {
     items: [],
     error: 'Could not read ~/.prompts: permission denied',
@@ -110,7 +97,6 @@ export const Failed: Story = {
 
 /** Nothing matches. */
 export const Empty: Story = {
-  parameters: knownListboxIssues,
   args: { items: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No matching prompts.')).toBeVisible()
