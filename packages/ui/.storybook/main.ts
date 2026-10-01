@@ -82,6 +82,16 @@ const config: StorybookConfig = {
           'lucide-react',
           'radix-ui',
           'tailwind-merge',
+          // The app's own heavy dependencies, which its stories reach through
+          // the components they render (MAR-3617): the markdown renderer and
+          // its plugins, the canvases, motion, charts and the stores.
+          '@streamdown/code',
+          '@streamdown/mermaid',
+          '@xyflow/react',
+          'chartgpu-react',
+          'motion/react',
+          'streamdown',
+          'zustand',
         ],
       },
     })
