@@ -78,6 +78,41 @@ export const Default: Story = {
   },
 }
 
+/**
+ * Drag: the line follows the pointer, held within min and max, and keeps
+ * following past the handle's own 13 px; its pointer is the resize cursor.
+ */
+export const Drag: Story = {
+  play: async ({ canvas, userEvent }) => {
+    const handle = canvas.getByRole('separator', {
+      name: 'Resize the sidebar',
+    })
+    await expect(getComputedStyle(handle).cursor).toBe('col-resize')
+    const box = handle.getBoundingClientRect()
+    const x = box.left + box.width / 2
+    const y = box.top + box.height / 2
+    await userEvent.pointer([
+      {
+        keys: '[MouseLeft>]',
+        target: handle,
+        coords: { clientX: x, clientY: y },
+      },
+      { coords: { clientX: x + 40, clientY: y } },
+    ])
+    await expect(handle).toHaveAttribute('aria-valuenow', '200')
+    await userEvent.pointer({ coords: { clientX: x + 400, clientY: y } })
+    await expect(handle).toHaveAttribute('aria-valuenow', '240')
+    await userEvent.pointer([
+      { coords: { clientX: x - 24, clientY: y } },
+      { keys: '[/MouseLeft]' },
+    ])
+    await expect(handle).toHaveAttribute('aria-valuenow', '136')
+    // Let go, it stays put.
+    await userEvent.pointer({ coords: { clientX: x + 80, clientY: y } })
+    await expect(handle).toHaveAttribute('aria-valuenow', '136')
+  },
+}
+
 export const Dark: Story = {
   globals: { theme: 'dark' },
   play: async ({ canvas, userEvent }) => {

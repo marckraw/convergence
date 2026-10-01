@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type PointerEvent, useRef } from 'react'
+import { type KeyboardEvent, type PointerEvent, useEffect, useRef } from 'react'
 import { cn } from '#lib/cn.pure'
 
 const clamp = (value: number, min: number, max: number) =>
@@ -58,10 +58,15 @@ function ResizeHandle({
   label,
   className,
 }: ResizeHandleProps) {
-  const drag = useRef<{ from: number; value: number } | null>(null)
   const direction = reverse ? -1 : 1
-  const along = (event: PointerEvent) =>
-    orientation === 'vertical' ? event.clientX : event.clientY
+  // The latest onChange, so a drag in progress calls the current one.
+  const change = useRef(onChange)
+  useEffect(() => {
+    change.current = onChange
+  })
+  // Ends a drag in progress: also when the handle goes away mid-drag.
+  const stopDrag = useRef<(() => void) | null>(null)
+  useEffect(() => () => stopDrag.current?.(), [])
 
   const onKeyDown = (event: KeyboardEvent) => {
     const [smaller, larger] = KEYS[orientation]
@@ -75,25 +80,31 @@ function ResizeHandle({
     onChange(clamp(next, min, max))
   }
 
+  /**
+   * A drag follows the pointer anywhere in the window, not only over the
+   * 13 px handle, until the button is let go.
+   */
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
-    event.currentTarget.setPointerCapture(event.pointerId)
-    drag.current = { from: along(event), value }
-  }
-
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const start = drag.current
-    if (start === null) return
-    const moved = (along(event) - start.from) * direction
-    onChange(clamp(start.value + moved, min, max))
-  }
-
-  const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
-    if (drag.current === null) return
-    drag.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+    stopDrag.current?.()
+    const along = (pointer: { clientX: number; clientY: number }) =>
+      orientation === 'vertical' ? pointer.clientX : pointer.clientY
+    const from = along(event)
+    const start = value
+    const move = (pointer: globalThis.PointerEvent) =>
+      change.current(
+        clamp(start + (along(pointer) - from) * direction, min, max),
+      )
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+      stopDrag.current = null
     }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+    stopDrag.current = stop
   }
 
   return (
@@ -108,16 +119,14 @@ function ResizeHandle({
       data-slot="resize-handle"
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
       onDoubleClick={onReset}
       className={cn(
         'app-no-drag relative z-10 shrink-0 touch-none bg-clip-content outline-none transition-colors select-none',
+        // Its pointer says what it does: a resize, not the hand of a click.
         'hover:bg-hairline active:bg-hairline-strong focus-visible:bg-focus',
         orientation === 'vertical'
-          ? '-mx-1.5 w-px self-stretch border-x-6 border-x-transparent'
-          : '-my-1.5 h-px w-full border-y-6 border-y-transparent',
+          ? '-mx-1.5 w-px cursor-col-resize self-stretch border-x-6 border-x-transparent'
+          : '-my-1.5 h-px w-full cursor-row-resize border-y-6 border-y-transparent',
         className,
       )}
     />

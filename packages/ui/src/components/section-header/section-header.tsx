@@ -10,8 +10,13 @@ type SectionHeaderProps = Omit<
   className?: string
   /** The section's name: its heading's words. */
   label: ReactNode
-  /** How many it holds: a number becomes a count Badge; anything else is shown as given. */
+  /** How many it holds, at its end, figures one width. */
   count?: ReactNode
+  /**
+   * `plain` (the default): the number in the header's own print, as the
+   * sidebar's sections show it today (R0). `badge`: in a count Badge.
+   */
+  countStyle?: 'plain' | 'badge'
   /** What you can do with the section, at its end: an IconButton (New, Filter). */
   action?: ReactNode
   /** Its heading's level; h2, as the sidebar's sections are, unless told otherwise. */
@@ -34,6 +39,7 @@ type SectionHeaderProps = Omit<
 function SectionHeader({
   label,
   count,
+  countStyle = 'plain',
   action,
   headingLevel = 2,
   collapsible = false,
@@ -59,7 +65,7 @@ function SectionHeader({
           <span className="min-w-0 truncate">{label}</span>
         )}
       </Heading>
-      {count == null ? null : typeof count === 'number' ? (
+      {count == null ? null : countStyle === 'badge' ? (
         <Badge shape="count">{count}</Badge>
       ) : (
         <span className="shrink-0 tabular-nums">{count}</span>

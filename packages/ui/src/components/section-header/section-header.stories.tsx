@@ -7,6 +7,7 @@ import {
   Collapsible,
   CollapsiblePanel,
 } from '../../motion/collapsible/collapsible'
+import { IconButton } from '../icon-button/icon-button'
 import { SectionHeader } from './section-header'
 
 type SidebarSectionProps = { label: string }
@@ -19,13 +20,9 @@ function SidebarSection({ label }: SidebarSectionProps) {
         label={label}
         count={3}
         action={
-          <button
-            type="button"
-            aria-label="New session"
-            className="rounded-sm p-0.5 text-ink-muted hover:text-ink"
-          >
+          <IconButton label="New session" size="xs" variant="quiet">
             <Plus className="size-3.5" />
-          </button>
+          </IconButton>
         }
       />
       <ul className="text-xs text-ink">
@@ -47,14 +44,20 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** A heading in the sidebar's 11 px medium muted print, a count and an action. */
+/** A heading in the sidebar's 11 px medium muted print, a plain count and an action. */
 export const Default: Story = {
   play: async ({ canvas }) => {
     const heading = canvas.getByRole('heading', { level: 2, name: 'Sessions' })
     const style = getComputedStyle(heading)
     await expect(style.fontSize).toBe('11px')
     await expect(style.color).toBe(tokenColor('--ink-muted'))
-    await expect(canvas.getByText('3')).toBeVisible()
+    // The count is plain by default, in the header's own print (R0).
+    const count = canvas.getByText('3')
+    await expect(count).toBeVisible()
+    await expect(count.closest('[data-slot="badge"]')).toBeNull()
+    await expect(getComputedStyle(count).fontVariantNumeric).toBe(
+      'tabular-nums',
+    )
     await expect(
       canvas.getByRole('button', { name: 'New session' }),
     ).toBeVisible()
@@ -71,7 +74,12 @@ function ArchivedSection() {
   return (
     <div className="w-64 rounded-md bg-canvas p-2">
       <Collapsible open={open} onOpenChange={setOpen}>
-        <SectionHeader label="Archived" count={12} collapsible />
+        <SectionHeader
+          label="Archived"
+          count={12}
+          countStyle="badge"
+          collapsible
+        />
         <CollapsiblePanel>
           <ul className="pt-1 text-xs text-ink">
             <li>An old conversation</li>
@@ -90,6 +98,10 @@ export const Collapsible_: Story = {
     const heading = canvas.getByRole('heading', { level: 2, name: 'Archived' })
     const trigger = canvas.getByRole('button', { name: 'Archived' })
     await expect(heading).toContainElement(trigger)
+    // countStyle="badge": the count in a count Badge.
+    await expect(
+      canvas.getByText('12').closest('[data-slot="badge"]'),
+    ).not.toBeNull()
     await expect(trigger).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(trigger)
     await expect(trigger).toHaveAttribute('aria-expanded', 'true')
