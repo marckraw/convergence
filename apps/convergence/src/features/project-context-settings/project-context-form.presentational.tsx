@@ -1,7 +1,7 @@
 import type { FC, FormEvent } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { ProjectContextReinjectMode } from '@/entities/project-context'
-import { Button, Input, SwitchRow, Textarea } from '@convergence/ui'
+import { Button, ChoiceField, Input, Switch, Textarea } from '@convergence/ui'
 
 interface ProjectContextFormProps {
   mode: 'create' | 'edit'
@@ -76,16 +76,19 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
       </div>
 
       <div className="space-y-2">
-        <SwitchRow
-          id="project-context-reinject"
+        <ChoiceField
           label="Re-inject every turn"
-          description="Off (default) injects this item only at session start."
-          checked={isEveryTurn}
+          hint="Off (default) injects this item only at session start."
           disabled={isSaving}
-          onChange={(checked) =>
-            onReinjectModeChange(checked ? 'every-turn' : 'boot')
-          }
-        />
+        >
+          <Switch
+            id="project-context-reinject"
+            checked={isEveryTurn}
+            onCheckedChange={(checked) =>
+              onReinjectModeChange(checked ? 'every-turn' : 'boot')
+            }
+          />
+        </ChoiceField>
         {isEveryTurn ? (
           <div
             className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200"

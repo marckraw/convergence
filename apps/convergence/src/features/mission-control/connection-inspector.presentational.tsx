@@ -10,9 +10,10 @@ import {
   Button,
   cn,
   IconButton,
+  ChoiceField,
   Input,
   SearchableSelect,
-  SwitchRow,
+  Switch,
   Textarea,
 } from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
@@ -225,14 +226,17 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         </div>
       ) : null}
 
-      <SwitchRow
-        id="connection-enabled"
+      <ChoiceField
         label={draft.enabled ? 'On' : 'Off'}
-        description="Saved connections can stay off while you build the crew."
-        checked={draft.enabled}
+        hint="Saved connections can stay off while you build the crew."
         disabled={busy}
-        onChange={onEnabledChange}
-      />
+      >
+        <Switch
+          id="connection-enabled"
+          checked={draft.enabled}
+          onCheckedChange={(next) => onEnabledChange(next)}
+        />
+      </ChoiceField>
 
       <div className="flex flex-col gap-1">
         <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -315,19 +319,22 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               onSpawnChange({ roleCard: event.target.value || null })
             }
           />
-          <SwitchRow
-            id="spawn-return-wire"
+          <ChoiceField
             label={`Report back to ${sourceName} when it finishes`}
-            checked={spec.returnWire !== null}
             disabled={busy}
-            onChange={(enabled) =>
-              onSpawnChange({
-                returnWire: enabled
-                  ? { instruction: spec.returnInstructionDraft ?? '' }
-                  : null,
-              })
-            }
-          />
+          >
+            <Switch
+              id="spawn-return-wire"
+              checked={spec.returnWire !== null}
+              onCheckedChange={(enabled) =>
+                onSpawnChange({
+                  returnWire: enabled
+                    ? { instruction: spec.returnInstructionDraft ?? '' }
+                    : null,
+                })
+              }
+            />
+          </ChoiceField>
           {spec.returnWire ? (
             <label className="text-[11px] text-muted-foreground">
               Return instructions

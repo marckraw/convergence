@@ -16,18 +16,7 @@ import type {
 } from '@/entities/notifications'
 import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import {
-  Button,
-  cn,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  SwitchRow,
-} from '@convergence/ui'
+import { Button, ChoiceField, cn, Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, Switch } from '@convergence/ui'
 import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
@@ -325,14 +314,17 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
               title="Work blocks"
               description="One short line under each folded block of tool steps, written after the turn ends."
             >
-              <SwitchRow
-                id="describe-work-blocks"
+              <ChoiceField
                 label="Describe work blocks"
-                description="Uses GPT-6 Luna on your default Codex account, one request per block of three or more steps, after each turn. Each line is checked against the block before it is shown."
-                checked={describeWorkBlocksDraft}
+                hint="Uses GPT-6 Luna on your default Codex account, one request per block of three or more steps, after each turn. Each line is checked against the block before it is shown."
                 disabled={isSaving}
-                onChange={onToggleDescribeWorkBlocks}
-              />
+              >
+                <Switch
+                  id="describe-work-blocks"
+                  checked={describeWorkBlocksDraft}
+                  onCheckedChange={(next) => onToggleDescribeWorkBlocks(next)}
+                />
+              </ChoiceField>
             </SettingsSubsection>
             <SettingsSubsection
               withDivider

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
-import { Button, SwitchRow } from '@convergence/ui'
+import { Button, ChoiceField, Switch } from '@convergence/ui'
 
 interface UpdatesFieldsProps {
   status: UpdateStatus
@@ -40,14 +40,17 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
         <span className="font-mono">{currentVersion ?? 'unknown'}</span>
       </div>
 
-      <SwitchRow
-        id="updates-background-check"
+      <ChoiceField
         label="Check for updates automatically"
-        description="Check GitHub every few hours while the app is running."
-        checked={prefs.backgroundCheckEnabled}
+        hint="Check GitHub every few hours while the app is running."
         disabled={isDev || isSaving}
-        onChange={onToggleBackground}
-      />
+      >
+        <Switch
+          id="updates-background-check"
+          checked={prefs.backgroundCheckEnabled}
+          onCheckedChange={(next) => onToggleBackground(next)}
+        />
+      </ChoiceField>
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

@@ -122,7 +122,6 @@ export {
 } from './components/segmented-control/segmented-control'
 export type { SegmentedSize } from './components/segmented-control/segmented-control.styles'
 export { Switch, type SwitchProps } from './components/switch/switch'
-export { SwitchRow } from './components/switch/switch-row'
 export {
   Tabs,
   TabsList,
