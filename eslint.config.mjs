@@ -13,9 +13,19 @@ export default tseslint.config(
    * would have followed. The globstar-prefixed form says what was always
    * meant: these directory kinds are never linted, wherever a workspace
    * puts them.
+   *
+   * `canaries/` is the one root-anchored entry: fixtures that break the
+   * rules on purpose, which `npm run canaries` lints with `--no-ignore`
+   * (MAR-3612).
    */
   {
-    ignores: ['**/out/', '**/dist/', '**/node_modules/', '**/tools/'],
+    ignores: [
+      '**/out/',
+      '**/dist/',
+      '**/node_modules/',
+      '**/tools/',
+      'canaries/',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

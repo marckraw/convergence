@@ -108,6 +108,14 @@ After every finished task, agents must run these commands in this repo:
 `chaperone` on your PATH is ignored, because another version answers
 differently and CI runs the pinned one (MAR-3609).
 
+Changed or added a check (a Chaperone rule or preset, an ESLint rule, a guard
+in `scripts/guards`)? Give it a canary, a fixture under `canaries/` that breaks
+it on purpose, and run `npm run canaries` (with `npm run test:scripts` for the
+scripts' own tests): CI fails a check that stays silent or has none
+(MAR-3612). These check canaries are not the Electron lane canary
+(`npm run test:electron`), which proves the app runs under Electron's patched
+`fs`.
+
 If a command fails because the current phase has not introduced that tool yet, report the failure clearly and fix the missing bootstrap in the next relevant task. Do not silently skip verification.
 
 ## Local dev server

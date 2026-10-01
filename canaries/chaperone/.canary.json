@@ -1,0 +1,3 @@
+{
+  "//": "Expectations for fixtures that can't hold a comment, as { \"path/inside/canaries/chaperone\": [\"rule-id\"] }. None yet: every fixture here names the rules it breaks in a `canary:` comment near its top."
+}

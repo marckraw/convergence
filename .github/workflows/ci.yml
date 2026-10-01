@@ -78,3 +78,33 @@ jobs:
       # signing are its constitution's to rule (MAR-2705).
       - name: Build Backpack Studio
         run: npm run build -w backpack-studio
+
+  # Every check, run against a fixture that breaks it on purpose (MAR-3612):
+  # a check that stopped firing looks exactly like one with nothing to report,
+  # so this job fails when one stays silent or has no canary. Not the Electron
+  # lane canary above, which tests the app rather than a check.
+  canaries:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@ef-global'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.EF_GLOBAL_PACKAGES_TOKEN }}
+
+      - name: Run the scripts' tests
+        run: npm run test:scripts
+
+      - name: Run the canaries
+        run: npm run canaries

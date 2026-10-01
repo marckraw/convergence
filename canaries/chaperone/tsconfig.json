@@ -1,0 +1,7 @@
+{
+  "//": "Not a canary: the @/ alias as the app declares it, so the import rules resolve the fixtures' imports the way they resolve the app's.",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@/*": ["apps/convergence/src/*"] }
+  }
+}

@@ -8,5 +8,6 @@
     "apps/convergence/src/**/*",
     "apps/backpack-studio/src/**/*",
     "packages/execution-host-client/src/**/*"
-  ]
+  ],
+  "exclude": ["/canaries"]
 }
