@@ -7,10 +7,13 @@ import type {
 import {
   Button,
   cn,
+  DescriptionItem,
+  DescriptionList,
   IconButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  StatusDot,
 } from '@convergence/ui'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import {
@@ -21,8 +24,14 @@ import { resolveContextCompactionAction } from './context-compaction.pure'
 import {
   describeContextAlert,
   getContextTone,
-  type ContextWindowTone,
 } from './context-window-tone.pure'
+import {
+  UsageHeading,
+  UsageMeterRow,
+  UsageNote,
+  UsageSection,
+} from './usage-popover.presentational'
+import { contextDotHalo, usagePillTone } from './usage-pill.styles'
 
 interface ContextWindowDotProps {
   contextWindow: SessionContextWindow | null | undefined
@@ -32,21 +41,8 @@ interface ContextWindowDotProps {
   hasPendingQueuedInput?: boolean
 }
 
-const dotClass: Record<ContextWindowTone, string> = {
-  green: 'bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.16)]',
-  amber: 'bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.16)]',
-  red: 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,0.18)]',
-  muted: 'bg-muted-foreground/55 shadow-[0_0_0_3px_rgba(148,163,184,0.12)]',
-}
-
-const buttonClass: Record<ContextWindowTone, string> = {
-  green:
-    'border-emerald-700/45 bg-emerald-950/35 hover:border-emerald-600/70 hover:bg-emerald-950/45',
-  amber:
-    'border-amber-600/45 bg-amber-950/35 hover:border-amber-500/70 hover:bg-amber-950/45',
-  red: 'border-rose-600/45 bg-rose-950/35 hover:border-rose-500/70 hover:bg-rose-950/45',
-  muted: 'border-border/80 bg-muted/25 hover:border-border hover:bg-muted/35',
-}
+/** A quiet line under an action: why it waits, how it went. */
+const usageFootnote = 'text-2xs leading-relaxed text-ink-muted'
 
 function formatFullTokens(value: number): string {
   return new Intl.NumberFormat('en-US').format(value)
@@ -219,17 +215,11 @@ export function ContextWindowDot({
                 openPanel()
               }}
               size="sm"
-              className={cn(
-                'shrink-0 rounded-full border shadow-none',
-                buttonClass[tone],
-              )}
+              className={cn('shrink-0', usagePillTone[tone])}
             />
           }
         >
-          <span
-            className={cn('h-2.5 w-2.5 rounded-full', dotClass[tone])}
-            aria-hidden="true"
-          />
+          <StatusDot tone={tone} size="lg" className={contextDotHalo[tone]} />
         </PopoverTrigger>
       </span>
       <PopoverContent
@@ -240,64 +230,44 @@ export function ContextWindowDot({
         onPointerLeave={closePanelSoon}
         initialFocus={false}
       >
-        <div>
-          <p className="text-sm font-semibold text-popover-foreground">
-            Context window
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Current conversation capacity, separate from provider usage limits.
-          </p>
-        </div>
+        <UsageHeading
+          title="Context window"
+          detail="Current conversation capacity, separate from provider usage limits."
+        />
 
         {!contextWindow ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <UsageNote>
             Context usage has not been reported for this session yet.
-          </p>
+          </UsageNote>
         ) : contextWindow.availability === 'unavailable' ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {contextWindow.reason}
-          </p>
+          <UsageNote>{contextWindow.reason}</UsageNote>
         ) : (
           <div className="space-y-2">
-            <div className="grid grid-cols-[4.5rem_1fr_3rem] items-center gap-2 text-xs">
-              <span className="font-medium text-popover-foreground">
-                Remaining
-              </span>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    'h-full rounded-full',
-                    tone === 'green' && 'bg-emerald-400',
-                    tone === 'amber' && 'bg-amber-400',
-                    tone === 'red' && 'bg-rose-400',
-                    tone === 'muted' && 'bg-muted-foreground',
-                  )}
-                  style={{ width: `${contextWindow.remainingPercentage}%` }}
-                />
-              </div>
-              <span className="text-right font-medium text-popover-foreground">
-                {contextWindow.remainingPercentage}%
-              </span>
-            </div>
-            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t border-border/70 pt-2 text-xs">
-              <span className="text-muted-foreground">Used</span>
-              <span className="font-medium text-popover-foreground">
-                {contextWindow.usedPercentage}% ·{' '}
-                {formatFullTokens(contextWindow.usedTokens)} tokens
-              </span>
-              <span className="text-muted-foreground">Window</span>
-              <span className="font-medium text-popover-foreground">
-                {formatFullTokens(contextWindow.windowTokens)} tokens
-              </span>
-              <span className="text-muted-foreground">Source</span>
-              <span className="font-medium text-popover-foreground">
-                {contextWindow.source === 'provider'
-                  ? 'Provider-reported'
-                  : 'Estimated'}
-              </span>
-            </div>
+            <UsageMeterRow
+              label="Remaining"
+              value={contextWindow.remainingPercentage}
+              valueLabel={`${contextWindow.remainingPercentage}%`}
+              tone={tone}
+              meterLabel="Context window remaining"
+            />
+            <UsageSection>
+              <DescriptionList layout="inline" className="gap-1.5">
+                <DescriptionItem term="Used">
+                  {contextWindow.usedPercentage}% ·{' '}
+                  {formatFullTokens(contextWindow.usedTokens)} tokens
+                </DescriptionItem>
+                <DescriptionItem term="Window">
+                  {formatFullTokens(contextWindow.windowTokens)} tokens
+                </DescriptionItem>
+                <DescriptionItem term="Source">
+                  {contextWindow.source === 'provider'
+                    ? 'Provider-reported'
+                    : 'Estimated'}
+                </DescriptionItem>
+              </DescriptionList>
+            </UsageSection>
             {alertLine ? (
-              <p className="text-[11px] leading-relaxed text-amber-400">
+              <p className="text-2xs leading-relaxed text-warning-ink">
                 {alertLine}
               </p>
             ) : null}
@@ -305,7 +275,7 @@ export function ContextWindowDot({
         )}
 
         {compaction.visible ? (
-          <div className="space-y-2 border-t border-border/70 pt-3">
+          <UsageSection className="space-y-2 pt-3">
             <Button
               type="button"
               disabled={
@@ -323,12 +293,10 @@ export function ContextWindowDot({
                 : 'Compact context'}
             </Button>
             {!compaction.enabled && compaction.reason ? (
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                {compaction.reason}
-              </p>
+              <p className={usageFootnote}>{compaction.reason}</p>
             ) : provider?.contextManagement?.compact.availability ===
               'runtime-check' ? (
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
+              <p className={usageFootnote}>
                 Availability is verified against the installed provider when you
                 run it.
               </p>
@@ -336,20 +304,20 @@ export function ContextWindowDot({
             {actionMessage ? (
               <p
                 className={cn(
-                  'text-[11px] leading-relaxed',
+                  usageFootnote,
                   actionMessage.tone === 'success'
-                    ? 'text-emerald-400'
-                    : 'text-destructive',
+                    ? 'text-success-ink'
+                    : 'text-danger-ink',
                 )}
               >
                 {actionMessage.text}
               </p>
             ) : null}
-          </div>
+          </UsageSection>
         ) : null}
 
         {drill.visible ? (
-          <div className="space-y-2 border-t border-border/70 pt-3">
+          <UsageSection className="space-y-2 pt-3">
             <Button
               type="button"
               variant="tonal"
@@ -379,20 +347,16 @@ export function ContextWindowDot({
               </Button>
             ) : null}
             {drill.cancel.visible && drill.cancel.reason ? (
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                {drill.cancel.reason}
-              </p>
+              <p className={usageFootnote}>{drill.cancel.reason}</p>
             ) : !drill.enabled && drill.reason ? (
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                {drill.reason}
-              </p>
+              <p className={usageFootnote}>{drill.reason}</p>
             ) : null}
             {cancelRefusal ? (
-              <p className="text-[11px] leading-relaxed text-destructive">
+              <p className={cn(usageFootnote, 'text-danger-ink')}>
                 {cancelRefusal}
               </p>
             ) : null}
-          </div>
+          </UsageSection>
         ) : null}
       </PopoverContent>
     </Popover>

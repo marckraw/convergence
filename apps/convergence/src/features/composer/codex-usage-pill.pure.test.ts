@@ -98,10 +98,10 @@ describe('Codex usage pill helpers', () => {
   it('formats remaining percent and color tone', () => {
     expect(formatCodexRemainingPercent(87.3)).toBe('87%')
     expect(formatCodexRemainingPercent(null)).toBe('--')
-    expect(getCodexUsageTone(87)).toBe('green')
-    expect(getCodexUsageTone(40)).toBe('amber')
-    expect(getCodexUsageTone(15)).toBe('red')
-    expect(getCodexUsageTone(null)).toBe('muted')
+    expect(getCodexUsageTone(87)).toBe('success')
+    expect(getCodexUsageTone(40)).toBe('warning')
+    expect(getCodexUsageTone(15)).toBe('danger')
+    expect(getCodexUsageTone(null)).toBe('neutral')
   })
 })
 

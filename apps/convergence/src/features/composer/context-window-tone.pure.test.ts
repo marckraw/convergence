@@ -29,8 +29,8 @@ function window_(
 
 describe('getContextTone', () => {
   it('is muted without a context window', () => {
-    expect(getContextTone(null, alert)).toBe('muted')
-    expect(getContextTone(undefined, alert)).toBe('muted')
+    expect(getContextTone(null, alert)).toBe('neutral')
+    expect(getContextTone(undefined, alert)).toBe('neutral')
   })
 
   it('is muted when the provider reports usage unavailable', () => {
@@ -43,35 +43,35 @@ describe('getContextTone', () => {
         },
         alert,
       ),
-    ).toBe('muted')
+    ).toBe('neutral')
   })
 
   it('is red at 15 % remaining or less', () => {
-    expect(getContextTone(window_(170000, 200000), alert)).toBe('red')
+    expect(getContextTone(window_(170000, 200000), alert)).toBe('danger')
   })
 
   it('is amber when the alert threshold is crossed', () => {
     // 152k of 200k is 76 % used, 24 % left: past the 75 % alert but not yet
     // into red, where the old fixed band would have said green.
-    expect(getContextTone(window_(152000, 200000), alert)).toBe('amber')
+    expect(getContextTone(window_(152000, 200000), alert)).toBe('warning')
   })
 
   it('is amber on a big window the old band would have called green', () => {
     // 410k of 1M is 41 % used, 59 % left — green under the fixed 35 %-left
     // band, amber because 410k is past the absolute cap.
-    expect(getContextTone(window_(410000, 1000000), alert)).toBe('amber')
+    expect(getContextTone(window_(410000, 1000000), alert)).toBe('warning')
   })
 
   it('is green below the alert threshold', () => {
-    expect(getContextTone(window_(100000, 200000), alert)).toBe('green')
+    expect(getContextTone(window_(100000, 200000), alert)).toBe('success')
   })
 
   it('falls back to the fixed 35 %-remaining band when the alert is off', () => {
     const off = { ...alert, enabled: false }
     // 70 % used / 30 % left: amber by the old band, and green by the alert
     // (which is off), so this asserts the fallback and not the new rule.
-    expect(getContextTone(window_(140000, 200000), off)).toBe('amber')
-    expect(getContextTone(window_(120000, 200000), off)).toBe('green')
+    expect(getContextTone(window_(140000, 200000), off)).toBe('warning')
+    expect(getContextTone(window_(120000, 200000), off)).toBe('success')
   })
 
   it('stays green on a big window when the alert is off', () => {
@@ -79,12 +79,12 @@ describe('getContextTone', () => {
     // off the dot must go back to its old colour.
     expect(
       getContextTone(window_(410000, 1000000), { ...alert, enabled: false }),
-    ).toBe('green')
+    ).toBe('success')
   })
 
   it('red outranks amber', () => {
     // 190k of 200k is over the alert AND at 5 % remaining. Red is the answer.
-    expect(getContextTone(window_(190000, 200000), alert)).toBe('red')
+    expect(getContextTone(window_(190000, 200000), alert)).toBe('danger')
   })
 })
 

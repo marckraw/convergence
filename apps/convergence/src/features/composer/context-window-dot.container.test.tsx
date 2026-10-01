@@ -219,13 +219,14 @@ describe('ContextWindowDot', () => {
     const dot = () =>
       screen
         .getByRole('button', { name: 'Context window 70% remaining' })
-        .querySelector('span[aria-hidden="true"]')!
+        .querySelector('[data-slot="status-dot"]')!
 
-    expect(dot().className).toContain('bg-emerald-400')
+    // The dot's tone (R1): room left, then over the new threshold.
+    expect(dot()).toHaveAttribute('data-tone', 'success')
 
     act(() => setContextAlert({ enabled: true, percent: 5, tokens: null }))
 
-    expect(dot().className).toContain('bg-amber-400')
+    expect(dot()).toHaveAttribute('data-tone', 'warning')
   })
 })
 
