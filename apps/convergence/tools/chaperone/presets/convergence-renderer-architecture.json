@@ -50,8 +50,9 @@
         "type": "regex",
         "severity": "error",
         "files": "apps/*/src/**/*.{ts,tsx}",
+        "exclude": ["apps/*/src/**/*.stories.tsx"],
         "pattern": "^\\s*export\\s+default\\b",
-        "message": "Use named exports only in renderer code."
+        "message": "Use named exports only in renderer code. Story files are left out: a story's meta is the one default export Storybook needs."
       },
       {
         "id": "retire-src-components-dir",
