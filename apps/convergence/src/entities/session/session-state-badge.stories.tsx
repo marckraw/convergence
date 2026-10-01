@@ -91,9 +91,9 @@ export const States: Story = {
     await expect(canvas.getAllByRole('listitem')).toHaveLength(STATES.length)
     // Compacting and background work have no word on the row, so the glyph
     // carries one.
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Compacting context…',
-    )
+    await expect(
+      canvas.getByLabelText('Compacting context…'),
+    ).toBeInTheDocument()
     await expect(
       canvas.getByLabelText('finished · 1 tasks running'),
     ).toBeInTheDocument()
@@ -131,9 +131,7 @@ export const Busy: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Compacting context…',
-    )
+    await expect(canvas.getByLabelText('Compacting context…')).toBeVisible()
   },
 }
 

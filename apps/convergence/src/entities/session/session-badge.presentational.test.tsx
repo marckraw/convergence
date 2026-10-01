@@ -6,11 +6,13 @@ it('MAR-3288 R5 draws a busy glyph, not the finished check, while compacting —
   const { container, rerender } = render(
     <SessionBadge attention="finished" status="completed" compacting />,
   )
-  expect(screen.getByRole('status')).toHaveTextContent('Compacting context…')
+  expect(
+    screen.getByRole('img', { name: 'Compacting context…' }),
+  ).toBeInTheDocument()
   expect(container.querySelector('[data-tone="success"]')).toBeNull()
 
   rerender(<SessionBadge attention="finished" status="completed" />)
-  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.queryByLabelText('Compacting context…')).toBeNull()
   expect(container.querySelector('[data-tone="success"]')).not.toBeNull()
 })
 

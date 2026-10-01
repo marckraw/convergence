@@ -82,13 +82,13 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
 }
 
-/** Compacting is busy, never the finished check, and says so to a screen reader. */
+/** Compacting is busy, never the finished check, and its glyph says so to a screen reader. */
 export const Busy: Story = {
   args: { compacting: true },
   play: async ({ canvas, canvasElement }) => {
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Compacting context…',
-    )
+    await expect(
+      canvas.getByRole('img', { name: 'Compacting context…' }),
+    ).toBeVisible()
     await expect(canvasElement.querySelector('[data-tone]')).toBeNull()
   },
 }

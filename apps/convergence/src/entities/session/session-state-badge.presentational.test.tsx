@@ -13,7 +13,7 @@ describe('SessionStateBadge (MAR-3288 lap 2 B)', () => {
         }}
       />,
     )
-    expect(screen.getByRole('status')).toHaveTextContent('Compacting context…')
+    expect(screen.getByLabelText('Compacting context…')).toBeInTheDocument()
     expect(container.querySelector('[data-tone="success"]')).toBeNull()
   })
 
@@ -23,13 +23,13 @@ describe('SessionStateBadge (MAR-3288 lap 2 B)', () => {
         session={{ attention: 'finished', status: 'completed', activity: null }}
       />,
     )
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByLabelText('Compacting context…')).toBeNull()
     expect(container.querySelector('[data-tone="success"]')).not.toBeNull()
   })
 
   it('draws a quiet glyph for a row with no record', () => {
     const { container } = render(<SessionStateBadge session={undefined} />)
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByLabelText('Compacting context…')).toBeNull()
     expect(container.querySelector('svg')).not.toBeNull()
   })
 })

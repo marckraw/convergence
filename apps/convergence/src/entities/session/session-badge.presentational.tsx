@@ -39,11 +39,13 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
   // `finished` for the whole compaction.
   if (compacting)
     return (
-      <Spinner
-        size="xs"
-        label="Compacting context…"
-        className={cn(className, 'text-muted-foreground')}
-      />
+      <span
+        role="img"
+        aria-label="Compacting context…"
+        className={cn('inline-flex shrink-0', className)}
+      >
+        <Spinner size="xs" className="text-muted-foreground" />
+      </span>
     )
 
   const parallel = parallelWorkStatus({ status, attention, parallelWork })
