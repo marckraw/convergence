@@ -32,6 +32,14 @@ export {
   type CopyButtonProps,
 } from './components/copy-button/copy-button'
 export {
+  DescriptionItem,
+  type DescriptionItemProps,
+  DescriptionList,
+  type DescriptionListDensity,
+  type DescriptionListLayout,
+  type DescriptionListProps,
+} from './components/description-list/description-list'
+export {
   Dialog,
   DialogBody,
   DialogClose,
@@ -42,6 +50,7 @@ export {
   DialogTitle,
   DialogTrigger,
 } from './components/dialog/dialog'
+export { Divider, type DividerProps } from './components/divider/divider'
 export {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,6 +90,10 @@ export type {
   SearchableSelectProps,
 } from './components/searchable-select/searchable-select.presentational'
 export {
+  SectionHeader,
+  type SectionHeaderProps,
+} from './components/section-header/section-header'
+export {
   SectionLabel,
   type SectionLabelProps,
   sectionLabel,
@@ -107,7 +120,18 @@ export {
   type StatusPillProps,
 } from './components/status-pill/status-pill'
 export { SwitchRow } from './components/switch/switch'
+export { TextLink, type TextLinkProps } from './components/text-link/text-link'
 export { Textarea, type TextareaProps } from './components/textarea/textarea'
+export {
+  Timestamp,
+  type TimestampProps,
+} from './components/timestamp/timestamp'
+export {
+  formatTimestamp,
+  fullDateLabel,
+  type TimestampFormat,
+  type TimestampOptions,
+} from './components/timestamp/timestamp.pure'
 export {
   Tooltip,
   type TooltipOptions,
@@ -142,6 +166,14 @@ export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'
 export { layoutPx } from './styles/layout.tokens'
 export { terminalTokens } from './styles/terminal.tokens'
+export {
+  Collapsible,
+  CollapsiblePanel,
+  type CollapsiblePanelProps,
+  type CollapsibleProps,
+  CollapsibleTrigger,
+  type CollapsibleTriggerProps,
+} from './motion/collapsible/collapsible'
 export {
   advanceDelayedLoading,
   type DelayedLoading,
