@@ -1,21 +1,51 @@
 /*
- * The design system's theme (MAR-3610): the color roles, light and dark,
- * the macOS translucency surfaces, and the surface motion the primitives
- * use. Moved verbatim from `apps/convergence/src/app/global.css`, which
- * imports it as `@convergence/ui/theme.css`. The app keeps its own chrome
- * classes, scrollbars and app-only animations.
+ * The Tailwind v4 theme of @convergence/ui (MAR-3615 DS2): maps tokens.css onto utilities.
+ *
+ * global.css imports it after Tailwind and points an @source at packages/ui/src (MAR-3610):
+ *   @import 'tailwindcss';
+ *   @import '@convergence/ui/theme.css';
+ *
+ * Until DS5 Tailwind's own palette, type scale, radii, shadows, easings and animations stay on,
+ * and the LEGACY BRIDGE at the end keeps every shadcn name the app still writes (bg-background,
+ * text-muted-foreground, var(--foreground) …) painting exactly what it paints at 6f6ebb93. DS4
+ * sweeps the app onto the token names. DS5 deletes the bridge and uncomments every line marked
+ * "DS5:", so a class names a token or doesn't exist. The vendor bridge stays: Streamdown's bundle
+ * writes shadcn and palette names of its own.
  */
-
-@custom-variant dark (&:is(.dark *));
+@import './tokens.css';
 
 /*
- * Reduced motion (MAR-3611). It follows the system setting, and
- * `data-motion="reduced"` on <html> turns it on as well: Storybook's Motion
- * toolbar does that today, an in-app setting could later. The app sets no
- * such attribute, so there both variants match exactly what Tailwind's
- * built-in ones match. An override keeps the built-in variant's place in
- * Tailwind's order, and `:where()` adds no specificity, so the cascade
- * between classes is unchanged too.
+ * dark: matches where the tokens resolve dark: under data-theme="dark" (on <html>, or a subtree
+ * such as the terminal dock), or with no data-theme when the system is dark. Inside
+ * @convergence/ui only (R1): the app writes tokens, which carry both themes already.
+ *
+ * The data-theme branch is :is(), not accent.'s :where(), so a dark: utility keeps the one class
+ * of specificity the old &:is(.dark *) gave it: in dark it still beats a same-property hover: or
+ * data-[state]: utility the way it did, by source order, instead of losing to it. The fallback
+ * (no data-theme: Storybook, tests, the moment before JS) adds none, so where both branches match
+ * it never outweighs the first. When DS5 has swept dark: out of the app, :where() can follow.
+ */
+@custom-variant dark {
+  &:is([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(
+      :root:not([data-theme='light']),
+      :root:not([data-theme='light']) *
+    ) {
+      @slot;
+    }
+  }
+}
+
+/*
+ * Reduced motion (MAR-3611). motion-safe: and motion-reduce: follow the system setting, and also
+ * answer data-motion="reduced" on <html> (or any subtree), the switch tokens.css's reduced-motion
+ * block listens to, so Storybook's Motion toolbar, and later an in-app setting, reach both. The
+ * app sets no such attribute, so there both variants match exactly what Tailwind's built-in ones
+ * match. An override keeps the built-in variant's place in Tailwind's order, and :where() adds no
+ * specificity, so the cascade between classes is unchanged too.
  */
 @custom-variant motion-safe {
   @media (prefers-reduced-motion: no-preference) {
@@ -29,14 +59,358 @@
   @media (prefers-reduced-motion: reduce) {
     @slot;
   }
-
   &:where([data-motion='reduced'], [data-motion='reduced'] *) {
     @slot;
   }
 }
 
 @theme inline {
-  --radius: 0.625rem;
+  /* DS5: --color-*: initial; */
+
+  /* Surfaces */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-raised: var(--raised);
+  --color-sheet: var(--sheet);
+  --color-glass: var(--glass);
+  --color-scrim: var(--scrim);
+  --color-scrim-contained: var(--scrim-contained);
+  --color-viewer: var(--viewer);
+
+  /* Text, strong, highlight */
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-strong: var(--strong);
+  --color-on-strong: var(--on-strong);
+  --color-highlight: var(--highlight);
+  --color-on-highlight: var(--on-highlight);
+
+  /* Lines and focus */
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-control-line: var(--control-line);
+  --color-control-fill: var(--control-fill);
+  --color-focus: var(--focus);
+
+  /* Overlays, chosen and selected (R7) */
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-fill-quiet: var(--fill-quiet);
+  --color-fill-hover: var(--fill-hover);
+  --color-fill-selected: var(--fill-selected);
+  --color-chip: var(--chip);
+  --color-chip-track: var(--chip-track);
+
+  /* Status (R1) */
+  --color-neutral-ink: var(--neutral-ink);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-neutral-line: var(--neutral-line);
+  --color-neutral-solid: var(--neutral-solid);
+  --color-info-ink: var(--info-ink);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+  --color-info-solid: var(--info-solid);
+  --color-success-ink: var(--success-ink);
+  --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
+  --color-success-solid: var(--success-solid);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
+  --color-warning-solid: var(--warning-solid);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-danger-solid: var(--danger-solid);
+  --color-on-danger: var(--on-danger);
+
+  /* Categories (R1) */
+  --color-tag-cyan: var(--tag-cyan);
+  --color-tag-cyan-ink: var(--tag-cyan-ink);
+  --color-tag-sky: var(--tag-sky);
+  --color-tag-sky-ink: var(--tag-sky-ink);
+  --color-tag-green: var(--tag-green);
+  --color-tag-green-ink: var(--tag-green-ink);
+  --color-tag-emerald: var(--tag-emerald);
+  --color-tag-emerald-ink: var(--tag-emerald-ink);
+  --color-tag-lime: var(--tag-lime);
+  --color-tag-lime-ink: var(--tag-lime-ink);
+  --color-tag-teal: var(--tag-teal);
+  --color-tag-teal-ink: var(--tag-teal-ink);
+  --color-tag-violet: var(--tag-violet);
+  --color-tag-violet-ink: var(--tag-violet-ink);
+  --color-tag-indigo: var(--tag-indigo);
+  --color-tag-indigo-ink: var(--tag-indigo-ink);
+  --color-tag-rose: var(--tag-rose);
+  --color-tag-rose-ink: var(--tag-rose-ink);
+  --color-tag-orange: var(--tag-orange);
+  --color-tag-orange-ink: var(--tag-orange-ink);
+  --color-tag-yellow: var(--tag-yellow);
+  --color-tag-yellow-ink: var(--tag-yellow-ink);
+  --color-tag-zinc: var(--tag-zinc);
+  --color-tag-zinc-ink: var(--tag-zinc-ink);
+  --color-merged: var(--merged);
+  --color-merged-ink: var(--merged-ink);
+  --color-crew-violet: var(--crew-violet);
+  --color-crew-blue: var(--crew-blue);
+  --color-crew-cyan: var(--crew-cyan);
+  --color-crew-green: var(--crew-green);
+  --color-crew-amber: var(--crew-amber);
+  --color-crew-red: var(--crew-red);
+  --color-crew-pink: var(--crew-pink);
+  --color-crew-slate: var(--crew-slate);
+  --color-provider-openai: var(--provider-openai);
+  --color-provider-anthropic: var(--provider-anthropic);
+  --color-provider-pi: var(--provider-pi);
+  --color-provider-cursor: var(--provider-cursor);
+  --color-provider-google: var(--provider-google);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-heat-1: var(--chart-heat-1);
+  --color-chart-heat-2: var(--chart-heat-2);
+  --color-chart-heat-3: var(--chart-heat-3);
+  --color-chart-heat-4: var(--chart-heat-4);
+  --color-diff-added: var(--diff-added);
+  --color-diff-removed: var(--diff-removed);
+  --color-avatar-agent: var(--avatar-agent);
+  --color-on-avatar-agent: var(--on-avatar-agent);
+
+  /* The terminal (R12): the dock, the strip, the tabs. xterm reads terminal.tokens.ts */
+  --color-terminal-bg: var(--terminal-bg);
+  --color-terminal-ink: var(--terminal-ink);
+  --color-terminal-strip: var(--terminal-strip);
+  --color-terminal-tab: var(--terminal-tab);
+  --color-terminal-tab-hover: var(--terminal-tab-hover);
+  --color-terminal-tab-ink: var(--terminal-tab-ink);
+  --color-terminal-tab-ink-muted: var(--terminal-tab-ink-muted);
+
+  /* Type. font-sans also becomes <html>'s face, which <body> already wears */
+  /* DS5: --font-*: initial; */
+  --font-sans: var(--type-family-sans);
+  --font-mono: var(--type-family-mono);
+  /* DS5: --font-weight-*: initial; */
+  --font-weight-normal: var(--type-weight-regular);
+  --font-weight-medium: var(--type-weight-medium);
+  --font-weight-semibold: var(--type-weight-semibold);
+  --font-weight-bold: var(--type-weight-bold);
+  /*
+   * R4: text-3xs (10 px) and text-2xs (11 px) set the size only, as text-[10px] and text-[11px]
+   * do today, so the sweep moves nothing. Their line heights are leading-3xs and leading-2xs
+   * until the redesign wires them in (uncomment the two --line-height lines then).
+   */
+  /* DS5: --text-*: initial; */
+  --text-3xs: var(--type-size-3xs);
+  /* Redesign: --text-3xs--line-height: var(--type-leading-3xs); */
+  --text-2xs: var(--type-size-2xs);
+  /* Redesign: --text-2xs--line-height: var(--type-leading-2xs); */
+  --text-xs: var(--type-size-xs);
+  --text-xs--line-height: var(--type-leading-xs);
+  --text-sm: var(--type-size-sm);
+  --text-sm--line-height: var(--type-leading-sm);
+  --text-base: var(--type-size-base);
+  --text-base--line-height: var(--type-leading-base);
+  --text-lg: var(--type-size-lg);
+  --text-lg--line-height: var(--type-leading-lg);
+  --text-xl: var(--type-size-xl);
+  --text-xl--line-height: var(--type-leading-xl);
+  --text-2xl: var(--type-size-2xl);
+  --text-2xl--line-height: var(--type-leading-2xl);
+  --leading-3xs: var(--type-leading-3xs);
+  --leading-2xs: var(--type-leading-2xs);
+  --tracking-eyebrow: var(--type-tracking-eyebrow);
+
+  /* Corners: Tailwind's names, today's values. Bare rounded reads --radius (10 px) */
+  /* DS5: --radius-*: initial; */
+  --radius: var(--corner-row);
+  --radius-sm: var(--corner-xs);
+  --radius-md: var(--corner-control);
+  --radius-lg: var(--corner-card);
+  --radius-xl: var(--corner-panel);
+  --radius-2xl: var(--corner-sheet);
+
+  /* Elevation: shadow-control, shadow-raised, shadow-floating, shadow-overlay, shadow-sheet(-open) */
+  /* DS5: --shadow-*: initial; */
+  /* DS5: --inset-shadow-*: initial; */
+  /* DS5: --drop-shadow-*: initial; */
+  --shadow-control: var(--elevation-control);
+  --shadow-raised: var(--elevation-raised);
+  --shadow-floating: var(--elevation-floating);
+  --shadow-overlay: var(--elevation-overlay);
+  --shadow-sheet: var(--elevation-sheet);
+  --shadow-sheet-open: var(--elevation-sheet-open);
+
+  /* Controls (R3): h-control-md, size-control-sm … for the parts' size props */
+  --spacing-control-xs: var(--control-xs);
+  --spacing-control-sm: var(--control-sm);
+  --spacing-control-md: var(--control-md);
+  --spacing-control-lg: var(--control-lg);
+
+  /* Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog, max-h-dialog */
+  --container-conversation: var(--layout-conversation);
+  --container-dialog: var(--layout-dialog);
+  --width-side-panel: var(--layout-side-panel);
+  --width-work-panel: var(--layout-work-panel);
+  --max-height-dialog: var(--layout-dialog-height);
+
+  /* Blur: backdrop-blur-glass (tooltips, R8), backdrop-blur-scrim (behind dialogs) */
+  --blur-glass: var(--glass-blur);
+  --blur-scrim: var(--scrim-blur);
+
+  /*
+   * Motion. Every value is a name: duration-exit|fast|panel|slow, ease-out|in|in-out|enter|exit|
+   * guide, animate-pop-in|pop-out|slide-in-*|spin|pulse. A bare transition is --motion-fast on
+   * --motion-ease-move, exactly Tailwind's default today.
+   */
+  /* DS5: --ease-*: initial; */
+  --ease-out: var(--motion-ease);
+  --ease-in: var(--motion-ease-in);
+  --ease-in-out: var(--motion-ease-move);
+  --ease-enter: var(--motion-ease-enter);
+  --ease-exit: var(--motion-ease-exit);
+  --ease-guide: var(--motion-ease-guide);
+  --default-transition-duration: var(--motion-fast);
+  --default-transition-timing-function: var(--motion-ease-move);
+  --transition-duration-exit: var(--motion-exit);
+  --transition-duration-fast: var(--motion-fast);
+  --transition-duration-panel: var(--motion-panel);
+  --transition-duration-slow: var(--motion-slow);
+
+  /*
+   * Surface motion (MAR-3319), on the tokens: the same 150 ms ease-out pop from 95% and 8 px
+   * travel as before. Scale leaves positioned dialogs' translate intact; directional travel uses
+   * transform so Select's translate offset survives too. Side utilities include the pop because
+   * animation shorthands replace one another. The primitives guard them with motion-safe:, so
+   * under reduced motion they don't run at all; unguarded, they keep the fade and lose the travel
+   * and the scale, which go to zero in tokens.css.
+   */
+  /* DS5: --animate-*: initial; */
+  --animate-pop-in: pop-in var(--motion-fast) var(--motion-ease-enter) both;
+  --animate-pop-out: pop-out var(--motion-exit) var(--motion-ease-exit) both;
+  --animate-slide-in-top:
+    pop-in var(--motion-fast) var(--motion-ease-enter) both,
+    slide-in-top var(--motion-fast) var(--motion-ease-enter) both;
+  --animate-slide-in-bottom:
+    pop-in var(--motion-fast) var(--motion-ease-enter) both,
+    slide-in-bottom var(--motion-fast) var(--motion-ease-enter) both;
+  --animate-slide-in-left:
+    pop-in var(--motion-fast) var(--motion-ease-enter) both,
+    slide-in-left var(--motion-fast) var(--motion-ease-enter) both;
+  --animate-slide-in-right:
+    pop-in var(--motion-fast) var(--motion-ease-enter) both,
+    slide-in-right var(--motion-fast) var(--motion-ease-enter) both;
+  /*
+   * Tailwind's spin and pulse, on the tokens: the same 1 s turn and 2 s beat, but a loop stands
+   * still under reduced motion (--motion-loops: 0), so the 32 spinners that ignore it today stop.
+   */
+  --animate-spin: spin var(--motion-loop) linear var(--motion-loops);
+  --animate-pulse: pulse var(--motion-blink) var(--motion-ease-blink)
+    var(--motion-loops);
+}
+
+/*
+ * A ring of a tone round a status dot (the composer's context dot): shadow-halo
+ * shadow-success-solid/16. Not inline, so Tailwind lets a shadow colour replace its black.
+ */
+@theme {
+  --shadow-halo: 0 0 0 3px rgb(0 0 0 / 0.16);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    scale: var(--motion-scale-from);
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes pop-out {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: var(--motion-scale-from);
+  }
+}
+
+@keyframes slide-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--motion-shift)));
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@keyframes slide-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-shift));
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--motion-shift)));
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(var(--motion-shift));
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/*
+ * LEGACY BRIDGE (DS2 → DS5) -------------------------------------------------------------------
+ *
+ * The shadcn names the app writes today, kept painting what they paint at 6f6ebb93 while DS4
+ * sweeps them away. Utilities point at the old variable names, and the old names alias the
+ * tokens, so a local override still works (.needs-you-card redefines --muted-foreground), and
+ * so does every raw var(--foreground) in TypeScript and app CSS. legacy-bridge.test.ts resolves
+ * each old name, in both themes, to master's value; it goes when the bridge goes.
+ *
+ * DS5: delete from here to the end of the file, then add the vendor bridge below.
+ */
+@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -55,212 +429,73 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
-  --color-success-ink: var(--success-ink);
-  --color-success-surface: var(--success-surface);
-  --color-warning-ink: var(--warning-ink);
-  --color-warning-surface: var(--warning-surface);
-  --color-error-ink: var(--error-ink);
-  --color-error-surface: var(--error-surface);
-  --color-info-ink: var(--info-ink);
-  --color-info-surface: var(--info-surface);
   --color-border: var(--border);
   --color-control-border: var(--control-border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
 }
 
 :root {
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(0.975 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(0.985 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.955 0 0);
-  --muted-foreground: oklch(0.46 0 0);
-  --accent: oklch(0.915 0.075 95);
-  --accent-foreground: oklch(0.28 0.04 80);
-  --destructive: oklch(0.55 0.23 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.78 0.16 75);
-  --warning-foreground: var(--warning-ink);
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--raised);
+  --popover-foreground: var(--ink);
+  --primary: var(--strong);
+  --primary-foreground: var(--on-strong);
+  --secondary: var(--surface-muted);
+  /* Equal to --strong in both themes (0.205 / 0.88); DS4 writes text-ink, a hair darker in light */
+  --secondary-foreground: var(--strong);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--highlight);
+  --accent-foreground: var(--on-highlight);
+  --destructive: var(--danger-solid);
+  --destructive-foreground: var(--on-danger);
   /*
-   * Color roles (MAR-3460). A status `*-ink` is readable text: >= 4.5:1 on
-   * background, card and muted, and on its own `*-surface` (a tint laid over
-   * the card). `--control-border` outlines a control and clears 3:1;
-   * `--border` stays the quiet decorative separator. `--ring` clears 3:1.
-   * `theme-contrast.pure.test.ts` computes every pair, in both themes, from
-   * this file.
+   * Today's warning fill, frozen: light is 0.78 in both themes, which --warning-solid deepens for
+   * a 3:1 dot. bg-warning/10 and border-warning/20…/40 keep today's light look until DS4 moves
+   * them to -soft and -line.
    */
-  --success-ink: oklch(0.48 0.13 150);
-  --success-surface: oklch(0.72 0.15 150 / 0.14);
-  --warning-ink: oklch(0.46 0.13 65);
-  --warning-surface: oklch(0.72 0.15 75 / 0.14);
-  --error-ink: oklch(0.48 0.13 27);
-  --error-surface: oklch(0.72 0.15 27 / 0.14);
-  --info-ink: oklch(0.48 0.13 250);
-  --info-surface: oklch(0.72 0.15 250 / 0.14);
-  --border: oklch(0.88 0 0);
-  --control-border: oklch(0.62 0 0);
-  --input: oklch(0.88 0 0);
-  --ring: oklch(0.5 0 0);
-  --sidebar: oklch(0.96 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --chrome-edge: rgba(255, 255, 255, 0.48);
-  --chrome-shadow: rgba(15, 23, 42, 0.12);
-  --sidebar-surface: rgba(255, 255, 255, 0.76);
-  --sidebar-sheen: rgba(255, 255, 255, 0.48);
-  --main-surface: rgba(252, 252, 253, 0.86);
-  --scrollbar-track: rgba(255, 255, 255, 0.08);
-  --scrollbar-thumb: rgba(17, 24, 39, 0.2);
-  --scrollbar-thumb-hover: rgba(17, 24, 39, 0.3);
-}
-
-.dark {
-  --background: oklch(0.21 0.005 260);
-  --foreground: oklch(0.88 0 0);
-  --card: oklch(0.24 0.005 260);
-  --card-foreground: oklch(0.88 0 0);
-  --popover: oklch(0.24 0.005 260);
-  --popover-foreground: oklch(0.88 0 0);
-  --primary: oklch(0.88 0 0);
-  --primary-foreground: oklch(0.18 0 0);
-  --secondary: oklch(0.27 0.005 260);
-  --secondary-foreground: oklch(0.88 0 0);
-  --muted: oklch(0.27 0.005 260);
-  --muted-foreground: oklch(0.66 0 0);
-  --accent: oklch(0.27 0.005 260);
-  --accent-foreground: oklch(0.88 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.18 0 0);
-  --warning: oklch(0.78 0.16 75);
+  --warning: light-dark(oklch(0.78 0.16 75), oklch(0.78 0.16 75));
   --warning-foreground: var(--warning-ink);
-  --success-ink: oklch(0.78 0.13 150);
-  --success-surface: oklch(0.72 0.15 150 / 0.16);
-  --warning-ink: oklch(0.86 0.13 85);
-  --warning-surface: oklch(0.72 0.15 75 / 0.16);
-  --error-ink: oklch(0.78 0.13 27);
-  --error-surface: oklch(0.72 0.15 27 / 0.16);
-  --info-ink: oklch(0.78 0.13 250);
-  --info-surface: oklch(0.72 0.15 250 / 0.16);
-  --border: oklch(0.32 0.005 260);
-  --control-border: oklch(0.55 0.005 260);
-  --input: oklch(0.28 0.005 260);
-  --ring: oklch(0.72 0 0);
-  --sidebar: oklch(0.17 0.005 260);
-  --sidebar-foreground: oklch(0.82 0 0);
-  --chrome-edge: rgba(255, 255, 255, 0.12);
-  --chrome-shadow: rgba(0, 0, 0, 0.38);
-  --sidebar-surface: rgba(16, 19, 27, 0.62);
-  --sidebar-sheen: rgba(255, 255, 255, 0.08);
-  --main-surface: rgba(22, 25, 33, 0.82);
-  --scrollbar-track: rgba(255, 255, 255, 0.04);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
-}
-
-:root[data-platform='darwin'][data-reduced-transparency='false'] {
-  --sidebar-surface: rgba(255, 255, 255, 0.62);
-  --main-surface: rgba(250, 250, 252, 0.78);
-}
-
-.dark[data-platform='darwin'][data-reduced-transparency='false'] {
-  --sidebar-surface: rgba(14, 17, 25, 0.42);
-  --sidebar-sheen: rgba(255, 255, 255, 0.1);
-  --main-surface: rgba(19, 22, 30, 0.72);
-  --scrollbar-track: rgba(255, 255, 255, 0.035);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
+  --border: var(--line);
+  --control-border: var(--control-line);
+  --input: var(--control-fill);
+  --ring: var(--focus);
+  --sidebar: var(--surface-sunken);
 }
 
 /*
- * Surface motion (MAR-3319): scale leaves positioned dialogs' translate
- * intact; directional travel uses transform so Select's translate offset
- * survives too. Side utilities include the pop animation because CSS
- * animation shorthands replace one another. Conditional classes use
- * motion-safe so their attribute specificity cannot defeat reduced motion.
+ * VENDOR BRIDGE (from DS5) ---------------------------------------------------------------------
+ *
+ * Streamdown's bundle (scanned by global.css's @source) writes shadcn names and a few palette
+ * shades of its own: bg-background, text-foreground, bg-muted, text-muted-foreground,
+ * border-border, divide-border, bg-sidebar, border-sidebar, bg-primary, text-primary,
+ * text-primary-foreground, text-red-600/700/800, bg-red-50/100 (Mermaid's error box), bg-black/10
+ * (an image's hover veil). When DS5 resets the palette and deletes the legacy bridge, these come
+ * back here: the shadcn names pointed straight at tokens, the palette shades at Tailwind's own
+ * values so Streamdown looks as it does today. They are Streamdown's names only: apps/ and
+ * packages/ui/src write the tokens.
+ *
+ * DS5: uncomment.
+ *
+ * @theme inline {
+ *   --color-background: var(--canvas);
+ *   --color-foreground: var(--ink);
+ *   --color-muted: var(--surface-muted);
+ *   --color-muted-foreground: var(--ink-muted);
+ *   --color-border: var(--line);
+ *   --color-sidebar: var(--surface-sunken);
+ *   --color-primary: var(--strong);
+ *   --color-primary-foreground: var(--on-strong);
+ *   --color-red-50: oklch(97.1% 0.013 17.38);
+ *   --color-red-100: oklch(93.6% 0.032 17.717);
+ *   --color-red-600: oklch(57.7% 0.245 27.325);
+ *   --color-red-700: oklch(50.5% 0.213 27.518);
+ *   --color-red-800: oklch(44.4% 0.177 26.899);
+ *   --color-black: #000;
+ * }
  */
-@theme {
-  --animate-pop-in: pop-in 150ms ease-out both;
-  --animate-pop-out: pop-out 100ms ease-in both;
-  --animate-slide-in-top:
-    pop-in 150ms ease-out both, slide-in-top 150ms ease-out both;
-  --animate-slide-in-bottom:
-    pop-in 150ms ease-out both, slide-in-bottom 150ms ease-out both;
-  --animate-slide-in-left:
-    pop-in 150ms ease-out both, slide-in-left 150ms ease-out both;
-  --animate-slide-in-right:
-    pop-in 150ms ease-out both, slide-in-right 150ms ease-out both;
-}
-
-@keyframes pop-in {
-  from {
-    opacity: 0;
-    scale: 0.95;
-  }
-  to {
-    opacity: 1;
-    scale: 1;
-  }
-}
-
-@keyframes pop-out {
-  from {
-    opacity: 1;
-    scale: 1;
-  }
-  to {
-    opacity: 0;
-    scale: 0.95;
-  }
-}
-
-@keyframes slide-in-top {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
-  }
-}
-
-@keyframes slide-in-bottom {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
-  }
-}
-
-@keyframes slide-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
-  }
-}
-
-@keyframes slide-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0);
-  }
-}

@@ -23,7 +23,7 @@ export function readDeclarations(
   return Object.fromEntries(
     [...body.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)].map((match) => [
       match[1],
-      match[2].trim(),
+      match[2].trim().replace(/\s+/g, ' '),
     ]),
   )
 }
@@ -32,13 +32,42 @@ export type ThemeName = 'light' | 'dark'
 export type ThemeTokens = Record<ThemeName, Record<string, string>>
 
 /**
- * Light is `:root`; Dark is `:root` overlaid by `.dark` — both classes land on
- * the same `<html>` element, so every `:root` token Dark does not redeclare
- * still applies.
+ * The two halves of a `light-dark(LIGHT, DARK)` value, split at its top-level
+ * comma; `null` for any other value.
  */
-export function readThemeTokens(css: string): ThemeTokens {
-  const light = readDeclarations(css, ':root')
-  return { light, dark: { ...light, ...readDeclarations(css, '.dark') } }
+export function splitLightDark(
+  value: string,
+): readonly [light: string, dark: string] | null {
+  const match = /^light-dark\((.*)\)$/s.exec(value.trim())
+  if (!match) return null
+  let depth = 0
+  for (let index = 0; index < match[1].length; index++) {
+    const char = match[1][index]
+    if (char === '(') depth++
+    else if (char === ')') depth--
+    else if (char === ',' && depth === 0) {
+      return [match[1].slice(0, index).trim(), match[1].slice(index + 1).trim()]
+    }
+  }
+  throw new Error(`light-dark() needs two values: "${value}"`)
+}
+
+/**
+ * Both themes from `tokens.css` (MAR-3615): its top-level `:root` block, every
+ * `light-dark(a, b)` split into Light's `a` and Dark's `b`. A plain value, or a
+ * `var(--other)` alias, is the same in both. That is the cascade `<html
+ * data-theme>` sees: `data-theme` only sets `color-scheme`, which picks the
+ * half.
+ */
+export function readLightDarkTokens(css: string): ThemeTokens {
+  const light: Record<string, string> = {}
+  const dark: Record<string, string> = {}
+  for (const [name, value] of Object.entries(readDeclarations(css, ':root'))) {
+    const halves = splitLightDark(value)
+    light[name] = halves ? halves[0] : value
+    dark[name] = halves ? halves[1] : value
+  }
+  return { light, dark }
 }
 
 /** A token's color, following `var(--other)` aliases inside the theme. */

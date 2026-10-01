@@ -1,0 +1,692 @@
+/*
+ * Convergence's design tokens (@convergence/ui, MAR-3615 DS2): the only place a colour value, a
+ * font name, a size, a radius, a shadow or a duration appears.
+ *
+ * Every colour is light-dark(LIGHT, DARK), resolved against the element's color-scheme. <html
+ * data-theme="light|dark"> forces one; applyTheme writes the resolved choice, System included,
+ * so System follows macOS (MAR-3464). With no data-theme the system decides. A subtree can force
+ * its own: the terminal dock carries data-theme="dark" in both themes (R12). The terminal family
+ * is the one exception to light-dark(): one value, dark in both themes (R12).
+ *
+ * Values are today's, from apps/convergence/src/app/global.css at 6f6ebb93. Dark is bit for bit.
+ * Light keeps today's value where one exists and clears the contrast canary; where the light
+ * theme had none (a white overlay, a dark-only shade) the light value says the same thing on a
+ * light surface. The canary (apps/convergence/src/app/theme-contrast.pure.test.ts) reads this
+ * file: the numbers in the comments are its contrast ratios, light / dark, against --surface
+ * unless a comment says other.
+ *
+ * To add a token: a literal in light-dark() (or var(--other) for the same role), a comment
+ * saying what wears it, a --color-<name> line in theme.css, and its pairs in the canary.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces ------------------------------------------------------------------------------- */
+
+  /* The app's own background; was --background */
+  --canvas: light-dark(oklch(0.985 0 0), oklch(0.21 0.005 260));
+  /* Cards, panels, the canvas's nodes; was --card */
+  --surface: light-dark(oklch(0.975 0 0), oklch(0.24 0.005 260));
+  /* Wells, tracks, inline code, fills; was --muted and --secondary (equal in both themes) */
+  --surface-muted: light-dark(oklch(0.955 0 0), oklch(0.27 0.005 260));
+  /* A recessed surface: the execution bar under the composer, Streamdown's code chrome; was --sidebar */
+  --surface-sunken: light-dark(oklch(0.96 0 0), oklch(0.17 0.005 260));
+  /* R8: the one opaque popup surface (menus, selects, popovers, combobox lists); was --popover */
+  --raised: light-dark(oklch(0.985 0 0), oklch(0.24 0.005 260));
+  /* Dialogs and sheets: the canvas at 95% (bg-background/95 in Dialog today) */
+  --sheet: light-dark(oklch(0.985 0 0 / 0.95), oklch(0.21 0.005 260 / 0.95));
+  /*
+   * R8: glass is for tooltips only: the popup surface at 95% under a blur (bg-popover/95). Its
+   * edge is --line-soft: the tooltip's border-border/80 folds into it, as /60 does (Fable, 1 Oct).
+   */
+  --glass: light-dark(oklch(0.985 0 0 / 0.95), oklch(0.24 0.005 260 / 0.95));
+  --glass-blur: 24px;
+  /*
+   * Behind dialogs, black at 55% in both themes (bg-black/55 + backdrop-blur-sm). Learn Loom's
+   * 68% overlay comes here too: its handoff numbers take the nearest token (R11, Fable, 1 Oct).
+   */
+  --scrim: light-dark(rgb(0 0 0 / 0.55), rgb(0 0 0 / 0.55));
+  --scrim-blur: 8px;
+  /* Behind a sheet inside a dialog: the skills drawer (bg-black/30) */
+  --scrim-contained: light-dark(rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.3));
+  /*
+   * Behind pictures: inline previews and the preview dialog letterbox in black (bg-black). Black
+   * in both themes: a media viewer is dark by convention (Fable, 1 Oct).
+   */
+  --viewer: light-dark(rgb(0 0 0), rgb(0 0 0));
+
+  /* Text ----------------------------------------------------------------------------------- */
+
+  /* Body text; was --foreground, --card-foreground, --popover-foreground: 18.4 / 11.5 */
+  --ink: light-dark(oklch(0.145 0 0), oklch(0.88 0 0));
+  /* Secondary text, names, times; was --muted-foreground: 6.6 / 5.3 */
+  --ink-muted: light-dark(oklch(0.46 0 0), oklch(0.66 0 0));
+
+  /* Strong and highlight ------------------------------------------------------------------- */
+
+  /*
+   * Convergence has no brand hue: its strong colour is the ink, inverted into a fill. The primary
+   * Button, an on Switch, a count. Was --primary. Not called "accent": that is shadcn's name for
+   * the hover fill below, and the legacy bridge still serves it until DS5.
+   */
+  --strong: light-dark(oklch(0.205 0 0), oklch(0.88 0 0));
+  /* Text on --strong; was --primary-foreground: 17.2 / 13.1 */
+  --on-strong: light-dark(oklch(0.985 0 0), oklch(0.18 0 0));
+  /*
+   * A ghost Button's hover, a menu item under the keyboard. Cream in light, grey in dark: was
+   * shadcn's --accent, renamed so it can't be mistaken for a brand colour.
+   */
+  --highlight: light-dark(oklch(0.915 0.075 95), oklch(0.27 0.005 260));
+  /* Text on --highlight; was --accent-foreground */
+  --on-highlight: light-dark(oklch(0.28 0.04 80), oklch(0.88 0 0));
+
+  /* Lines and focus ------------------------------------------------------------------------ */
+
+  /* The quiet decorative separator; was --border. Decorative: not held to 3:1 */
+  --line: light-dark(oklch(0.88 0 0), oklch(0.32 0.005 260));
+  /*
+   * The app's most common border, border-border/70 (150 uses), as a name. border-border/60 (63)
+   * and /80 (10) fold into it too (R0, imperceptible; Fable, 1 Oct), the tooltip's edge and the
+   * terminal dock's included.
+   */
+  --line-soft: light-dark(oklch(0.88 0 0 / 0.7), oklch(0.32 0.005 260 / 0.7));
+  /* A control's outline: Input, SelectTrigger, Textarea (MAR-3460); was --control-border: 3.4 / 3.4 */
+  --control-line: light-dark(oklch(0.62 0 0), oklch(0.55 0.005 260));
+  /* The field hairline shadcn calls --input; also the dark Select's fill (bg-input/30) */
+  --control-fill: light-dark(oklch(0.88 0 0), oklch(0.28 0.005 260));
+  /* Focus rings; was --ring: 5.6 / 6.6 */
+  --focus: light-dark(oklch(0.5 0 0), oklch(0.72 0 0));
+
+  /*
+   * Overlays: the theme-safe replacements for the 131 border-white/ and bg-white/ classes that
+   * only work on a dark surface (DS-2). Dark is today's white at the same alpha; light is the ink
+   * at the alpha that draws the same edge or fill on a near-white surface.
+   */
+  /* An edge or divider on any surface; was border-white/10 (73), border-white/5 */
+  --hairline: light-dark(oklch(0.145 0 0 / 0.1), rgb(255 255 255 / 0.1));
+  /* A hovered or emphasised edge; was border-white/15, /20, /25, hover:border-white/20 and /30 */
+  --hairline-strong: light-dark(oklch(0.145 0 0 / 0.2), rgb(255 255 255 / 0.2));
+  /* A resting tint on a card or well; was bg-white/[0.02], bg-foreground/[0.02]-[0.035] */
+  --fill-quiet: light-dark(oklch(0.145 0 0 / 0.03), rgb(255 255 255 / 0.02));
+
+  /*
+   * R7 Chosen and selected. A selected row is --fill-selected plus aria-current, and its hover is
+   * --fill-hover, about half as strong. The selected fill is the sidebar's selected row today
+   * (bg-accent), the most common selected look (R0). The chosen option of a one-of-a-few control
+   * is --chip, raised (shadow-raised) on --chip-track.
+   */
+  --fill-selected: var(--highlight);
+  /*
+   * Exactly half of --fill-selected (R7; Fable, 1 Oct): the same colour at 50%, written as a
+   * literal because tokens hold no color-mix(). The canary holds the two together.
+   * Replaces hover:bg-accent on rows and hover:bg-white/5.
+   */
+  --fill-hover: light-dark(
+    oklch(0.915 0.075 95 / 0.5),
+    oklch(0.27 0.005 260 / 0.5)
+  );
+  --chip-track: var(--surface-muted);
+  /* Light: a white chip lifted by shadow-raised. Dark: today's bg-white/10 laid over the track */
+  --chip: light-dark(oklch(1 0 0), oklch(0.356 0.004 260));
+
+  /*
+   * Status (R1) --------------------------------------------------------------------------
+   *
+   * Five tones: neutral, info, success, warning, danger. Never colour alone: always with a word or
+   * a glyph. Session states map onto them in entities/session, never here: working = info,
+   * waiting on you = warning, finished = success, failed = danger, unreachable = warning with its
+   * own glyph, idle = neutral. Each tone has four roles:
+   *   -ink    text and icons, 4.5:1 on canvas, surface and surface-muted, and on its own -soft
+   *   -soft   a tint behind the tone's word (badge, notice, a destructive item under the pointer)
+   *   -line   the tint's border
+   *   -solid  dots, bars, canvas wires, the destructive Button; 3:1 on canvas, surface, muted
+   * The -ink values are MAR-3460's tested inks, except danger, which keeps --destructive's red
+   * (text-destructive, 96 uses, R0). -soft and -line are the app's most common tint recipe, the
+   * tone's -500 at 10% under its -500 at 30% (40% for danger, as border-destructive/40 draws).
+   */
+
+  /* Neutral: idle, closed, declared. The ink is --ink-muted; the solid is the idle dot and only recedes */
+  --neutral-ink: var(--ink-muted);
+  --neutral-soft: light-dark(
+    oklch(0.955 0 0 / 0.3),
+    oklch(0.27 0.005 260 / 0.3)
+  );
+  --neutral-line: var(--line-soft);
+  --neutral-solid: light-dark(oklch(0.46 0 0 / 0.4), oklch(0.66 0 0 / 0.4));
+
+  /* Info: working, a remote, a hint. Ink 6.1 / 8.2, on its tint 5.4 / 7.3; solid (blue-500) 3.5 / 4.4 */
+  --info-ink: light-dark(oklch(0.48 0.13 250), oklch(0.78 0.13 250));
+  --info-soft: light-dark(
+    oklch(0.623 0.214 259.815 / 0.1),
+    oklch(0.623 0.214 259.815 / 0.1)
+  );
+  --info-line: light-dark(
+    oklch(0.623 0.214 259.815 / 0.3),
+    oklch(0.623 0.214 259.815 / 0.3)
+  );
+  --info-solid: light-dark(
+    oklch(0.623 0.214 259.815),
+    oklch(0.623 0.214 259.815)
+  );
+
+  /* Success: finished, delivered. Ink 5.7 / 8.6, on its tint 5.2 / 7.4; solid emerald-600 / -400 (#34d399) 3.4 / 8.5 */
+  --success-ink: light-dark(oklch(0.48 0.13 150), oklch(0.78 0.13 150));
+  --success-soft: light-dark(
+    oklch(0.696 0.17 162.48 / 0.1),
+    oklch(0.696 0.17 162.48 / 0.1)
+  );
+  --success-line: light-dark(
+    oklch(0.696 0.17 162.48 / 0.3),
+    oklch(0.696 0.17 162.48 / 0.3)
+  );
+  --success-solid: light-dark(
+    oklch(0.596 0.145 163.225),
+    oklch(0.765 0.177 163.223)
+  );
+
+  /*
+   * Warning: waiting on you, unreachable, a heads-up. "Needs you" is never red (R1). The tint is
+   * today's bg-warning/10; the dark solid is today's --warning, the light one a shade deeper so a
+   * dot clears 3:1 on a near-white surface (today's 0.78 is 2.0:1).
+   */
+  --warning-ink: light-dark(oklch(0.46 0.13 65), oklch(0.86 0.13 85));
+  --warning-soft: light-dark(
+    oklch(0.78 0.16 75 / 0.1),
+    oklch(0.78 0.16 75 / 0.1)
+  );
+  --warning-line: light-dark(
+    oklch(0.78 0.16 75 / 0.3),
+    oklch(0.78 0.16 75 / 0.3)
+  );
+  --warning-solid: light-dark(oklch(0.64 0.16 60), oklch(0.78 0.16 75));
+
+  /*
+   * Danger: failed and errored, and the destructive item and its confirming button (R5). Dark is
+   * today's --destructive (red-400, the canvas's #f87171). The light ink is a step deeper than
+   * --destructive so it clears 4.5:1 on its own tint too (today 4.2); the light solid is today's.
+   */
+  --danger-ink: light-dark(oklch(0.51 0.21 27.325), oklch(0.704 0.191 22.216));
+  --danger-soft: light-dark(
+    oklch(0.55 0.23 27.325 / 0.1),
+    oklch(0.704 0.191 22.216 / 0.1)
+  );
+  --danger-line: light-dark(
+    oklch(0.55 0.23 27.325 / 0.4),
+    oklch(0.704 0.191 22.216 / 0.4)
+  );
+  --danger-solid: light-dark(
+    oklch(0.55 0.23 27.325),
+    oklch(0.704 0.191 22.216)
+  );
+  /* Text on --danger-solid; was --destructive-foreground: 5.1 / 6.5 */
+  --on-danger: light-dark(oklch(0.985 0 0), oklch(0.18 0 0));
+
+  /*
+   * Categories (R1) -----------------------------------------------------------------------
+   *
+   * Things told apart by hue, not by state: a Space's status, a pull request's state, a skill's
+   * origin, a favourite. Each tag hue is a base (the -500, drawn at /10 for a pill's fill and /25
+   * for its edge, as the app draws them today) and an ink. The inks are today's -700 / -200 pairs;
+   * green, lime, orange and yellow go one step deeper in light (-800) so the word clears 4.5:1 on
+   * its own tint. Which category wears which hue lives in the owning entity's .pure.ts.
+   */
+  --tag-cyan: light-dark(
+    oklch(0.715 0.143 215.221),
+    oklch(0.715 0.143 215.221)
+  );
+  --tag-cyan-ink: light-dark(
+    oklch(0.52 0.105 223.128),
+    oklch(0.917 0.08 205.041)
+  );
+  --tag-sky: light-dark(oklch(0.685 0.169 237.323), oklch(0.685 0.169 237.323));
+  --tag-sky-ink: light-dark(
+    oklch(0.5 0.134 242.749),
+    oklch(0.901 0.058 230.902)
+  );
+  --tag-green: light-dark(
+    oklch(0.723 0.219 149.579),
+    oklch(0.723 0.219 149.579)
+  );
+  --tag-green-ink: light-dark(
+    oklch(0.448 0.119 151.328),
+    oklch(0.925 0.084 155.995)
+  );
+  --tag-emerald: light-dark(oklch(0.696 0.17 162.48), oklch(0.696 0.17 162.48));
+  --tag-emerald-ink: light-dark(
+    oklch(0.508 0.118 165.612),
+    oklch(0.905 0.093 164.15)
+  );
+  --tag-lime: light-dark(oklch(0.768 0.233 130.85), oklch(0.768 0.233 130.85));
+  --tag-lime-ink: light-dark(
+    oklch(0.453 0.124 130.933),
+    oklch(0.938 0.127 124.321)
+  );
+  --tag-teal: light-dark(oklch(0.704 0.14 182.503), oklch(0.704 0.14 182.503));
+  --tag-teal-ink: light-dark(
+    oklch(0.511 0.096 186.391),
+    oklch(0.91 0.096 180.426)
+  );
+  --tag-violet: light-dark(
+    oklch(0.606 0.25 292.717),
+    oklch(0.606 0.25 292.717)
+  );
+  --tag-violet-ink: light-dark(
+    oklch(0.491 0.27 292.581),
+    oklch(0.894 0.057 293.283)
+  );
+  --tag-indigo: light-dark(
+    oklch(0.585 0.233 277.117),
+    oklch(0.585 0.233 277.117)
+  );
+  --tag-indigo-ink: light-dark(
+    oklch(0.457 0.24 277.023),
+    oklch(0.87 0.065 274.039)
+  );
+  --tag-rose: light-dark(oklch(0.645 0.246 16.439), oklch(0.645 0.246 16.439));
+  --tag-rose-ink: light-dark(
+    oklch(0.514 0.222 16.935),
+    oklch(0.892 0.058 10.001)
+  );
+  --tag-orange: light-dark(
+    oklch(0.705 0.213 47.604),
+    oklch(0.705 0.213 47.604)
+  );
+  --tag-orange-ink: light-dark(
+    oklch(0.47 0.157 37.304),
+    oklch(0.901 0.076 70.697)
+  );
+  --tag-yellow: light-dark(
+    oklch(0.795 0.184 86.047),
+    oklch(0.795 0.184 86.047)
+  );
+  --tag-yellow-ink: light-dark(
+    oklch(0.476 0.114 61.907),
+    oklch(0.945 0.129 101.54)
+  );
+  --tag-zinc: light-dark(
+    oklch(0.552 0.016 285.938),
+    oklch(0.552 0.016 285.938)
+  );
+  --tag-zinc-ink: light-dark(
+    oklch(0.442 0.017 285.786),
+    oklch(0.871 0.006 286.286)
+  );
+
+  /*
+   * Merged: a pull request (or a Space) that landed. Teal, as the PR panel and the Space board
+   * draw it (R0: two of the three places; Needs-you's purple icon follows). Its own name, so a
+   * change to the tag hues never recolours a merge.
+   */
+  --merged: var(--tag-teal);
+  --merged-ink: var(--tag-teal-ink);
+
+  /*
+   * Crews: the eight colours a crew can wear (session-crew-picker.pure.ts). A crew stores its
+   * colour as this hex, so the hex is the key: crewColorToken('#7c3aed') is var(--crew-violet).
+   * Same in both themes today; a crew's colour is a swatch someone picked.
+   */
+  --crew-violet: light-dark(#7c3aed, #7c3aed);
+  --crew-blue: light-dark(#2563eb, #2563eb);
+  --crew-cyan: light-dark(#06b6d4, #06b6d4);
+  --crew-green: light-dark(#10b981, #10b981);
+  --crew-amber: light-dark(#f59e0b, #f59e0b);
+  --crew-red: light-dark(#ef4444, #ef4444);
+  --crew-pink: light-dark(#ec4899, #ec4899);
+  /* Also the colour of a crew with none chosen (crew-settings-panel's rgb(148 163 184)) */
+  --crew-slate: light-dark(#94a3b8, #94a3b8);
+
+  /* Providers: the tint a provider's card is washed in, at 6% (needs-you-card.styles.ts) */
+  --provider-openai: light-dark(#5faf9c, #5faf9c);
+  --provider-anthropic: light-dark(#cc917b, #cc917b);
+  --provider-pi: light-dark(#ae94db, #ae94db);
+  --provider-cursor: light-dark(#a5b3c7, #a5b3c7);
+  --provider-google: light-dark(#83a4e2, #83a4e2);
+
+  /* Chart series, in order (analytics-insights.pure.ts CHART_PALETTE) */
+  --chart-1: light-dark(#2563eb, #2563eb);
+  --chart-2: light-dark(#14b8a6, #14b8a6);
+  --chart-3: light-dark(#f59e0b, #f59e0b);
+  --chart-4: light-dark(#7c3aed, #7c3aed);
+  --chart-5: light-dark(#ef4444, #ef4444);
+  /* Grid and axis lines */
+  --chart-grid: light-dark(rgb(148 163 184 / 0.22), rgb(148 163 184 / 0.22));
+  /* The activity heatmap's four levels (usage-tab.presentational.tsx) */
+  --chart-heat-1: light-dark(
+    oklch(0.91 0.096 180.426 / 0.6),
+    oklch(0.277 0.046 192.524)
+  );
+  --chart-heat-2: light-dark(
+    oklch(0.777 0.152 181.912 / 0.7),
+    oklch(0.437 0.078 188.216)
+  );
+  --chart-heat-3: light-dark(
+    oklch(0.6 0.118 184.704 / 0.8),
+    oklch(0.6 0.118 184.704)
+  );
+  --chart-heat-4: light-dark(
+    oklch(0.769 0.188 70.08 / 0.9),
+    oklch(0.769 0.188 70.08)
+  );
+
+  /*
+   * A diff's line counts (+12 −3 on a turn card): their own hues, so red keeps meaning failed
+   * (R1). Today green-500 and red-500 in both themes; light goes to -700 to be readable on a
+   * near-white card (green-500 is 2.1:1), dark's red goes a step lighter to clear 4.5 on a card.
+   */
+  --diff-added: light-dark(
+    oklch(0.527 0.154 150.069),
+    oklch(0.723 0.219 149.579)
+  );
+  --diff-removed: light-dark(
+    oklch(0.505 0.213 27.518),
+    oklch(0.704 0.191 22.216)
+  );
+
+  /* The agent's avatar in the transcript (bg-purple-600 text-white) */
+  --avatar-agent: light-dark(
+    oklch(0.558 0.288 302.321),
+    oklch(0.558 0.288 302.321)
+  );
+  --on-avatar-agent: light-dark(rgb(255 255 255), rgb(255 255 255));
+
+  /*
+   * Window chrome ----------------------------------------------------------------------------
+   *
+   * The macOS window is translucent (vibrancy under-window): these sit over the desktop and have
+   * no fixed colour to test against. The base values are the opaque-ish fallback (reduced
+   * transparency, or not darwin); the darwin block below thins them.
+   */
+  --chrome-edge: light-dark(
+    rgba(255, 255, 255, 0.48),
+    rgba(255, 255, 255, 0.12)
+  );
+  --chrome-shadow: light-dark(rgba(15, 23, 42, 0.12), rgba(0, 0, 0, 0.38));
+  /* The sidebar panel; was --sidebar-surface */
+  --chrome-sidebar: light-dark(
+    rgba(255, 255, 255, 0.76),
+    rgba(16, 19, 27, 0.62)
+  );
+  /* The light that runs down the sidebar's top and bottom; was --sidebar-sheen */
+  --chrome-sheen: light-dark(
+    rgba(255, 255, 255, 0.48),
+    rgba(255, 255, 255, 0.08)
+  );
+  /* The main panel; was --main-surface */
+  --chrome-main: light-dark(rgba(252, 252, 253, 0.86), rgba(22, 25, 33, 0.82));
+  --scrollbar-track: light-dark(
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.04)
+  );
+  --scrollbar-thumb: light-dark(
+    rgba(17, 24, 39, 0.2),
+    rgba(255, 255, 255, 0.14)
+  );
+  --scrollbar-thumb-hover: light-dark(
+    rgba(17, 24, 39, 0.3),
+    rgba(255, 255, 255, 0.22)
+  );
+
+  /*
+   * The terminal (R12) -------------------------------------------------------------------------
+   *
+   * Dark in both themes, so one value each, not light-dark(). The dock's root also carries
+   * data-theme="dark", so the kit's own parts inside it (the new-tab and close buttons, the
+   * trailing slot) draw their dark look too. xterm can't read CSS: terminal.tokens.ts mirrors
+   * the palette and the type, and its test keeps the two equal.
+   */
+  --terminal-bg: #0b0b0f;
+  --terminal-ink: #e6e6e6;
+  --terminal-cursor: #e6e6e6;
+  --terminal-selection: #2d3340;
+  --terminal-ansi-black: #1a1a1f;
+  --terminal-ansi-red: #ef5350;
+  --terminal-ansi-green: #9ccc65;
+  --terminal-ansi-yellow: #ffca28;
+  --terminal-ansi-blue: #42a5f5;
+  --terminal-ansi-magenta: #ab47bc;
+  --terminal-ansi-cyan: #26c6da;
+  --terminal-ansi-white: #e6e6e6;
+  --terminal-ansi-bright-black: #4f4f5a;
+  --terminal-ansi-bright-red: #ff6e6e;
+  --terminal-ansi-bright-green: #b9f27c;
+  --terminal-ansi-bright-yellow: #ffe082;
+  --terminal-ansi-bright-blue: #64b5f6;
+  --terminal-ansi-bright-magenta: #ce93d8;
+  --terminal-ansi-bright-cyan: #4dd0e1;
+  --terminal-ansi-bright-white: #ffffff;
+  /* The tab strip, the dark theme's bg-background/40 over the terminal, in both themes */
+  --terminal-strip: oklch(0.21 0.005 260 / 0.4);
+  /* The active tab, and an inactive one under the pointer */
+  --terminal-tab: oklch(0.21 0.005 260);
+  --terminal-tab-hover: oklch(0.21 0.005 260 / 0.6);
+  /*
+   * Tab labels: the active one, the rest. 12.3 and 5.7 on --terminal-tab. The dock's edge and
+   * the strip's divider are --line-soft, which the dock's data-theme="dark" resolves dark.
+   */
+  --terminal-tab-ink: oklch(0.88 0 0);
+  --terminal-tab-ink-muted: oklch(0.66 0 0);
+  --terminal-font:
+    JetBrainsMono, 'JetBrains Mono', Menlo, 'SF Mono', Consolas, monospace;
+  --terminal-font-size: 13px;
+  --terminal-line-height: 1.2;
+
+  /*
+   * Type -------------------------------------------------------------------------------------
+   *
+   * The system's own face. Line heights stay unitless ratios, as Tailwind writes them, so a child
+   * in another size inherits the ratio, not a length: a 1rem here would move every 11 px label
+   * that sits inside text-xs.
+   */
+  --type-family-sans: -apple-system, 'SF Pro Text', system-ui, sans-serif;
+  --type-family-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  /*
+   * R4: today's two small sizes, as tokens, so nothing moves. Neither sets a line height yet:
+   * text-[10px] and text-[11px] never did, and their 477 uses inherit their parent's. Their own
+   * line heights are here for the parts that want them (leading-3xs, leading-2xs), and become the
+   * steps' own when the redesign lifts the floor to 11 px.
+   */
+  /* 10 px: captions, counts, keyboard hints (text-[10px], 143 uses) */
+  --type-size-3xs: 0.625rem;
+  /* 11 px: the dense default of every panel (text-[11px], 334 uses) */
+  --type-size-2xs: 0.6875rem;
+  /* 12 px */
+  --type-size-xs: 0.75rem;
+  /* 14 px */
+  --type-size-sm: 0.875rem;
+  /* 16 px */
+  --type-size-base: 1rem;
+  /* 18 px */
+  --type-size-lg: 1.125rem;
+  /* 20 px */
+  --type-size-xl: 1.25rem;
+  /* 24 px */
+  --type-size-2xl: 1.5rem;
+  /* 14 px on 10 px */
+  --type-leading-3xs: calc(0.875 / 0.625);
+  /* 16 px on 11 px, xs's line, so an 11 px label sits on a 12 px row's baseline grid */
+  --type-leading-2xs: calc(1 / 0.6875);
+  --type-leading-xs: calc(1 / 0.75);
+  --type-leading-sm: calc(1.25 / 0.875);
+  --type-leading-base: calc(1.5 / 1);
+  --type-leading-lg: calc(1.75 / 1.125);
+  --type-leading-xl: calc(1.75 / 1.25);
+  --type-leading-2xl: calc(2 / 1.5);
+  --type-weight-regular: 400;
+  --type-weight-medium: 500;
+  --type-weight-semibold: 600;
+  --type-weight-bold: 700;
+  /* An eyebrow (SectionLabel): 11 px, medium, uppercase, this tracking (R0: 23 of 84) */
+  --type-tracking-eyebrow: 0.025em;
+
+  /*
+   * Corners -----------------------------------------------------------------------------------
+   *
+   * Today's radii, by what wears them. The class names stay Tailwind's (rounded-sm … rounded-2xl,
+   * and bare rounded), so the sweep renames nothing here. Bare rounded is 10 px, not Tailwind's
+   * 4 px: shadcn's --radius: 0.625rem in global.css's @theme is what it reads (64 uses).
+   */
+  /* Menu and select items, small inner chips: rounded-sm */
+  --corner-xs: 0.25rem;
+  /* Controls, menus, popovers: rounded-md */
+  --corner-control: 0.375rem;
+  /* Cards, panels' boxes, notices: rounded-lg */
+  --corner-card: 0.5rem;
+  /* Sidebar rows and small cards: bare rounded */
+  --corner-row: 0.625rem;
+  /* Dialogs, tooltips, large cards, the terminal frame: rounded-xl */
+  --corner-panel: 0.75rem;
+  /* The conversation-actions panel, settings cards: rounded-2xl */
+  --corner-sheet: 1rem;
+
+  /*
+   * Elevation ---------------------------------------------------------------------------------
+   *
+   * Tailwind's own values, by role. Black in both themes today; shadows hardly read on a dark
+   * surface, where the lighter fill does the lifting.
+   */
+  /* Buttons, inputs, a Switch's thumb (shadow-sm, bare shadow, shadow-xs) */
+  --elevation-control:
+    0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  /* R8 popups, the chosen chip, the composer card resting on its strip (shadow-md, shadow-lg) */
+  --elevation-raised:
+    0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  /* The tooltip, the floating feedback button (shadow-xl) */
+  --elevation-floating:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  /* Dialogs, the sidebar's peek (shadow-2xl) */
+  --elevation-overlay: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  /* R11 recorded: Loom's stacked sheets, closed and open (loom-stack.presentational.tsx) */
+  --elevation-sheet: 0 3px 12px rgb(0 0 0 / 0.16);
+  --elevation-sheet-open: 0 4px 20px rgb(0 0 0 / 0.22);
+
+  /* Controls (R3) ------------------------------------------------------------------------------ */
+
+  /* One scale for every control; the size is a prop, never a class (h-6 / h-7 / h-8 / h-9 today) */
+  --control-xs: 1.5rem;
+  --control-sm: 1.75rem;
+  --control-md: 2rem;
+  --control-lg: 2.25rem;
+
+  /*
+   * Layout -------------------------------------------------------------------------------------
+   *
+   * Widths CSS draws. layout.tokens.ts mirrors them in pixels for the TypeScript that does
+   * arithmetic on them (the dock decision, the actions breakpoint), and its test keeps the two
+   * equal.
+   */
+  /* The conversation column: transcript, composer, notices, the annotation strip (max-w-2xl, 7 places) */
+  --layout-conversation: 42rem;
+  /* The gutter each side of it beside a docked panel (MIN_CONVERSATION_WIDTH = 672 + 2 × 24) */
+  --layout-conversation-gutter: 1.5rem;
+  /* The PR and Space panels (w-80, SIDE_PANEL_WIDTH) */
+  --layout-side-panel: 20rem;
+  /* The docked Parallel work panel (PARALLEL_WORK_PANEL_WIDTH) */
+  --layout-work-panel: 26.25rem;
+  /* A dialog's default width and greatest height (w-[min(720px,…)], max-h-[min(80vh,720px)]) */
+  --layout-dialog: 45rem;
+  --layout-dialog-height: 45rem;
+
+  /*
+   * Motion -------------------------------------------------------------------------------------
+   *
+   * Every duration, easing and distance the app animates with. Durations stay put under reduced
+   * motion, so fades keep their timing; distances, scales and loops go (below). motion/tokens.ts
+   * mirrors the durations and easings for TypeScript, and its test keeps the two equal.
+   */
+  /* A popup leaving (pop-out) */
+  --motion-exit: 100ms;
+  /* A popup arriving, a hover, a colour change: Tailwind's default transition, the sidebar fold */
+  --motion-fast: 150ms;
+  /* Loom's shell and other panels; also the delay before Loom's content fades in (loom-enter) */
+  --motion-panel: 200ms;
+  /* Rare, guided moments: Learn Loom */
+  --motion-slow: 350ms;
+  /* The notifications pulse */
+  --motion-pulse: 600ms;
+  /* One turn of a spinner */
+  --motion-loop: 1s;
+  /* One beat of a pulsing dot (animate-pulse) */
+  --motion-blink: 2s;
+  /* How long a canvas wire stays lit after a hop lands (WIRE_PULSE_MS) */
+  --motion-wire: 1.8s;
+  /* One breath of a working card's glow (CARD_BREATHE.periodMs) */
+  --motion-breath: 2.8s;
+  /* How long the pointer rests before a tooltip shows (the root TooltipProvider) */
+  --motion-tooltip-delay: 200ms;
+  /* Tailwind's ease-out: things settling */
+  --motion-ease: cubic-bezier(0, 0, 0.2, 1);
+  /* Tailwind's ease-in */
+  --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  /* Tailwind's default transition and ease-in-out: things moving and staying */
+  --motion-ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+  /* The popups' entrance and Loom's fade, written as the CSS keyword they use today */
+  --motion-ease-enter: ease-out;
+  /* The popups' exit */
+  --motion-ease-exit: ease-in;
+  /* Learn Loom: Figma's EASE_IN_AND_OUT, which is the CSS keyword */
+  --motion-ease-guide: ease-in-out;
+  /* A pulsing dot */
+  --motion-ease-blink: cubic-bezier(0.4, 0, 0.6, 1);
+  /* How far a popup travels as it arrives from its side */
+  --motion-shift: 8px;
+  /* Where a popup grows from */
+  --motion-scale-from: 0.95;
+  /* How many beats a loop plays: as many as it's shown for */
+  --motion-loops: infinite;
+}
+
+/* The darwin window, translucency on: the chrome thins so the desktop shows through */
+:root[data-platform='darwin'][data-reduced-transparency='false'] {
+  --chrome-sidebar: light-dark(
+    rgba(255, 255, 255, 0.62),
+    rgba(14, 17, 25, 0.42)
+  );
+  --chrome-sheen: light-dark(
+    rgba(255, 255, 255, 0.48),
+    rgba(255, 255, 255, 0.1)
+  );
+  --chrome-main: light-dark(rgba(250, 250, 252, 0.78), rgba(19, 22, 30, 0.72));
+  --scrollbar-track: light-dark(
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.035)
+  );
+  --scrollbar-thumb: light-dark(
+    rgba(17, 24, 39, 0.2),
+    rgba(255, 255, 255, 0.16)
+  );
+  --scrollbar-thumb-hover: light-dark(
+    rgba(17, 24, 39, 0.3),
+    rgba(255, 255, 255, 0.26)
+  );
+}
+
+/*
+ * Reduced motion reduces, it doesn't remove: nothing travels or scales, but fades keep their
+ * timing, because a fade still says something changed. A loop, which says nothing new beat after
+ * beat, stands still. It follows the system setting, and data-motion="reduced" on <html> (or any
+ * subtree) turns it on as well; it can't turn it off.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-shift: 0px;
+    --motion-scale-from: 1;
+    --motion-loops: 0;
+  }
+}
+
+[data-motion='reduced'] {
+  --motion-shift: 0px;
+  --motion-scale-from: 1;
+  --motion-loops: 0;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+}
