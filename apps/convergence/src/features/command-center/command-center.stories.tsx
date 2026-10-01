@@ -121,12 +121,23 @@ export const Default: Story = {
 
     await userEvent.keyboard('p')
     await expect(args.onQueryChange).toHaveBeenCalledWith('p')
-    // The highlighted row is the container's to keep; the arrows ask to move it.
+    // The highlighted row is the container's to keep; the arrows ask to move
+    // it. The field announces it (aria-activedescendant).
     await expect(options[0]).toHaveAttribute('aria-selected', 'true')
+    await expect(search).toHaveAttribute('aria-activedescendant', options[0].id)
+    await expect(within(dialog).getByRole('listbox')).toHaveAccessibleName(
+      'Results',
+    )
+    await expect(
+      within(dialog).getByRole('group', { name: 'Waiting on you' }),
+    ).toBeInTheDocument()
     await userEvent.keyboard('{ArrowDown}')
     await expect(args.onSelectedValueChange).toHaveBeenCalledWith(
       'new-session:w-sidebar',
     )
+    // Enter picks the highlighted row.
+    await userEvent.keyboard('{Enter}')
+    await expect(args.onSelect).toHaveBeenCalledWith(waiting)
 
     await userEvent.click(
       within(dialog).getByRole('option', { name: /^Dialog: Providers/ }),
@@ -168,30 +179,9 @@ export const Ranked: Story = {
   },
 }
 
-/**
- * Narrowed to cmdk's list, which holds only the message when nothing
- * matches; every other element in these stories is still checked.
- */
-const emptyListGap = {
-  a11y: {
-    config: {
-      rules: [
-        // a11y-known: with nothing to show, the list (role="listbox") holds
-        // only its message, a listbox without options — fixed by the sweep
-        // (DS4)
-        {
-          id: 'aria-required-children',
-          selector: '[role]:not([cmdk-list])',
-        },
-      ],
-    },
-  },
-}
-
 /** A query that matches nothing says what to try. */
 export const NoResults: Story = {
   name: 'No results',
-  parameters: emptyListGap,
   args: { query: 'zeppelin', view: { mode: 'ranked', items: [] } },
   play: async () => {
     const dialog = await screen.findByRole('dialog', {
@@ -202,13 +192,17 @@ export const NoResults: Story = {
         'No results. Try a session name, branch, or project.',
       ),
     ).toBeInTheDocument()
-    await expect(within(dialog).queryAllByRole('option')).toHaveLength(0)
+    // The words stand in for the list: no listbox without options.
+    await expect(within(dialog).queryByRole('listbox')).toBeNull()
+    await expect(within(dialog).getByRole('combobox')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
   },
 }
 
 /** Nothing recent yet: the palette says how to fill it. */
 export const Empty: Story = {
-  parameters: emptyListGap,
   args: { view: { mode: 'sections', sections: [] } },
   play: async () => {
     const dialog = await screen.findByRole('dialog', {
