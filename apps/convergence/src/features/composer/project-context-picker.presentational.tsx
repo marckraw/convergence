@@ -41,25 +41,28 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
   onToggleItem,
 }) => (
   <Popover open={open} onOpenChange={onOpenChange}>
-    <PopoverTrigger asChild>
-      <Button
-        type="button"
-        variant="quiet"
-        aria-label="Select project context"
-        disabled={disabled || items.length === 0}
-        size="sm"
-        className={triggerClassName}
-      >
-        <FileText className="h-3.5 w-3.5" />
-        Context
-        {selectedIds.length > 0 ? (
-          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-            {selectedIds.length}
-          </span>
-        ) : null}
-      </Button>
-    </PopoverTrigger>
+    <PopoverTrigger
+      render={
+        <Button
+          type="button"
+          variant="quiet"
+          aria-label="Select project context"
+          disabled={disabled || items.length === 0}
+          size="sm"
+          className={triggerClassName}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Context
+          {selectedIds.length > 0 ? (
+            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+              {selectedIds.length}
+            </span>
+          ) : null}
+        </Button>
+      }
+    />
     <PopoverContent
+      aria-label="Project context"
       align="start"
       className="w-[min(420px,calc(100vw-2rem))] p-0"
     >

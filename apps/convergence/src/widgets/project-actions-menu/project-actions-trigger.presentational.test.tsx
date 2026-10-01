@@ -1,12 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { ProjectScript } from '@/entities/project-script'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@convergence/ui'
+import { Popover, PopoverContent, PopoverTrigger } from '@convergence/ui'
 import { ProjectActionsTrigger } from './project-actions-trigger.presentational'
 
 const script: ProjectScript = {
@@ -21,22 +16,21 @@ const script: ProjectScript = {
 }
 
 describe('ProjectActionsTrigger', () => {
-  it('forwards trigger props when used as a dropdown trigger child', async () => {
+  it('forwards trigger props when it is what a popover trigger renders', async () => {
     render(
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <ProjectActionsTrigger selectedScript={script} running={false} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuItem>Action menu opened</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>,
+      <Popover>
+        <PopoverTrigger
+          render={
+            <ProjectActionsTrigger selectedScript={script} running={false} />
+          }
+        />
+        <PopoverContent aria-label="Project actions">
+          Action menu opened
+        </PopoverContent>
+      </Popover>,
     )
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: /dev/i }), {
-      button: 0,
-      ctrlKey: false,
-    })
+    fireEvent.click(screen.getByRole('button', { name: /dev/i }))
 
     expect(await screen.findByText('Action menu opened')).toBeInTheDocument()
   })

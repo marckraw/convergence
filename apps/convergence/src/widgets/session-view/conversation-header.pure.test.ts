@@ -470,9 +470,10 @@ describe('MAR-3429 CH4', () => {
   })
 })
 
-describe('interactionKeepsFocusWhereItIs (MAR-3429 CH4 lap 2 C)', () => {
+describe('interactionKeepsFocusWhereItIs (MAR-3429 CH4 lap 2 C, MAR-3616)', () => {
   const outside = (init: Partial<MouseEvent>) => ({
-    detail: { originalEvent: init as Event },
+    reason: 'outside-press',
+    event: init as Event,
   })
 
   it('keeps focus where it is for a right-click or ctrl-click outside, and only then — mutation return false turns red', () => {
@@ -486,5 +487,20 @@ describe('interactionKeepsFocusWhereItIs (MAR-3429 CH4 lap 2 C)', () => {
     ).toBe(false)
     // A focus moving outside is no pointer at all.
     expect(interactionKeepsFocusWhereItIs(outside({}))).toBe(false)
+  })
+
+  it('only a press outside: a right-button event under any other reason keeps nothing — mutation drop the reason check turns red', () => {
+    for (const reason of [
+      'escape-key',
+      'item-press',
+      'focus-out',
+      'trigger-press',
+    ])
+      expect(
+        interactionKeepsFocusWhereItIs({
+          reason,
+          event: { button: 2 } as unknown as Event,
+        }),
+      ).toBe(false)
   })
 })

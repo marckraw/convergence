@@ -96,39 +96,38 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
             }
           }}
         >
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant={holding.length > 0 ? 'tonal' : 'ghost'}
-              aria-label={`Add ${sessionName} to a crew`}
-              aria-expanded={open}
-              size="xs"
-              className={cn(
-                'max-w-32 shrink-0 transition-opacity',
-                holding.length > 0
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100',
-              )}
-            >
-              {holding.length === 1 && holding[0]?.emoji ? (
-                <span aria-hidden className="leading-none">
-                  {holding[0].emoji}
-                </span>
-              ) : (
-                <Users className="size-3" />
-              )}
-              <span className="truncate">{label}</span>
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant={holding.length > 0 ? 'tonal' : 'ghost'}
+                aria-label={`Add ${sessionName} to a crew`}
+                aria-expanded={open}
+                size="xs"
+                className={cn(
+                  'max-w-32 shrink-0 transition-opacity',
+                  holding.length > 0
+                    ? 'opacity-100'
+                    : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100',
+                )}
+              >
+                {holding.length === 1 && holding[0]?.emoji ? (
+                  <span aria-hidden className="leading-none">
+                    {holding[0].emoji}
+                  </span>
+                ) : (
+                  <Users className="size-3" />
+                )}
+                <span className="truncate">{label}</span>
+              </Button>
+            }
+          />
 
           <PopoverContent
             align="end"
             collisionPadding={16}
-            className="flex max-h-[min(24rem,var(--radix-popover-content-available-height))] w-64 flex-col p-0"
-            onOpenAutoFocus={(event) => {
-              event.preventDefault()
-              searchRef.current?.focus()
-            }}
+            className="flex max-h-[min(24rem,var(--available-height))] w-64 flex-col p-0"
+            initialFocus={searchRef}
           >
             <Command
               shouldFilter={false}

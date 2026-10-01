@@ -65,35 +65,34 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
         if (!next) setQuery('')
       }}
     >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          role="combobox"
-          aria-label={label}
-          aria-expanded={open}
-          disabled={options.length === 0}
-          size="sm"
-          className={cn(
-            'max-w-56 rounded-full border px-2.5 text-[11px] font-normal',
-            selected.length > 0
-              ? 'border-white/25 bg-white/10 text-foreground'
-              : 'border-white/10 text-muted-foreground hover:border-white/20',
-          )}
-        >
-          <span className="truncate">{summary}</span>
-          <ChevronDown className="size-3 shrink-0" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            role="combobox"
+            aria-label={label}
+            aria-expanded={open}
+            disabled={options.length === 0}
+            size="sm"
+            className={cn(
+              'max-w-56 rounded-full border px-2.5 text-[11px] font-normal',
+              selected.length > 0
+                ? 'border-white/25 bg-white/10 text-foreground'
+                : 'border-white/10 text-muted-foreground hover:border-white/20',
+            )}
+          >
+            <span className="truncate">{summary}</span>
+            <ChevronDown className="size-3 shrink-0" />
+          </Button>
+        }
+      />
 
       <PopoverContent
         align="start"
         collisionPadding={16}
-        className="flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-64 min-w-52 flex-col p-0"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault()
-          inputRef.current?.focus()
-        }}
+        className="flex max-h-[min(20rem,var(--available-height))] w-64 min-w-52 flex-col p-0"
+        initialFocus={inputRef}
       >
         <Command
           shouldFilter={false}

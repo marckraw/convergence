@@ -143,24 +143,27 @@ export const LocalModelTunnelStatusContainer: FC = () => {
           label="Local model tunnels. Click to view status and controls."
           side="top"
         >
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              data-testid="local-model-tunnel-pill"
-              className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
-            >
-              <StatusDot state={aggregate.state} />
-              <span className="min-w-0 truncate text-foreground">
-                {aggregate.label}
-              </span>
-              <span className="truncate text-muted-foreground/85">
-                {aggregate.detail}
-              </span>
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="local-model-tunnel-pill"
+                className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
+              >
+                <StatusDot state={aggregate.state} />
+                <span className="min-w-0 truncate text-foreground">
+                  {aggregate.label}
+                </span>
+                <span className="truncate text-muted-foreground/85">
+                  {aggregate.detail}
+                </span>
+              </Button>
+            }
+          />
         </Tooltip>
         <PopoverContent
+          aria-label="Local model tunnels"
           align="start"
           side="top"
           className="w-[min(420px,calc(100vw-2rem))] p-0"

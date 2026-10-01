@@ -520,7 +520,7 @@ describe('App', () => {
       sidebar.queryByRole('button', { name: /open a project/i }),
     ).toBeNull()
     expect(sidebar.queryByText('Project Settings')).toBeNull()
-    fireEvent.pointerDown(
+    fireEvent.click(
       sidebar.getByRole('button', { name: /open sidebar tools/i }),
     )
     expect(screen.getByText('Providers')).toBeInTheDocument()

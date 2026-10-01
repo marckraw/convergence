@@ -39,7 +39,7 @@ import {
 } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
-import { Button, DropdownMenuItem, IconButton } from '@convergence/ui'
+import { Button, IconButton, MenuCheckboxItem, MenuItem } from '@convergence/ui'
 import {
   Archive,
   ArrowLeftRight,
@@ -939,43 +939,40 @@ export const SessionView: FC = () => {
           ]}
           moreContent={
             <>
-              <DropdownMenuItem
-                role="menuitemcheckbox"
-                aria-checked={!!session.pinnedAt}
-                onSelect={togglePin}
-                className="gap-2"
+              <MenuCheckboxItem
+                checked={!!session.pinnedAt}
+                onCheckedChange={togglePin}
+                closeOnClick
               >
                 <Pin className="h-3.5 w-3.5" />
                 {session.pinnedAt ? 'Unpin conversation' : 'Pin conversation'}
-              </DropdownMenuItem>
+              </MenuCheckboxItem>
               {session.providerId !== 'shell' && (
-                <DropdownMenuItem
+                <MenuItem
                   onClick={() =>
                     openDialog('session-fork', {
                       parentSessionId: session.id,
                     })
                   }
-                  className="gap-2"
                 >
                   <GitFork className="h-3.5 w-3.5" />
                   Fork session…
-                </DropdownMenuItem>
+                </MenuItem>
               )}
               {session.providerId !== 'shell' && (
-                <DropdownMenuItem
+                <MenuItem
                   onClick={() =>
                     openDialog('space-session-link', {
                       sessionId: session.id,
                     })
                   }
-                  className="gap-2"
                 >
                   <Link2 className="h-3.5 w-3.5" />
-                  Link to Space...
-                </DropdownMenuItem>
+                  Link to Space…
+                </MenuItem>
               )}
               {session.providerId !== 'shell' && (
-                <DropdownMenuItem
+                <MenuItem
                   onClick={() => {
                     void setPrimarySurface(
                       session.id,
@@ -984,22 +981,18 @@ export const SessionView: FC = () => {
                         : 'terminal',
                     )
                   }}
-                  className="gap-2"
                 >
                   <ArrowLeftRight className="h-3.5 w-3.5" />
                   {session.primarySurface === 'terminal'
                     ? 'Show conversation as main'
                     : 'Show terminal as main'}
-                </DropdownMenuItem>
+                </MenuItem>
               )}
               {session.providerId !== 'shell' && debugLoggingEnabled && (
-                <DropdownMenuItem
-                  onClick={() => setDebugDrawerOpen(true)}
-                  className="gap-2"
-                >
+                <MenuItem onClick={() => setDebugDrawerOpen(true)}>
                   <ScrollText className="h-3.5 w-3.5" />
                   Open debug log…
-                </DropdownMenuItem>
+                </MenuItem>
               )}
             </>
           }

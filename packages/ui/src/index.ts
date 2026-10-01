@@ -41,13 +41,6 @@ export {
   DialogTrigger,
 } from './components/dialog/dialog.radix'
 export {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './components/dropdown-menu/dropdown-menu'
-export {
   FormDialog,
   type FormDialogProps,
   type FormDialogSaves,
@@ -93,8 +86,17 @@ export {
 export {
   Popover,
   PopoverContent,
+  type PopoverContentProps,
+  PopoverDescription,
+  type PopoverDescriptionProps,
+  PopoverHeader,
+  type PopoverHeaderProps,
+  type PopoverProps,
+  PopoverTitle,
+  type PopoverTitleProps,
   PopoverTrigger,
-} from './components/popover/popover.radix'
+  type PopoverTriggerProps,
+} from './components/popover/popover'
 export { SearchableSelect } from './components/searchable-select/searchable-select.container'
 export type {
   SearchableSelectAction,
@@ -143,6 +145,11 @@ export {
   focusRingWithin,
 } from './lib/focus-ring.styles'
 export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from './lib/no-drag.styles'
+export type {
+  PopupCloseType,
+  PopupFinalFocus,
+  PopupOpenChangeDetails,
+} from './lib/popup-focus.types'
 export {
   applyTheme,
   readAppliedTheme,

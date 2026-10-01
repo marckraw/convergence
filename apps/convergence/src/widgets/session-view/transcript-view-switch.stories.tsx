@@ -1,10 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@convergence/ui'
+import { Button, Menu, MenuContent, MenuTrigger } from '@convergence/ui'
 import { expect, fn, screen, waitFor } from 'storybook/test'
 import { TranscriptViewMenuItems } from './transcript-view-switch.presentational'
 
@@ -17,14 +12,12 @@ const meta = {
   },
   // The items only ever live inside the header's View menu.
   render: (args) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="secondary">View</Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
+    <Menu>
+      <MenuTrigger render={<Button variant="secondary" />}>View</MenuTrigger>
+      <MenuContent align="start">
         <TranscriptViewMenuItems {...args} />
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </MenuContent>
+    </Menu>
   ),
 } satisfies Meta<typeof TranscriptViewMenuItems>
 

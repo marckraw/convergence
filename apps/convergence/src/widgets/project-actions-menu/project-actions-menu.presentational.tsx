@@ -1,11 +1,18 @@
-import type { ComponentPropsWithoutRef, FC, ReactNode } from 'react'
+import type { FC, ReactNode } from 'react'
 import type {
   ProjectScript,
   ProjectScriptRun,
   ProjectScriptRunOutput,
 } from '@/entities/project-script'
 import { ProjectScriptIcon } from '@/entities/project-script'
-import { Button, cn, DropdownMenuContent, IconButton } from '@convergence/ui'
+import {
+  Button,
+  cn,
+  IconButton,
+  PopoverContent,
+  type PopupFinalFocus,
+  type PopupOpenChangeDetails,
+} from '@convergence/ui'
 import {
   ChevronDown,
   ChevronRight,
@@ -21,11 +28,15 @@ import { ProjectActionRunLog } from './project-action-run-log.presentational'
 import { formatProjectActionRunMeta } from './project-actions-menu.pure'
 import type { ProjectActionItem } from './project-actions-menu.types'
 
-/** Focus props for the menu's content (MAR-3427 A). */
-export type ProjectActionsMenuContentFocus = Pick<
-  ComponentPropsWithoutRef<typeof DropdownMenuContent>,
-  'onCloseAutoFocus' | 'onInteractOutside'
->
+/**
+ * How the panel hands the focus on when it closes, from a header that may
+ * have moved its trigger into More (MAR-3427 A, MAR-3616): `finalFocus` on
+ * the content, `onOpenChange` heard from the popover's own.
+ */
+export interface ProjectActionsMenuContentFocus {
+  finalFocus: PopupFinalFocus
+  onOpenChange: (open: boolean, details: PopupOpenChangeDetails) => void
+}
 
 interface ProjectActionsMenuPresentationalProps {
   projectName: string
@@ -68,10 +79,11 @@ export const ProjectActionsMenuPresentational: FC<
   onToggleRun,
   children,
 }) => (
-  <DropdownMenuContent
+  <PopoverContent
+    aria-label="Project actions"
     align="end"
     className="w-[28rem] p-1.5"
-    {...contentFocus}
+    finalFocus={contentFocus?.finalFocus}
   >
     <div className="flex items-center justify-between border-b border-border/70 px-2 py-1.5 text-[11px] text-muted-foreground">
       <span>Project actions</span>
@@ -258,5 +270,5 @@ export const ProjectActionsMenuPresentational: FC<
       </div>
       {children}
     </div>
-  </DropdownMenuContent>
+  </PopoverContent>
 )

@@ -100,25 +100,28 @@ export const SkillPicker: FC<SkillPickerProps> = ({
   onBrowseAll,
 }) => (
   <Popover open={open} onOpenChange={onOpenChange}>
-    <PopoverTrigger asChild>
-      <Button
-        type="button"
-        variant="quiet"
-        aria-label="Select skills"
-        disabled={disabled}
-        size="sm"
-        className={triggerClassName}
-      >
-        <Library className="h-3.5 w-3.5" />
-        Skills
-        {selectedSkills.length > 0 ? (
-          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-            {selectedSkills.length}
-          </span>
-        ) : null}
-      </Button>
-    </PopoverTrigger>
+    <PopoverTrigger
+      render={
+        <Button
+          type="button"
+          variant="quiet"
+          aria-label="Select skills"
+          disabled={disabled}
+          size="sm"
+          className={triggerClassName}
+        >
+          <Library className="h-3.5 w-3.5" />
+          Skills
+          {selectedSkills.length > 0 ? (
+            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+              {selectedSkills.length}
+            </span>
+          ) : null}
+        </Button>
+      }
+    />
     <PopoverContent
+      aria-label="Skills"
       align="start"
       className="w-[min(390px,calc(100vw-2rem))] p-0"
     >

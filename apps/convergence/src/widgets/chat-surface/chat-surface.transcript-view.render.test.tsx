@@ -125,7 +125,7 @@ it('MAR-3391 R5 E a global chat that folds has the Compact/Full choice in View, 
   }
 
   // The choice lives in the header's View menu (MAR-3429 CH4 R1).
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'View' }))
+  fireEvent.click(screen.getByRole('button', { name: 'View' }))
   const switchGroup = screen.getByRole('group', { name: 'Conversation view' })
   fireEvent.click(
     within(switchGroup).getByRole('menuitemradio', { name: 'Full' }),

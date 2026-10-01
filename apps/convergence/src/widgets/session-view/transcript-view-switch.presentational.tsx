@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { DropdownMenuItem } from '@convergence/ui'
+import { MenuRadioGroup, MenuRadioItem } from '@convergence/ui'
 import type { TranscriptViewMode } from './transcript-view-mode.api'
 
 interface TranscriptViewMenuItemsProps {
@@ -22,33 +22,29 @@ const OPTIONS: ReadonlyArray<{
 
 /**
  * The conversation's Compact/Full choice (MAR-3391 R5) as a radio choice
- * inside the header's View menu (MAR-3429 CH4 R1). The group keeps the name
- * the segmented switch had, "Conversation view".
+ * inside the header's View menu (MAR-3429 CH4 R1): the menu's own radio
+ * items (MAR-3616), with a check on the one chosen. The group keeps the name
+ * the segmented switch had, "Conversation view", and choosing closes the
+ * menu.
  */
 export const TranscriptViewMenuItems: FC<TranscriptViewMenuItemsProps> = ({
   mode,
   onChange,
 }) => (
-  <div role="group" aria-label="Conversation view">
+  <MenuRadioGroup
+    aria-label="Conversation view"
+    value={mode}
+    onValueChange={(next: TranscriptViewMode) => onChange(next)}
+  >
     {OPTIONS.map((option) => (
-      <DropdownMenuItem
+      <MenuRadioItem
         key={option.mode}
-        role="menuitemradio"
-        aria-checked={mode === option.mode}
+        value={option.mode}
         title={option.title}
-        onSelect={() => onChange(option.mode)}
-        className="gap-2"
+        closeOnClick
       >
-        <span
-          aria-hidden
-          className={
-            mode === option.mode
-              ? 'h-1.5 w-1.5 rounded-full bg-foreground'
-              : 'h-1.5 w-1.5'
-          }
-        />
         {option.label}
-      </DropdownMenuItem>
+      </MenuRadioItem>
     ))}
-  </div>
+  </MenuRadioGroup>
 )

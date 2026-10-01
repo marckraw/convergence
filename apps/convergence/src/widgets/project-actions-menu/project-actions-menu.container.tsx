@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FC, ReactNode } from 'react'
+import type { FC, ReactElement, ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useDialogStore } from '@/entities/dialog'
 import { laneApi, type Project } from '@/entities/project'
@@ -10,7 +10,7 @@ import {
   type ProjectScriptRun,
 } from '@/entities/project-script'
 import { ProjectScriptEditor } from '@/features/project-script-editor'
-import { DropdownMenu, DropdownMenuTrigger } from '@convergence/ui'
+import { Popover, PopoverTrigger } from '@convergence/ui'
 import { isProjectScriptRunActive } from './project-actions-menu.pure'
 import {
   ProjectActionsMenuPresentational,
@@ -34,10 +34,10 @@ interface ProjectActionsMenuProps {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   /**
-   * The header's own trigger in place of the action picker; it is told
-   * whether an action runs.
+   * The header's own trigger in place of the action picker, as the element
+   * the popover's trigger renders; it is told whether an action runs.
    */
-  renderTrigger?: (state: { running: boolean }) => ReactNode
+  renderTrigger?: (state: { running: boolean }) => ReactElement
   /**
    * Sections drawn after the project's actions and lanes, in the same menu
    * (the header's Open in, Pull request and Terminal, CH4 R4).
@@ -119,17 +119,25 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
 
   return (
     <>
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          {renderTrigger ? (
-            renderTrigger({ running: activeItem !== null })
-          ) : (
-            <ProjectActionsTrigger
-              selectedScript={selectedItem?.script ?? null}
-              running={selectedItem?.running ?? false}
-            />
-          )}
-        </DropdownMenuTrigger>
+      <Popover
+        open={menuOpen}
+        onOpenChange={(next, details) => {
+          contentFocus?.onOpenChange(next, details)
+          setMenuOpen(next)
+        }}
+      >
+        <PopoverTrigger
+          render={
+            renderTrigger ? (
+              renderTrigger({ running: activeItem !== null })
+            ) : (
+              <ProjectActionsTrigger
+                selectedScript={selectedItem?.script ?? null}
+                running={selectedItem?.running ?? false}
+              />
+            )
+          }
+        />
         <ProjectActionsMenuPresentational
           projectName={project.name}
           contentFocus={contentFocus}
@@ -200,7 +208,7 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
         >
           {children}
         </ProjectActionsMenuPresentational>
-      </DropdownMenu>
+      </Popover>
 
       <ProjectScriptEditor
         open={editorOpen}

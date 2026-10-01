@@ -971,7 +971,7 @@ describe('ChatSurface', () => {
     const more = () => screen.getByRole('button', { name: 'Session actions' })
     /** Opens View from More, where it has yielded, both fades played out. */
     const openViewFromMore = async () => {
-      fireEvent.pointerDown(more())
+      fireEvent.click(more())
       fireEvent.click(await screen.findByRole('menuitem', { name: 'View' }))
       return screen.findByRole('menuitem', { name: 'Parallel work history' })
     }
@@ -1067,7 +1067,7 @@ describe('ChatSurface', () => {
       })
       headerWidth(560)
       render(<ChatSurface selectedSpaceId={null} />)
-      fireEvent.pointerDown(more())
+      fireEvent.click(more())
       expect(await screen.findByRole('menu')).toBeInTheDocument()
       act(() =>
         useSessionStore.setState({ globalChatSessions: [globalSession] }),

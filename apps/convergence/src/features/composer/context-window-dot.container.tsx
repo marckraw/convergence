@@ -198,37 +198,47 @@ export function ContextWindowDot({
   }, [clearCloseTimer, session.id])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <span onPointerEnter={openPanel} onPointerLeave={closePanelSoon}>
-          <IconButton
-            label={getAriaLabel(contextWindow)}
-            type="button"
-            variant="ghost"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              openPanel()
-            }}
-            size="sm"
-            className={cn(
-              'shrink-0 rounded-full border shadow-none',
-              buttonClass[tone],
-            )}
-          >
-            <span
-              className={cn('h-2.5 w-2.5 rounded-full', dotClass[tone])}
-              aria-hidden="true"
+    <Popover
+      open={open}
+      onOpenChange={(next, details) => {
+        // A press on the pill opens the panel, never closes it: the pointer
+        // that rested on it has opened it already (MAR-3616).
+        if (!next && details.reason === 'trigger-press') return
+        setOpen(next)
+      }}
+    >
+      <span onPointerEnter={openPanel} onPointerLeave={closePanelSoon}>
+        <PopoverTrigger
+          render={
+            <IconButton
+              label={getAriaLabel(contextWindow)}
+              type="button"
+              variant="ghost"
+              onClick={(event) => {
+                event.stopPropagation()
+                openPanel()
+              }}
+              size="sm"
+              className={cn(
+                'shrink-0 rounded-full border shadow-none',
+                buttonClass[tone],
+              )}
             />
-          </IconButton>
-        </span>
-      </PopoverTrigger>
+          }
+        >
+          <span
+            className={cn('h-2.5 w-2.5 rounded-full', dotClass[tone])}
+            aria-hidden="true"
+          />
+        </PopoverTrigger>
+      </span>
       <PopoverContent
+        aria-label="Context window"
         side="top"
-        className="w-80 space-y-3 rounded-xl border-border/80 bg-popover/95 p-3 text-popover-foreground shadow-xl backdrop-blur-xl"
+        className="w-80 space-y-3 p-3"
         onPointerEnter={openPanel}
         onPointerLeave={closePanelSoon}
-        onOpenAutoFocus={(event) => event.preventDefault()}
+        initialFocus={false}
       >
         <div>
           <p className="text-sm font-semibold text-popover-foreground">

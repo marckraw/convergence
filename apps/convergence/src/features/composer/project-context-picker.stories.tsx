@@ -102,16 +102,6 @@ export const Disabled: Story = {
 
 /** Open, with a long list. */
 export const Long: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the open popover is a dialog with no accessible name — fixed by the sweep (DS4)
-          { id: 'aria-dialog-name', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     open: true,
     items: Array.from({ length: 12 }, (_, index) => ({
