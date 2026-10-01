@@ -9,8 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  SearchableSelect,
-  type SearchableSelectItem,
+  Combobox,
+  type ComboboxItem,
 } from '@convergence/ui'
 
 export const PROJECT_DEFAULT_ID = '__project_default__'
@@ -21,7 +21,7 @@ interface WorkspaceCreateDialogProps {
   projectName: string
   branchName: string
   onBranchNameChange: (value: string) => void
-  baseBranchItems: SearchableSelectItem[]
+  baseBranchItems: ComboboxItem[]
   selectedBaseBranchId: string
   selectedBaseBranchLabel: string
   onBaseBranchChange: (id: string) => void
@@ -73,6 +73,7 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
                 Branch name
               </label>
               <Input
+                size="lg"
                 id="workspace-branch-name"
                 value={branchName}
                 onChange={(event) => onBranchNameChange(event.target.value)}
@@ -88,7 +89,7 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
 
             <section className="space-y-2">
               <label className="text-sm font-medium">Create from</label>
-              <SearchableSelect
+              <Combobox
                 selectedId={selectedBaseBranchId}
                 value={selectedBaseBranchLabel}
                 items={baseBranchItems}
@@ -102,7 +103,7 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
                     ? 'Loading branches...'
                     : 'No branches found.'
                 }
-                triggerClassName="w-full"
+                className="w-full"
                 icon={<GitBranch className="h-3.5 w-3.5 shrink-0" />}
               />
               <p className="text-xs text-muted-foreground">

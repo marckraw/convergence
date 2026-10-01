@@ -19,6 +19,15 @@ export {
   type ButtonVariant,
   buttonVariants,
 } from './components/button/button'
+export { Checkbox, type CheckboxProps } from './components/checkbox/checkbox'
+export {
+  ChoiceCard,
+  type ChoiceCardProps,
+} from './components/choice-card/choice-card'
+export {
+  ChoiceField,
+  type ChoiceFieldProps,
+} from './components/choice-field/choice-field'
 export {
   Card,
   CardAction,
@@ -35,6 +44,14 @@ export {
   type CodeBlockProps,
   type CodeProps,
 } from './components/code-block/code-block'
+export {
+  Combobox,
+  type ComboboxAction,
+  type ComboboxItem,
+  type ComboboxMultipleProps,
+  type ComboboxProps,
+  type ComboboxSingleProps,
+} from './components/combobox/combobox'
 export {
   ConfirmDialog,
   type ConfirmDialogProps,
@@ -89,6 +106,27 @@ export {
   type FormDialogSaves,
 } from './components/form-dialog/form-dialog'
 export {
+  Field,
+  FieldDescription,
+  type FieldDescriptionProps,
+  FieldError,
+  type FieldErrorProps,
+  FieldLabel,
+  type FieldLabelProps,
+  type FieldLabelVariant,
+  type FieldProps,
+} from './components/field/field'
+export {
+  Fieldset,
+  FieldsetLegend,
+  type FieldsetLegendProps,
+  type FieldsetProps,
+} from './components/fieldset/fieldset'
+export {
+  FormError,
+  type FormErrorProps,
+} from './components/form-error/form-error'
+export {
   EmptyState,
   type EmptyStateLayout,
   type EmptyStateProps,
@@ -99,8 +137,27 @@ export {
   IconButton,
   type IconButtonProps,
 } from './components/icon-button/icon-button'
-export { Input, type InputProps } from './components/input/input'
+export {
+  Input,
+  type InputProps,
+  type InputType,
+} from './components/input/input'
 export { Kbd, type KbdProps } from './components/kbd/kbd'
+export {
+  NavTab,
+  type NavTabProps,
+  NavTabs,
+  type NavTabsProps,
+} from './components/nav-tabs/nav-tabs'
+export {
+  Listbox,
+  ListboxGroup,
+  type ListboxGroupProps,
+  ListboxOption,
+  type ListboxOptionProps,
+  type ListboxProps,
+} from './components/listbox/listbox'
+export { listboxOptionId, listboxStep } from './components/listbox/listbox.pure'
 export {
   ListRow,
   type ListRowDensity,
@@ -161,6 +218,16 @@ export {
   type PopoverTriggerProps,
 } from './components/popover/popover'
 export {
+  RadioGroup,
+  RadioGroupItem,
+  type RadioGroupItemProps,
+  type RadioGroupProps,
+} from './components/radio-group/radio-group'
+export {
+  SearchField,
+  type SearchFieldProps,
+} from './components/search-field/search-field'
+export {
   ResizeHandle,
   type ResizeHandleProps,
 } from './components/resize-handle/resize-handle'
@@ -170,12 +237,6 @@ export {
   ScreenHeader,
   type ScreenHeaderProps,
 } from './components/screen-header/screen-header'
-export { SearchableSelect } from './components/searchable-select/searchable-select.container'
-export type {
-  SearchableSelectAction,
-  SearchableSelectItem,
-  SearchableSelectProps,
-} from './components/searchable-select/searchable-select.presentational'
 export {
   SectionHeader,
   type SectionHeaderProps,
@@ -205,9 +266,44 @@ export {
   type SelectValueProps,
 } from './components/select/select'
 export {
+  SegmentedControl,
+  SegmentedControlItem,
+  type SegmentedControlItemProps,
+  type SegmentedControlProps,
+} from './components/segmented-control/segmented-control'
+export type { SegmentedSize } from './components/segmented-control/segmented-control.styles'
+export { Switch, type SwitchProps } from './components/switch/switch'
+export {
+  Tabs,
+  TabsList,
+  type TabsListProps,
+  TabsPanel,
+  type TabsPanelProps,
+  type TabsProps,
+  TabsTab,
+  type TabsTabProps,
+  type TabsVariant,
+} from './components/tabs/tabs'
+export { Textarea, type TextareaProps } from './components/textarea/textarea'
+export {
+  ThemeScope,
+  type ThemeScopeProps,
+} from './components/theme-scope/theme-scope'
+export {
+  Toggle,
+  type ToggleProps,
+  type ToggleVariant,
+} from './components/toggle/toggle'
+export {
   SettingsSection,
   type SettingsSectionProps,
 } from './components/settings-section/settings-section'
+export {
+  Sheet,
+  SheetContent,
+  type SheetContentProps,
+  type SheetProps,
+} from './components/sheet/sheet'
 export {
   PanelHeader,
   type PanelHeaderProps,
@@ -226,15 +322,7 @@ export {
   StatusPill,
   type StatusPillProps,
 } from './components/status-pill/status-pill'
-export {
-  Sheet,
-  SheetContent,
-  type SheetContentProps,
-  type SheetProps,
-} from './components/sheet/sheet'
-export { SwitchRow } from './components/switch/switch'
 export { TextLink, type TextLinkProps } from './components/text-link/text-link'
-export { Textarea, type TextareaProps } from './components/textarea/textarea'
 export {
   Timestamp,
   type TimestampProps,
@@ -260,6 +348,7 @@ export {
 } from './components/tooltip/tooltip-card'
 export { tooltipSurface } from './components/tooltip/tooltip.styles'
 export { cn } from './lib/cn.pure'
+export type { ControlSize } from './lib/control-frame.styles'
 export {
   focusRing,
   focusRingField,

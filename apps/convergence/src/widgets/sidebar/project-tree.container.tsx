@@ -360,6 +360,7 @@ export const ProjectTree = memo(function ProjectTree({
               <SessionStateBadge session={session} />
             )}
             <Input
+              size="xs"
               value={renameDraft}
               onChange={(event) => setRenameDraft(event.target.value)}
               onBlur={submitRename}
@@ -369,7 +370,7 @@ export const ProjectTree = memo(function ProjectTree({
                   cancelRename()
                 }
               }}
-              className="h-6 flex-1 min-w-0 text-xs"
+              className="flex-1 min-w-0 text-xs"
               autoFocus
               aria-label={`Rename ${session.name}`}
             />

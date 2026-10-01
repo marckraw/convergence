@@ -95,6 +95,7 @@ export function FeedbackButton({
               <label className="flex flex-col gap-2 text-sm font-medium">
                 Title
                 <Input
+                  size="lg"
                   value={title}
                   onChange={(event) => onTitleChange(event.target.value)}
                   placeholder="Add export to Markdown"
@@ -151,6 +152,7 @@ export function FeedbackButton({
 
             <DialogFooter className="border-t border-border/60 px-5 py-4">
               <Input
+                size="lg"
                 value={contact}
                 onChange={(event) => onContactChange(event.target.value)}
                 placeholder="Contact optional"

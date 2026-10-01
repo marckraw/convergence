@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { NotificationPrefs } from '@/entities/app-settings'
-import { Button, SwitchRow } from '@convergence/ui'
+import { Button, ChoiceField, Switch } from '@convergence/ui'
 
 interface NotificationsFieldsProps {
   prefs: NotificationPrefs
@@ -43,13 +43,16 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border/70 bg-card/45 p-4">
-        <SwitchRow
-          id="notif-enabled"
+        <ChoiceField
           label="Enable notifications"
-          description="Master switch. Turn this off to mute every channel."
-          checked={prefs.enabled}
-          onChange={(next) => setChannel('enabled', next)}
-        />
+          hint="Master switch. Turn this off to mute every channel."
+        >
+          <Switch
+            id="notif-enabled"
+            checked={prefs.enabled}
+            onCheckedChange={(next) => setChannel('enabled', next)}
+          />
+        </ChoiceField>
       </div>
 
       <section className="rounded-xl border border-border/70 bg-card/45">
@@ -63,52 +66,52 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
         </div>
         <div className="space-y-0 px-4 py-2">
           <div className={`border-b ${sectionRowClass}`}>
-            <SwitchRow
-              id="notif-toasts"
-              label={TOAST_LABEL}
-              checked={prefs.toasts}
-              disabled={masterDisabled}
-              onChange={(next) => setChannel('toasts', next)}
-            />
+            <ChoiceField label={TOAST_LABEL} disabled={masterDisabled}>
+              <Switch
+                id="notif-toasts"
+                checked={prefs.toasts}
+                onCheckedChange={(next) => setChannel('toasts', next)}
+              />
+            </ChoiceField>
           </div>
           <div className={`border-b ${sectionRowClass}`}>
-            <SwitchRow
-              id="notif-sounds"
-              label={SOUND_LABEL}
-              checked={prefs.sounds}
-              disabled={masterDisabled}
-              onChange={(next) => setChannel('sounds', next)}
-            />
+            <ChoiceField label={SOUND_LABEL} disabled={masterDisabled}>
+              <Switch
+                id="notif-sounds"
+                checked={prefs.sounds}
+                onCheckedChange={(next) => setChannel('sounds', next)}
+              />
+            </ChoiceField>
           </div>
           <div className={`border-b ${sectionRowClass}`}>
-            <SwitchRow
-              id="notif-system"
-              label={SYSTEM_LABEL}
-              checked={prefs.system}
-              disabled={masterDisabled}
-              onChange={(next) => setChannel('system', next)}
-            />
+            <ChoiceField label={SYSTEM_LABEL} disabled={masterDisabled}>
+              <Switch
+                id="notif-system"
+                checked={prefs.system}
+                onCheckedChange={(next) => setChannel('system', next)}
+              />
+            </ChoiceField>
           </div>
           {isMac && (
             <div className={`border-b ${sectionRowClass}`}>
-              <SwitchRow
-                id="notif-dock-badge"
-                label={DOCK_BADGE_LABEL}
-                checked={prefs.dockBadge}
-                disabled={masterDisabled}
-                onChange={(next) => setChannel('dockBadge', next)}
-              />
+              <ChoiceField label={DOCK_BADGE_LABEL} disabled={masterDisabled}>
+                <Switch
+                  id="notif-dock-badge"
+                  checked={prefs.dockBadge}
+                  onCheckedChange={(next) => setChannel('dockBadge', next)}
+                />
+              </ChoiceField>
             </div>
           )}
           {isMac && (
             <div className={sectionRowClass}>
-              <SwitchRow
-                id="notif-dock-bounce"
-                label={DOCK_BOUNCE_LABEL}
-                checked={prefs.dockBounce}
-                disabled={masterDisabled}
-                onChange={(next) => setChannel('dockBounce', next)}
-              />
+              <ChoiceField label={DOCK_BOUNCE_LABEL} disabled={masterDisabled}>
+                <Switch
+                  id="notif-dock-bounce"
+                  checked={prefs.dockBounce}
+                  onCheckedChange={(next) => setChannel('dockBounce', next)}
+                />
+              </ChoiceField>
             </div>
           )}
         </div>
@@ -125,62 +128,65 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
         </div>
         <div className="space-y-0 px-4 py-2">
           <div className={`border-b ${sectionRowClass}`}>
-            <SwitchRow
-              id="notif-event-finished"
-              label="Finished"
-              checked={prefs.events.finished}
-              disabled={masterDisabled}
-              onChange={(next) => setEvent('finished', next)}
-            />
+            <ChoiceField label="Finished" disabled={masterDisabled}>
+              <Switch
+                id="notif-event-finished"
+                checked={prefs.events.finished}
+                onCheckedChange={(next) => setEvent('finished', next)}
+              />
+            </ChoiceField>
           </div>
           <div className={`border-b ${sectionRowClass}`}>
-            <SwitchRow
-              id="notif-event-needs-input"
-              label="Needs input"
-              checked={prefs.events.needsInput}
-              disabled={masterDisabled}
-              onChange={(next) => setEvent('needsInput', next)}
-            />
+            <ChoiceField label="Needs input" disabled={masterDisabled}>
+              <Switch
+                id="notif-event-needs-input"
+                checked={prefs.events.needsInput}
+                onCheckedChange={(next) => setEvent('needsInput', next)}
+              />
+            </ChoiceField>
           </div>
           <div className={`border-b ${sectionRowClass}`}>
-            <SwitchRow
-              id="notif-event-needs-approval"
-              label="Needs approval"
-              checked={prefs.events.needsApproval}
-              disabled={masterDisabled}
-              onChange={(next) => setEvent('needsApproval', next)}
-            />
+            <ChoiceField label="Needs approval" disabled={masterDisabled}>
+              <Switch
+                id="notif-event-needs-approval"
+                checked={prefs.events.needsApproval}
+                onCheckedChange={(next) => setEvent('needsApproval', next)}
+              />
+            </ChoiceField>
           </div>
           <div className={`border-b ${sectionRowClass}`}>
-            <SwitchRow
-              id="notif-event-errored"
-              label="Errored"
-              checked={prefs.events.errored}
-              disabled={masterDisabled}
-              onChange={(next) => setEvent('errored', next)}
-            />
+            <ChoiceField label="Errored" disabled={masterDisabled}>
+              <Switch
+                id="notif-event-errored"
+                checked={prefs.events.errored}
+                onCheckedChange={(next) => setEvent('errored', next)}
+              />
+            </ChoiceField>
           </div>
           <div className={sectionRowClass}>
-            <SwitchRow
-              id="notif-event-terminal-idle"
-              label="Terminal idle"
-              checked={prefs.events.terminalIdle}
-              disabled={masterDisabled}
-              onChange={(next) => setEvent('terminalIdle', next)}
-            />
+            <ChoiceField label="Terminal idle" disabled={masterDisabled}>
+              <Switch
+                id="notif-event-terminal-idle"
+                checked={prefs.events.terminalIdle}
+                onCheckedChange={(next) => setEvent('terminalIdle', next)}
+              />
+            </ChoiceField>
           </div>
         </div>
       </section>
 
       <div className="rounded-xl border border-border/70 bg-card/45 p-4">
-        <SwitchRow
-          id="notif-suppress-focused"
+        <ChoiceField
           label="Suppress when window is focused"
-          description="Hide toasts and silence sounds when Convergence is the active window."
-          checked={prefs.suppressWhenFocused}
+          hint="Hide toasts and silence sounds when Convergence is the active window."
           disabled={masterDisabled}
-          onChange={(next) => setChannel('suppressWhenFocused', next)}
-        />
+        >
+          <Switch
+            id="notif-suppress-focused"
+            checked={prefs.suppressWhenFocused}
+            onCheckedChange={(next) => setChannel('suppressWhenFocused', next)}
+          />
+        </ChoiceField>
       </div>
 
       <div className="space-y-2 rounded-md border border-dashed border-border p-3">

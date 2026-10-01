@@ -10,24 +10,12 @@ const items = filterComposerInjectionRootItems({
   includeSkill: true,
 })
 
-const knownListboxIssues = {
-  a11y: {
-    config: {
-      rules: [
-        // a11y-known: the picker's listbox has no accessible name — fixed by the sweep (DS4)
-        { id: 'aria-input-field-name', enabled: false },
-        // a11y-known: the listbox also holds its visually hidden Close button (and, when empty, a message), which are not options — fixed by the sweep (DS4)
-        { id: 'aria-required-children', enabled: false },
-      ],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Composer/ComposerInjectionRootPicker',
   component: ComposerInjectionRootPicker,
   args: {
     open: true,
+    listId: 'injections',
     items,
     highlightedIndex: 0,
     onSelect: fn(),
@@ -52,8 +40,9 @@ type Story = StoryObj<typeof meta>
 
 /** Typing :: offers the three kinds of injection; the first is highlighted. */
 export const Default: Story = {
-  parameters: knownListboxIssues,
   play: async ({ args, canvas, userEvent }) => {
+    // A named list that holds only its options (MAR-3616 DS3e).
+    await expect(canvas.getByRole('listbox')).toHaveAccessibleName('Injections')
     const options = canvas.getAllByRole('option')
     await expect(options).toHaveLength(3)
     await expect(options[0]).toHaveAttribute('aria-selected', 'true')
@@ -66,7 +55,6 @@ export const Default: Story = {
 
 /** Nothing matches what was typed. */
 export const Empty: Story = {
-  parameters: knownListboxIssues,
   args: { items: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No matching injections.')).toBeVisible()

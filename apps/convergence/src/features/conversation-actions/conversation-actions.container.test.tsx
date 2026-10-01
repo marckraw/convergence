@@ -132,11 +132,14 @@ function Harness({
   )
 }
 
-/** Focus is somewhere inside the open menu, never on <body>. */
+/**
+ * Focus is somewhere inside the open menu, never on <body>: a menu, or the
+ * Skills dialog (MAR-3616 DS3e).
+ */
 function expectFocusInsideMenu() {
   const active = document.activeElement
   expect(active).not.toBe(document.body)
-  expect(active?.closest('[role="menu"]')).not.toBeNull()
+  expect(active?.closest('[role="menu"], [role="dialog"]')).not.toBeNull()
 }
 
 /** What the store's own `loadCatalog` does first: reseed empty, all loading. */
@@ -200,7 +203,9 @@ async function openGroup(name: 'Skills' | 'Routines' | 'Project') {
   await act(async () => {
     fireEvent.click(within(fan).getByRole('menuitem', { name }))
   })
-  return screen.getByRole('menu', { name })
+  // Skills is a search and the list it drives, so its panel is a dialog
+  // (MAR-3616 DS3e); Routines and Project are menus.
+  return screen.getByRole(name === 'Skills' ? 'dialog' : 'menu', { name })
 }
 
 beforeEach(() => {
@@ -346,26 +351,37 @@ describe('ConversationActionsContainer', () => {
     it('adds the chosen skill through the composer, by keyboard, and sends nothing (walkthrough step 3)', async () => {
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
-      const search = within(list).getByRole('textbox', { name: 'Find a skill' })
+      const search = within(list).getByRole('combobox', {
+        name: 'Find a skill',
+      })
       expect(document.activeElement).toBe(search)
       expect(
         within(list)
-          .getAllByRole('menuitem')
-          .map((item) => item.textContent),
-      ).toEqual(['Skills', 'Planning', 'Review', 'Legacy'])
+          .getAllByRole('option')
+          .map((item) => item.getAttribute('aria-label')),
+      ).toEqual(['Planning', 'Review', 'Legacy'])
+
+      // The search drives the list: Down moves the active row, which the
+      // search names, and the focus stays in the search (MAR-3616 DS3e).
+      key('ArrowDown')
+      expect(document.activeElement).toBe(search)
+      expect(search).toHaveAttribute(
+        'aria-activedescendant',
+        within(list).getByRole('option', { name: 'Review' }).id,
+      )
 
       fireEvent.change(search, { target: { value: 'plan' } })
       expect(
         within(list)
-          .getAllByRole('menuitem')
-          .map((item) => item.textContent),
-      ).toEqual(['Skills', 'Planning'])
+          .getAllByRole('option')
+          .map((item) => item.getAttribute('aria-label')),
+      ).toEqual(['Planning'])
+      expect(search).toHaveAttribute(
+        'aria-activedescendant',
+        within(list).getByRole('option', { name: 'Planning' }).id,
+      )
 
-      key('ArrowDown')
-      expect(document.activeElement).toHaveTextContent('Planning')
-      act(() => {
-        fireEvent.click(document.activeElement as HTMLElement)
-      })
+      key('Enter')
 
       expect(
         useComposerIntentStore.getState().intentsBySessionId['session-1'],
@@ -383,21 +399,20 @@ describe('ConversationActionsContainer', () => {
       expect(runMock).not.toHaveBeenCalled()
     })
 
-    it('sends typing on a row to the search', async () => {
+    it('sends typing on the back control to the search', async () => {
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
-      const row = within(list).getByRole('menuitem', { name: 'Review' })
-      row.focus()
+      within(list).getByRole('button', { name: 'Back from Skills' }).focus()
       key('r')
       expect(document.activeElement).toBe(
-        within(list).getByRole('textbox', { name: 'Find a skill' }),
+        within(list).getByRole('combobox', { name: 'Find a skill' }),
       )
     })
 
     it('shows a disabled skill disabled, with its reason, and adds nothing for it', async () => {
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
-      const legacy = within(list).getByRole('menuitem', { name: 'Legacy' })
+      const legacy = within(list).getByRole('option', { name: 'Legacy' })
       expect(legacy).toHaveAttribute('aria-disabled', 'true')
       expect(
         within(list).getByText('Disabled in Claude Code settings.'),
@@ -460,7 +475,7 @@ describe('ConversationActionsContainer', () => {
         const list = await openGroup('Skills')
         expect(within(list).queryByRole('status')).toBeNull()
         expect(document.activeElement).toBe(
-          within(list).getByRole('textbox', { name: 'Find a skill' }),
+          within(list).getByRole('combobox', { name: 'Find a skill' }),
         )
         escape()
         escape()
@@ -486,7 +501,7 @@ describe('ConversationActionsContainer', () => {
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
       expect(document.activeElement).toBe(
-        within(list).getByRole('textbox', { name: 'Find a skill' }),
+        within(list).getByRole('combobox', { name: 'Find a skill' }),
       )
 
       // The composer's own picker rescans: the search unmounts under focus.
@@ -514,7 +529,7 @@ describe('ConversationActionsContainer', () => {
       expectFocusInsideMenu()
 
       escape()
-      expect(screen.queryByRole('menu', { name: 'Skills' })).toBeNull()
+      expect(screen.queryByRole('dialog', { name: 'Skills' })).toBeNull()
       expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument()
     })
 
@@ -557,7 +572,7 @@ describe('ConversationActionsContainer', () => {
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
       act(() => {
-        fireEvent.click(within(list).getByRole('menuitem', { name: 'Review' }))
+        fireEvent.click(within(list).getByRole('option', { name: 'Review' }))
       })
       expect(screen.queryByRole('menu')).toBeNull()
       expect(document.activeElement).toBe(trigger())
@@ -568,16 +583,26 @@ describe('ConversationActionsContainer', () => {
     it('moves the text cursor on Left and Right, and only Up and Down traverse', async () => {
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
-      const search = within(list).getByRole('textbox', { name: 'Find a skill' })
-      fireEvent.change(search, { target: { value: 'plan' } })
+      const search = within(list).getByRole('combobox', {
+        name: 'Find a skill',
+      })
+      fireEvent.change(search, { target: { value: 'e' } })
+      const first = within(list).getAllByRole('option')[0]
+      expect(search).toHaveAttribute('aria-activedescendant', first.id)
 
       key('ArrowLeft')
       expect(document.activeElement).toBe(search)
       key('ArrowRight')
       expect(document.activeElement).toBe(search)
+      expect(search).toHaveAttribute('aria-activedescendant', first.id)
 
+      // Up and Down move the active row; the focus stays in the search.
       key('ArrowDown')
-      expect(document.activeElement).toHaveTextContent('Planning')
+      expect(document.activeElement).toBe(search)
+      expect(search).toHaveAttribute(
+        'aria-activedescendant',
+        within(list).getAllByRole('option')[1].id,
+      )
     })
   })
 
@@ -745,7 +770,7 @@ describe('ConversationActionsContainer', () => {
 
       await act(async () => {
         fireEvent.click(
-          within(list).getByRole('menuitem', { name: 'Routines →' }),
+          within(list).getByRole('button', { name: 'Routines →' }),
         )
       })
       expect(screen.getByRole('menu', { name: 'Routines' })).toBeInTheDocument()

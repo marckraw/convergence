@@ -14,7 +14,7 @@ import {
   type SeatDraftField,
   type SessionCrewMember,
 } from '@/entities/session-crew'
-import { Button, IconButton, Input } from '@convergence/ui'
+import { Button, Checkbox, IconButton, Input } from '@convergence/ui'
 import { flowRunCeilingNote } from './crew-loop.pure'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
@@ -417,12 +417,13 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
             />
             <Input
+              size="md"
               type="search"
               value={seatQuery}
               placeholder="Find a seat by name, role or host"
               aria-label="Find a seat by name, role or host"
               onChange={(event) => onSeatQueryChange(event.target.value)}
-              className="h-8 pl-7 text-xs"
+              className="pl-7 text-xs"
             />
           </div>
         ) : null}
@@ -475,11 +476,12 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               Crew name
             </label>
             <Input
+              size="md"
               id="crew-name"
               value={crewName}
               disabled={busy}
               onChange={(event) => onCrewNameChange(event.target.value)}
-              className="h-8 text-xs"
+              className="text-xs"
             />
           </div>
 
@@ -507,6 +509,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 Delivery limit
               </label>
               <Input
+                size="sm"
                 id="crew-delivery-limit"
                 type="number"
                 min={1}
@@ -517,7 +520,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onDeliveryLimitChange(readLimit(event.target.value))
                 }
-                className="h-7 w-16 text-xs"
+                className="w-16 text-xs"
               />
               <span className="text-[11px] text-muted-foreground">per run</span>
             </div>
@@ -532,6 +535,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 Ask for attention after
               </label>
               <Input
+                size="sm"
                 id="crew-attention-minutes"
                 type="number"
                 min={1}
@@ -542,7 +546,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onAttentionMinutesChange(readLimit(event.target.value))
                 }
-                className="h-7 w-16 text-xs"
+                className="w-16 text-xs"
               />
               <span className="text-[11px] text-muted-foreground">minutes</span>
             </div>
@@ -558,6 +562,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 Lap cap
               </label>
               <Input
+                size="sm"
                 id="crew-lap-cap"
                 type="number"
                 min={1}
@@ -568,7 +573,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onLapCapChange(readLimit(event.target.value))
                 }
-                className="h-7 w-16 text-xs"
+                className="w-16 text-xs"
               />
               <span className="text-[11px] text-muted-foreground">
                 per issue
@@ -590,14 +595,10 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               Recipe
             </h4>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Input
-                type="checkbox"
-                className="size-3.5 rounded-sm p-0"
+              <Checkbox
                 checked={includePositions}
                 disabled={exporting}
-                onChange={(event) =>
-                  onIncludePositionsChange(event.target.checked)
-                }
+                onCheckedChange={(checked) => onIncludePositionsChange(checked)}
               />
               Include positions
             </label>

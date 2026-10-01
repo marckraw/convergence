@@ -136,6 +136,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           Endpoint name
         </label>
         <Input
+          size="lg"
           id={`execution-host-label-${endpointId}`}
           value={labelDraft}
           placeholder="kuba-vps"
@@ -194,6 +195,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
         Execution host URL
       </label>
       <Input
+        size="lg"
         id={`execution-host-daemon-base-url-${endpointId}`}
         value={remoteBaseUrlDraft}
         placeholder="https://daemon.example.com"
@@ -272,6 +274,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
             <Input
+              size="lg"
               id={`execution-host-daemon-token-${endpointId}`}
               type={showDaemonToken ? 'text' : 'password'}
               autoComplete="off"

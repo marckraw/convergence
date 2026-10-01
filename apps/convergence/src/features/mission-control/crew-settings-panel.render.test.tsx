@@ -866,7 +866,7 @@ it('MAR-2981 R5 seat pause switch submits a seat edit beside WIP', () => {
   const toggle = screen.getByRole('switch', {
     name: 'Pause automatic dispatch to this seat',
   })
-  expect(toggle).toHaveProperty('checked', false)
+  expect(toggle).not.toBeChecked()
   fireEvent.click(toggle)
   expect(edit).toHaveBeenCalledWith({ sessionId: 's' }, { paused: true })
 })

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ContextAlertSettings } from '@/entities/app-settings'
-import { Input, SwitchRow } from '@convergence/ui'
+import { ChoiceField, Input, Switch } from '@convergence/ui'
 
 interface ContextAlertFieldsProps {
   alert: ContextAlertSettings
@@ -28,14 +28,17 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
   onChange,
 }) => (
   <div className="space-y-4">
-    <SwitchRow
-      id="context-alert-enabled"
+    <ChoiceField
       label="Warn me when a conversation fills up"
-      description="Turns the context dot amber and raises one notification when a turn ends above your threshold."
-      checked={alert.enabled}
+      hint="Turns the context dot amber and raises one notification when a turn ends above your threshold."
       disabled={isSaving}
-      onChange={(enabled) => onChange({ ...alert, enabled })}
-    />
+    >
+      <Switch
+        id="context-alert-enabled"
+        checked={alert.enabled}
+        onCheckedChange={(enabled) => onChange({ ...alert, enabled })}
+      />
+    </ChoiceField>
 
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="space-y-1.5 text-sm">
@@ -43,6 +46,7 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
           Alert at % of the window
         </span>
         <Input
+          size="lg"
           type="number"
           min={MIN_PERCENT}
           max={MAX_PERCENT}
@@ -63,6 +67,7 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
           …or at this many tokens
         </span>
         <Input
+          size="lg"
           type="number"
           min={MIN_TOKENS}
           step={1000}

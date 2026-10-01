@@ -140,6 +140,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
         <div className="relative">
           <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
           <Input
+            size="lg"
             value={query}
             onChange={(event) => onQueryChange(event.currentTarget.value)}
             placeholder="Search skills"

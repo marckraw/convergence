@@ -1,5 +1,5 @@
 import type { ReleaseCandidate } from '@/entities/release'
-import { Input } from '@convergence/ui'
+import { Checkbox } from '@convergence/ui'
 
 export function MergeReviewedRow({
   row,
@@ -15,12 +15,11 @@ export function MergeReviewedRow({
   const mergeable = row.verdict === 'mergeable'
   return (
     <label className="flex min-h-10 items-start gap-3 rounded-lg bg-foreground/5 p-3 text-sm">
-      <Input
-        type="checkbox"
-        className="mt-1 size-4 shrink-0 p-0"
+      <Checkbox
+        className="mt-1"
         checked={mergeable && selected}
         disabled={running || !mergeable}
-        onChange={() => onToggle(row.issueId)}
+        onCheckedChange={() => onToggle(row.issueId)}
         aria-label={`Select PR #${row.prNumber}`}
       />
       <span className="min-w-0 space-y-1">

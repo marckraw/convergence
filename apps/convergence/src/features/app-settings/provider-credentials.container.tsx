@@ -123,6 +123,7 @@ export const ProviderCredentialsContainer: FC = () => {
           <div className="flex gap-2">
             <div className="relative min-w-0 flex-1">
               <Input
+                size="lg"
                 id="openrouter-api-key"
                 type={showToken ? 'text' : 'password'}
                 autoComplete="off"

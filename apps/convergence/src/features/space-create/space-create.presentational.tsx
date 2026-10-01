@@ -58,6 +58,7 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
                 Title
               </label>
               <Input
+                size="lg"
                 id="space-title"
                 value={title}
                 onChange={(event) => onTitleChange(event.target.value)}

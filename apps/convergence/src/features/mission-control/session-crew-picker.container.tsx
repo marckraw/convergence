@@ -1,24 +1,9 @@
 import { CrewImport } from './crew-import.container'
 import { useRef, useState } from 'react'
 import type { FC } from 'react'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from 'cmdk'
-import { Check, Plus, Users, X } from 'lucide-react'
+import { Plus, Users, X } from 'lucide-react'
 import { useSessionCrewStore } from '@/entities/session-crew'
-import {
-  Button,
-  cn,
-  IconButton,
-  Input,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@convergence/ui'
+import { Button, cn, Combobox, IconButton, Input } from '@convergence/ui'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 import {
   CREW_SEARCH_THRESHOLD,
@@ -37,10 +22,10 @@ interface SessionCrewPickerProps {
  * "Add to crew…" on a Session Card.
  *
  * Membership is many-to-many, so this is checkbox toggling and never a move:
- * ticking a second crew does not untick the first, and the menu stays open so
- * a session can join several crews in one pass. Creating a crew from here puts
- * this session in it immediately — nobody opens a create form to make an empty
- * crew they then have to fill.
+ * ticking a second crew does not untick the first, and the list stays open so
+ * a session can join several crews in one pass (Combobox `multiple`).
+ * Creating a crew from here puts this session in it immediately — nobody
+ * opens a create form to make an empty crew they then have to fill.
  */
 export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
   sessionId,
@@ -52,17 +37,14 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
   const createCrew = useSessionCrewStore((state) => state.createCrew)
 
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
   const [creating, setCreating] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [draftEmoji, setDraftEmoji] = useState<string | null>(null)
   const [draftAccent, setDraftAccent] = useState<string | null>(null)
-  const searchRef = useRef<HTMLInputElement | null>(null)
   const nameRef = useRef<HTMLInputElement | null>(null)
 
   const holding = crewsHoldingSession(crews, sessionId)
   const label = formatCrewTriggerLabel(crews, sessionId)
-  const visible = filterCrewsByQuery(crews, query)
   const showSearch = crews.length >= CREW_SEARCH_THRESHOLD
 
   const resetDraft = () => {
@@ -86,209 +68,157 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
   return (
     <CrewImport
       trigger={(startImport, importBusy) => (
-        <Popover
+        <Combobox
+          multiple
           open={open}
           onOpenChange={(next) => {
             setOpen(next)
-            if (!next) {
-              setQuery('')
-              resetDraft()
-            }
+            if (!next) resetDraft()
           }}
-        >
-          <PopoverTrigger
-            render={
-              <Button
-                type="button"
-                variant={holding.length > 0 ? 'tonal' : 'ghost'}
-                aria-label={`Add ${sessionName} to a crew`}
-                aria-expanded={open}
-                size="xs"
-                className={cn(
-                  'max-w-32 shrink-0 transition-opacity',
-                  holding.length > 0
-                    ? 'opacity-100'
-                    : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100',
-                )}
-              >
-                {holding.length === 1 && holding[0]?.emoji ? (
-                  <span aria-hidden className="leading-none">
-                    {holding[0].emoji}
-                  </span>
-                ) : (
-                  <Users className="size-3" />
-                )}
-                <span className="truncate">{label}</span>
-              </Button>
-            }
-          />
-
-          <PopoverContent
-            align="end"
-            collisionPadding={16}
-            className="flex max-h-[min(24rem,var(--available-height))] w-64 flex-col p-0"
-            initialFocus={searchRef}
-          >
-            <Command
-              shouldFilter={false}
-              label="Crews"
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              {showSearch ? (
-                <div className="shrink-0 border-b border-white/10 px-3 py-2">
-                  <CommandInput
-                    ref={searchRef}
-                    value={query}
-                    onValueChange={setQuery}
-                    placeholder="Search crews…"
-                    className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-                  />
-                </div>
-              ) : null}
-
-              <CommandList
-                className="app-scrollbar min-h-0 flex-1 overflow-y-auto p-1"
-                style={{ maxHeight: '100%' }}
-                onWheel={(event) => {
-                  event.currentTarget.scrollTop += event.deltaY
-                }}
-              >
-                {crews.length === 0 ? (
-                  <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-                    No crews yet. Make the first one below.
-                  </p>
-                ) : visible.length === 0 ? (
-                  <CommandEmpty className="px-2 py-6 text-center text-xs text-muted-foreground">
-                    Nothing matches “{query}”
-                  </CommandEmpty>
-                ) : (
-                  visible.map((crew) => {
-                    const member = crew.sessionIds.includes(sessionId)
-
-                    return (
-                      // Toggling keeps the menu open: a session may join several
-                      // crews, and joining one is never leaving another.
-                      <CommandItem
-                        key={crew.id}
-                        value={crew.id}
-                        onSelect={() => {
-                          void (member
-                            ? removeMember(crew.id, sessionId)
-                            : addMember(crew.id, sessionId))
-                        }}
-                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs aria-selected:bg-accent aria-selected:text-accent-foreground"
-                      >
-                        <Check
-                          className={cn(
-                            'size-3.5 shrink-0',
-                            member ? 'opacity-100' : 'opacity-0',
-                          )}
-                        />
-                        {crew.emoji ? (
-                          <span aria-hidden className="leading-none">
-                            {crew.emoji}
-                          </span>
-                        ) : crew.accentColor ? (
-                          <span
-                            aria-hidden
-                            style={{ backgroundColor: crew.accentColor }}
-                            className="size-2 shrink-0 rounded-full"
-                          />
-                        ) : null}
-                        <span className="min-w-0 flex-1 truncate">
-                          {crew.name}
-                        </span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">
-                          {crew.sessionIds.length}
-                        </span>
-                      </CommandItem>
-                    )
-                  })
-                )}
-              </CommandList>
-            </Command>
-
-            <div className="shrink-0 border-t border-white/10 p-2">
-              {creating ? (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-1">
-                    <Input
-                      ref={nameRef}
-                      autoFocus
-                      value={draftName}
-                      placeholder="Crew name"
-                      aria-label="New crew name"
-                      className="h-7 flex-1 text-xs"
-                      onChange={(event) => setDraftName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          void submitDraft()
-                        }
-                        if (event.key === 'Escape') {
-                          event.preventDefault()
-                          resetDraft()
-                        }
-                      }}
-                    />
-                    <IconButton
-                      label="Cancel new crew"
-                      type="button"
-                      variant="ghost"
-                      onClick={resetDraft}
-                      size="sm"
-                      className="shrink-0"
-                    >
-                      <X className="size-3.5" />
-                    </IconButton>
-                  </div>
-
-                  <CrewDecorationPicker
-                    emoji={draftEmoji}
-                    accentColor={draftAccent}
-                    onEmojiChange={setDraftEmoji}
-                    onAccentColorChange={setDraftAccent}
-                  />
-
-                  <Button
-                    type="button"
-                    variant="tonal"
-                    disabled={!isValidCrewName(draftName)}
-                    onClick={() => void submitDraft()}
+          selectedIds={holding.map((crew) => crew.id)}
+          value={label}
+          ariaLabel={`Add ${sessionName} to a crew`}
+          variant={holding.length > 0 ? 'tonal' : 'ghost'}
+          size="xs"
+          chevron={false}
+          className={cn(
+            'max-w-32 shrink-0 justify-center transition-opacity',
+            holding.length > 0
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100',
+          )}
+          icon={
+            holding.length === 1 && holding[0]?.emoji ? (
+              <span aria-hidden className="leading-none">
+                {holding[0].emoji}
+              </span>
+            ) : (
+              <Users className="size-3" />
+            )
+          }
+          items={crews.map((crew) => ({
+            id: crew.id,
+            label: crew.name,
+            icon: crew.emoji ? (
+              <span aria-hidden className="leading-none">
+                {crew.emoji}
+              </span>
+            ) : crew.accentColor ? (
+              <span
+                aria-hidden
+                style={{ backgroundColor: crew.accentColor }}
+                className="size-2 shrink-0 rounded-full"
+              />
+            ) : undefined,
+            trailing: crew.sessionIds.length,
+          }))}
+          // A crew matches by its name or its emoji.
+          filter={(item, query) => {
+            const crew = crews.find((entry) => entry.id === item.id)
+            return (
+              crew !== undefined && filterCrewsByQuery([crew], query).length > 0
+            )
+          }}
+          // Toggling keeps the list open: a session may join several crews,
+          // and joining one is never leaving another.
+          onChange={(ids) => {
+            const joined = ids.find(
+              (id) => !holding.some((crew) => crew.id === id),
+            )
+            const left = holding.find((crew) => !ids.includes(crew.id))
+            if (joined !== undefined) void addMember(joined, sessionId)
+            else if (left !== undefined) void removeMember(left.id, sessionId)
+          }}
+          searchable={showSearch}
+          searchPlaceholder="Search crews…"
+          emptyMessage={(query) =>
+            crews.length === 0
+              ? 'No crews yet. Make the first one below.'
+              : `Nothing matches “${query}”`
+          }
+          contentClassName="w-64"
+          footer={
+            creating ? (
+              <div className="flex flex-col gap-2 p-1">
+                <div className="flex items-center gap-1">
+                  <Input
                     size="sm"
-                    className="px-3"
-                  >
-                    Create &amp; add this session
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCreating(true)}
-                    size="sm"
-                    className="w-full justify-start font-normal"
-                  >
-                    <Plus className="size-3.5" />
-                    New crew
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={importBusy}
-                    onClick={() => {
-                      setOpen(false)
-                      startImport()
+                    ref={nameRef}
+                    autoFocus
+                    value={draftName}
+                    placeholder="Crew name"
+                    aria-label="New crew name"
+                    className="flex-1 text-xs"
+                    onChange={(event) => setDraftName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        void submitDraft()
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault()
+                        resetDraft()
+                      }
                     }}
+                  />
+                  <IconButton
+                    label="Cancel new crew"
+                    type="button"
+                    variant="ghost"
+                    onClick={resetDraft}
+                    size="sm"
+                    className="shrink-0"
                   >
-                    Import crew…
-                  </Button>
-                </>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+                    <X className="size-3.5" />
+                  </IconButton>
+                </div>
+
+                <CrewDecorationPicker
+                  emoji={draftEmoji}
+                  accentColor={draftAccent}
+                  onEmojiChange={setDraftEmoji}
+                  onAccentColorChange={setDraftAccent}
+                />
+
+                <Button
+                  type="button"
+                  variant="tonal"
+                  disabled={!isValidCrewName(draftName)}
+                  onClick={() => void submitDraft()}
+                  size="sm"
+                  className="px-3"
+                >
+                  Create &amp; add this session
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setCreating(true)}
+                  size="sm"
+                  className="w-full justify-start font-normal"
+                >
+                  <Plus className="size-3.5" />
+                  New crew
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={importBusy}
+                  onClick={() => {
+                    setOpen(false)
+                    resetDraft()
+                    startImport()
+                  }}
+                >
+                  Import crew…
+                </Button>
+              </>
+            )
+          }
+        />
       )}
     />
   )

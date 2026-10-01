@@ -84,6 +84,7 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
                   <ProjectScriptIcon icon={icon} className="h-4 w-4" />
                 </div>
                 <Input
+                  size="lg"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Dev"
@@ -130,6 +131,7 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
                 Working directory
               </span>
               <Input
+                size="lg"
                 value={cwd}
                 onChange={(event) => setCwd(event.target.value)}
                 placeholder="Project repository path"

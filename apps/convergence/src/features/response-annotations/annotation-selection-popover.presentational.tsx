@@ -69,12 +69,13 @@ export const AnnotationSelectionPopover: FC<
           </p>
           <div className="flex items-center gap-1.5">
             <Input
+              size="md"
               autoFocus
               value={commentValue}
               onChange={(event) => onCommentValueChange(event.target.value)}
               placeholder="What about this part?"
               aria-label="Comment on the selected text"
-              className="h-8 text-sm"
+              className="text-sm"
             />
             <Button type="submit" className="shrink-0">
               Add

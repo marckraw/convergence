@@ -1,4 +1,5 @@
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { useId } from 'react'
 import type {
   FC,
   ClipboardEvent,
@@ -37,6 +38,7 @@ import {
   Button,
   cn,
   IconButton,
+  listboxOptionId,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -370,6 +372,47 @@ export const Composer: FC<ComposerProps> = ({
   onMentionDismiss,
   onSelectionChange,
 }) => {
+  // The `::` and `@` pickers' lists (MAR-3616 DS3e): the message field drives
+  // whichever one is showing rows, naming it (aria-controls) and its active
+  // row (aria-activedescendant), so a screen reader hears the row the arrows
+  // reach while the caret stays in the message.
+  const pickerListId = useId()
+  const pickerLists = {
+    root: `${pickerListId}-injections`,
+    mention: `${pickerListId}-context`,
+    skill: `${pickerListId}-skills`,
+    prompt: `${pickerListId}-prompts`,
+  }
+  const drivenList = (
+    [
+      [
+        rootInjectionPickerOpen,
+        pickerLists.root,
+        rootInjectionItems.length,
+        rootInjectionHighlightedIndex,
+      ],
+      [
+        projectContextEnabled && mentionPickerOpen,
+        pickerLists.mention,
+        mentionItems.length,
+        mentionHighlightedIndex,
+      ],
+      [
+        skillInjectionPickerOpen && !skillCatalogError && !skillCatalogLoading,
+        pickerLists.skill,
+        skillInjectionItems.length,
+        skillInjectionHighlightedIndex,
+      ],
+      [
+        promptInjectionPickerOpen &&
+          !promptInjectionError &&
+          !promptInjectionLoading,
+        pickerLists.prompt,
+        promptInjectionItems.length,
+        promptInjectionHighlightedIndex,
+      ],
+    ] as const
+  ).find(([showing, , count, index]) => showing && index >= 0 && index < count)
   // The choices always carry the chosen tier (MAR-3574), so the label never
   // falls back to a speed the next turn is not running at.
   const codexSpeedLabel =
@@ -709,6 +752,7 @@ export const Composer: FC<ComposerProps> = ({
           ) : null}
           <div className="relative">
             <ComposerInjectionRootPicker
+              listId={pickerLists.root}
               open={rootInjectionPickerOpen}
               items={rootInjectionItems}
               highlightedIndex={rootInjectionHighlightedIndex}
@@ -717,6 +761,7 @@ export const Composer: FC<ComposerProps> = ({
               onDismiss={() => onRootInjectionDismiss?.()}
             />
             <ComposerContextMentionPicker
+              listId={pickerLists.mention}
               open={projectContextEnabled && mentionPickerOpen}
               items={mentionItems}
               highlightedIndex={mentionHighlightedIndex}
@@ -725,6 +770,7 @@ export const Composer: FC<ComposerProps> = ({
               onDismiss={() => onMentionDismiss?.()}
             />
             <ComposerSkillInjectionPicker
+              listId={pickerLists.skill}
               open={skillInjectionPickerOpen}
               items={skillInjectionItems}
               selectedSkills={selectedSkills}
@@ -738,6 +784,7 @@ export const Composer: FC<ComposerProps> = ({
               onDismiss={() => onSkillInjectionDismiss?.()}
             />
             <ComposerPromptInjectionPicker
+              listId={pickerLists.prompt}
               open={promptInjectionPickerOpen}
               items={promptInjectionItems}
               highlightedIndex={promptInjectionHighlightedIndex}
@@ -769,9 +816,16 @@ export const Composer: FC<ComposerProps> = ({
               // thing. An input a reader cannot name is also an accessibility
               // defect on its own terms.
               aria-label="Message"
+              aria-autocomplete={drivenList ? 'list' : undefined}
+              aria-controls={drivenList?.[1]}
+              aria-activedescendant={
+                drivenList
+                  ? listboxOptionId(drivenList[1], drivenList[3])
+                  : undefined
+              }
               disabled={disabled}
               rows={1}
-              className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:ring-0"
+              className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:outline-none"
             />
           </div>
           <div className="mt-2 flex items-center justify-between">

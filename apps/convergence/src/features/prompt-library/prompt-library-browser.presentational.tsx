@@ -412,6 +412,7 @@ function renderPromptForm({
           <label className="text-xs font-medium text-muted-foreground">
             Title
             <Input
+              size="lg"
               value={draft.title}
               onChange={(event) =>
                 onChange({ title: event.currentTarget.value })
@@ -423,6 +424,7 @@ function renderPromptForm({
           <label className="text-xs font-medium text-muted-foreground">
             Tags
             <Input
+              size="lg"
               value={draft.tagsText}
               onChange={(event) =>
                 onChange({ tagsText: event.currentTarget.value })
@@ -480,6 +482,7 @@ function renderPromptForm({
           <label className="text-xs font-medium text-muted-foreground">
             Filename
             <Input
+              size="lg"
               value={draft.filename}
               onChange={(event) =>
                 onChange({ filename: event.currentTarget.value })
@@ -591,6 +594,7 @@ export const PromptLibraryBrowserDialog: FC<
               <div className="relative">
                 <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  size="lg"
                   value={filters.query}
                   onChange={(event) =>
                     onFiltersChange({ query: event.currentTarget.value })

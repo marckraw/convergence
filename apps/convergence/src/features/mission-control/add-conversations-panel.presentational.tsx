@@ -1,12 +1,6 @@
 import type { FC } from 'react'
 import { Users, X } from 'lucide-react'
-import {
-  Button,
-  cn,
-  IconButton,
-  Input,
-  SearchableSelect,
-} from '@convergence/ui'
+import { Button, cn, IconButton, Input, Combobox } from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import { SeatRefusal } from './seat-refusal.presentational'
 
@@ -100,16 +94,17 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
     </div>
 
     <Input
+      size="md"
       type="search"
       value={query}
       placeholder="Search conversations…"
       aria-label="Search conversations to add"
       disabled={busy}
       onChange={(event) => onQueryChange(event.target.value)}
-      className="h-8 text-xs"
+      className="text-xs"
     />
 
-    <SearchableSelect
+    <Combobox
       selectedId={selectedProjectId ?? ANY_PROJECT_OPTION_ID}
       value={
         projectOptions.find(
@@ -124,7 +119,6 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
       disabled={busy}
       searchPlaceholder="Search projects…"
       emptyMessage="No projects."
-      triggerClassName="h-8 text-xs"
     />
 
     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">

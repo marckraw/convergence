@@ -248,6 +248,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                 }}
               >
                 <Input
+                  size="lg"
                   value={createTitle}
                   onChange={(event) => onCreateTitleChange(event.target.value)}
                   placeholder="New Space"
@@ -341,6 +342,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       Title
                     </span>
                     <Input
+                      size="lg"
                       value={selectedDraft.title}
                       onChange={(event) =>
                         onDraftChange({
@@ -663,6 +665,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   Label
                                 </span>
                                 <Input
+                                  size="lg"
                                   value={artifactDraft.label}
                                   onChange={(event) =>
                                     onArtifactDraftChange({
@@ -753,6 +756,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                   Value
                                 </span>
                                 <Input
+                                  size="lg"
                                   value={artifactDraft.value}
                                   onChange={(event) =>
                                     onArtifactDraftChange({
@@ -1129,6 +1133,7 @@ function renderArtifactRow(input: {
             Label
           </span>
           <Input
+            size="lg"
             defaultValue={artifact.label}
             onBlur={(event) => {
               const label = event.target.value.trim()
@@ -1187,6 +1192,7 @@ function renderArtifactRow(input: {
           </span>
           <div className="flex gap-2">
             <Input
+              size="lg"
               defaultValue={artifact.value}
               onBlur={(event) => {
                 const value = event.target.value.trim()

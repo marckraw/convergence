@@ -1,55 +1,46 @@
-import type { FC } from 'react'
+import { Switch as SwitchPrimitive } from '@base-ui/react/switch'
 import { cn } from '#lib/cn.pure'
+import { focusRing } from '#lib/focus-ring.styles'
 
-interface SwitchRowProps {
-  id: string
-  label: string
-  description?: string
-  checked: boolean
-  disabled?: boolean
-  onChange: (next: boolean) => void
+export type SwitchProps = Omit<SwitchPrimitive.Root.Props, 'className'> & {
+  className?: string
 }
 
-export const SwitchRow: FC<SwitchRowProps> = ({
-  id,
-  label,
-  description,
-  checked,
-  disabled,
-  onChange,
-}) => (
-  <div
-    className={cn(
-      'flex items-center justify-between gap-4 py-1',
-      disabled && 'opacity-50',
-    )}
-  >
-    <label htmlFor={id} className="flex flex-col gap-0.5 text-sm leading-tight">
-      <span>{label}</span>
-      {description && (
-        <span className="text-xs text-muted-foreground">{description}</span>
-      )}
-    </label>
-    <button
-      id={id}
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
+/**
+ * One setting that is on or off and takes effect at once (MAR-3616 DS3c), on
+ * Base UI's Switch. Today's track and thumb (R0): 36 × 20, filled with the
+ * strong colour when on; off, its edge is the control line (MAR-3460), where
+ * it was a faint hairline. It gains the keyboard's focus ring it lacked.
+ * Give it its words with a ChoiceField (the switch sits at the row's end), or
+ * an aria-label. Space toggles it. It is a <button role="switch">, as
+ * SwitchRow's was. Under reduced motion the thumb jumps.
+ */
+export function Switch({ className, ...props }: SwitchProps) {
+  return (
+    <SwitchPrimitive.Root
+      data-slot="switch"
+      nativeButton
+      render={<button type="button" />}
       className={cn(
-        'relative h-5 w-9 shrink-0 rounded-full border transition-colors',
-        checked ? 'border-primary bg-primary' : 'border-input bg-muted',
-        disabled && 'cursor-not-allowed',
+        'relative inline-block h-5 w-9 shrink-0 rounded-full border transition-colors',
+        'border-control-line bg-surface-muted',
+        'data-checked:border-strong data-checked:bg-strong',
+        focusRing,
+        'aria-invalid:border-danger-solid data-invalid:border-danger-solid',
+        'data-disabled:pointer-events-none data-disabled:opacity-50',
+        'after:absolute after:-inset-1',
+        'app-no-drag',
+        className,
       )}
+      {...props}
     >
-      <span
+      <SwitchPrimitive.Thumb
+        data-slot="switch-thumb"
         className={cn(
-          'absolute top-0.5 left-0.5 block h-4 w-4 rounded-full bg-background shadow transition-transform',
-          checked && 'translate-x-4',
+          'pointer-events-none absolute top-0.5 left-0.5 block size-4 rounded-full bg-canvas shadow-control',
+          'motion-safe:transition-transform data-checked:translate-x-4',
         )}
       />
-    </button>
-  </div>
-)
+    </SwitchPrimitive.Root>
+  )
+}

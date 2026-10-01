@@ -10,7 +10,14 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { Button, cn, IconButton, Input } from '@convergence/ui'
+import {
+  Button,
+  Checkbox,
+  cn,
+  IconButton,
+  Input,
+  Switch,
+} from '@convergence/ui'
 import {
   LOCAL_HOST_ID,
   ROLE_CARD_LIMIT,
@@ -179,6 +186,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               mark, so a field that knocked per key made `my_horse`
               untypeable. */}
           <Input
+            size="md"
             value={nameValue}
             placeholder="unnamed"
             aria-label={`Baton name for ${label}`}
@@ -192,7 +200,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               }
             }}
             className={cn(
-              'h-8 flex-1 text-xs',
+              'flex-1 text-xs',
               problems.batonName !== undefined && 'border-amber-500/70',
             )}
           />
@@ -373,12 +381,13 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
               Worktree path
               <Input
+                size="md"
                 value={lanePathValue}
                 placeholder="/Users/…/my-repo-lane-name"
                 onChange={(event) => onLanePathChange(event.target.value)}
                 onBlur={onLanePathCommit}
                 className={cn(
-                  'h-8 text-xs',
+                  'text-xs',
                   problems.lanePath !== undefined && 'border-amber-500/70',
                 )}
               />
@@ -417,13 +426,14 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 <Minus aria-hidden className="size-3" />
               </IconButton>
               <Input
+                size="sm"
                 type="number"
                 min={1}
                 value={wipValue}
                 aria-label={`WIP limit for ${label}`}
                 onChange={(event) => onWipChange(event.target.value)}
                 onBlur={onWipCommit}
-                className="h-7 w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:ring-0 [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:outline-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <IconButton
                 label={`Raise the WIP limit for ${label}`}
@@ -441,13 +451,10 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           </div>
           {refusalFor('wipLimit')}
           <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-            <Input
-              className="size-3.5 shrink-0 rounded-sm p-0"
-              type="checkbox"
-              role="switch"
+            <Switch
               checked={member.paused}
               disabled={busy}
-              onChange={(event) => onSeatEdit({ paused: event.target.checked })}
+              onCheckedChange={(checked) => onSeatEdit({ paused: checked })}
             />
             Pause automatic dispatch to this seat
           </label>
@@ -455,13 +462,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           {member.role === 'mastermind' && (
             <>
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Input
-                  className="size-3.5 shrink-0 rounded-sm p-0"
-                  type="checkbox"
+                <Checkbox
                   checked={member.drillAuto}
                   disabled={busy}
-                  onChange={(event) =>
-                    onSeatEdit({ drillAuto: event.target.checked })
+                  onCheckedChange={(checked) =>
+                    onSeatEdit({ drillAuto: checked })
                   }
                 />
                 Run the drill by itself when the context passes the alert

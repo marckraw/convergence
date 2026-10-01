@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { DebugLoggingPrefs } from '@/entities/app-settings'
-import { Button, SwitchRow } from '@convergence/ui'
+import { Button, ChoiceField, Switch } from '@convergence/ui'
 
 interface DebugLoggingFieldsProps {
   prefs: DebugLoggingPrefs
@@ -17,14 +17,17 @@ export const DebugLoggingFields: FC<DebugLoggingFieldsProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      <SwitchRow
-        id="debug-logging-enabled"
+      <ChoiceField
         label="Capture provider debug logs"
-        description="Records every provider event Convergence can observe into JSONL files for diagnosis. Files live alongside the app data and are not uploaded anywhere."
-        checked={prefs.enabled}
+        hint="Records every provider event Convergence can observe into JSONL files for diagnosis. Files live alongside the app data and are not uploaded anywhere."
         disabled={isSaving}
-        onChange={onToggleEnabled}
-      />
+      >
+        <Switch
+          id="debug-logging-enabled"
+          checked={prefs.enabled}
+          onCheckedChange={(next) => onToggleEnabled(next)}
+        />
+      </ChoiceField>
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"

@@ -165,16 +165,14 @@ describe('CommandCenterContainer', () => {
       useCommandCenterStore.getState().open()
     })
 
+    // Each section is a group of the listbox, named by its heading.
     const list = screen.getByRole('listbox')
-    const headings = within(list).getAllByRole('presentation', { hidden: true })
-    const headingTexts = within(list)
-      .getAllByText(/Projects|Workspaces|Dialogs|Recent|Waiting|Review/, {
-        selector: 'div[cmdk-group-heading]',
-      })
-      .map((el) => el.textContent?.trim())
+    const groups = within(list).getAllByRole('group')
 
-    expect(headings.length).toBeGreaterThan(0)
-    expect(headingTexts).toEqual(['Projects', 'Workspaces', 'Dialogs'])
+    expect(groups).toHaveLength(3)
+    expect(groups[0]).toHaveAccessibleName('Projects')
+    expect(groups[1]).toHaveAccessibleName('Workspaces')
+    expect(groups[2]).toHaveAccessibleName('Dialogs')
   })
 
   it('shows a ranked list when a query is typed', () => {

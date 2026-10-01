@@ -1,13 +1,7 @@
-import type { FC, RefObject } from 'react'
+import { useId, type FC, type RefObject } from 'react'
+import { Check, ChevronDown, Star } from 'lucide-react'
 import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from 'cmdk'
-import { Check, ChevronDown, Search, Star } from 'lucide-react'
-import {
+  Badge,
   Button,
   type ButtonProps,
   cn,
@@ -15,7 +9,13 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
+  EmptyState,
   IconButton,
+  Listbox,
+  ListboxOption,
+  listboxOptionId,
+  listboxStep,
+  SearchField,
 } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type {
@@ -56,6 +56,13 @@ function formatContextWindowTokens(value: number): string {
   return `${new Intl.NumberFormat('en-US').format(value)} context`
 }
 
+/**
+ * The model picker (MAR-3616 DS3e): a Dialog holding a SearchField, the
+ * provider filters and the Listbox the field drives. The field keeps the
+ * focus; the arrows (and Home, End, Control-N and -P) move the active row,
+ * which the container keeps (`selectedValue`), Enter picks it, and Escape
+ * closes the dialog. Nothing matching shows an EmptyState, not an empty list.
+ */
 export const ModelPickerDialogPresentational: FC<
   ModelPickerDialogPresentationalProps
 > = ({
@@ -78,50 +85,69 @@ export const ModelPickerDialogPresentational: FC<
   onSelectedValueChange,
   onSelect,
   onToggleFavorite,
-}) => (
-  <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-    <Button
-      type="button"
-      variant={triggerVariant}
-      size={triggerSize}
-      disabled={isDisabled}
-      role="combobox"
-      aria-haspopup="dialog"
-      aria-expanded={open}
-      aria-label={value}
-      className={cn('justify-between', triggerClassName)}
-      onClick={() => onOpenChange(true)}
-    >
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate">{value}</span>
-      </span>
-      <ChevronDown className="h-3 w-3 shrink-0" />
-    </Button>
+}) => {
+  const listId = useId()
+  const selectedIndex = models.findIndex((item) => item.value === selectedValue)
+  const active = models.length === 0 ? null : Math.max(selectedIndex, 0)
+  const hasModels = models.length > 0
 
-    <DialogContent
-      className="h-[min(620px,calc(100vh-2rem))] w-[min(860px,calc(100vw-2rem))]"
-      initialFocus={inputRef}
-    >
-      <DialogTitle className="sr-only">Select model</DialogTitle>
-      <DialogDescription className="sr-only">
-        Search and filter providers to choose a model.
-      </DialogDescription>
-
-      <Command
-        shouldFilter={false}
-        label="Model picker"
-        value={selectedValue}
-        onValueChange={onSelectedValueChange}
-        className="flex min-h-0 flex-1 flex-col"
+  return (
+    <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
+      <Button
+        type="button"
+        variant={triggerVariant}
+        size={triggerSize}
+        disabled={isDisabled}
+        role="combobox"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={value}
+        className={cn('justify-between', triggerClassName)}
+        onClick={() => onOpenChange(true)}
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-4 py-3 pr-12">
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <CommandInput
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate">{value}</span>
+        </span>
+        <ChevronDown className="h-3 w-3 shrink-0" />
+      </Button>
+
+      <DialogContent
+        className="h-[min(620px,calc(100vh-2rem))] w-[min(860px,calc(100vw-2rem))]"
+        initialFocus={inputRef}
+      >
+        <DialogTitle className="sr-only">Select model</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search and filter providers to choose a model.
+        </DialogDescription>
+
+        <div className="shrink-0 border-b border-white/10 px-4 py-3 pr-12">
+          <SearchField
             ref={inputRef}
+            role="combobox"
+            aria-label="Search models"
+            aria-autocomplete="list"
+            aria-expanded={hasModels}
+            aria-controls={hasModels ? listId : undefined}
+            aria-activedescendant={
+              active === null ? undefined : listboxOptionId(listId, active)
+            }
             value={query}
-            onValueChange={onQueryChange}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              // cmdk's steps: they stop at the ends rather than wrapping.
+              const next = listboxStep(active, models.length, event, {
+                loop: false,
+              })
+              if (next !== undefined) {
+                onSelectedValueChange(models[next].value)
+              } else if (event.key === 'Enter' && active !== null) {
+                onSelect(models[active])
+              } else {
+                return
+              }
+              event.preventDefault()
+            }}
             placeholder="Search models..."
-            className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
 
@@ -149,21 +175,22 @@ export const ModelPickerDialogPresentational: FC<
             </div>
           </aside>
 
-          <CommandList
-            key={`${providerFilterId}:${query}`}
-            className="app-scrollbar min-h-0 overflow-y-auto p-2"
-          >
-            {models.length === 0 ? (
-              <CommandEmpty className="px-3 py-8 text-center text-sm text-muted-foreground">
-                No models found.
-              </CommandEmpty>
-            ) : (
-              models.map((item) => (
-                <CommandItem
+          {hasModels ? (
+            <Listbox
+              // A new search or filter starts the list from its top.
+              key={`${providerFilterId}:${query}`}
+              id={listId}
+              aria-label="Models"
+              active={active}
+              className="app-scrollbar min-h-0 overflow-y-auto p-2"
+            >
+              {models.map((item, index) => (
+                <ListboxOption
                   key={item.value}
-                  value={item.value}
-                  onSelect={() => onSelect(item)}
-                  className="flex cursor-pointer items-start gap-3 rounded-md px-3 py-3 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  index={index}
+                  onPick={() => onSelect(item)}
+                  onHover={() => onSelectedValueChange(item.value)}
+                  className="items-start gap-3 px-3 py-3"
                 >
                   <ProviderIcon
                     providerId={item.providerId}
@@ -205,7 +232,11 @@ export const ModelPickerDialogPresentational: FC<
                           />
                         </IconButton>
                         {item.selected ? (
-                          <Check className="h-4 w-4 shrink-0" />
+                          <>
+                            <Check aria-hidden className="h-4 w-4 shrink-0" />
+                            {/* The highlight is the active row: the model in use says so in words. */}
+                            <span className="sr-only">(in use)</span>
+                          </>
                         ) : null}
                       </span>
                     </div>
@@ -229,21 +260,24 @@ export const ModelPickerDialogPresentational: FC<
                     <div className="flex min-w-0 items-center gap-1.5 text-[11px] leading-snug text-muted-foreground">
                       <span className="truncate">{item.providerLabel}</span>
                       {item.providerBadge ? (
-                        <span
+                        <Badge
+                          tone="warning"
+                          shape="label"
                           title={item.providerBadge.title}
-                          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
                         >
                           {item.providerBadge.label}
-                        </span>
+                        </Badge>
                       ) : null}
                     </div>
                   </div>
-                </CommandItem>
-              ))
-            )}
-          </CommandList>
+                </ListboxOption>
+              ))}
+            </Listbox>
+          ) : (
+            <EmptyState variant="plain" detail="No models found." />
+          )}
         </div>
-      </Command>
-    </DialogContent>
-  </Dialog>
-)
+      </DialogContent>
+    </Dialog>
+  )
+}

@@ -198,6 +198,7 @@ function renderFilterToolbar({
       <div className="relative min-w-[200px] flex-1">
         <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
         <Input
+          size="lg"
           value={filters.query}
           onChange={(event) =>
             onFiltersChange({ query: event.currentTarget.value })

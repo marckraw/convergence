@@ -3785,7 +3785,10 @@ describe('ComposerContainer', () => {
 
       fireEvent.click(await screen.findByText('Default account'))
       const option = await screen.findByText('a@example.com')
-      expect(option.closest('[data-disabled="true"]')).not.toBeNull()
+      expect(option.closest('[role="option"]')).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
 
       fireEvent.click(option)
 
