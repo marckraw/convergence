@@ -8,6 +8,33 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Reduced motion (MAR-3611). It follows the system setting, and
+ * `data-motion="reduced"` on <html> turns it on as well: Storybook's Motion
+ * toolbar does that today, an in-app setting could later. The app sets no
+ * such attribute, so there both variants match exactly what Tailwind's
+ * built-in ones match. An override keeps the built-in variant's place in
+ * Tailwind's order, and `:where()` adds no specificity, so the cascade
+ * between classes is unchanged too.
+ */
+@custom-variant motion-safe {
+  @media (prefers-reduced-motion: no-preference) {
+    &:not(:where([data-motion='reduced'], [data-motion='reduced'] *)) {
+      @slot;
+    }
+  }
+}
+
+@custom-variant motion-reduce {
+  @media (prefers-reduced-motion: reduce) {
+    @slot;
+  }
+
+  &:where([data-motion='reduced'], [data-motion='reduced'] *) {
+    @slot;
+  }
+}
+
 @theme inline {
   --radius: 0.625rem;
   --color-background: var(--background);

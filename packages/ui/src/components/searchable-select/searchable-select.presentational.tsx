@@ -141,6 +141,9 @@ export function SearchableSelectPresentational({
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        // The popover is a dialog to assistive tech; it takes its trigger's
+        // name, so it is announced as the field it belongs to (MAR-3611).
+        aria-label={ariaLabel ?? value}
         align="start"
         collisionPadding={16}
         className={cn(

@@ -1,0 +1,37 @@
+/*
+ * Stories wear the app's real stylesheet (MAR-3611): Tailwind, the design
+ * system's theme and every @source the app scans, the package's own source
+ * included, so a story looks like the app because it is styled by the same
+ * file.
+ */
+@import '../../../apps/convergence/src/app/global.css';
+
+/*
+ * The app's own build scans its tree by automatic detection from its own
+ * root; Storybook's root is this package, so the app's stories (main.ts
+ * already looks for them) need their tree named.
+ */
+@source '../../../apps/convergence/src';
+
+/*
+ * The app's window is translucent on macOS, so its surfaces sit over whatever
+ * is behind the window. Storybook has no desktop; this soft, theme-aware
+ * gradient stands in for it, built from the theme's own roles so it follows
+ * light and dark with the rest of the page.
+ */
+html {
+  min-height: 100%;
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      circle at 12% 8%,
+      color-mix(in oklch, var(--info-ink) 18%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 88% 92%,
+      color-mix(in oklch, var(--warning-ink) 14%, transparent),
+      transparent 50%
+    );
+  background-attachment: fixed;
+}

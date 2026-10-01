@@ -101,7 +101,11 @@ After every finished task, agents must run these commands in this repo:
 - `npm run typecheck`
 - `npm run test:pure`
 - `npm run test:unit`
+- `npm run test:stories` (every Storybook story, in headless Chromium, with axe;
+  run `npx playwright install chromium` once first)
 - `npm run chaperone -- check --fix`
+- `npm run test:scripts`
+- `npm run canaries`
 
 `npm run chaperone` runs the Chaperone version the repo pins in
 `scripts/chaperone.mjs` (downloaded once, checksum-verified); a global
@@ -229,6 +233,15 @@ Electron backend modules should prefer focused files such as:
 - `state.ts`
 - `types.ts`
 - `provider.ts`
+
+### Building UI
+
+The design system is its own package, `@convergence/ui` (`packages/ui`, rules
+in `packages/ui/AGENTS.md`). Before building a part, search `@convergence/ui`
+and Storybook (`npm run storybook`) for one that exists. Every new part ships
+with stories, and every story is a test with an accessibility check
+(`npm run test:stories`). Look at it in Storybook in light, dark and reduced
+motion (the toolbar) before calling it done.
 
 ### Presentational vs container rules
 

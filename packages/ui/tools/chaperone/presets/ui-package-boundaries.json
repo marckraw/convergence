@@ -42,9 +42,8 @@
         "type": "regex",
         "severity": "error",
         "files": "packages/ui/src/**/*.{ts,tsx}",
-        "exclude": ["packages/ui/src/**/*.stories.tsx"],
-        "pattern": "(^|\\n)\\s*export\\s+default\\b",
-        "message": "@convergence/ui uses named exports only (a story file's meta is the one default export Storybook needs)."
+        "pattern": "(^|\\n)\\s*export\\s+default\\s+(?!meta\\b)",
+        "message": "@convergence/ui uses named exports only. The one default export is a story file's `export default meta`, which Storybook needs."
       },
       {
         "id": "ui-package-index-names-each-export",
