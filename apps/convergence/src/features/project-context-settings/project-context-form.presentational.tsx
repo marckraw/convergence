@@ -1,7 +1,18 @@
 import type { FC, FormEvent } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { ProjectContextReinjectMode } from '@/entities/project-context'
-import { Button, ChoiceField, Input, Switch, Textarea } from '@convergence/ui'
+import {
+  Button,
+  ChoiceField,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  FormError,
+  Input,
+  Notice,
+  Switch,
+  Textarea,
+} from '@convergence/ui'
 
 interface ProjectContextFormProps {
   mode: 'create' | 'edit'
@@ -40,41 +51,32 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4"
+      className="space-y-4 rounded-lg border border-line-soft bg-surface/30 p-4"
       data-testid="project-context-form"
     >
-      <div className="space-y-2">
-        <label htmlFor="project-context-label" className="text-sm font-medium">
-          Label{' '}
-          <span className="text-xs text-muted-foreground">(optional)</span>
-        </label>
+      <Field disabled={isSaving}>
+        <FieldLabel>
+          Label <span className="text-xs text-ink-muted">(optional)</span>
+        </FieldLabel>
         <Input
           size="lg"
-          id="project-context-label"
           value={label}
           onChange={(event) => onLabelChange(event.target.value)}
           placeholder="e.g. monorepo-api"
-          disabled={isSaving}
         />
-      </div>
+      </Field>
 
-      <div className="space-y-2">
-        <label htmlFor="project-context-body" className="text-sm font-medium">
-          Body
-        </label>
+      <Field disabled={isSaving}>
+        <FieldLabel>Body</FieldLabel>
         <Textarea
-          id="project-context-body"
           value={body}
           onChange={(event) => onBodyChange(event.target.value)}
           placeholder="Free-text context. Plain prose works well."
           rows={6}
-          disabled={isSaving}
           required
         />
-        <p className="text-xs text-muted-foreground">
-          {body.trim().length} characters
-        </p>
-      </div>
+        <FieldDescription>{body.trim().length} characters</FieldDescription>
+      </Field>
 
       <div className="space-y-2">
         <ChoiceField
@@ -91,25 +93,19 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
           />
         </ChoiceField>
         {isEveryTurn ? (
-          <div
-            className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200"
+          <Notice
+            tone="warning"
+            icon={<AlertTriangle />}
+            title="Re-sent with every message"
             data-testid="every-turn-warning"
           >
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              Every-turn items are re-sent on every message. They cost tokens
-              and can conflict with the provider&apos;s own session memory. Use
-              sparingly.
-            </span>
-          </div>
+            They cost tokens and can conflict with the provider&apos;s own
+            session memory. Use sparingly.
+          </Notice>
         ) : null}
       </div>
 
-      {error ? (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <FormError>{error}</FormError>
 
       <div className="flex items-center justify-end gap-2">
         <Button
@@ -123,14 +119,14 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
         </Button>
         <Button
           type="submit"
-          disabled={isSaving || body.trim().length === 0}
+          disabledReason={
+            body.trim().length === 0 ? 'Write the body first.' : undefined
+          }
+          pending={isSaving}
+          pendingLabel="Saving…"
           size="lg"
         >
-          {isSaving
-            ? 'Saving...'
-            : mode === 'create'
-              ? 'Add context item'
-              : 'Save changes'}
+          {mode === 'create' ? 'Add context item' : 'Save changes'}
         </Button>
       </div>
     </form>

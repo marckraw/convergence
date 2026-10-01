@@ -8,6 +8,7 @@ import {
 import { ProjectContextForm } from './project-context-form.presentational'
 import { ProjectContextList } from './project-context-list.presentational'
 import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
+import { Notice, useConfirm } from '@convergence/ui'
 
 interface ProjectContextSettingsProps {
   projectId: string
@@ -34,9 +35,9 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
   const updateItem = useProjectContextStore((state) => state.updateItem)
   const deleteItem = useProjectContextStore((state) => state.deleteItem)
   const clearError = useProjectContextStore((state) => state.clearError)
+  const confirm = useConfirm()
 
   const [formState, setFormState] = useState<FormState>({ mode: 'closed' })
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [labelDraft, setLabelDraft] = useState('')
   const [bodyDraft, setBodyDraft] = useState('')
   const [modeDraft, setModeDraft] = useState<ProjectContextReinjectMode>('boot')
@@ -114,9 +115,16 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
   // Enable cmd+Enter to submit the form
   useFormSubmitShortcut(formState.mode !== 'closed', handleSubmit)
 
-  const handleDeleteConfirm = async (id: string) => {
-    await deleteItem(id, projectId)
-    setPendingDeleteId(null)
+  // What can't be taken back asks first, in the app's own dialog (R5).
+  const handleDeleteRequest = async (item: ProjectContextItem) => {
+    const confirmed = await confirm({
+      title: `Delete “${item.label?.trim() || 'Untitled'}”?`,
+      description:
+        'The context item is deleted from this project. Sessions stop getting it from their next start or turn.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    })
+    if (confirmed) await deleteItem(item.id, projectId)
   }
 
   return (
@@ -126,12 +134,9 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
           items={items}
           isLoading={isLoading}
           isEmpty={!isLoading && items.length === 0}
-          pendingDeleteId={pendingDeleteId}
           onCreateClick={openCreate}
           onEditClick={openEdit}
-          onDeleteRequest={setPendingDeleteId}
-          onDeleteConfirm={(id) => void handleDeleteConfirm(id)}
-          onDeleteCancel={() => setPendingDeleteId(null)}
+          onDeleteRequest={(item) => void handleDeleteRequest(item)}
         />
       ) : (
         <ProjectContextForm
@@ -149,9 +154,7 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
         />
       )}
       {error && formState.mode === 'closed' ? (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </p>
+        <Notice tone="danger" title={error} />
       ) : null}
     </section>
   )

@@ -44,12 +44,9 @@ const meta = {
     items,
     isLoading: false,
     isEmpty: false,
-    pendingDeleteId: null,
     onCreateClick: fn(),
     onEditClick: fn(),
     onDeleteRequest: fn(),
-    onDeleteConfirm: fn(),
-    onDeleteCancel: fn(),
   },
   decorators: [
     (Story) => (
@@ -80,26 +77,11 @@ export const Default: Story = {
     )
     await expect(args.onEditClick).toHaveBeenCalledWith(items[0])
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Delete house style' }),
+      canvas.getByRole('button', { name: 'Delete house style…' }),
     )
-    await expect(args.onDeleteRequest).toHaveBeenCalledWith('ctx-style')
+    await expect(args.onDeleteRequest).toHaveBeenCalledWith(items[1])
     await userEvent.click(canvas.getByRole('button', { name: 'Add' }))
     await expect(args.onCreateClick).toHaveBeenCalledOnce()
-  },
-}
-
-/** Deleting asks first, inside the row: Delete or Cancel. */
-export const ConfirmDelete: Story = {
-  name: 'Confirm delete',
-  args: { pendingDeleteId: 'ctx-style' },
-  play: async ({ args, canvas, userEvent }) => {
-    await expect(
-      canvas.getByText('Delete this context item permanently?'),
-    ).toBeVisible()
-    await userEvent.click(canvas.getByRole('button', { name: 'Delete' }))
-    await expect(args.onDeleteConfirm).toHaveBeenCalledWith('ctx-style')
-    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }))
-    await expect(args.onDeleteCancel).toHaveBeenCalledOnce()
   },
 }
 
@@ -141,7 +123,7 @@ export const Long: Story = {
 }
 
 export const Dark: Story = {
-  ...ConfirmDelete,
+  ...Default,
   name: 'Dark',
   globals: { theme: 'dark' },
 }

@@ -2,7 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useProjectContextStore } from '@/entities/project-context'
 import type { ProjectContextItem } from '@/entities/project-context'
+import { UiProvider } from '@convergence/ui'
+import { answerConfirm } from '@/shared/testing/confirm'
 import { ProjectContextSettings } from './project-context-list.container'
+
+/** Under the app's UiProvider, which hosts the delete's question (R5). */
+function renderSettings() {
+  return render(
+    <UiProvider>
+      <ProjectContextSettings projectId={PROJECT_ID} />
+    </UiProvider>,
+  )
+}
 
 const PROJECT_ID = 'p1'
 
@@ -55,7 +66,7 @@ describe('ProjectContextSettings', () => {
   })
 
   it('loads items for the project on mount and renders them with badges', async () => {
-    render(<ProjectContextSettings projectId={PROJECT_ID} />)
+    renderSettings()
 
     await waitFor(() => {
       expect(
@@ -73,7 +84,7 @@ describe('ProjectContextSettings', () => {
 
   it('renders the empty-state copy when no items exist', async () => {
     mockElectronAPI.projectContext.list.mockResolvedValue([])
-    render(<ProjectContextSettings projectId={PROJECT_ID} />)
+    renderSettings()
 
     await waitFor(() => {
       expect(screen.getByText(/No context items yet/i)).toBeTruthy()
@@ -82,7 +93,7 @@ describe('ProjectContextSettings', () => {
 
   it('opens the form on Add and shows the every-turn warning when toggled on', async () => {
     mockElectronAPI.projectContext.list.mockResolvedValue([])
-    render(<ProjectContextSettings projectId={PROJECT_ID} />)
+    renderSettings()
 
     await waitFor(() => {
       expect(screen.getByText(/No context items yet/i)).toBeTruthy()
@@ -107,7 +118,7 @@ describe('ProjectContextSettings', () => {
     }
     mockElectronAPI.projectContext.create.mockResolvedValue(created)
 
-    render(<ProjectContextSettings projectId={PROJECT_ID} />)
+    renderSettings()
 
     await waitFor(() => {
       expect(screen.getByText(/No context items yet/i)).toBeTruthy()
@@ -142,7 +153,7 @@ describe('ProjectContextSettings', () => {
       body: 'updated body',
     })
 
-    render(<ProjectContextSettings projectId={PROJECT_ID} />)
+    renderSettings()
 
     await waitFor(() => {
       expect(
@@ -175,7 +186,7 @@ describe('ProjectContextSettings', () => {
   it('asks for confirmation before deleting and dispatches on confirm', async () => {
     mockElectronAPI.projectContext.delete.mockResolvedValue(undefined)
 
-    render(<ProjectContextSettings projectId={PROJECT_ID} />)
+    renderSettings()
 
     await waitFor(() => {
       expect(
@@ -185,11 +196,12 @@ describe('ProjectContextSettings', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Delete monorepo/i }))
 
-    expect(
-      screen.getByTestId(`project-context-delete-confirm-${itemA.id}`),
-    ).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }))
+    // The app's own question, named for the item (R5), not an inline strip.
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      'Delete “monorepo”?',
+    )
+    expect(mockElectronAPI.projectContext.delete).not.toHaveBeenCalled()
+    await answerConfirm('Delete')
 
     await waitFor(() => {
       expect(mockElectronAPI.projectContext.delete).toHaveBeenCalledWith(
@@ -199,7 +211,7 @@ describe('ProjectContextSettings', () => {
   })
 
   it('cancels the delete confirmation without dispatching', async () => {
-    render(<ProjectContextSettings projectId={PROJECT_ID} />)
+    renderSettings()
 
     await waitFor(() => {
       expect(
@@ -208,11 +220,9 @@ describe('ProjectContextSettings', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /Delete monorepo/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Cancel/i }))
+    await answerConfirm('Cancel')
 
-    expect(
-      screen.queryByTestId(`project-context-delete-confirm-${itemA.id}`),
-    ).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(mockElectronAPI.projectContext.delete).not.toHaveBeenCalled()
   })
 })
