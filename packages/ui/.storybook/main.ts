@@ -80,6 +80,7 @@ const config: StorybookConfig = {
           '@base-ui/react/button',
           '@base-ui/react/checkbox',
           '@base-ui/react/collapsible',
+          '@base-ui/react/combobox',
           '@base-ui/react/field',
           '@base-ui/react/fieldset',
           '@base-ui/react/input',
