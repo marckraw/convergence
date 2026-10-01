@@ -10,10 +10,11 @@ describe('session service tier (MAR-3572)', () => {
   it('accepts Codex tier ids and refuses anything else', () => {
     expect(parseServiceTierInput('fast')).toBe('fast')
     expect(parseServiceTierInput(' default ')).toBe('default')
+    // Codex's own ids (MAR-3574): whether the account offers one is asked by
+    // the app layer, not by the shape check.
+    expect(parseServiceTierInput('priority')).toBe('priority')
+    expect(parseServiceTierInput('ultrafast')).toBe('ultrafast')
     for (const bad of [
-      // Real Codex tiers the switch cannot show yet (CS2 widens this).
-      'priority',
-      'ultrafast',
       '',
       '  ',
       'Fast',

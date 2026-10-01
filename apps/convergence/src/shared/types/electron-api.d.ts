@@ -24,6 +24,7 @@ import type {
   TrackerProjectResolution,
 } from './tracker.types'
 import type { ProviderAccountLoginAttempt } from './provider-account-login.types'
+import type { CodexSpeedScope, CodexSpeedSnapshot } from './codex-speed.types'
 import type {
   SessionPullRequest,
   SessionPullRequestReading,
@@ -2166,7 +2167,7 @@ interface ElectronAPI {
     ) => Promise<SessionSummaryData>
     setServiceTier: (
       id: string,
-      input: { serviceTier: string },
+      input: { serviceTier: string; providerAccountId?: string | null },
     ) => Promise<SessionSummaryData>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
@@ -2217,6 +2218,12 @@ interface ElectronAPI {
       forceRefresh?: boolean,
       scope?: { executionHostId: string; providerAccountId: string | null },
     ) => Promise<ProviderQuotaSnapshotData[]>
+  }
+  codexSpeed: {
+    list: (
+      forceRefresh?: boolean,
+      scope?: CodexSpeedScope,
+    ) => Promise<CodexSpeedSnapshot>
   }
   providerAccounts: {
     loginAttempt: () => Promise<ProviderAccountLoginAttempt | null>

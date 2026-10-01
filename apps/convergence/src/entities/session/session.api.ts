@@ -149,7 +149,7 @@ export const sessionApi = {
 
   setServiceTier: (
     id: string,
-    input: { serviceTier: string },
+    input: { serviceTier: string; providerAccountId?: string | null },
   ): Promise<SessionSummary> =>
     window.electronAPI.session.setServiceTier(
       id,

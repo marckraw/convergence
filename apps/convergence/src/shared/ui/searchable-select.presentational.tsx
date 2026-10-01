@@ -50,6 +50,8 @@ export interface SearchableSelectProps {
   triggerVariant?: ButtonProps['variant']
   triggerSize?: ButtonProps['size']
   triggerClassName?: string
+  /** The trigger's accessible name; defaults to its visible value. */
+  ariaLabel?: string
   contentClassName?: string
   icon?: ReactNode
   action?: SearchableSelectAction
@@ -74,6 +76,8 @@ interface SearchableSelectPresentationalProps {
   triggerVariant: ButtonProps['variant']
   triggerSize: ButtonProps['size']
   triggerClassName?: string
+  /** The trigger's accessible name; defaults to its visible value. */
+  ariaLabel?: string
   contentClassName?: string
   icon?: ReactNode
   action?: SearchableSelectAction
@@ -97,6 +101,7 @@ export function SearchableSelectPresentational({
   triggerVariant,
   triggerSize,
   triggerClassName,
+  ariaLabel,
   contentClassName,
   icon,
   action,
@@ -116,7 +121,7 @@ export function SearchableSelectPresentational({
           size={triggerSize}
           disabled={isDisabled}
           role="combobox"
-          aria-label={value}
+          aria-label={ariaLabel ?? value}
           aria-expanded={open}
           className={cn('justify-between', triggerClassName)}
         >

@@ -106,8 +106,18 @@ interface ComposerProps {
   providerAccountHelp?: string
   accountNotice?: ComposerAccountNoticeState
   onManageProviderAccounts?: () => void
-  codexFastMode: boolean
-  onCodexFastModeChange: (enabled: boolean) => void
+  /**
+   * The Codex speeds this account is offered for the chosen model, Standard
+   * first (MAR-3574). Built from the account's own list, never hard-coded.
+   */
+  codexSpeedChoices: Array<{
+    id: string
+    label: string
+    description: string | null
+  }>
+  /** The chosen speed's id: `default` (Standard), `priority`, `ultrafast`. */
+  codexSpeedId: string
+  onCodexSpeedChange: (speedId: string) => void
   /**
    * Whether this composer governs the local Codex CLI's own billing (MAR-2682).
    * Derived from the machine as well as the provider, because `serviceTier`
@@ -261,8 +271,9 @@ export const Composer: FC<ComposerProps> = ({
   providerAccountHelp,
   accountNotice,
   onManageProviderAccounts,
-  codexFastMode,
-  onCodexFastModeChange,
+  codexSpeedChoices,
+  codexSpeedId,
+  onCodexSpeedChange,
   codexBillingControlsAvailable,
   executionBar,
   onExecutionHostChange,
@@ -353,6 +364,11 @@ export const Composer: FC<ComposerProps> = ({
   onMentionDismiss,
   onSelectionChange,
 }) => {
+  // The choices always carry the chosen tier (MAR-3574), so the label never
+  // falls back to a speed the next turn is not running at.
+  const codexSpeedLabel =
+    codexSpeedChoices.find((choice) => choice.id === codexSpeedId)?.label ??
+    codexSpeedId
   /**
    * Whether this composer may send at all — one derivation, read by both ways
    * of sending.
@@ -911,37 +927,35 @@ export const Composer: FC<ComposerProps> = ({
                     />
                   )}
                   {/*
-                    Gone on a daemon, not disabled: Fast mode writes
-                    `serviceTier`, which has no home on the wire, so the switch
+                    Gone on a daemon, not disabled: the speed writes
+                    `serviceTier`, which has no home on the wire, so a choice
                     there would set a field the machine below never receives
                     (MAR-2682). Locked like the model and effort, not like the
                     provider: a speed change reaches the conversation's next
                     turn, so it is only held while a turn is in flight
-                    (MAR-3572).
+                    (MAR-3572). Its rows are the account's own offer (MAR-3574).
                   */}
                   {codexBillingControlsAvailable ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      role="switch"
-                      aria-checked={codexFastMode}
-                      aria-label="Fast mode"
-                      title={
-                        codexFastMode
-                          ? 'Fast mode is on'
-                          : 'Fast mode is off: Codex runs at standard speed.'
-                      }
-                      onClick={() => onCodexFastModeChange(!codexFastMode)}
+                    <ComposerSelect
+                      selectedId={codexSpeedId}
+                      value={codexSpeedLabel}
+                      ariaLabel={`Speed: ${codexSpeedLabel}`}
+                      items={codexSpeedChoices.map((choice) => ({
+                        id: choice.id,
+                        label: choice.label,
+                        ...(choice.description
+                          ? { description: choice.description }
+                          : {}),
+                      }))}
+                      icon={<Zap className="h-3.5 w-3.5" />}
+                      onChange={onCodexSpeedChange}
                       disabled={disabled || modelSelectionDisabled}
                       className={cn(
-                        'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
-                        codexFastMode && 'bg-secondary text-foreground',
+                        'px-2 text-xs text-muted-foreground hover:text-foreground',
+                        codexSpeedId !== 'default' &&
+                          'bg-secondary text-foreground',
                       )}
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                      Fast
-                    </Button>
+                    />
                   ) : null}
                   {/*
                     Ask/Yolo lives in the cluster because it is the same kind of

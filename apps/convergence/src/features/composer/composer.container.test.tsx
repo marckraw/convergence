@@ -324,6 +324,27 @@ const projectContextItem: ProjectContextItem = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+const FAST_TIER = {
+  id: 'priority',
+  name: 'Fast',
+  description: '2x speed, increased usage',
+}
+const ULTRAFAST_TIER = {
+  id: 'ultrafast',
+  name: 'Ultrafast',
+  description: 'Up to 8x speed, highest usage',
+}
+/** What the account answers in each test; reset to "Fast on GPT-5.5" (MAR-3574). */
+let codexSpeedModels: Record<
+  string,
+  { tiers: (typeof FAST_TIER)[]; defaultTier: string | null }
+> = {}
+const codexSpeedList = vi.fn(async () => ({
+  status: 'available' as const,
+  checkedAt: '2026-10-01T00:00:00.000Z',
+  models: codexSpeedModels,
+}))
+
 const codexProvider = {
   id: 'codex',
   name: 'Codex',
@@ -424,6 +445,15 @@ function reseedProviders(map: (provider: ProviderInfo) => ProviderInfo): void {
 
 describe('ComposerContainer', () => {
   beforeEach(() => {
+    codexSpeedModels = {
+      'gpt-5.5': { tiers: [FAST_TIER], defaultTier: null },
+    }
+    codexSpeedList.mockReset()
+    codexSpeedList.mockImplementation(async () => ({
+      status: 'available' as const,
+      checkedAt: '2026-10-01T00:00:00.000Z',
+      models: codexSpeedModels,
+    }))
     providerAccountsMock = []
     sessionTurnsMock = []
     turnDeltaListener = undefined
@@ -455,6 +485,9 @@ describe('ComposerContainer', () => {
             unreachableReason: null,
           }),
         ),
+      },
+      codexSpeed: {
+        list: codexSpeedList,
       },
       providerQuota: {
         list: vi.fn().mockResolvedValue([
@@ -2148,10 +2181,9 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    expect(screen.getByRole('switch', { name: 'Fast mode' })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    )
+    expect(
+      screen.getByRole('combobox', { name: 'Speed: Standard' }),
+    ).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, {
@@ -2182,7 +2214,10 @@ describe('ComposerContainer', () => {
     })
   })
 
-  it('can turn on fast mode for a new Codex session', () => {
+  it("MAR-3574 R5: a new conversation starts at Standard even when the account's own default is Fast", async () => {
+    codexSpeedModels = {
+      'gpt-5.5': { tiers: [FAST_TIER], defaultTier: 'priority' },
+    }
     useSessionStore.setState({
       providerCatalogs: localProviderCatalogs([codexProvider]),
     })
@@ -2198,7 +2233,44 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
+    await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
+    expect(
+      screen.getByRole('combobox', { name: 'Speed: Standard' }),
+    ).toBeInTheDocument()
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, { target: { value: 'Standard please' } })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'codex', serviceTier: 'default' }),
+    )
+  })
+
+  it("can choose Fast for a new Codex session, sent as Codex's own tier id", async () => {
+    useSessionStore.setState({
+      providerCatalogs: localProviderCatalogs([codexProvider]),
+    })
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+    fireEvent.click(await screen.findByText('Fast'))
+    expect(
+      screen.getByRole('combobox', { name: 'Speed: Fast' }),
+    ).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, {
@@ -2220,7 +2292,7 @@ describe('ComposerContainer', () => {
       skillSelections: undefined,
       contextItemIds: undefined,
       permissionConfig: { preset: 'ask' },
-      serviceTier: 'fast',
+      serviceTier: 'priority',
       executionHost: undefined,
       // A Local session works in the directory the record already names, so it
       // states no place and records none (MAR-2689).
@@ -2805,6 +2877,143 @@ describe('ComposerContainer', () => {
       ),
     }))
   }
+
+  it('MAR-3574 R1: asks the speed list of the account the composer would send on, not the ambient one', async () => {
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    await waitFor(() =>
+      expect(codexSpeedList).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-b',
+      }),
+    )
+    expect(codexSpeedList).not.toHaveBeenCalledWith(false, {
+      executionHostId: 'local',
+      providerAccountId: null,
+    })
+  })
+
+  it("MAR-3574 R4: another account's answer never judges the conversation just opened", async () => {
+    // The scope tag's own input (the blind reader, round 1): A runs on acct-a,
+    // whose list offers GPT-5.5 nothing; B runs on acct-b at Fast, and acct-b's
+    // list has not answered yet. Untagged, A's answer would judge B's Fast as
+    // not offered and write Standard over it.
+    const setSessionServiceTier = vi.fn().mockResolvedValue(undefined)
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-a',
+        providerId: 'codex',
+        email: 'a@example.com',
+      }),
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    ;(
+      window.electronAPI.turns as unknown as {
+        listForSession: (id: string) => Promise<unknown[]>
+      }
+    ).listForSession = vi.fn((id: string) =>
+      Promise.resolve([
+        {
+          id: `turn-${id}`,
+          providerAccountId: id === 'session-1' ? 'acct-a' : 'acct-b',
+        },
+      ]),
+    )
+    codexSpeedList.mockImplementation(((
+      _force: boolean,
+      scope?: { providerAccountId: string | null },
+    ) =>
+      scope?.providerAccountId === 'acct-b'
+        ? new Promise(() => {})
+        : Promise.resolve({
+            status: 'available' as const,
+            checkedAt: '2026-10-01T00:00:00.000Z',
+            models: { 'gpt-5.5': { tiers: [], defaultTier: null } },
+          })) as never)
+    useSessionStore.setState((state) => ({
+      setSessionServiceTier,
+      providerCatalogs: localProviderCatalogs([
+        ...seededProviders(),
+        codexProvider,
+      ]),
+      sessions: [
+        ...state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? {
+                ...session,
+                providerId: 'codex',
+                model: 'gpt-5.5',
+                serviceTier: 'default',
+                status: 'completed' as const,
+                attention: 'finished' as const,
+              }
+            : session,
+        ),
+        {
+          ...state.sessions.find((session) => session.id === 'session-1')!,
+          id: 'session-2',
+          providerId: 'codex',
+          model: 'gpt-5.5',
+          serviceTier: 'priority',
+          status: 'completed' as const,
+          attention: 'finished' as const,
+        },
+      ],
+    }))
+    const context = (id: string) => ({
+      kind: 'project' as const,
+      projectId: 'project-1',
+      workspaceId: null,
+      activeSessionId: id,
+    })
+    const { rerender } = render(
+      <ComposerContainer context={context('session-1')} />,
+    )
+    await waitFor(() =>
+      expect(codexSpeedList).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-a',
+      }),
+    )
+
+    rerender(<ComposerContainer context={context('session-2')} />)
+    await waitFor(() =>
+      expect(codexSpeedList).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-b',
+      }),
+    )
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(setSessionServiceTier).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('combobox', { name: 'Speed: Fast' }),
+    ).toBeInTheDocument()
+  })
 
   it('asks about the account the composer would send on, not the ambient default', async () => {
     // MAR-2826 round 1, M3. The read was unscoped, so a session running on a
@@ -4012,7 +4221,7 @@ describe('ComposerContainer', () => {
       })
     })
 
-    it('MAR-3572 R2: Fast on an open Codex conversation is written to its row, and the switch shows the row', async () => {
+    it('MAR-3572 R2: a speed chosen on an open Codex conversation is written to its row, and the choice shows the row', async () => {
       const setSessionServiceTier = vi.fn().mockResolvedValue(undefined)
       useSessionStore.setState({
         setSessionServiceTier,
@@ -4030,37 +4239,198 @@ describe('ComposerContainer', () => {
       })
       renderComposer()
 
-      const fast = screen.getByRole('switch', { name: 'Fast mode' })
-      expect(fast).toHaveAttribute('aria-checked', 'false')
-      fireEvent.click(fast)
+      await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+      fireEvent.click(await screen.findByText('Fast'))
 
       await waitFor(() => {
         expect(setSessionServiceTier).toHaveBeenCalledWith('session-1', {
-          serviceTier: 'fast',
+          serviceTier: 'priority',
+          providerAccountId: null,
         })
       })
-      // Nothing optimistic: until the row says Fast, the switch says what the
+      // Nothing optimistic: until the row says Fast, the choice says what the
       // next turn will actually run on.
-      expect(fast).toHaveAttribute('aria-checked', 'false')
+      expect(
+        screen.getByRole('combobox', { name: 'Speed: Standard' }),
+      ).toBeInTheDocument()
 
+      // The legacy `fast` a CS1 row holds reads as Codex's Fast.
       act(() => setSessionState({ serviceTier: 'fast' }))
-      expect(screen.getByRole('switch', { name: 'Fast mode' })).toHaveAttribute(
-        'aria-checked',
-        'true',
-      )
+      expect(
+        screen.getByRole('combobox', { name: 'Speed: Fast' }),
+      ).toBeInTheDocument()
 
-      fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Fast' }))
+      fireEvent.click(await screen.findByText('Standard'))
       await waitFor(() => {
         expect(setSessionServiceTier).toHaveBeenLastCalledWith('session-1', {
           serviceTier: 'default',
+          providerAccountId: null,
         })
       })
 
       // Held like the model while a turn runs, not like the provider for the
       // conversation's whole life.
       act(() => setSessionState({ status: 'running', attention: 'none' }))
-      expect(screen.getByRole('switch', { name: 'Fast mode' })).toBeDisabled()
+      expect(
+        screen.getByRole('combobox', { name: 'Speed: Fast' }),
+      ).toBeDisabled()
       expect(screen.getByRole('combobox', { name: 'GPT-5.5' })).toBeDisabled()
+    })
+
+    it("MAR-3574 R2: lists exactly the speeds this account is offered, under Codex's names", async () => {
+      codexSpeedModels = {
+        'gpt-5.5': { tiers: [FAST_TIER, ULTRAFAST_TIER], defaultTier: null },
+      }
+      useSessionStore.setState({
+        providerCatalogs: localProviderCatalogs([
+          ...seededProviders(),
+          codexProvider,
+        ]),
+      })
+      setSessionState({
+        status: 'completed',
+        attention: 'finished',
+        providerId: 'codex',
+        model: 'gpt-5.5',
+        serviceTier: 'default',
+      })
+      renderComposer()
+
+      await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
+      expect(codexSpeedList).toHaveBeenLastCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: null,
+      })
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+      expect(await screen.findByText('Ultrafast')).toBeInTheDocument()
+      expect(screen.getByText('Fast')).toBeInTheDocument()
+      expect(
+        screen.getByText('Up to 8x speed, highest usage'),
+      ).toBeInTheDocument()
+    })
+
+    it('MAR-3574 R2: a speed the account is not offered is not listed', async () => {
+      useSessionStore.setState({
+        providerCatalogs: localProviderCatalogs([
+          ...seededProviders(),
+          codexProvider,
+        ]),
+      })
+      setSessionState({
+        status: 'completed',
+        attention: 'finished',
+        providerId: 'codex',
+        model: 'gpt-5.5',
+        serviceTier: 'default',
+      })
+      renderComposer()
+
+      await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
+      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+      expect(await screen.findByText('Fast')).toBeInTheDocument()
+      expect(screen.queryByText('Ultrafast')).toBeNull()
+    })
+
+    it('MAR-3574 R4: an open conversation whose model is not offered its tier goes back to Standard, written to the row', async () => {
+      const setSessionServiceTier = vi.fn().mockResolvedValue(undefined)
+      useSessionStore.setState({
+        setSessionServiceTier,
+        providerCatalogs: localProviderCatalogs([
+          ...seededProviders(),
+          codexProvider,
+        ]),
+      })
+      setSessionState({
+        status: 'completed',
+        attention: 'finished',
+        providerId: 'codex',
+        model: 'gpt-5.5',
+        serviceTier: 'ultrafast',
+      })
+      renderComposer()
+
+      await waitFor(() => {
+        expect(setSessionServiceTier).toHaveBeenCalledWith('session-1', {
+          serviceTier: 'default',
+          providerAccountId: null,
+        })
+      })
+    })
+
+    it("MAR-3574 R4: switching conversations never writes Standard over the new conversation's speed", async () => {
+      // The blind reader's probe, round 1: the composer outlives the switch,
+      // so for a render its state held A's Ultrafast while the model was
+      // already B's GPT-5.5 -- and R4 wrote Standard over B's Fast.
+      const setSessionServiceTier = vi.fn().mockResolvedValue(undefined)
+      codexSpeedModels = {
+        'gpt-6-astra': {
+          tiers: [FAST_TIER, ULTRAFAST_TIER],
+          defaultTier: null,
+        },
+        'gpt-5.5': { tiers: [FAST_TIER], defaultTier: null },
+      }
+      const astraModel = {
+        id: 'gpt-6-astra',
+        label: 'GPT-6 Astra',
+        defaultEffort: 'medium' as const,
+        effortOptions: [{ id: 'medium' as const, label: 'Medium' }],
+      }
+      useSessionStore.setState((state) => ({
+        setSessionServiceTier,
+        providerCatalogs: localProviderCatalogs([
+          ...seededProviders(),
+          {
+            ...codexProvider,
+            modelOptions: [...codexProvider.modelOptions, astraModel],
+          },
+        ]),
+        sessions: [
+          ...state.sessions.map((session) =>
+            session.id === 'session-1'
+              ? {
+                  ...session,
+                  providerId: 'codex',
+                  model: 'gpt-6-astra',
+                  serviceTier: 'ultrafast',
+                  status: 'completed' as const,
+                  attention: 'finished' as const,
+                }
+              : session,
+          ),
+          {
+            ...state.sessions.find((session) => session.id === 'session-1')!,
+            id: 'session-2',
+            providerId: 'codex',
+            model: 'gpt-5.5',
+            serviceTier: 'priority',
+            status: 'completed' as const,
+            attention: 'finished' as const,
+          },
+        ],
+      }))
+      const context = (id: string) => ({
+        kind: 'project' as const,
+        projectId: 'project-1',
+        workspaceId: null,
+        activeSessionId: id,
+      })
+      const { rerender } = render(
+        <ComposerContainer context={context('session-1')} />,
+      )
+      expect(
+        await screen.findByRole('combobox', { name: 'Speed: Ultrafast' }),
+      ).toBeInTheDocument()
+
+      rerender(<ComposerContainer context={context('session-2')} />)
+      expect(
+        await screen.findByRole('combobox', { name: 'Speed: Fast' }),
+      ).toBeInTheDocument()
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect(setSessionServiceTier).not.toHaveBeenCalled()
     })
 
     it('keeps showing the old model when the backend refuses the change', async () => {

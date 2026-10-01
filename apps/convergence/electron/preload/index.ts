@@ -558,8 +558,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         effort: string | null
       },
     ) => ipcRenderer.invoke('session:setModelSelection', id, input),
-    setServiceTier: (id: string, input: { serviceTier: string }) =>
-      ipcRenderer.invoke('session:setServiceTier', id, input),
+    setServiceTier: (
+      id: string,
+      input: { serviceTier: string; providerAccountId?: string | null },
+    ) => ipcRenderer.invoke('session:setServiceTier', id, input),
     getNeedsYouDismissals: () =>
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>
@@ -654,6 +656,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       forceRefresh?: boolean,
       scope?: { executionHostId: string; providerAccountId: string | null },
     ) => ipcRenderer.invoke('providerQuota:list', forceRefresh, scope),
+  },
+  codexSpeed: {
+    list: (
+      forceRefresh?: boolean,
+      scope?: { executionHostId: string; providerAccountId: string | null },
+    ) => ipcRenderer.invoke('codexSpeed:list', forceRefresh, scope),
   },
   providerAccounts: {
     loginAttempt: () => ipcRenderer.invoke('providerAccounts:loginAttempt'),

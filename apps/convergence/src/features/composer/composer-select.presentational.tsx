@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { SearchableSelect } from '@/shared/ui/searchable-select.container'
 import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 
@@ -9,6 +9,8 @@ interface ComposerSelectProps {
   onChange: (id: string) => void
   disabled?: boolean
   className?: string
+  icon?: ReactNode
+  ariaLabel?: string
 }
 
 export const ComposerSelect: FC<ComposerSelectProps> = ({
@@ -18,6 +20,8 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
   onChange,
   disabled = false,
   className,
+  icon,
+  ariaLabel,
 }) => (
   <SearchableSelect
     selectedId={selectedId}
@@ -30,5 +34,7 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
     triggerVariant="ghost"
     triggerSize="sm"
     triggerClassName={className}
+    icon={icon}
+    ariaLabel={ariaLabel}
   />
 )

@@ -804,7 +804,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     ).not.toBeDisabled()
   })
 
-  it('drops Fast mode and the quota pill on a remote, and keeps them here', async () => {
+  it('drops the speed choice and the quota pill on a remote, and keeps them here', async () => {
     // `serviceTier` is on EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS and the
     // quota is read off the Codex CLI installed *here*. A control above the
     // strip that cannot act on the machine below it does not render
@@ -830,7 +830,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     renderComposer()
     // Local Codex: both controls are real, because this app owns that CLI.
     expect(
-      await screen.findByRole('switch', { name: 'Fast mode' }),
+      await screen.findByRole('combobox', { name: 'Speed: Standard' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /Codex usage/ }),
@@ -840,13 +840,15 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     await screen.findByRole('combobox', { name: 'Daemon GPT' })
 
     // Same provider, different machine: gone. Not disabled — absent.
-    expect(screen.queryByRole('switch', { name: 'Fast mode' })).toBeNull()
+    expect(
+      screen.queryByRole('combobox', { name: 'Speed: Standard' }),
+    ).toBeNull()
     expect(screen.queryByRole('button', { name: /Codex usage/ })).toBeNull()
 
     // Back here, and both return.
     await chooseHost(/kuba-vps/, 'Local')
     expect(
-      await screen.findByRole('switch', { name: 'Fast mode' }),
+      await screen.findByRole('combobox', { name: 'Speed: Standard' }),
     ).toBeInTheDocument()
   })
 

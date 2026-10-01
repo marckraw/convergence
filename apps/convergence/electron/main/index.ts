@@ -81,6 +81,7 @@ import { AppSettingsService } from '../backend/app-settings/app-settings.service
 import { ExecutionHostEndpointRepository } from '../backend/execution-host-endpoint/execution-host-endpoint.repository'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
+import { CodexServiceTiersService } from '../backend/provider/codex/codex-service-tiers.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
 import { NotificationsStateService } from '../backend/notifications/notifications.state'
@@ -456,6 +457,15 @@ async function startApp(): Promise<void> {
         account: accountId ? providerAccountRepository.get(accountId) : null,
       }),
   })
+  // Each account's own speed tiers, from its own resident server (MAR-3574):
+  // resolved exactly like the quota read, because the answer is the account's.
+  const codexServiceTiersService = new CodexServiceTiersService({
+    resolveAccount: (accountId) =>
+      resolveCodexAccountForTurn({
+        accountId,
+        account: accountId ? providerAccountRepository.get(accountId) : null,
+      }),
+  })
   const ptyFactory = createNodePtyFactory()
   const providerAccountLoginService = new ProviderAccountLoginService({
     runner: createPtyCommandRunner({ ptyFactory }),
@@ -591,6 +601,7 @@ async function startApp(): Promise<void> {
         codexVersion = p.version ?? null
         providerAccountMcpService.setCodexBinaryPath(p.binaryPath)
         codexQuotaService.setServerHosts(codexServerHosts)
+        codexServiceTiersService.setServerHosts(codexServerHosts)
         providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
       } else if (p.id === 'cursor') {
         providerRegistry.register(
@@ -1353,6 +1364,7 @@ async function startApp(): Promise<void> {
     },
     {
       codex: codexQuotaService,
+      codexServiceTiers: codexServiceTiersService,
     },
     {
       credentials: executionHostDaemonCredentials,

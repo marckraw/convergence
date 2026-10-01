@@ -44,6 +44,8 @@ function createSessionBackend(
     getAllSummaries: vi.fn(() => []),
     getGlobalSummaries: vi.fn(() => []),
     getSummaryById: vi.fn(() => null),
+    getById: vi.fn(() => null),
+    getLastTurnProviderAccountId: vi.fn(() => null),
     getConversation: vi.fn(() => []),
     archive: vi.fn(),
     unarchive: vi.fn(),
@@ -297,5 +299,95 @@ describe('SessionAppService', () => {
       model: 'opus',
       effort: 'high',
     })
+  })
+})
+
+describe('the speed door (MAR-3574 R3)', () => {
+  const codexSession = {
+    ...sessionFixture,
+    id: 'codex-1',
+    providerId: 'codex',
+    model: 'gpt-6-astra',
+    executionHost: 'local',
+  } as unknown as Session
+
+  const FAST = {
+    id: 'priority',
+    name: 'Fast',
+    description: '2x speed, increased usage',
+  }
+
+  function door(snapshot: unknown, account: string | null = 'icloud') {
+    const setServiceTier = vi.fn(() => codexSession)
+    const getTiers = vi.fn(async () => snapshot)
+    const app = new SessionAppService(
+      createSessionBackend({
+        getById: vi.fn(() => codexSession),
+        getLastTurnProviderAccountId: vi.fn(() => account),
+        setServiceTier,
+      }),
+      { resolveSessionDefaults: async () => null },
+      { removeForSession: vi.fn(() => 0) },
+      { removeMembershipsForSession: vi.fn(() => 0) },
+      { getTiers } as never,
+    )
+    return { app, setServiceTier, getTiers }
+  }
+
+  const proOffer = {
+    status: 'available',
+    checkedAt: '2026-10-01T00:00:00.000Z',
+    models: { 'gpt-6-astra': { tiers: [FAST], defaultTier: null } },
+  }
+
+  it('lets a tier the account is offered through, asking the account that runs the next turn', async () => {
+    const { app, setServiceTier, getTiers } = door(proOffer)
+    await app.setSessionServiceTier('codex-1', { serviceTier: 'priority' })
+    expect(setServiceTier).toHaveBeenCalledWith('codex-1', {
+      serviceTier: 'priority',
+    })
+    expect(getTiers).toHaveBeenCalledWith({
+      scope: { executionHostId: 'local', providerAccountId: 'icloud' },
+    })
+  })
+
+  it('asks the account the composer names, when it names one (a staged handoff)', async () => {
+    const { app, getTiers } = door(proOffer, 'last-turn-account')
+    await app.setSessionServiceTier('codex-1', {
+      serviceTier: 'priority',
+      providerAccountId: 'staged-account',
+    })
+    expect(getTiers).toHaveBeenCalledWith({
+      scope: { executionHostId: 'local', providerAccountId: 'staged-account' },
+    })
+  })
+
+  it('refuses a tier the account is not offered, because Codex would drop it silently', async () => {
+    const { app, setServiceTier } = door(proOffer)
+    await expect(
+      app.setSessionServiceTier('codex-1', { serviceTier: 'ultrafast' }),
+    ).rejects.toThrow(
+      "This account isn't offered the ultrafast speed for gpt-6-astra.",
+    )
+    expect(setServiceTier).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the list cannot be read: an unread list offers nothing', async () => {
+    const { app, setServiceTier } = door({
+      status: 'unavailable',
+      reason: 'Codex app-server exited',
+      checkedAt: '2026-10-01T00:00:00.000Z',
+    })
+    await expect(
+      app.setSessionServiceTier('codex-1', { serviceTier: 'priority' }),
+    ).rejects.toThrow("Couldn't check which speeds this account offers.")
+    expect(setServiceTier).not.toHaveBeenCalled()
+  })
+
+  it('Standard always passes, without asking anyone', async () => {
+    const { app, setServiceTier, getTiers } = door({ status: 'warming-up' })
+    await app.setSessionServiceTier('codex-1', { serviceTier: 'default' })
+    expect(setServiceTier).toHaveBeenCalled()
+    expect(getTiers).not.toHaveBeenCalled()
   })
 })
