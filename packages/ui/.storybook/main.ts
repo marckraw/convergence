@@ -78,11 +78,14 @@ const config: StorybookConfig = {
         // that file on a cold cache (as in CI).
         include: [
           '@base-ui/react/button',
+          '@base-ui/react/collapsible',
           '@base-ui/react/dialog',
           '@base-ui/react/menu',
+          '@base-ui/react/meter',
           '@base-ui/react/popover',
           '@base-ui/react/select',
           '@base-ui/react/tooltip',
+          '@base-ui/react/use-render',
           'class-variance-authority',
           'clsx',
           'cmdk',
