@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import {
+  catalogInForce,
   landedProviderCatalog,
   LOCAL_PROVIDER_CATALOG_SOURCE,
   localProviderCatalogs,
@@ -219,6 +220,27 @@ describe('providerCatalogInForce', () => {
       endpoint('daemon-a', 'https://moved.test'),
     ])
     expect(providerCatalogInForce({ 'daemon-a': pending }, moved)).toBeNull()
+  })
+})
+
+describe('catalogInForce', () => {
+  // The rule `providerCatalogInForce` applies, generic over what a map holds:
+  // the remote project catalog is the second map it guards, so it is pinned
+  // here with something that is not a provider catalog at all.
+  const source = providerCatalogSourceForHost('daemon-a', [
+    endpoint('daemon-a', 'https://a.test'),
+  ])
+  const projects = { source, projects: ['convergence'] }
+
+  it('hands back any entry read from where its endpoint still points', () => {
+    expect(catalogInForce({ 'daemon-a': projects }, source)).toBe(projects)
+  })
+
+  it('refuses any entry read from an address the endpoint has left', () => {
+    const moved = providerCatalogSourceForHost('daemon-a', [
+      endpoint('daemon-a', 'https://moved.test'),
+    ])
+    expect(catalogInForce({ 'daemon-a': projects }, moved)).toBeNull()
   })
 })
 

@@ -1,0 +1,25 @@
+// The composer's usage pill: the original the next file pastes.
+import { cn } from '@/shared/lib/cn.pure'
+
+export interface UsagePillProps {
+  label: string
+  used: number
+  limit: number
+  onOpen: () => void
+}
+
+export function UsagePill({ label, used, limit, onOpen }: UsagePillProps) {
+  const ratio = limit > 0 ? Math.min(used / limit, 1) : 0
+  const tone = ratio > 0.9 ? 'danger' : ratio > 0.7 ? 'warning' : 'muted'
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn('rounded-full px-2 text-xs', tone)}
+      aria-label={`${label}: ${Math.round(ratio * 100)}% used`}
+    >
+      <span>{label}</span>
+      <span>{Math.round(ratio * 100)}%</span>
+    </button>
+  )
+}

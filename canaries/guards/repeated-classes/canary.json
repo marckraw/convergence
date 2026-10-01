@@ -1,0 +1,8 @@
+{
+  "why": "A header bar pasted from one pane into the next, then a third time into a styles file with its classes reordered; its label's classes a third time inside cn() and through triggerClassName. The copy in a test must not count: each expected line names exactly three copies. Runs with the repo's own scripts/guards/repeated-classes.json.",
+  "args": ["--root", "."],
+  "expect": [
+    "\"border-b border-border px-3 flex min-w-0 items-center gap-2\": 3 copies, at most 2: apps/convergence/src/features/composer/composer.styles.ts:4, apps/convergence/src/widgets/mission-control/board-header.presentational.tsx:7, apps/convergence/src/widgets/session-view/session-header.presentational.tsx:4",
+    "\"text-[11px] uppercase tracking-wide text-muted-foreground\": 3 copies, at most 2: apps/convergence/src/features/composer/model-select.presentational.tsx:7, apps/convergence/src/widgets/mission-control/board-header.presentational.tsx:10, apps/convergence/src/widgets/session-view/session-header.presentational.tsx:5"
+  ]
+}

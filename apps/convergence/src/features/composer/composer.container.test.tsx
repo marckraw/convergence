@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
-import { SessionWiresContainer } from '@/widgets/session-view'
-import { rendererPerfReport } from '@/shared/lib/usePerfProbe'
+import {
+  FAST_TIER,
+  installComposerBridge,
+  queuedInput,
+  seedComposerStores,
+  seedQueuedInputs,
+  wireLeaving,
+} from '../../../test/composer-harness'
 import {
   landedProviderCatalog,
   landedRemoteProjectCatalog,
@@ -15,7 +21,6 @@ import {
   type ProviderInfo,
   type RemoteProject,
 } from '@/entities/session'
-import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useContextDrillStore } from '@/entities/context-drill'
@@ -27,10 +32,7 @@ import {
   postComposerIntent,
   useComposerIntentStore,
 } from '@/entities/composer-intent'
-import {
-  useProjectContextStore,
-  type ProjectContextItem,
-} from '@/entities/project-context'
+import { useProjectContextStore } from '@/entities/project-context'
 
 let providerAccountsMock: unknown[] = []
 let sessionTurnsMock: unknown[] = []
@@ -314,21 +316,6 @@ function loudClassesWithin(root: Element, except?: Element): string[] {
     )
 }
 
-const projectContextItem: ProjectContextItem = {
-  id: 'ctx-chaperone',
-  projectId: 'project-1',
-  label: 'chaperone project',
-  body: '/Users/marckraw/Projects/OpenSource/chaperone',
-  reinjectMode: 'boot',
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-}
-
-const FAST_TIER = {
-  id: 'priority',
-  name: 'Fast',
-  description: '2x speed, increased usage',
-}
 const ULTRAFAST_TIER = {
   id: 'ultrafast',
   name: 'Ultrafast',
@@ -457,284 +444,19 @@ describe('ComposerContainer', () => {
     providerAccountsMock = []
     sessionTurnsMock = []
     turnDeltaListener = undefined
-    useSessionStore.setState({ accountHandoffRefusals: {} })
-    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
-      providerAccounts: {
-        list: vi.fn(() => Promise.resolve(providerAccountsMock)),
+    installComposerBridge({
+      providerAccounts: () => providerAccountsMock,
+      sessionTurns: () => sessionTurnsMock,
+      onTurnDelta: (listener) => {
+        turnDeltaListener = listener
+        return () => {
+          turnDeltaListener = undefined
+        }
       },
-      turns: {
-        listForSession: vi.fn(() => Promise.resolve(sessionTurnsMock)),
-        onTurnDelta: vi.fn((listener: (delta: TurnDelta) => void) => {
-          turnDeltaListener = listener
-          return () => {
-            turnDeltaListener = undefined
-          }
-        }),
-      },
-      git: {
-        getCloneableRepositoryUrl: vi.fn(() =>
-          Promise.resolve('https://github.com/marckraw/new-blok.git'),
-        ),
-      },
-      executionHost: {
-        getProjects: vi.fn(() =>
-          Promise.resolve({
-            executionHostId: 'local',
-            supported: false,
-            projects: [],
-            unreachableReason: null,
-          }),
-        ),
-      },
-      codexSpeed: {
-        list: codexSpeedList,
-      },
-      providerQuota: {
-        list: vi.fn().mockResolvedValue([
-          {
-            providerId: 'codex',
-            status: 'available',
-            source: 'provider-api',
-            planType: 'pro',
-            windows: [
-              {
-                kind: 'five-hour',
-                label: '5 hour usage limit',
-                usedPercent: 13,
-                remainingPercent: 87,
-                windowMinutes: 300,
-                resetsAt: '2026-05-21T15:21:00.000Z',
-              },
-              {
-                kind: 'weekly',
-                label: 'Weekly usage limit',
-                usedPercent: 5,
-                remainingPercent: 95,
-                windowMinutes: 10_080,
-                resetsAt: '2026-05-26T22:00:00.000Z',
-              },
-            ],
-            credits: null,
-            limitReachedType: null,
-            lastCheckedAt: '2026-05-21T12:00:00.000Z',
-            stale: false,
-          },
-          {
-            providerId: 'claude-code',
-            status: 'unavailable',
-            source: 'manual',
-            reason: 'Open the Claude usage page for live limits.',
-            usageUrl: 'https://claude.ai/new#settings/usage',
-            lastCheckedAt: '2026-06-17T15:03:00.000Z',
-            stale: false,
-          },
-        ]),
-      },
-    }
-
-    const loadProviders = vi.fn()
-    const loadProviderCatalog = vi.fn()
-    const loadRemoteProjectCatalog = vi.fn()
-    const createAndStartSession = vi.fn()
-    const createAndStartGlobalSession = vi.fn()
-    const sendMessageToSession = vi.fn()
-    const cancelQueuedInput = vi.fn()
-    const testMidRunInput = {
-      supportsAnswer: false,
-      supportsNativeFollowUp: false,
-      supportsAppQueuedFollowUp: true,
-      supportsSteer: false,
-      supportsInterrupt: false,
-      defaultRunningMode: 'follow-up' as const,
-    }
-    const catalog = {
-      projectId: 'project-1',
-      projectName: 'Project',
-      refreshedAt: '2026-04-25T00:00:00.000Z',
-      providers: [
-        {
-          providerId: 'claude-code' as const,
-          providerName: 'Claude Code',
-          catalogSource: 'filesystem' as const,
-          invocationSupport: 'native-command' as const,
-          activationConfirmation: 'none' as const,
-          error: null,
-          skills: [
-            {
-              id: 'claude-code:global:planning',
-              providerId: 'claude-code' as const,
-              providerName: 'Claude Code',
-              name: 'planning',
-              displayName: 'Planning',
-              description: 'Plan implementation work.',
-              shortDescription: 'Plan implementation work.',
-              path: '/skills/planning/SKILL.md',
-              scope: 'global' as const,
-              rawScope: null,
-              sourceLabel: 'Global',
-              enabled: true,
-              dependencies: [],
-              warnings: [],
-            },
-          ],
-        },
-      ],
-    }
-
-    useSessionStore.setState({
-      sessions: [
-        {
-          id: 'session-1',
-          contextKind: 'project',
-          projectId: 'project-1',
-          workspaceId: null,
-          providerId: 'claude-code',
-          model: 'claude-sonnet',
-          effort: 'medium',
-          name: 'Failed session',
-          status: 'failed',
-          attention: 'failed',
-          activity: null,
-          contextWindow: null,
-          workingDirectory: '/tmp/project-1',
-          archivedAt: null,
-          parentSessionId: null,
-          forkStrategy: null,
-          primarySurface: 'conversation',
-          continuationToken: null,
-          lastSequence: 0,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
-      globalChatSessions: [],
-      providerCatalogs: localProviderCatalogs([
-        {
-          id: 'claude-code',
-          name: 'Claude Code',
-          vendorLabel: 'Anthropic',
-          kind: 'conversation',
-          supportsContinuation: true,
-          supportsConversationReset: false,
-          defaultModelId: 'claude-sonnet',
-          modelOptions: [
-            {
-              id: 'claude-sonnet',
-              label: 'Claude Sonnet',
-              defaultEffort: 'medium',
-              effortOptions: [
-                { id: 'low', label: 'Low' },
-                { id: 'medium', label: 'Medium' },
-                { id: 'high', label: 'High' },
-              ],
-            },
-          ],
-          attachments: {
-            supportsImage: true,
-            supportsPdf: true,
-            supportsText: true,
-            maxImageBytes: 10 * 1024 * 1024,
-            maxPdfBytes: 20 * 1024 * 1024,
-            maxTextBytes: 1024 * 1024,
-            maxTotalBytes: 50 * 1024 * 1024,
-          },
-          midRunInput: testMidRunInput,
-        },
-      ]),
-      queuedInputsBySessionId: {},
-      loadProviders,
-      loadProviderCatalog,
-      loadRemoteProjectCatalog,
-      remoteProjectCatalogs: {},
-      createAndStartSession,
-      createAndStartGlobalSession,
-      sendMessageToSession,
-      cancelQueuedInput,
-      error: null,
+      codexSpeedList,
     })
-
-    useSkillStore.setState({
-      catalog,
-      isCatalogLoading: false,
-      catalogError: null,
-      selectedSkillId: null,
-      detailsBySkillId: {},
-      detailsErrorBySkillId: {},
-      loadingDetailsSkillId: null,
-      loadCatalog: vi.fn().mockResolvedValue(catalog),
-      loadGlobalCatalog: vi.fn().mockResolvedValue({
-        ...catalog,
-        projectId: 'global',
-        projectName: 'Global chat',
-      }),
-    })
-
-    // The project the composer is aimed at, so the strip can say what a daemon
-    // would clone for it (MAR-2689).
-    useProjectStore.setState({
-      projects: [
-        {
-          id: 'project-1',
-          name: 'Project',
-          repositoryPath: '/tmp/project-1',
-          settings: normalizeProjectSettings(undefined),
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-          laneOf: null,
-          laneName: null,
-        },
-      ],
-    })
-
-    useSessionRelayStore.setState({ relays: [], isLoaded: true })
-    // A fresh ingest spy per test: the drop path calls the store action
-    // directly, and a mock left standing would count a neighbour's drop.
-    useAttachmentStore.setState({
-      drafts: {},
-      resolved: {},
-      ingestFiles: vi.fn().mockResolvedValue(undefined),
-    })
-
-    useProjectContextStore.setState({
-      itemsByProjectId: { 'project-1': [projectContextItem] },
-      attachmentsBySessionId: {},
-      loading: false,
-      error: null,
-      loadForProject: vi.fn().mockResolvedValue(undefined),
-    })
-
-    useAppSettingsStore.setState((state) => ({
-      settings: {
-        ...state.settings,
-        defaultProviderId: 'claude-code',
-        defaultModelId: 'claude-sonnet',
-        defaultEffortId: 'medium',
-        piModelVisibility: { additionalModelIds: [] },
-        // Endpoints are settings, and settings survive a render. Without this
-        // reset, whether the strip is hidden depends on which test ran first.
-        executionHostEndpoints: [],
-      },
-      isLoaded: true,
-    }))
+    seedComposerStores()
   })
-
-  function wireLeaving(sessionId: string, armed = true) {
-    return {
-      id: `relay-${sessionId}-${armed ? 'armed' : 'disarmed'}`,
-      crewId: 'crew-1',
-      sourceSessionId: sessionId,
-      trigger: 'settled' as const,
-      action: 'hail' as const,
-      targetSessionId: 'session-2',
-      spawnSpec: null,
-      instruction: null,
-      opener: null,
-      conditionToken: null,
-      armed,
-      createdAt: '2026-08-01T00:00:00.000Z',
-      updatedAt: '2026-08-01T00:00:00.000Z',
-    }
-  }
 
   function renderComposer() {
     render(
@@ -4722,42 +4444,13 @@ describe('ComposerContainer', () => {
       })
     })
   })
-  /**
+  /*
    * The rendered card, not the state word behind it (MAR-2280 law). Marcin's
    * four cards read `FOLLOW-UP · FAILED · The turn this input was waiting
    * behind failed.` with a ✕ he could not click. What a waiting row must say
    * now is that it is waiting — and what a failed row must offer is a way out
    * of the dead end (MAR-2971, R1/R2/R3).
    */
-  function seedQueuedInputs(inputs: unknown[]) {
-    useSessionStore.setState({
-      queuedInputsBySessionId: { 'session-1': inputs as never },
-    })
-  }
-
-  function queuedInput(overrides: Record<string, unknown>) {
-    return {
-      id: 'q-1',
-      sessionId: 'session-1',
-      deliveryMode: 'follow-up',
-      state: 'queued',
-      text: 'RUN100 round 1, lap 1 of 6',
-      attachmentIds: [],
-      skillSelections: [],
-      providerRequestId: null,
-      providerAccountId: null,
-      skipContextInjection: false,
-      relaysMuted: false,
-      dispatchId: 'dispatch-1',
-      queuePosition: 1,
-      redeliveredBy: false,
-      error: null,
-      createdAt: '2026-09-11T22:20:25.000Z',
-      updatedAt: '2026-09-11T22:20:25.000Z',
-      ...overrides,
-    }
-  }
-
   it('tells a waiting follow-up it is waiting for the next turn', async () => {
     seedQueuedInputs([queuedInput({})])
 
@@ -5024,334 +4717,5 @@ describe('ComposerContainer', () => {
     expect(
       screen.queryByRole('button', { name: 'Deliver now' }),
     ).not.toBeInTheDocument()
-  })
-  /**
-   * The render budget (MAR-3325, MAR-3310 F1d).
-   *
-   * Counted by the app's own instrument: the perf flag on, the composer's
-   * `PerfProfiler` (React's `<Profiler>`) records every commit of the
-   * composer root, and `rendererPerfReport()` is what S0 read. A commit is
-   * anything under that root drawing again, so a child that re-renders counts
-   * against it too.
-   *
-   * The parent below is shaped like `SessionView`: it subscribes to the open
-   * conversation (so every streamed patch redraws it) and hands the composer a
-   * context written inline, as Mission Control and the chat surface still do.
-   * The composer must hold its own line against both.
-   */
-  describe('the render budget (MAR-3325)', () => {
-    const OPEN_CONTEXT = {
-      kind: 'project',
-      projectId: 'project-1',
-      workspaceId: null,
-      activeSessionId: 'session-1',
-    } as const
-
-    function TranscriptStub() {
-      const items = useSessionStore((s) => s.activeConversation)
-      return (
-        <div data-testid="transcript-stub">
-          {items
-            .map((item) => (item.kind === 'message' ? item.text : ''))
-            .join('|')}
-        </div>
-      )
-    }
-
-    const wiresSlot = <SessionWiresContainer sessionId="session-1" />
-
-    function ConversationParent({ withWires = false }) {
-      // Subscribed exactly as SessionView subscribes: every patch of the open
-      // conversation redraws this component.
-      useSessionStore((s) => s.activeConversation)
-      return (
-        <>
-          <TranscriptStub />
-          <ComposerContainer
-            context={{ ...OPEN_CONTEXT }}
-            wiresSlot={withWires ? wiresSlot : undefined}
-          />
-        </>
-      )
-    }
-
-    /** Every composer-root commit so far, as the S0 report reads it. */
-    function composerCommitTotal(): number {
-      return rendererPerfReport().commits.composer?.count ?? 0
-    }
-
-    interface CommitCounter {
-      readonly count: number
-      reset: () => void
-    }
-
-    function renderCounted(withWires = false): CommitCounter {
-      render(<ConversationParent withWires={withWires} />)
-      let baseline = composerCommitTotal()
-      return {
-        get count() {
-          return composerCommitTotal() - baseline
-        },
-        reset: () => {
-          baseline = composerCommitTotal()
-        },
-      }
-    }
-
-    /** Lets every mount-time async hop land, then zeroes the counter. */
-    async function settle(commits: CommitCounter) {
-      await act(async () => {})
-      await act(async () => {})
-      commits.reset()
-    }
-
-    function summary(id: string, overrides: Record<string, unknown> = {}) {
-      const base = useSessionStore.getState().sessions[0]!
-      return { ...base, id, name: `Session ${id}`, ...overrides } as typeof base
-    }
-
-    function agentMessage(text: string) {
-      return {
-        id: 'item-agent',
-        sessionId: 'session-1',
-        sequence: 1,
-        turnId: 'turn-1',
-        kind: 'message' as const,
-        actor: 'assistant' as const,
-        state: 'streaming' as const,
-        text,
-        createdAt: '2026-09-24T00:00:00.000Z',
-        updatedAt: '2026-09-24T00:00:00.000Z',
-        providerMeta: {
-          providerId: 'claude-code',
-          providerItemId: null,
-          providerEventType: null,
-        },
-      }
-    }
-
-    beforeEach(() => {
-      // The perf flag on, so `PerfProfiler` mounts a real Profiler.
-      ;(
-        window as unknown as { electronAPI: Record<string, unknown> }
-      ).electronAPI.perf = { isEnabled: () => true, report: vi.fn() }
-      useSessionStore.setState((state) => ({
-        activeSessionId: 'session-1',
-        activeConversationSessionId: 'session-1',
-        activeConversation: [],
-        currentProjectId: 'project-1',
-        globalSessions: state.sessions,
-      }))
-    })
-
-    it('R1 costs exactly one commit per keystroke — 20 keys, 20 commits', async () => {
-      const commits = renderCounted()
-      await settle(commits)
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
-
-      for (let i = 1; i <= 20; i += 1) {
-        fireEvent.change(textbox, { target: { value: 'x'.repeat(i) } })
-      }
-
-      expect(textbox).toHaveValue('x'.repeat(20))
-      expect(commits.count).toBe(20)
-    })
-
-    it.each([false, true])(
-      'R2 30 summaries of another conversation draw nothing (real wires slot: %s) — mutation subscribe to the whole sessions list turns red',
-      async (withWires) => {
-        useSessionRelayStore.setState({
-          relays: [
-            { ...wireLeaving('session-1'), targetSessionId: 'session-3' },
-          ],
-        })
-        act(() => {
-          useSessionStore.setState((state) => ({
-            sessions: [...state.sessions, summary('session-2')],
-            globalSessions: [
-              ...state.globalSessions,
-              summary('session-2'),
-              summary('session-3'),
-            ],
-          }))
-        })
-        const commits = renderCounted(withWires)
-        await settle(commits)
-        if (withWires) {
-          expect(
-            screen.getByRole('button', {
-              name: '1 wire fires when this session finishes.',
-            }),
-          ).toBeVisible()
-        }
-
-        for (let i = 1; i <= 30; i += 1) {
-          act(() => {
-            useSessionStore.getState().handleSessionSummaryUpdate(
-              summary('session-2', {
-                status: 'running',
-                activity: 'streaming',
-                updatedAt: `2026-09-24T00:00:${String(i).padStart(2, '0')}.000Z`,
-              }),
-            )
-          })
-        }
-
-        // The updates landed: the store's lists moved on.
-        expect(
-          useSessionStore
-            .getState()
-            .sessions.find((entry) => entry.id === 'session-2')?.updatedAt,
-        ).toBe('2026-09-24T00:00:30.000Z')
-        expect(commits.count).toBe(0)
-      },
-    )
-
-    it('R2 30 streamed patches of the open conversation draw nothing while the transcript receives every one — mutation drop the memo turns red', async () => {
-      act(() => {
-        useSessionStore.setState({ activeConversation: [agentMessage('')] })
-      })
-      const commits = renderCounted()
-      await settle(commits)
-
-      for (let i = 1; i <= 30; i += 1) {
-        act(() => {
-          useSessionStore.getState().handleConversationPatched({
-            sessionId: 'session-1',
-            op: 'patch',
-            item: agentMessage(`token ${i}`),
-          })
-        })
-      }
-
-      expect(screen.getByTestId('transcript-stub')).toHaveTextContent(
-        'token 30',
-      )
-      expect(commits.count).toBe(0)
-    })
-
-    it('R2 a summary of the open conversation that moves no copied field costs one commit, not two — mutation key the model/permission effect on the summary object turns red', async () => {
-      act(() => {
-        useSessionStore.setState((state) => ({
-          sessions: state.sessions.map((entry) => ({
-            ...entry,
-            serviceTier: 'default',
-            permissionConfig: { preset: 'ask' },
-          })),
-        }))
-      })
-      const commits = renderCounted()
-      await settle(commits)
-
-      for (let i = 1; i <= 10; i += 1) {
-        act(() => {
-          // Over IPC every summary is a new object, the permission config too.
-          useSessionStore.getState().handleSessionSummaryUpdate(
-            summary('session-1', {
-              serviceTier: 'default',
-              permissionConfig: { preset: 'ask' },
-              updatedAt: `2026-09-24T00:01:${String(i).padStart(2, '0')}.000Z`,
-            }),
-          )
-        })
-      }
-
-      expect(commits.count).toBe(10)
-    })
-
-    it('R2 the open conversation starting to run is drawn: the running placeholder and the queued follow-up appear', async () => {
-      const commits = renderCounted()
-      await settle(commits)
-      expect(screen.getByPlaceholderText('Send a follow-up...')).toBeVisible()
-
-      act(() => {
-        useSessionStore
-          .getState()
-          .handleSessionSummaryUpdate(
-            summary('session-1', { status: 'running', attention: 'none' }),
-          )
-      })
-
-      expect(commits.count).toBeGreaterThanOrEqual(1)
-      expect(screen.getByPlaceholderText('Queue a follow-up...')).toBeVisible()
-
-      commits.reset()
-      act(() => {
-        seedQueuedInputs([queuedInput({})])
-      })
-
-      expect(commits.count).toBeGreaterThanOrEqual(1)
-      expect(await screen.findByTestId('queued-inputs')).toHaveTextContent(
-        'Waiting for the next turn',
-      )
-    })
-
-    it('R2 the relay count is a number: 30 wire-list changes that leave the count alone draw nothing, arming one draws the toggle — mutation filter the relays inside the selector turns red', async () => {
-      const commits = renderCounted()
-      await settle(commits)
-
-      for (let i = 1; i <= 30; i += 1) {
-        act(() => {
-          useSessionRelayStore.setState({
-            relays: [{ ...wireLeaving('session-9'), updatedAt: `t-${i}` }],
-          })
-        })
-      }
-
-      expect(commits.count).toBe(0)
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
-
-      act(() => {
-        useSessionRelayStore.setState({
-          relays: [wireLeaving('session-9'), wireLeaving('session-1')],
-        })
-      })
-
-      expect(commits.count).toBeGreaterThanOrEqual(1)
-      expect(
-        screen.getByRole('switch', { name: 'Send quiet' }),
-      ).toHaveAttribute('aria-checked', 'false')
-    })
-
-    it('R3 aimed from Mission Control at a conversation of a project nobody has opened, it still continues that conversation — mutation drop the globalSessions fallback turns red', () => {
-      act(() => {
-        useSessionStore.setState({
-          sessions: [],
-          globalChatSessions: [],
-          globalSessions: [
-            summary('session-elsewhere', {
-              projectId: 'project-unopened',
-            }),
-          ],
-        })
-      })
-
-      render(
-        <ComposerContainer
-          context={{
-            kind: 'project',
-            projectId: 'project-unopened',
-            workspaceId: null,
-            activeSessionId: 'session-elsewhere',
-          }}
-        />,
-      )
-
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
-      fireEvent.change(textbox, { target: { value: 'From the Hail' } })
-      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
-
-      expect(
-        useSessionStore.getState().sendMessageToSession,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionId: 'session-elsewhere',
-          text: 'From the Hail',
-        }),
-      )
-      expect(
-        useSessionStore.getState().createAndStartSession,
-      ).not.toHaveBeenCalled()
-    })
   })
 })

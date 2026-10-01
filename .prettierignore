@@ -4,3 +4,6 @@ apps/convergence/tools/spikes/block-summary/.cache/
 apps/convergence/tools/spikes/block-summary/models/
 apps/convergence/tools/spikes/block-summary/apple-fm/.build/
 apps/convergence/tools/spikes/block-summary/scratch/
+
+# Fixtures that break the checks on purpose: `npm run canaries` (MAR-3612).
+canaries/

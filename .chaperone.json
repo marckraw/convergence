@@ -8,5 +8,28 @@
     "apps/convergence/src/**/*",
     "apps/backpack-studio/src/**/*",
     "packages/execution-host-client/src/**/*"
-  ]
+  ],
+  "exclude": ["/canaries"],
+  "rules": {
+    "custom": [
+      {
+        "id": "repeated-classes-guard",
+        "type": "command",
+        "severity": "warning",
+        "command": "node",
+        "args": ["scripts/guards/repeated-classes.mjs"],
+        "timeoutMs": 60000,
+        "message": "A class string of 4+ utilities appears more than twice in apps/convergence/src: the third copy is a shared/ui part or a shared constant (scripts/guards/repeated-classes.json has the settings and the allowlist). A warning until the design-system sweep (DS4) has fixed today's repeats (MAR-3613)."
+      },
+      {
+        "id": "copied-code-guard",
+        "type": "command",
+        "severity": "warning",
+        "command": "node",
+        "args": ["scripts/guards/copied-code.mjs"],
+        "timeoutMs": 60000,
+        "message": "jscpd found copied code in apps/convergence/src (.jscpd.json has the settings): make the copy a shared part, or keep it on purpose in scripts/guards/copied-code.json, or between jscpd:ignore-start and jscpd:ignore-end, and say why. A warning until the design-system sweep (DS4) has fixed today's copies (MAR-3613)."
+      }
+    ]
+  }
 }

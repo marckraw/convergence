@@ -122,7 +122,7 @@
         "severity": "error",
         "files": "apps/*/src/**/*.presentational.tsx",
         "pattern": "\\buse(Effect|LayoutEffect|InsertionEffect)\\b",
-        "forbidden": true,
+        "mustMatch": false,
         "message": "Presentational components must not use useEffect/useLayoutEffect/useInsertionEffect. Move effects to *.container.tsx."
       },
       {
@@ -131,7 +131,7 @@
         "severity": "error",
         "files": "apps/*/src/**/*.presentational.tsx",
         "pattern": "from\\s+['\"]electron['\"]",
-        "forbidden": true,
+        "mustMatch": false,
         "message": "Presentational components must not import electron."
       },
       {
@@ -140,26 +140,20 @@
         "severity": "error",
         "files": "apps/*/src/**/*.{ts,tsx}",
         "pattern": "from\\s+['\"]electron['\"]",
-        "forbidden": true,
+        "mustMatch": false,
         "message": "Renderer code must not import electron directly. Use preload-exposed APIs via *.api.ts wrappers. Vite bundles such an import into the browser chunk with only a warning, so nothing but this rule stands between it and a runtime failure on a user's machine."
       },
       {
         "id": "pure-files-need-sibling-tests",
-        "type": "relationship",
+        "type": "file-pairing",
         "severity": "error",
-        "when": {
-          "files": "apps/*/src/**/*.pure.ts"
+        "files": "apps/*/src/**/*.pure.ts",
+        "pair": {
+          "from": "\\.pure\\.ts$",
+          "to": ".pure.test.ts"
         },
-        "then": [
-          {
-            "mustHaveCompanion": {
-              "pair": {
-                "from": "\\.pure\\.ts$",
-                "to": ".pure.test.ts"
-              }
-            }
-          }
-        ]
+        "mustExist": true,
+        "message": "Every *.pure.ts has a sibling *.pure.test.ts."
       },
       {
         "id": "pure-functions-tested",

@@ -1,0 +1,7 @@
+{
+  "why": "The single-react-component-per-file command rule (apps/convergence/tools/chaperone/presets/single-react-component-per-file.json): a file holding a second component. It runs with the rule's own command and arguments from this folder, so a scope or an exclusion that stops reaching apps/convergence/src makes it go silent.",
+  "args": [],
+  "expect": [
+    "- apps/convergence/src/features/cards/cards.presentational.tsx: CardTitle (line 3), CardBody (line 7)"
+  ]
+}
