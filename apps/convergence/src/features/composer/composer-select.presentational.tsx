@@ -1,10 +1,10 @@
 import type { FC, ReactNode } from 'react'
-import { SearchableSelect, type SearchableSelectItem } from '@convergence/ui'
+import { Combobox, type ComboboxItem } from '@convergence/ui'
 
 interface ComposerSelectProps {
   selectedId: string
   value: string
-  items: SearchableSelectItem[]
+  items: ComboboxItem[]
   onChange: (id: string) => void
   disabled?: boolean
   className?: string
@@ -22,7 +22,7 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
   icon,
   ariaLabel,
 }) => (
-  <SearchableSelect
+  <Combobox
     selectedId={selectedId}
     value={value}
     items={items}
@@ -30,9 +30,8 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
     disabled={disabled}
     searchPlaceholder="Search options..."
     emptyMessage="No matching options."
-    triggerVariant="ghost"
-    triggerSize="md"
-    triggerClassName={className}
+    variant="ghost"
+    className={className}
     icon={icon}
     ariaLabel={ariaLabel}
   />

@@ -45,6 +45,14 @@ export {
   type CodeProps,
 } from './components/code-block/code-block'
 export {
+  Combobox,
+  type ComboboxAction,
+  type ComboboxItem,
+  type ComboboxMultipleProps,
+  type ComboboxProps,
+  type ComboboxSingleProps,
+} from './components/combobox/combobox'
+export {
   CopyButton,
   type CopyButtonProps,
 } from './components/copy-button/copy-button'
@@ -120,6 +128,15 @@ export {
   type NavTabsProps,
 } from './components/nav-tabs/nav-tabs'
 export {
+  Listbox,
+  ListboxGroup,
+  type ListboxGroupProps,
+  ListboxOption,
+  type ListboxOptionProps,
+  type ListboxProps,
+} from './components/listbox/listbox'
+export { listboxOptionId, listboxStep } from './components/listbox/listbox.pure'
+export {
   ListRow,
   type ListRowDensity,
   type ListRowProps,
@@ -157,12 +174,6 @@ export {
   ScreenHeader,
   type ScreenHeaderProps,
 } from './components/screen-header/screen-header'
-export { SearchableSelect } from './components/searchable-select/searchable-select.container'
-export type {
-  SearchableSelectAction,
-  SearchableSelectItem,
-  SearchableSelectProps,
-} from './components/searchable-select/searchable-select.presentational'
 export {
   SectionHeader,
   type SectionHeaderProps,

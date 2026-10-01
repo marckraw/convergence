@@ -1,10 +1,12 @@
 import type { FC } from 'react'
 import { BookOpenText, FileText, Library } from 'lucide-react'
 import type { ComposerInjectionRootItem } from './composer-injection-trigger.pure'
-import { Button, cn } from '@convergence/ui'
+import { Button, Listbox, ListboxOption } from '@convergence/ui'
 
 interface ComposerInjectionRootPickerProps {
   open: boolean
+  /** The list's id: the message field names it (aria-controls) and its active row. */
+  listId: string
   items: ComposerInjectionRootItem[]
   highlightedIndex: number
   onSelect: (item: ComposerInjectionRootItem) => void
@@ -22,16 +24,29 @@ function itemIcon(item: ComposerInjectionRootItem) {
   return <Library className="h-3.5 w-3.5 shrink-0" />
 }
 
+/**
+ * What `::` offers (context, skill, prompt): a Listbox the message field
+ * drives (MAR-3616 DS3e). The field keeps the focus; its arrows move the
+ * active row and Enter picks it. The empty message and the hidden Close sit
+ * beside the list, never in it.
+ */
 export const ComposerInjectionRootPicker: FC<
   ComposerInjectionRootPickerProps
-> = ({ open, items, highlightedIndex, onSelect, onHover, onDismiss }) => {
+> = ({
+  open,
+  listId,
+  items,
+  highlightedIndex,
+  onSelect,
+  onHover,
+  onDismiss,
+}) => {
   if (!open) return null
 
   return (
     <div
       className="absolute right-0 bottom-full left-0 z-50 mb-2 max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
       data-testid="composer-injection-root-picker"
-      role="listbox"
     >
       {items.length === 0 ? (
         <div
@@ -41,23 +56,15 @@ export const ComposerInjectionRootPicker: FC<
           No matching injections.
         </div>
       ) : (
-        items.map((item, index) => {
-          const isActive = index === highlightedIndex
-          return (
-            <Button
+        <Listbox id={listId} aria-label="Injections" active={highlightedIndex}>
+          {items.map((item, index) => (
+            <ListboxOption
               key={item.kind}
-              type="button"
-              variant="ghost"
-              role="option"
-              aria-selected={isActive}
-              onMouseEnter={() => onHover(index)}
-              onClick={() => onSelect(item)}
+              index={index}
+              onHover={() => onHover(index)}
+              onPick={() => onSelect(item)}
               data-testid={`composer-injection-root-item-${item.kind}`}
-              size="lg"
-              className={cn(
-                'flex h-auto w-full items-start rounded px-2 py-1.5 text-left text-xs',
-                isActive && 'bg-accent text-accent-foreground',
-              )}
+              className="items-start rounded px-2 py-1.5 text-xs"
             >
               <span className="mt-0.5 text-muted-foreground">
                 {itemIcon(item)}
@@ -73,9 +80,9 @@ export const ComposerInjectionRootPicker: FC<
                   {item.description}
                 </span>
               </span>
-            </Button>
-          )
-        })
+            </ListboxOption>
+          ))}
+        </Listbox>
       )}
       <Button
         type="button"

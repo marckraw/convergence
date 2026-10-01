@@ -1,20 +1,6 @@
-import { useRef, useState } from 'react'
+import { useMemo } from 'react'
 import type { FC } from 'react'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from 'cmdk'
-import { Check, ChevronDown } from 'lucide-react'
-import {
-  Button,
-  cn,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@convergence/ui'
+import { Button, cn, Combobox } from '@convergence/ui'
 import {
   filterFacetOptions,
   formatFacetSummary,
@@ -38,7 +24,8 @@ interface SessionFacetPickerProps {
  *
  * Search and scroll are not decoration: the project list is as long as the
  * number of repositories he works in, and a menu that runs off the screen is
- * not a control.
+ * not a control. Picking keeps the list open, so several projects can be
+ * chosen in one pass (Combobox `multiple`).
  */
 export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
   label,
@@ -50,123 +37,61 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
   onToggle,
   onClear,
 }) => {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const inputRef = useRef<HTMLInputElement | null>(null)
-
   const summary = formatFacetSummary(selected, options, allLabel, noun)
-  const visible = filterFacetOptions(options, query)
+  const byId = useMemo(
+    () => new Map(options.map((option) => [option.id, option])),
+    [options],
+  )
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) setQuery('')
+    <Combobox
+      multiple
+      selectedIds={selected}
+      value={summary}
+      ariaLabel={label}
+      items={options.map((option) => ({
+        id: option.id,
+        label: option.label,
+        trailing: option.count,
+      }))}
+      // The facets' own rule: every word of the search, anywhere in the name.
+      filter={(item, query) => {
+        const option = byId.get(item.id)
+        return (
+          option !== undefined && filterFacetOptions([option], query).length > 0
+        )
       }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          role="combobox"
-          aria-label={label}
-          aria-expanded={open}
-          disabled={options.length === 0}
-          size="sm"
-          className={cn(
-            'max-w-56 rounded-full border px-2.5 text-[11px] font-normal',
-            selected.length > 0
-              ? 'border-white/25 bg-white/10 text-foreground'
-              : 'border-white/10 text-muted-foreground hover:border-white/20',
-          )}
-        >
-          <span className="truncate">{summary}</span>
-          <ChevronDown className="size-3 shrink-0" />
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="start"
-        collisionPadding={16}
-        className="flex max-h-[min(20rem,var(--radix-popover-content-available-height))] w-64 min-w-52 flex-col p-0"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault()
-          inputRef.current?.focus()
-        }}
-      >
-        <Command
-          shouldFilter={false}
-          label={searchPlaceholder}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <div className="shrink-0 border-b border-white/10 px-3 py-2">
-            <CommandInput
-              ref={inputRef}
-              value={query}
-              onValueChange={setQuery}
-              placeholder={searchPlaceholder}
-              className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-
-          <CommandList
-            className="app-scrollbar min-h-0 flex-1 overflow-y-auto p-1"
-            style={{ maxHeight: '100%' }}
-            onWheel={(event) => {
-              event.currentTarget.scrollTop += event.deltaY
-            }}
+      onChange={(ids) => {
+        const toggled =
+          ids.find((id) => !selected.includes(id)) ??
+          selected.find((id) => !ids.includes(id))
+        if (toggled !== undefined) onToggle(toggled)
+      }}
+      disabled={options.length === 0}
+      searchPlaceholder={searchPlaceholder}
+      emptyMessage={(query) => `Nothing matches “${query}”`}
+      variant="ghost"
+      size="sm"
+      className={cn(
+        'max-w-56 rounded-full border px-2.5 text-[11px] font-normal',
+        selected.length > 0
+          ? 'border-white/25 bg-white/10 text-foreground'
+          : 'border-white/10 text-muted-foreground hover:border-white/20',
+      )}
+      contentClassName="w-64"
+      footer={
+        selected.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onClear()}
+            size="sm"
+            className="w-full justify-start font-normal"
           >
-            {visible.length === 0 ? (
-              <CommandEmpty className="px-2 py-6 text-center text-xs text-muted-foreground">
-                Nothing matches “{query}”
-              </CommandEmpty>
-            ) : (
-              visible.map((option) => {
-                const active = selected.includes(option.id)
-
-                return (
-                  // Multi-select: picking keeps the menu open so several
-                  // projects can be chosen in one pass.
-                  <CommandItem
-                    key={option.id}
-                    value={option.id}
-                    onSelect={() => onToggle(option.id)}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <Check
-                      className={cn(
-                        'size-3.5 shrink-0',
-                        active ? 'opacity-100' : 'opacity-0',
-                      )}
-                    />
-                    <span className="min-w-0 flex-1 truncate">
-                      {option.label}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {option.count}
-                    </span>
-                  </CommandItem>
-                )
-              })
-            )}
-          </CommandList>
-        </Command>
-
-        {selected.length > 0 ? (
-          <div className="shrink-0 border-t border-white/10 p-1">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onClear()}
-              size="sm"
-              className="w-full justify-start font-normal"
-            >
-              {allLabel}
-            </Button>
-          </div>
-        ) : null}
-      </PopoverContent>
-    </Popover>
+            {allLabel}
+          </Button>
+        ) : undefined
+      }
+    />
   )
 }

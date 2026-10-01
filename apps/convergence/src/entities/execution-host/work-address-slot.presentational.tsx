@@ -1,9 +1,5 @@
 import type { FC } from 'react'
-import {
-  type SearchableSelectItem,
-  Input,
-  SearchableSelect,
-} from '@convergence/ui'
+import { type ComboboxItem, Input, Combobox } from '@convergence/ui'
 import {
   stripFactClass,
   stripInputClass,
@@ -95,22 +91,21 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
   return (
     <>
       <span className={stripLabelClass}>Works in</span>
-      <SearchableSelect
+      <Combobox
         selectedId={view.selectedId ?? ''}
         value={selected?.label ?? UNCHOSEN_PLACE_LABEL}
         items={view.choices.map(
-          (choice): SearchableSelectItem => ({
+          (choice): ComboboxItem => ({
             id: choice.id,
             label: choice.label,
           }),
         )}
         onChange={onChange}
         disabled={disabled}
-        triggerClassName={stripSelectClass}
+        className={stripSelectClass}
         searchPlaceholder="Search options..."
         emptyMessage="No matching options."
-        triggerVariant="ghost"
-        triggerSize="md"
+        variant="ghost"
       />
       {view.branch ? (
         <>

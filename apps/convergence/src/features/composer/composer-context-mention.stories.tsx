@@ -33,24 +33,12 @@ const items: ProjectContextItem[] = [
   },
 ]
 
-const knownListboxIssues = {
-  a11y: {
-    config: {
-      rules: [
-        // a11y-known: the picker's listbox has no accessible name — fixed by the sweep (DS4)
-        { id: 'aria-input-field-name', enabled: false },
-        // a11y-known: the listbox also holds its visually hidden Close button (and, when empty, a message), which are not options — fixed by the sweep (DS4)
-        { id: 'aria-required-children', enabled: false },
-      ],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Composer/ComposerContextMention',
   component: ComposerContextMentionPicker,
   args: {
     open: true,
+    listId: 'context',
     items,
     highlightedIndex: 1,
     onSelect: fn(),
@@ -74,8 +62,11 @@ type Story = StoryObj<typeof meta>
 
 /** @ offers the project's context notes; every-turn notes are marked. */
 export const Default: Story = {
-  parameters: knownListboxIssues,
   play: async ({ args, canvas, userEvent }) => {
+    // A named list that holds only its options (MAR-3616 DS3e).
+    await expect(canvas.getByRole('listbox')).toHaveAccessibleName(
+      'Project context',
+    )
     const gates = canvas.getByRole('option', { name: /Gates before a PR/ })
     await expect(gates).toHaveAttribute('aria-selected', 'true')
     await expect(canvas.getByRole('option', { name: /Untitled/ })).toBeVisible()
@@ -88,7 +79,6 @@ export const Default: Story = {
 
 /** Nothing matches. */
 export const Empty: Story = {
-  parameters: knownListboxIssues,
   args: { items: [] },
   play: async ({ canvas }) => {
     await expect(
@@ -99,7 +89,6 @@ export const Empty: Story = {
 
 /** A long note is cut to a short preview. */
 export const Long: Story = {
-  parameters: knownListboxIssues,
   args: {
     items: [
       {

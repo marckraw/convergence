@@ -440,20 +440,17 @@ export const Injection: Story = {
     onRootInjectionHover: fn(),
     onRootInjectionDismiss: fn(),
   },
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the injection picker's listbox has no accessible name — fixed by the sweep (DS4)
-          { id: 'aria-input-field-name', enabled: false },
-          // a11y-known: the listbox also holds its visually hidden Close button, which is not an option — fixed by the sweep (DS4)
-          { id: 'aria-required-children', enabled: false },
-        ],
-      },
-    },
-  },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('textbox', { name: 'Message' }))
+    const message = canvas.getByRole('textbox', { name: 'Message' })
+    await userEvent.click(message)
+    // The message drives the picker's list: it names the list and the row the
+    // arrows reach, so a screen reader hears it while the caret stays put.
+    const list = canvas.getByRole('listbox', { name: 'Injections' })
+    await expect(message).toHaveAttribute('aria-controls', list.id)
+    await expect(message).toHaveAttribute(
+      'aria-activedescendant',
+      canvas.getAllByRole('option')[0].id,
+    )
     await userEvent.keyboard('{ArrowDown}')
     await expect(args.onRootInjectionHover).toHaveBeenCalledWith(1)
     await userEvent.keyboard('{Enter}')

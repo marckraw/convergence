@@ -16,8 +16,8 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   ).ResizeObserver = MockResizeObserver
 }
 
-// jsdom does not implement Element.scrollIntoView; cmdk calls it when the
-// highlighted item changes.
+// jsdom does not implement Element.scrollIntoView; a ListboxOption calls it
+// when it becomes the active row, and Base UI's lists when they highlight one.
 if (
   typeof Element !== 'undefined' &&
   typeof Element.prototype.scrollIntoView !== 'function'

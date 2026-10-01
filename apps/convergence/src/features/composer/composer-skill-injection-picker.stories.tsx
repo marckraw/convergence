@@ -37,24 +37,12 @@ const skills: SkillCatalogEntry[] = [
   skill({ id: 'skill-old', name: 'legacy-deploy', enabled: false }),
 ]
 
-const knownListboxIssues = {
-  a11y: {
-    config: {
-      rules: [
-        // a11y-known: the picker's listbox has no accessible name — fixed by the sweep (DS4)
-        { id: 'aria-input-field-name', enabled: false },
-        // a11y-known: the listbox also holds its heading, its visually hidden Close button and its messages, which are not options — fixed by the sweep (DS4)
-        { id: 'aria-required-children', enabled: false },
-      ],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Composer/ComposerSkillInjectionPicker',
   component: ComposerSkillInjectionPicker,
   args: {
     open: true,
+    listId: 'skills',
     items: skills,
     selectedSkills: [
       {
@@ -96,15 +84,19 @@ type Story = StoryObj<typeof meta>
 
 /** The provider's skills under ::skill::; a disabled one cannot be picked. */
 export const Default: Story = {
-  parameters: knownListboxIssues,
   play: async ({ args, canvas, userEvent }) => {
+    // A named list that holds only its options (MAR-3616 DS3e).
+    await expect(canvas.getByRole('listbox')).toHaveAccessibleName('Skills')
     await expect(canvas.getByRole('option', { name: /tdd/ })).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    await expect(
-      canvas.getByRole('option', { name: /legacy-deploy/ }),
-    ).toBeDisabled()
+    // A listbox row is never a disabled button now: it says so with
+    // aria-disabled, and a click passes it by.
+    const legacy = canvas.getByRole('option', { name: /legacy-deploy/ })
+    await expect(legacy).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(legacy)
+    await expect(args.onSelect).not.toHaveBeenCalled()
     await userEvent.click(canvas.getByRole('option', { name: /tdd/ }))
     await expect(args.onSelect).toHaveBeenCalledWith(skills[1])
   },
@@ -112,7 +104,6 @@ export const Default: Story = {
 
 /** Read for another machine: the list says so above itself. */
 export const Remote: Story = {
-  parameters: knownListboxIssues,
   args: { notice: 'Skills on grok-mac, read when this session started.' },
   play: async ({ canvas }) => {
     await expect(
@@ -123,7 +114,6 @@ export const Remote: Story = {
 
 /** Reading the catalog. */
 export const Busy: Story = {
-  parameters: knownListboxIssues,
   args: { items: [], isLoading: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Loading skills...')).toBeVisible()
@@ -132,7 +122,6 @@ export const Busy: Story = {
 
 /** The catalog could not be read. */
 export const Failed: Story = {
-  parameters: knownListboxIssues,
   args: { items: [], error: 'claude: skills listing timed out after 10s' },
   play: async ({ canvas }) => {
     await expect(canvas.getByText(/timed out after 10s/)).toBeVisible()
@@ -141,7 +130,6 @@ export const Failed: Story = {
 
 /** Nothing matches. */
 export const Empty: Story = {
-  parameters: knownListboxIssues,
   args: { items: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No matching skills.')).toBeVisible()
@@ -154,7 +142,6 @@ export const Dark: Story = {
     a11y: {
       config: {
         rules: [
-          ...knownListboxIssues.a11y.config.rules,
           // a11y-known: in dark, a selected skill's description (muted on the primary tint) is 4.16:1 — fixed by the sweep (DS4)
           { id: 'color-contrast', enabled: false },
         ],

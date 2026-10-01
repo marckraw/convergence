@@ -53,6 +53,13 @@ export const conversationActionsStyles = {
   list: 'flex flex-col',
   item: `h-auto w-full justify-start whitespace-normal rounded-md px-2 py-1.5 text-left text-sm font-normal text-popover-foreground ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent`,
   reason: 'px-2 pb-1.5 text-xs leading-relaxed text-muted-foreground',
+  /**
+   * A Skills row (MAR-3616 DS3e): a ListboxOption the search drives, its
+   * reason inside it. One not offered keeps today's muted words, undimmed.
+   */
+  option:
+    'rounded-md px-2 py-1.5 text-sm text-popover-foreground aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground aria-disabled:opacity-100',
+  optionReason: 'pb-0.5 text-xs leading-relaxed text-muted-foreground',
   progress: 'px-2 py-1 text-base text-sky-300',
   status: 'px-2 py-1.5 text-sm text-muted-foreground',
   emptyTitle: 'px-2 py-1.5 text-sm font-medium text-popover-foreground',
