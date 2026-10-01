@@ -70,6 +70,7 @@ export function ProviderAccountLoginProgress({
             Authorization code
           </label>
           <Input
+            size="lg"
             id="provider-authorization-code"
             type="password"
             value={code}

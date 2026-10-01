@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import {
   Button,
+  ChoiceField,
   cn,
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
   Input,
-  SwitchRow,
+  Switch,
 } from '@convergence/ui'
 import type { WorkspaceStartStrategy } from '@/entities/project'
 
@@ -124,6 +125,7 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
               Base branch name
             </label>
             <Input
+              size="lg"
               id="project-base-branch"
               value={baseBranchName}
               onChange={(event) => onBaseBranchNameChange(event.target.value)}
@@ -146,23 +148,29 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
               </p>
             </div>
 
-            <SwitchRow
-              id="project-copy-env-files"
+            <ChoiceField
               label="Copy env files"
-              description="Copies matching root files such as .env and .env.local into worktrees."
-              checked={envCopyEnabled}
+              hint="Copies matching root files such as .env and .env.local into worktrees."
               disabled={isSaving}
-              onChange={onEnvCopyEnabledChange}
-            />
+            >
+              <Switch
+                id="project-copy-env-files"
+                checked={envCopyEnabled}
+                onCheckedChange={(next) => onEnvCopyEnabledChange(next)}
+              />
+            </ChoiceField>
 
-            <SwitchRow
-              id="project-overwrite-env-files"
+            <ChoiceField
               label="Overwrite existing env files"
-              description="Replace matching files during manual sync and workspace creation."
-              checked={envOverwrite}
+              hint="Replace matching files during manual sync and workspace creation."
               disabled={!envCopyEnabled || isSaving}
-              onChange={onEnvOverwriteChange}
-            />
+            >
+              <Switch
+                id="project-overwrite-env-files"
+                checked={envOverwrite}
+                onCheckedChange={(next) => onEnvOverwriteChange(next)}
+              />
+            </ChoiceField>
 
             <div className="space-y-2">
               <label
@@ -172,6 +180,7 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
                 File patterns
               </label>
               <Input
+                size="lg"
                 id="project-env-patterns"
                 value={envPatternsText}
                 onChange={(event) =>

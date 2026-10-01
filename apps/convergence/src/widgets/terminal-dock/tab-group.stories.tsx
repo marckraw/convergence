@@ -25,23 +25,17 @@ const tabs: TerminalTab[] = [
 ]
 
 /*
- * Known gaps, switched off on these stories alone.
+ * Known gaps, switched off on these stories alone. The tab list's structure
+ * gaps (buttons among the tabs, aria-controls naming a panel never drawn)
+ * closed when the strip moved to the kit's Tabs (MAR-3616 DS3c).
  */
-const tabStructureGaps = [
-  // a11y-known: the tablist holds each tab's close button and the New tab
-  // button beside the tabs themselves — fixed by the sweep (DS4)
-  { id: 'aria-required-children', enabled: false },
-  // a11y-known: each tab's aria-controls names a panel that is never rendered
-  // (the terminal sits outside Tabs.Content) — fixed by the sweep (DS4)
-  { id: 'aria-valid-attr-value', enabled: false },
-]
 // a11y-known: an exited tab is drawn at 60% opacity, 2.9:1 on the dock —
 // fixed by the sweep (DS4)
 const exitedTabContrast = { id: 'color-contrast', enabled: false }
 
 /** For stories that draw an exited tab. */
 const knownTabGaps = {
-  a11y: { config: { rules: [...tabStructureGaps, exitedTabContrast] } },
+  a11y: { config: { rules: [exitedTabContrast] } },
 }
 
 const meta = {
@@ -89,12 +83,18 @@ export const Default: Story = {
     await userEvent.click(canvas.getByRole('tab', { name: 'zsh' }))
     await expect(args.onSelect).toHaveBeenCalledWith('zsh')
 
-    await userEvent.click(
-      canvas.getByRole('button', { name: 'Close tab npm run build' }),
-    )
+    // The pointer's close (MAR-3616 DS3c): the tab list holds only tabs, so
+    // the x is out of the tab order and the accessibility tree, and the
+    // keyboard closes a tab with Delete.
+    await userEvent.click(canvas.getByLabelText('Close tab npm run build'))
     await expect(args.onCloseTab).toHaveBeenCalledWith('build')
     // Closing a tab does not select it.
     await expect(args.onSelect).not.toHaveBeenCalledWith('build')
+    const zsh = canvas.getByRole('tab', { name: 'zsh' })
+    await expect(zsh).toHaveAttribute('aria-keyshortcuts', 'Delete')
+    zsh.focus()
+    await userEvent.keyboard('{Delete}')
+    await expect(args.onCloseTab).toHaveBeenLastCalledWith('zsh')
 
     await userEvent.click(canvas.getByRole('button', { name: 'New tab' }))
     await expect(args.onNewTab).toHaveBeenCalledOnce()
@@ -122,7 +122,6 @@ export const Keyboard: Story = {
 
 /** Many tabs with long titles stay in the one row the pane has. */
 export const Long: Story = {
-  parameters: { a11y: { config: { rules: tabStructureGaps } } },
   args: {
     tabs: Array.from({ length: 8 }, (_, index) =>
       tab(

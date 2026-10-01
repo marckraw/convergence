@@ -10,9 +10,10 @@ import {
   Button,
   cn,
   IconButton,
+  ChoiceField,
   Input,
   SearchableSelect,
-  SwitchRow,
+  Switch,
   Textarea,
 } from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
@@ -225,14 +226,17 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         </div>
       ) : null}
 
-      <SwitchRow
-        id="connection-enabled"
+      <ChoiceField
         label={draft.enabled ? 'On' : 'Off'}
-        description="Saved connections can stay off while you build the crew."
-        checked={draft.enabled}
+        hint="Saved connections can stay off while you build the crew."
         disabled={busy}
-        onChange={onEnabledChange}
-      />
+      >
+        <Switch
+          id="connection-enabled"
+          checked={draft.enabled}
+          onCheckedChange={(next) => onEnabledChange(next)}
+        />
+      </ChoiceField>
 
       <div className="flex flex-col gap-1">
         <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -315,19 +319,22 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               onSpawnChange({ roleCard: event.target.value || null })
             }
           />
-          <SwitchRow
-            id="spawn-return-wire"
+          <ChoiceField
             label={`Report back to ${sourceName} when it finishes`}
-            checked={spec.returnWire !== null}
             disabled={busy}
-            onChange={(enabled) =>
-              onSpawnChange({
-                returnWire: enabled
-                  ? { instruction: spec.returnInstructionDraft ?? '' }
-                  : null,
-              })
-            }
-          />
+          >
+            <Switch
+              id="spawn-return-wire"
+              checked={spec.returnWire !== null}
+              onCheckedChange={(enabled) =>
+                onSpawnChange({
+                  returnWire: enabled
+                    ? { instruction: spec.returnInstructionDraft ?? '' }
+                    : null,
+                })
+              }
+            />
+          </ChoiceField>
           {spec.returnWire ? (
             <label className="text-[11px] text-muted-foreground">
               Return instructions
@@ -417,12 +424,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             triggerClassName="h-7 text-xs"
           />
           <Input
+            size="sm"
             value={spec.name}
             placeholder="Relayed session"
             aria-label="Name for the new session"
             disabled={busy}
             onChange={(event) => onSpawnChange({ name: event.target.value })}
-            className="h-7 text-xs"
+            className="text-xs"
           />
         </div>
       ) : null}
@@ -459,12 +467,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         {draft.condition.kind === 'token' ? (
           <>
             <Input
+              size="md"
               value={draft.condition.token}
               placeholder="BATON: horse"
               aria-label="The final line this connection waits for"
               disabled={busy}
               onChange={(event) => onConditionTokenChange(event.target.value)}
-              className="h-8 text-xs"
+              className="text-xs"
             />
             <p className="text-[10px] text-muted-foreground/70">
               Only this final line sends the reply to{' '}
@@ -514,12 +523,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           </div>
           {draft.beforeDelivery === 'custom' ? (
             <Input
+              size="md"
               value={draft.customOpener}
               placeholder="/clear"
               aria-label="The first message, sent on its own"
               disabled={busy}
               onChange={(event) => onCustomOpenerChange(event.target.value)}
-              className="h-8 text-xs"
+              className="text-xs"
             />
           ) : null}
           <p className="text-[10px] text-muted-foreground/70">

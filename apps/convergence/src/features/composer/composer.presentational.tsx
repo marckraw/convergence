@@ -771,7 +771,7 @@ export const Composer: FC<ComposerProps> = ({
               aria-label="Message"
               disabled={disabled}
               rows={1}
-              className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:ring-0"
+              className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:outline-none"
             />
           </div>
           <div className="mt-2 flex items-center justify-between">

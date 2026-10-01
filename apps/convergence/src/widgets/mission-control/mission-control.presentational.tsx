@@ -110,11 +110,12 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
 
           <>
             <Input
+              size="md"
               type="search"
               value={query}
               placeholder="Search cards by name, project, provider, model, status…"
               aria-label="Search session cards"
-              className="h-8 w-full max-w-xs text-xs"
+              className="w-full max-w-xs text-xs"
               onChange={(event) => onQueryChange(event.target.value)}
             />
 

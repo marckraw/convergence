@@ -100,13 +100,14 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
     </div>
 
     <Input
+      size="md"
       type="search"
       value={query}
       placeholder="Search conversations…"
       aria-label="Search conversations to add"
       disabled={busy}
       onChange={(event) => onQueryChange(event.target.value)}
-      className="h-8 text-xs"
+      className="text-xs"
     />
 
     <SearchableSelect

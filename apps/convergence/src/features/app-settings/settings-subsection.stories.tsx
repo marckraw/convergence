@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect } from 'storybook/test'
-import { SwitchRow } from '@convergence/ui'
+import { ChoiceField, Switch } from '@convergence/ui'
 import { SettingsSubsection } from './settings-subsection.presentational'
 
 const meta = {
@@ -11,12 +11,9 @@ const meta = {
     description:
       'Warns when a conversation is close to its context window, so you can fork or compact before the provider does it for you.',
     children: (
-      <SwitchRow
-        id="story-context-alert"
-        label="Warn me when a conversation fills up"
-        checked
-        onChange={() => undefined}
-      />
+      <ChoiceField label="Warn me when a conversation fills up">
+        <Switch id="story-context-alert" checked onCheckedChange={() => {}} />
+      </ChoiceField>
     ),
   },
   decorators: [

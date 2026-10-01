@@ -10,7 +10,7 @@ import type {
   ProviderAccountSettingsRow,
   ProviderAccountSettingsWarning,
 } from '@/entities/provider-account'
-import { Button, cn, Input } from '@convergence/ui'
+import { Button, Checkbox, cn, Input } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
   CONFIGURED_SERVERS_SENTENCE,
@@ -401,14 +401,13 @@ export function ProviderAccountsFields({
                     </p>
                     {!isCodex && !!removalLayout?.privateEntries.length ? (
                       <label className="mt-2 flex cursor-pointer items-start gap-2">
-                        <Input
-                          type="checkbox"
+                        <Checkbox
                           checked={privateDeletionAcknowledged}
                           disabled={isBusy}
-                          onChange={(event) =>
-                            onPrivateDeletionAcknowledged(event.target.checked)
+                          onCheckedChange={(checked) =>
+                            onPrivateDeletionAcknowledged(checked)
                           }
-                          className="mt-1 h-4 w-4 shrink-0 accent-destructive"
+                          className="mt-0.5"
                         />
                         <span>
                           Delete the private files in{' '}
@@ -423,6 +422,7 @@ export function ProviderAccountsFields({
                 {isRenaming ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <Input
+                      size="lg"
                       aria-label={`Label for ${row.identity}`}
                       value={renameDraft}
                       disabled={isBusy}
@@ -770,6 +770,7 @@ export function ProviderAccountsFields({
         <div className="flex flex-col gap-2 sm:flex-row">
           {!isCodex ? (
             <Input
+              size="lg"
               aria-label="Account email"
               type="email"
               autoComplete="off"
@@ -781,6 +782,7 @@ export function ProviderAccountsFields({
             />
           ) : null}
           <Input
+            size="lg"
             aria-label="Account label (optional)"
             placeholder="Label (optional)"
             value={enrolLabel}

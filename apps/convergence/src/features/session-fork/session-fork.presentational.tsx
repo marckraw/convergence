@@ -143,6 +143,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               Name
             </label>
             <Input
+              size="lg"
               id="fork-name"
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
@@ -279,6 +280,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
             </div>
             {workspaceMode === 'fork' && (
               <Input
+                size="lg"
                 value={workspaceBranchName}
                 onChange={(event) =>
                   onWorkspaceBranchNameChange(event.target.value)

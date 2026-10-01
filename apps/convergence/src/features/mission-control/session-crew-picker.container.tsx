@@ -214,12 +214,13 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-1">
                     <Input
+                      size="sm"
                       ref={nameRef}
                       autoFocus
                       value={draftName}
                       placeholder="Crew name"
                       aria-label="New crew name"
-                      className="h-7 flex-1 text-xs"
+                      className="flex-1 text-xs"
                       onChange={(event) => setDraftName(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {

@@ -12,13 +12,14 @@ import {
 import {
   Button,
   IconButton,
+  ChoiceField,
   Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  SwitchRow,
+  Switch,
 } from '@convergence/ui'
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
@@ -152,7 +153,11 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             <span className="text-xs font-medium text-muted-foreground">
               Display name
             </span>
-            <Input value={draft.name ?? ''} onChange={updateString('name')} />
+            <Input
+              size="lg"
+              value={draft.name ?? ''}
+              onChange={updateString('name')}
+            />
           </label>
           <div className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">
@@ -176,35 +181,43 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                 SSH target
               </span>
               <Input
+                size="lg"
                 value={draft.sshTarget ?? ''}
                 onChange={updateString('sshTarget')}
               />
             </label>
-            <SwitchRow
-              id="local-model-tunnel-autostart"
-              label="Start when Convergence opens"
-              checked={!!draft.autoStart}
-              onChange={(next) => patchDraft({ autoStart: next })}
-            />
+            <ChoiceField label="Start when Convergence opens">
+              <Switch
+                id="local-model-tunnel-autostart"
+                checked={!!draft.autoStart}
+                onCheckedChange={(next) => patchDraft({ autoStart: next })}
+              />
+            </ChoiceField>
           </>
         ) : null}
       </section>
 
       <section className="space-y-3">
         {renderSectionLabel(isSshTunnel ? 'Forwarding' : 'Endpoint')}
-        <SwitchRow
-          id="local-model-tunnel-custom-bind"
+        <ChoiceField
           label="Use custom local bind IP"
-          description="Leave off to bind to 127.0.0.1."
-          checked={!!draft.useCustomLocalBindHost}
-          onChange={(next) => patchDraft({ useCustomLocalBindHost: next })}
-        />
+          hint="Leave off to bind to 127.0.0.1."
+        >
+          <Switch
+            id="local-model-tunnel-custom-bind"
+            checked={!!draft.useCustomLocalBindHost}
+            onCheckedChange={(next) =>
+              patchDraft({ useCustomLocalBindHost: next })
+            }
+          />
+        </ChoiceField>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">
               Local bind IP
             </span>
             <Input
+              size="lg"
               value={draft.localBindHost ?? '127.0.0.1'}
               disabled={!draft.useCustomLocalBindHost}
               onChange={updateString('localBindHost')}
@@ -215,6 +228,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
               Local port
             </span>
             <Input
+              size="lg"
               type="number"
               min={1}
               max={65535}
@@ -229,6 +243,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                   Remote IP or hostname
                 </span>
                 <Input
+                  size="lg"
                   value={draft.remoteHost ?? ''}
                   onChange={updateString('remoteHost')}
                 />
@@ -238,6 +253,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                   Remote port
                 </span>
                 <Input
+                  size="lg"
                   type="number"
                   min={1}
                   max={65535}
@@ -249,13 +265,16 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
           ) : null}
         </div>
         {isSshTunnel ? (
-          <SwitchRow
-            id="local-model-tunnel-external"
+          <ChoiceField
             label="Accept externally managed endpoint"
-            description="Use only when another SSH tunnel owns the local port."
-            checked={!!draft.allowExternal}
-            onChange={(next) => patchDraft({ allowExternal: next })}
-          />
+            hint="Use only when another SSH tunnel owns the local port."
+          >
+            <Switch
+              id="local-model-tunnel-external"
+              checked={!!draft.allowExternal}
+              onCheckedChange={(next) => patchDraft({ allowExternal: next })}
+            />
+          </ChoiceField>
         ) : null}
         {isSshTunnel ? (
           <div className="space-y-2">
@@ -304,6 +323,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Route label
                       </span>
                       <Input
+                        size="lg"
                         value={route.label}
                         onChange={updateRouteString(route.id, 'label')}
                       />
@@ -313,6 +333,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         SSH target
                       </span>
                       <Input
+                        size="lg"
                         value={route.sshTarget}
                         onChange={updateRouteString(route.id, 'sshTarget')}
                       />
@@ -322,6 +343,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Local port
                       </span>
                       <Input
+                        size="lg"
                         type="number"
                         min={1}
                         max={65535}
@@ -334,6 +356,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Remote host
                       </span>
                       <Input
+                        size="lg"
                         value={route.remoteHost}
                         onChange={updateRouteString(route.id, 'remoteHost')}
                       />
@@ -343,6 +366,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Remote port
                       </span>
                       <Input
+                        size="lg"
                         type="number"
                         min={1}
                         max={65535}
@@ -355,6 +379,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Connect timeout seconds
                       </span>
                       <Input
+                        size="lg"
                         type="number"
                         min={1}
                         max={120}
@@ -367,6 +392,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         Health URL
                       </span>
                       <Input
+                        size="lg"
                         value={route.healthCheckUrl}
                         onChange={updateRouteString(route.id, 'healthCheckUrl')}
                       />
@@ -386,17 +412,19 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
 
       <section className="space-y-3">
         {renderSectionLabel('Health')}
-        <SwitchRow
-          id="local-model-tunnel-health"
-          label="Check a health URL after connecting"
-          checked={!!draft.healthCheckEnabled}
-          onChange={(next) => patchDraft({ healthCheckEnabled: next })}
-        />
+        <ChoiceField label="Check a health URL after connecting">
+          <Switch
+            id="local-model-tunnel-health"
+            checked={!!draft.healthCheckEnabled}
+            onCheckedChange={(next) => patchDraft({ healthCheckEnabled: next })}
+          />
+        </ChoiceField>
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">
             Health URL
           </span>
           <Input
+            size="lg"
             value={draft.healthCheckUrl ?? ''}
             disabled={!draft.healthCheckEnabled}
             onChange={updateString('healthCheckUrl')}

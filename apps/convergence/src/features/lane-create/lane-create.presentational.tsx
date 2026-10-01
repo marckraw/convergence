@@ -118,6 +118,7 @@ export const LaneCreateDialog: FC<LaneCreateDialogProps> = ({
                   Lane name
                 </label>
                 <Input
+                  size="lg"
                   id="lane-name"
                   value={laneName}
                   onChange={(event) => onLaneNameChange(event.target.value)}
@@ -136,6 +137,7 @@ export const LaneCreateDialog: FC<LaneCreateDialogProps> = ({
                   Branch name
                 </label>
                 <Input
+                  size="lg"
                   id="lane-branch"
                   value={branchName}
                   onChange={(event) => onBranchNameChange(event.target.value)}

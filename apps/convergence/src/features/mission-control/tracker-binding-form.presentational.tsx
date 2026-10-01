@@ -3,7 +3,7 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
-import { Button, Input } from '@convergence/ui'
+import { Button, Input, Switch } from '@convergence/ui'
 import {
   probeAsksForKey,
   probeTimeLabel,
@@ -85,13 +85,10 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           Dispatch
         </h4>
         <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-          <Input
-            className="size-3.5 shrink-0 rounded-sm p-0"
-            type="checkbox"
-            role="switch"
+          <Switch
             checked={autoDispatch}
             disabled={busy || !bound}
-            onChange={(event) => onAutoDispatchChange?.(event.target.checked)}
+            onCheckedChange={(checked) => onAutoDispatchChange?.(checked)}
           />
           Auto-dispatch — send issues labeled groomed, grounded, their seat and
           dispatch into their seats' conversations
@@ -115,11 +112,12 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             name; the id is the one thing Linear shows nowhere (MAR-3156). */}
         <span className={LABEL}>Project ({TRACKER_PROJECT_FIELD_HINT})</span>
         <Input
+          size="sm"
           aria-label="Tracker project"
           value={draft.projectId}
           disabled={busy}
           onChange={(event) => onDraftChange({ projectId: event.target.value })}
-          className="h-7 text-xs"
+          className="text-xs"
         />
         {boundProjectName === null ? null : (
           <span className={LABEL} data-tracker-bound-project>
@@ -131,6 +129,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         <label className="flex flex-1 flex-col gap-1">
           <span className={LABEL}>Label prefix</span>
           <Input
+            size="sm"
             aria-label="Tracker label prefix"
             value={draft.labelPrefix}
             placeholder="horse:"
@@ -138,12 +137,13 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             onChange={(event) =>
               onDraftChange({ labelPrefix: event.target.value })
             }
-            className="h-7 text-xs"
+            className="text-xs"
           />
         </label>
         <label className="flex flex-1 flex-col gap-1">
           <span className={LABEL}>Wave prefix</span>
           <Input
+            size="sm"
             aria-label="Tracker wave prefix"
             value={draft.wavePrefix}
             placeholder="wave:"
@@ -151,7 +151,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             onChange={(event) =>
               onDraftChange({ wavePrefix: event.target.value })
             }
-            className="h-7 text-xs"
+            className="text-xs"
           />
         </label>
       </div>
@@ -193,6 +193,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       {credential !== 'present' || asksForKey ? (
         <div className="flex items-center gap-1.5">
           <Input
+            size="sm"
             type="password"
             autoComplete="off"
             aria-label={
@@ -202,7 +203,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             value={keyDraft}
             disabled={busy}
             onChange={(event) => onKeyDraftChange(event.target.value)}
-            className="h-7 flex-1 text-xs"
+            className="flex-1 text-xs"
           />
           <Button
             type="button"

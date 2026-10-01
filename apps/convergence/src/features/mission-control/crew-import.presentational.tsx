@@ -6,6 +6,7 @@ import type {
 } from '@/shared/types/crew-import.types'
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogBody,
   DialogContent,
@@ -13,7 +14,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
 } from '@convergence/ui'
 
 interface Props {
@@ -165,14 +165,12 @@ export function CrewImportView({
                         )}
                         {r.canUpdate && (
                           <label className="flex items-center gap-2">
-                            <Input
-                              type="checkbox"
-                              className="h-4 w-4 shrink-0 p-0"
+                            <Checkbox
                               aria-label={`Update ${r.label} to file`}
                               disabled={busy}
                               checked={decisions.updates[r.key] !== false}
-                              onChange={(e) =>
-                                onUpdate(r.key, e.target.checked)
+                              onCheckedChange={(checked) =>
+                                onUpdate(r.key, checked)
                               }
                             />
                             Update to file
@@ -194,12 +192,10 @@ export function CrewImportView({
               </table>
               {plan.hasLayout && (
                 <label className="mt-4 flex items-center gap-2 text-sm">
-                  <Input
-                    type="checkbox"
-                    className="h-4 w-4 shrink-0 p-0"
+                  <Checkbox
                     checked={decisions.includeLayout}
                     disabled={busy}
-                    onChange={(e) => onIncludeLayout(e.target.checked)}
+                    onCheckedChange={(checked) => onIncludeLayout(checked)}
                   />
                   Include layout
                 </label>

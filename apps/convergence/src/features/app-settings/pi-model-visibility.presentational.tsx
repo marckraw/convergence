@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ProviderModelOption } from '@/entities/session'
-import { Button, Input } from '@convergence/ui'
+import { Button, Checkbox, Input } from '@convergence/ui'
 
 interface PiModelVisibilityFieldsProps {
   providerExists: boolean
@@ -82,6 +82,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
 
         <div className="flex gap-2">
           <Input
+            size="lg"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search available Pi models..."
@@ -113,12 +114,10 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
                 return (
                   <li key={model.id}>
                     <label className="flex min-h-14 cursor-pointer items-center gap-3 px-3 py-2">
-                      <Input
-                        type="checkbox"
-                        className="h-4 w-4 shrink-0 accent-primary shadow-none"
+                      <Checkbox
                         checked={checked}
-                        onChange={(event) =>
-                          onToggleModel(model.id, event.target.checked)
+                        onCheckedChange={(next) =>
+                          onToggleModel(model.id, next)
                         }
                       />
                       <span className="min-w-0">

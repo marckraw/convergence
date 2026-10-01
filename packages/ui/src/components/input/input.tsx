@@ -1,23 +1,70 @@
-import * as React from 'react'
+import { Input as InputPrimitive } from '@base-ui/react/input'
+import type { Ref } from 'react'
 import { cn } from '#lib/cn.pure'
+import {
+  controlFrame,
+  controlHeight,
+  type ControlSize,
+} from '#lib/control-frame.styles'
+import { focusRingField } from '#lib/focus-ring.styles'
 
-export type InputProps = React.InputHTMLAttributes<HTMLInputElement>
+/**
+ * The kinds of text an Input takes. A checkbox or a radio is not an Input:
+ * those are Checkbox and RadioGroup, so `type="checkbox"` doesn't compile.
+ */
+export type InputType =
+  | 'text'
+  | 'search'
+  | 'email'
+  | 'password'
+  | 'number'
+  | 'tel'
+  | 'url'
+  | 'date'
+  | 'datetime-local'
+  | 'month'
+  | 'time'
+  | 'week'
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
-    return (
-      <input
-        type={type}
-        className={cn(
-          'flex h-9 w-full rounded-md border border-control-border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-          className,
-        )}
-        ref={ref}
-        {...props}
-      />
-    )
-  },
-)
-Input.displayName = 'Input'
+export type InputProps = Omit<
+  InputPrimitive.Props,
+  'className' | 'type' | 'size' | 'ref'
+> & {
+  className?: string
+  type?: InputType
+  /** R3: 24, 28, 32 or 36 px. `md` (32) unless said. */
+  size?: ControlSize
+  ref?: Ref<HTMLInputElement>
+}
 
-export { Input }
+/**
+ * One line of text (MAR-3616 DS3c), on Base UI's Input: in a Field it gets
+ * its label, hint and error wired; on its own it needs a <label> or an
+ * aria-label. It wears the field frame (today's look) and rings over its
+ * border. Invalid (`aria-invalid`, or its Field's) turns the border red.
+ */
+export function Input({
+  className,
+  type,
+  size = 'md',
+  ref,
+  ...props
+}: InputProps) {
+  return (
+    <InputPrimitive
+      ref={ref as Ref<HTMLElement>}
+      type={type}
+      data-slot="input"
+      data-size={size}
+      className={cn(
+        'flex px-3 py-1',
+        controlFrame,
+        controlHeight[size],
+        'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-ink',
+        focusRingField,
+        className,
+      )}
+      {...props}
+    />
+  )
+}

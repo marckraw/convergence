@@ -76,6 +76,7 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
     >
       <div className="flex gap-2">
         <Input
+          size="lg"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="Session name..."
@@ -106,6 +107,7 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
       </div>
       <div className="flex gap-2">
         <Input
+          size="lg"
           value={message}
           onChange={(e) => onMessageChange(e.target.value)}
           placeholder="Initial message for the agent..."
