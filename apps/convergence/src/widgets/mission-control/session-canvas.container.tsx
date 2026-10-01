@@ -9,7 +9,7 @@ import {
   ReactFlow,
 } from '@xyflow/react'
 import type { Edge, Node, NodeChange, ReactFlowInstance } from '@xyflow/react'
-import { useAppliedTheme } from '@convergence/ui'
+import { EmptyState, useAppliedTheme } from '@convergence/ui'
 import { Waypoints } from 'lucide-react'
 import {
   CANVAS_CHAIR_NODE_HEIGHT,
@@ -70,11 +70,6 @@ const EDGE_TYPES = {
   routed: CanvasRoutedEdge,
 }
 
-/** Matches the popover's own `w-80`, plus room to breathe at the edges. */
-const POPOVER_WIDTH = 320
-const POPOVER_MAX_HEIGHT = 260
-const POPOVER_EDGE_GAP = 8
-
 /** The popover is a glance; the crew's trail is where the full ledger lives. */
 const POPOVER_HOP_LIMIT = 5
 
@@ -87,8 +82,11 @@ const POPOVER_HOP_LIMIT = 5
  */
 const CONNECTION_RADIUS = 40
 
-/** The unsaved draft's colour: not the crew's, because it is not a wire yet. */
-const DRAFT_EDGE_COLOR = '#38bdf8'
+/**
+ * The unsaved draft's colour: not the crew's, because it is not a wire yet.
+ * The connect tone (info), the colour the drawing handles wear too.
+ */
+const DRAFT_EDGE_COLOR = 'var(--info-solid)'
 
 /**
  * What a wire looks like while a run is being replayed on it.
@@ -99,10 +97,10 @@ const DRAFT_EDGE_COLOR = '#38bdf8'
  * what this build understands to be wrong.
  */
 const REPLAY_TONE_COLOR: Record<string, string> = {
-  delivered: '#34d399',
-  alarm: '#f87171',
-  terminal: '#fbbf24',
-  held: 'color-mix(in srgb, var(--muted-foreground) 70%, transparent)',
+  delivered: 'var(--success-solid)',
+  alarm: 'var(--danger-solid)',
+  terminal: 'var(--warning-solid)',
+  held: 'color-mix(in srgb, var(--ink-muted) 70%, transparent)',
 }
 
 /**
@@ -113,17 +111,7 @@ const FIT_VIEW_OPTIONS = { padding: 0.15 }
 
 /** A wire the selected run never used. */
 const REPLAY_QUIET_COLOR =
-  'color-mix(in srgb, var(--muted-foreground) 45%, transparent)'
-
-function clamp(
-  value: number,
-  gap: number,
-  extent: number | undefined,
-  size: number,
-): number {
-  if (!extent) return value
-  return Math.max(gap, Math.min(value, extent - size - gap))
-}
+  'color-mix(in srgb, var(--ink-muted) 45%, transparent)'
 
 /**
  * Everything the canvas needs to be authored, or nothing at all.
@@ -674,16 +662,12 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
         authoring.onSelectRelay(edge.id)
         return
       }
-      const bounds = canvasRef.current?.getBoundingClientRect()
-      const localX = event.clientX - (bounds?.left ?? 0)
-      const localY = event.clientY - (bounds?.top ?? 0)
-
-      // Kept inside the canvas: a popover opened on a wire near the right edge
-      // would otherwise hang off the side where it cannot be read.
+      // The popover hangs from the point that was clicked; it keeps itself
+      // on screen, so a wire near the right edge still opens readably.
       setOpenWire({
         relayId: edge.id,
-        x: clamp(localX, POPOVER_EDGE_GAP, bounds?.width, POPOVER_WIDTH),
-        y: clamp(localY, POPOVER_EDGE_GAP, bounds?.height, POPOVER_MAX_HEIGHT),
+        x: event.clientX,
+        y: event.clientY,
       })
     },
     [relayEdgeIds, authoring],
@@ -697,13 +681,13 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
 
   if (graph.nodes.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-        <Waypoints className="size-6 text-muted-foreground" />
-        <p className="text-sm font-medium">Nothing wired to draw yet</p>
-        <p className="max-w-sm text-xs text-muted-foreground">
-          {EMPTY_CANVAS_MESSAGE}
-        </p>
-      </div>
+      <EmptyState
+        variant="plain"
+        layout="centred"
+        icon={Waypoints}
+        title="Nothing wired to draw yet"
+        detail={EMPTY_CANVAS_MESSAGE}
+      />
     )
   }
 
@@ -757,14 +741,14 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <Controls
           showInteractive={false}
-          className="!bottom-4 !left-4 overflow-hidden !rounded-md !border !border-border !shadow-none"
+          className="!bottom-4 !left-4 overflow-hidden !rounded-md !border !border-line !shadow-none"
         />
       </ReactFlow>
 
       {authoring?.runBanner ? (
         <p
           data-run-banner
-          className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-md border border-hairline bg-background/90 px-3 py-1 text-3xs uppercase tracking-wide text-muted-foreground shadow-sm"
+          className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-md border border-hairline bg-canvas/90 px-3 py-1 text-3xs uppercase tracking-wide text-ink-muted shadow-control"
         >
           {authoring.runBanner}
         </p>
@@ -774,27 +758,23 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
         <p
           data-connect-hint
           role="status"
-          className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto w-fit rounded-md border border-hairline bg-background/90 px-3 py-1.5 text-2xs text-muted-foreground shadow-sm"
+          className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto w-fit rounded-md border border-hairline bg-canvas/90 px-3 py-1.5 text-2xs text-ink-muted shadow-control"
         >
           {authoring.hint}
         </p>
       ) : null}
 
       {openWire && openRelay ? (
-        <div
-          style={{ left: openWire.x, top: openWire.y }}
-          className="absolute z-10"
-        >
-          <CanvasWirePopover
-            sentence={buildRelaySentence(openRelay, resolveName)}
-            armed={openRelay.armed}
-            hopLines={hops
-              .filter((hop) => hop.relayId === openRelay.id)
-              .slice(0, POPOVER_HOP_LIMIT)
-              .map((hop) => buildRelayHopLine(hop, resolveName, new Date()))}
-            onClose={closeWire}
-          />
-        </div>
+        <CanvasWirePopover
+          sentence={buildRelaySentence(openRelay, resolveName)}
+          armed={openRelay.armed}
+          hopLines={hops
+            .filter((hop) => hop.relayId === openRelay.id)
+            .slice(0, POPOVER_HOP_LIMIT)
+            .map((hop) => buildRelayHopLine(hop, resolveName, new Date()))}
+          at={openWire}
+          onClose={closeWire}
+        />
       ) : null}
     </div>
   )

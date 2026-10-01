@@ -56,6 +56,13 @@ export const CANVAS_THEME_VARS = {
 } as CSSProperties
 
 /**
+ * The column a canvas inspector opens in, beside the diagram: 340 px on the
+ * spacing scale, one constant for the four panels (MC-11), which wrote it out
+ * as an arbitrary width each.
+ */
+export const INSPECTOR_COLUMN_CLASS = 'w-85 shrink-0'
+
+/**
  * Wires attach to every node's ports, but a canvas you cannot draw on must
  * never show them (MC-35: one constant for the session, chair and spawn
  * nodes, which wrote it out eight times).

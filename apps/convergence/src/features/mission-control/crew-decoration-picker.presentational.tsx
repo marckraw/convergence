@@ -4,6 +4,7 @@ import { cn, IconButton } from '@convergence/ui'
 import {
   CREW_ACCENT_COLORS,
   CREW_EMOJI_CHOICES,
+  crewColor,
 } from './session-crew-picker.pure'
 
 interface CrewDecorationPickerProps {
@@ -40,13 +41,14 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
             key={choice}
             type="button"
             variant="ghost"
-            aria-pressed={emoji === choice}
+            pressed={emoji === choice}
             onClick={() => onEmojiChange(emoji === choice ? null : choice)}
             size="xs"
             className={cn(
               'rounded-md border text-xs leading-none',
+              // R7: the chosen one is the raised chip.
               emoji === choice
-                ? 'border-white/40 bg-white/10'
+                ? 'border-hairline-strong bg-chip shadow-raised'
                 : 'border-transparent hover:border-hairline-strong',
             )}
           >
@@ -66,18 +68,21 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
             key={choice.value}
             type="button"
             variant="ghost"
-            aria-pressed={accentColor === choice.value}
+            pressed={accentColor === choice.value}
             onClick={() =>
               onAccentColorChange(
                 accentColor === choice.value ? null : choice.value,
               )
             }
-            style={{ backgroundColor: choice.value }}
+            // The swatch paints with the hue's token; the hex is what's stored.
+            style={{ backgroundColor: crewColor(choice.value) ?? undefined }}
             size="xs"
             className={cn(
               'rounded-full border-2 transition-transform hover:bg-transparent',
+              // The chosen swatch grows and wears an ink ring, which reads on
+              // a light window as well as a dark one.
               accentColor === choice.value
-                ? 'scale-110 border-white/70'
+                ? 'scale-110 border-ink/70'
                 : 'border-transparent hover:border-hairline-strong',
             )}
           />

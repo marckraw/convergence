@@ -83,7 +83,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="relative flex h-[640px] w-[1100px]">
+        <div className="relative flex h-160 w-275">
           <Story />
         </div>
       </TooltipProvider>

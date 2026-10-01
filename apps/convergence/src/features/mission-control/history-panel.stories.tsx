@@ -114,7 +114,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="flex h-[900px] w-[960px] flex-col">
+      <div className="flex h-225 w-240 flex-col">
         <Story />
       </div>
     ),

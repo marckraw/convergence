@@ -7,6 +7,7 @@ import {
   CHAIR_NODE_LABEL,
 } from '@/features/mission-control'
 import { Button, cn } from '@convergence/ui'
+import { CANVAS_HIDDEN_HANDLE } from './session-canvas.styles'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasChairNodeData } from './session-canvas.types'
 
@@ -30,9 +31,11 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
       style={{ width: CANVAS_NODE_WIDTH, height: CANVAS_CHAIR_NODE_HEIGHT }}
       className={cn(
         'flex flex-col justify-center gap-0.5 rounded-lg border px-3 py-2',
+        // Lit, it waits on you: the warning tone (R1), its edge at the
+        // solid so the one node that needs a human reads from across the room.
         chair.lit
-          ? 'border-amber-400/70 bg-amber-400/[0.10]'
-          : 'border-border bg-fill-quiet',
+          ? 'border-warning-solid/70 bg-warning-soft'
+          : 'border-line bg-fill-quiet',
       )}
     >
       <Handle
@@ -40,14 +43,14 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
         type="target"
         position={Position.Left}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
       <Handle
         id={CANVAS_HANDLE.loopIn}
         type="target"
         position={Position.Bottom}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
       {/* The other two sides, so a chair a route approaches from the right or
           from above is entered by the side it actually faces (R11). */}
@@ -56,14 +59,14 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
         type="target"
         position={Position.Right}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
       <Handle
         id={CANVAS_SIDE_HANDLE.target.top}
         type="target"
         position={Position.Top}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
 
       <div className="flex items-center gap-1.5">
@@ -73,7 +76,7 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
         <span
           className={cn(
             'truncate text-xs font-medium',
-            chair.lit ? 'text-amber-200' : 'text-foreground',
+            chair.lit ? 'text-warning-ink' : 'text-ink',
           )}
         >
           {CHAIR_NODE_LABEL}
@@ -83,9 +86,10 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
           <Button
             type="button"
             variant="ghost"
+            size="xs"
             aria-label={`Answer the hails for this crew`}
             onClick={() => chair.onAcknowledge(chair.crewId)}
-            className="ml-auto h-5 shrink-0 px-1.5 text-3xs text-amber-200/80 hover:text-amber-100"
+            className="ml-auto shrink-0 text-warning-ink hover:text-warning-ink"
           >
             Seen
           </Button>
@@ -95,7 +99,7 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
       <p
         className={cn(
           'truncate text-2xs',
-          chair.lit ? 'text-amber-200/80' : 'text-muted-foreground',
+          chair.lit ? 'text-warning-ink' : 'text-ink-muted',
         )}
       >
         {chair.detail ?? 'nothing is waiting on you here'}

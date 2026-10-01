@@ -1,3 +1,4 @@
+import { durationsMs } from '@convergence/ui'
 import type { RelayHop } from '@/entities/session-relay'
 import { relayHopTone } from './relay-hop.pure'
 import type { RelayHopTone } from './relay-hop.pure'
@@ -9,10 +10,10 @@ import type { RelayHopTone } from './relay-hop.pure'
  * short enough that a busy loop reads as a pulse rather than a wire that is
  * simply always on.
  */
-export const WIRE_PULSE_MS = 1800
+export const WIRE_PULSE_MS = durationsMs.wire
 
-/** Red-400: the same alarm colour the trail and the crew badge already use. */
-export const PULSE_ALARM_COLOR = '#f87171'
+/** The danger solid: the same alarm colour the trail and the crew badge use. */
+export const PULSE_ALARM_COLOR = 'var(--danger-solid)'
 
 export interface WirePulse {
   relayId: string

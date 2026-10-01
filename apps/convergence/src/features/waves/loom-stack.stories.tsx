@@ -179,9 +179,7 @@ const meta = {
     (Story, { args }) => (
       <div
         className={
-          args.wide
-            ? 'flex h-[640px] w-[1100px] flex-col'
-            : 'flex h-[760px] w-[340px] flex-col'
+          args.wide ? 'flex h-160 w-275 flex-col' : 'flex h-190 w-85 flex-col'
         }
       >
         <Story />

@@ -18,7 +18,7 @@ function OnCanvas(data: CanvasSpawnNodeData) {
     },
   ]
   return (
-    <div className="h-[160px] w-[360px]">
+    <div className="h-40 w-90">
       <ReactFlow
         nodes={nodes}
         edges={[]}

@@ -31,7 +31,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="flex h-[640px] w-80 flex-col">
+      <div className="flex h-160 w-80 flex-col">
         <Story />
       </div>
     ),

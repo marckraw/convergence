@@ -19,7 +19,7 @@ function OnCanvas(data: CanvasCrewClusterData) {
     },
   ]
   return (
-    <div className="h-[260px] w-[520px]">
+    <div className="h-65 w-130">
       <ReactFlow
         nodes={nodes}
         edges={[]}
