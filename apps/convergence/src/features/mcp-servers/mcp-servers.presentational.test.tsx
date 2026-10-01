@@ -61,7 +61,7 @@ describe('McpServersDialog', () => {
       />,
     )
 
-    expect(screen.getByText('MCP Servers')).toBeInTheDocument()
+    expect(screen.getByText('MCP servers')).toBeInTheDocument()
     expect(screen.getByText('Claude Code')).toBeInTheDocument()
     expect(screen.getAllByText('Project')).not.toHaveLength(0)
     expect(screen.getAllByText('Global')).not.toHaveLength(0)

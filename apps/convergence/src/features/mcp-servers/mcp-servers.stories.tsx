@@ -86,7 +86,7 @@ const snapshot: ProjectMcpVisibility = {
 }
 
 const openDialog = async () => {
-  const dialog = await screen.findByRole('dialog', { name: 'MCP Servers' })
+  const dialog = await screen.findByRole('dialog', { name: 'MCP servers' })
   await waitFor(() =>
     expect(dialog).toContainElement(document.activeElement as HTMLElement),
   )
@@ -145,17 +145,20 @@ export const Default: Story = {
   },
 }
 
-/** Busy, the first read: nothing to show yet, and Refresh waits. */
+/** Busy, the first read: nothing to show yet, and Refresh says it is at it. */
 export const Busy: Story = {
   args: { snapshot: null, isLoading: true },
   play: async () => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByText('Checking provider MCP servers…'),
-    ).toBeVisible()
+    // It fades in once the read has taken 300 ms.
+    await waitFor(() =>
+      expect(
+        within(dialog).getByText('Checking provider MCP servers…'),
+      ).toBeVisible(),
+    )
     await expect(
       within(dialog).getByRole('button', { name: 'Refresh' }),
-    ).toBeDisabled()
+    ).toHaveAttribute('aria-busy', 'true')
   },
 }
 
@@ -165,12 +168,15 @@ export const Failed: Story = {
     snapshot: null,
     error: 'Could not read ~/.claude.json: unexpected token } at line 41.',
   },
-  play: async () => {
+  play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText(/unexpected token/)).toBeVisible()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Refresh' }),
-    ).toBeEnabled()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /unexpected token/,
+    )
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Try again' }),
+    )
+    await expect(args.onRefresh).toHaveBeenCalledOnce()
   },
 }
 
@@ -182,9 +188,7 @@ export const Empty: Story = {
   play: async () => {
     const dialog = await openDialog()
     await expect(
-      within(dialog).getByText(
-        'No MCP-capable providers are currently available.',
-      ),
+      within(dialog).getByText('No MCP-capable providers'),
     ).toBeVisible()
   },
 }
@@ -197,9 +201,9 @@ export const Disabled: Story = {
     await expect(dialog).toHaveAccessibleDescription(
       'Select a project to inspect provider-backed MCP availability.',
     )
-    await expect(
-      within(dialog).getByRole('button', { name: 'Refresh' }),
-    ).toBeDisabled()
+    const refresh = within(dialog).getByRole('button', { name: 'Refresh' })
+    await expect(refresh).toHaveAttribute('aria-disabled', 'true')
+    await expect(refresh).toHaveAccessibleDescription('Open a project first.')
   },
 }
 
