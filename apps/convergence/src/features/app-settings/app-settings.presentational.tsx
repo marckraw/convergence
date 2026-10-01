@@ -16,7 +16,19 @@ import type {
 } from '@/entities/notifications'
 import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { Button, ChoiceField, cn, Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, Switch } from '@convergence/ui'
+import {
+  Button,
+  ChoiceField,
+  cn,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  Switch,
+} from '@convergence/ui'
 import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
