@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Plus } from 'lucide-react'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { Button } from '@convergence/ui'
+import { Button, EmptyState, Notice } from '@convergence/ui'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
 import type {
   ExecutionHostEndpointDraft,
@@ -42,18 +42,14 @@ export const ExecutionHostEndpointsFields: FC<
 }) => (
   <div className="space-y-4">
     {environmentOverrideWarning && (
-      <p
-        role="status"
-        className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
-      >
-        {environmentOverrideWarning}
-      </p>
+      <Notice tone="warning" title={environmentOverrideWarning} />
     )}
 
     {drafts.length === 0 && (
-      <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-        No execution host endpoints. Sessions run on this machine.
-      </p>
+      <EmptyState
+        title="No execution host endpoints"
+        detail="Sessions run on this machine."
+      />
     )}
 
     {drafts.map((draft) => (
@@ -71,7 +67,7 @@ export const ExecutionHostEndpointsFields: FC<
     ))}
 
     <Button type="button" variant="secondary" onClick={onAdd}>
-      <Plus className="mr-2 h-4 w-4" />
+      <Plus className="size-4" />
       Add endpoint
     </Button>
   </div>

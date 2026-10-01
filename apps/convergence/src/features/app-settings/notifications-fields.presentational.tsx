@@ -5,7 +5,8 @@ import { Button, ChoiceField, Switch } from '@convergence/ui'
 interface NotificationsFieldsProps {
   prefs: NotificationPrefs
   platform: string | null
-  isSaving: boolean
+  /** Locks the test buttons while something else saves. */
+  isSaving?: boolean
   onChange: (next: NotificationPrefs) => void
   onTestFire: (severity: 'info' | 'critical') => void
 }
@@ -19,7 +20,7 @@ const DOCK_BOUNCE_LABEL = 'Dock bounce'
 export const NotificationsFields: FC<NotificationsFieldsProps> = ({
   prefs,
   platform,
-  isSaving,
+  isSaving = false,
   onChange,
   onTestFire,
 }) => {

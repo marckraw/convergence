@@ -41,8 +41,6 @@ function makeProps(
     credentialMessage: null,
     credentialError: null,
     connectionResult,
-    removalWarning: null,
-    isRemovalPending: false,
     onLabelChange: vi.fn(),
     onRemoteBaseUrlChange: vi.fn(),
     onDaemonTokenChange: vi.fn(),
@@ -51,8 +49,6 @@ function makeProps(
     onDeleteDaemonToken: vi.fn(),
     onTestDaemonConnection: vi.fn(),
     onRequestRemove: vi.fn(),
-    onConfirmRemove: vi.fn(),
-    onCancelRemove: vi.fn(),
   }
 }
 

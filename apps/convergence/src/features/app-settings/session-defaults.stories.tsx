@@ -126,7 +126,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="w-[600px]">
+        <div className="w-xl">
           <Story />
         </div>
       </TooltipProvider>
@@ -139,20 +139,25 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 /**
- * The default provider, model and reasoning effort, each a picker, and below
- * them what the provider reports about itself.
+ * The default provider and reasoning effort, each a few fixed choices in a
+ * Select (R9), the model in its picker, and below them what the provider
+ * reports about itself.
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('combobox', { name: 'Anthropic' }))
-    await screen.findByRole('combobox', { name: 'Search options...' })
-    await userEvent.click(screen.getByRole('option', { name: /OpenAI/ }))
+    const provider = canvas.getByRole('combobox', { name: 'Default provider' })
+    await expect(provider).toHaveTextContent('Anthropic')
+    await userEvent.click(provider)
+    await userEvent.click(await screen.findByRole('option', { name: /OpenAI/ }))
     await expect(args.onProviderChange).toHaveBeenCalledWith('codex')
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
 
-    await userEvent.click(canvas.getByRole('combobox', { name: 'High' }))
-    await screen.findByRole('combobox', { name: 'Search options...' })
-    await userEvent.click(screen.getByRole('option', { name: /Max/ }))
+    const effort = canvas.getByRole('combobox', {
+      name: 'Default reasoning effort',
+    })
+    await expect(effort).toHaveTextContent('High')
+    await userEvent.click(effort)
+    await userEvent.click(await screen.findByRole('option', { name: 'Max' }))
     await expect(args.onEffortChange).toHaveBeenCalledWith('max')
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
 
@@ -204,9 +209,9 @@ export const Empty: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole('combobox', { name: 'Select provider' }),
-    ).toBeDisabled()
+    const provider = canvas.getByRole('combobox', { name: 'Default provider' })
+    await expect(provider).toHaveTextContent('Select provider')
+    await expect(provider).toHaveAttribute('data-disabled')
     await expect(
       canvas.getByRole('combobox', { name: 'Select model' }),
     ).toBeVisible()

@@ -256,7 +256,7 @@ describe('ExecutionHostSettingsContainer', () => {
 
     expect(
       await screen.findByText(
-        'Save settings first — this endpoint does not exist yet.',
+        'Enter a valid URL first — this endpoint is saved once its address is.',
       ),
     ).toBeInTheDocument()
     // Asking about an endpoint the main process cannot find would come back as
@@ -287,7 +287,7 @@ describe('ExecutionHostSettingsContainer', () => {
     ).toBe(true)
     expect(
       screen.getByText(
-        `Save to test the URL you typed — this endpoint still points at ${BASE_URL}.`,
+        `Finish the URL to test it — this endpoint still points at ${BASE_URL}.`,
       ),
     ).toBeInTheDocument()
     // The Keychain account is the id, and the id did not change.
@@ -307,20 +307,16 @@ describe('ExecutionHostSettingsContainer', () => {
       }),
     )
 
-    expect(
-      await screen.findByText(
-        '3 sessions run on “backpack-automations”. Removing it does not move ' +
-          'them — they will refuse to run, because a session may only run on ' +
-          'the machine it named.',
-      ),
-    ).toBeInTheDocument()
+    // The app's own question (R5), with the price as its description.
+    const question = await screen.findByRole('alertdialog')
+    expect(question).toHaveTextContent(
+      '3 sessions run on “backpack-automations”. Removing it does not move ' +
+        'them — they will refuse to run, because a session may only run on ' +
+        'the machine it named.',
+    )
     expect(onRemove).not.toHaveBeenCalled()
 
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Confirm removing endpoint backpack-automations',
-      }),
-    )
+    await answerConfirm('Remove endpoint')
     expect(onRemove).toHaveBeenCalledTimes(1)
   })
 
@@ -335,9 +331,10 @@ describe('ExecutionHostSettingsContainer', () => {
       }),
     )
 
-    expect(
-      await screen.findByText(/could not count the sessions/),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      /could not count the sessions/,
+    )
+    await answerConfirm('Cancel')
     expect(onRemove).not.toHaveBeenCalled()
   })
 
@@ -363,8 +360,30 @@ describe('ExecutionHostSettingsContainer', () => {
     expect(onRemove).not.toHaveBeenCalled()
   })
 
-  it('removes an endpoint nothing names without ceremony', () => {
+  /**
+   * Settings saves as you go (DS4, R6), so removing a stored endpoint is kept
+   * at once, its address and token with it: even one nothing names asks
+   * first now (R5), where it used to wait for Settings' Save.
+   */
+  it('asks before removing a stored endpoint, even one nothing names', async () => {
     const { onRemove } = renderContainer({ sessionCounts: counted(0) })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove endpoint backpack-automations',
+      }),
+    )
+
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      'Its address and its saved token are deleted. No session runs on it.',
+    )
+    expect(onRemove).not.toHaveBeenCalled()
+    await answerConfirm('Remove endpoint')
+    expect(onRemove).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes a row that was only ever typed without ceremony', () => {
+    const { onRemove } = renderContainer({ saved: null })
 
     fireEvent.click(
       screen.getByRole('button', {

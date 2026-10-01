@@ -22,8 +22,27 @@ import {
 import { useAnalyticsStore, type AnalyticsOverview } from '@/entities/analytics'
 import { useDialogStore } from '@/entities/dialog'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { Button } from '@convergence/ui'
+import { Button, UiProvider } from '@convergence/ui'
+import { answerConfirm } from '@/shared/testing/confirm'
 import { AppSettingsDialogContainer } from './app-settings.container'
+
+/**
+ * Settings under the app's UiProvider, which hosts the confirmations a
+ * removal asks (R5). It saves as you go (DS4, R6): there is no Save to press.
+ */
+function renderSettings() {
+  return render(
+    <UiProvider>
+      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />
+    </UiProvider>,
+  )
+}
+
+/** The record the last save wrote. */
+function lastSaved() {
+  const calls = vi.mocked(window.electronAPI.appSettings.set).mock.calls
+  return calls[calls.length - 1]?.[0]
+}
 
 const TEST_ATTACHMENTS = {
   supportsImage: true,
@@ -382,23 +401,26 @@ describe('AppSettingsDialogContainer', () => {
     }
   })
 
-  it('opens, shows the stored selection, and saves it verbatim when Save is clicked', async () => {
+  it('opens on the stored selection and saves the whole record, verbatim, the moment a setting changes', async () => {
     primeStores({
       defaultProviderId: 'codex',
       defaultModelId: 'gpt-5.4',
       defaultEffortId: 'high',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
 
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     expect(screen.getAllByText('OpenAI').length).toBeGreaterThan(0)
+    // Saving as you go (R6): one Done, and nothing to Save.
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Describe work blocks' }),
+    )
 
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith({
@@ -414,10 +436,39 @@ describe('AppSettingsDialogContainer', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
-        describeWorkBlocks: false,
+        describeWorkBlocks: true,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
+    })
+  })
+
+  /**
+   * DLG-3: Done used to close through Cancel, so a change made on one tab
+   * was thrown away when Done was pressed on another. Each change is kept as
+   * it is made now, whichever tab Done is pressed on.
+   */
+  it('keeps a change made on one tab when Done is pressed on another', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+    document.documentElement.dataset.platform = 'darwin'
+
+    renderSettings()
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Notifications/ }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Sounds' }))
+    fireEvent.click(screen.getByRole('button', { name: /Shortcuts/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+
+    await waitFor(() => {
+      expect(lastSaved()?.notifications).toEqual(
+        expect.objectContaining({ sounds: false }),
+      )
     })
   })
 
@@ -427,9 +478,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultModelId: 'gpt-5.4',
       defaultEffortId: 'high',
     })
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     const toggle = await screen.findByRole('switch', {
       name: 'Describe work blocks',
@@ -439,7 +488,6 @@ describe('AppSettingsDialogContainer', () => {
       screen.getByText(/GPT-6 Luna on your default Codex account/),
     ).toBeInTheDocument()
     fireEvent.click(toggle)
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
         expect.objectContaining({ describeWorkBlocks: true }),
@@ -461,18 +509,15 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Pi models/ }))
-    fireEvent.click(screen.getByRole('checkbox', { name: /OpenAI GPT-5\.5/ }))
     const providerLoadsBeforeSave = vi.mocked(
       window.electronAPI.provider.getAll,
     ).mock.calls.length
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /OpenAI GPT-5\.5/ }))
 
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
@@ -488,24 +533,19 @@ describe('AppSettingsDialogContainer', () => {
     })
   })
 
-  it('Restore defaults resets draft to first provider/default model/default effort without saving', async () => {
+  it('Restore defaults goes back to the first provider, its default model and effort, and saves them', async () => {
     primeStores({
       defaultProviderId: 'codex',
       defaultModelId: 'gpt-5.4',
       defaultEffortId: 'high',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Restore defaults' }))
-    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith({
         defaultProviderId: 'claude-code',
@@ -527,7 +567,7 @@ describe('AppSettingsDialogContainer', () => {
     })
   })
 
-  it('toggling a notification channel persists the new prefs on save', async () => {
+  it('toggling a notification channel saves the new prefs at once', async () => {
     primeStores({
       defaultProviderId: 'claude-code',
       defaultModelId: 'sonnet',
@@ -535,16 +575,13 @@ describe('AppSettingsDialogContainer', () => {
     })
     document.documentElement.dataset.platform = 'darwin'
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Notifications/ }))
 
     fireEvent.click(screen.getByRole('switch', { name: 'Sounds' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
@@ -569,9 +606,7 @@ describe('AppSettingsDialogContainer', () => {
       testFire,
     }
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -589,9 +624,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -615,28 +648,21 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
+    // The widest dialog, at the tall height: one size whatever the section.
     const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveClass(
-      'h-[min(92vh,960px)]',
-      'w-[min(1280px,calc(100vw-2rem))]',
-      'max-h-[min(92vh,960px)]',
-    )
+    expect(dialog).toHaveAttribute('data-size', '2xl')
+    expect(dialog).toHaveAttribute('data-height', 'tall')
 
     fireEvent.click(screen.getByRole('button', { name: /Insights/ }))
 
     expect(await screen.findByRole('tab', { name: 'Your Usage' })).toBeVisible()
-    expect(dialog).toHaveClass(
-      'h-[min(92vh,960px)]',
-      'w-[min(1280px,calc(100vw-2rem))]',
-      'max-h-[min(92vh,960px)]',
-    )
+    expect(dialog).toHaveAttribute('data-size', '2xl')
+    expect(dialog).toHaveAttribute('data-height', 'tall')
   })
 
   it('opens the local Insights section from settings navigation', async () => {
@@ -646,9 +672,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -673,9 +697,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -723,9 +745,7 @@ describe('AppSettingsDialogContainer', () => {
       payload: { appSettingsSection: 'insights' },
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
 
     expect(
       await screen.findByRole('tab', { name: 'Your Usage' }),
@@ -741,9 +761,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -766,16 +784,14 @@ describe('AppSettingsDialogContainer', () => {
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
   })
 
-  it('toggling the auto-update switch persists the new updates prefs on save', async () => {
+  it('toggling the auto-update switch saves the new updates prefs at once', async () => {
     primeStores({
       defaultProviderId: 'claude-code',
       defaultModelId: 'sonnet',
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -785,7 +801,6 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(
       screen.getByRole('switch', { name: 'Check for updates automatically' }),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
@@ -810,9 +825,7 @@ describe('AppSettingsDialogContainer', () => {
       check: updatesCheck,
     }
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -830,9 +843,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -851,8 +862,6 @@ describe('AppSettingsDialogContainer', () => {
 
     expect(await screen.findByText('⌘P')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -869,9 +878,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -891,12 +898,12 @@ describe('AppSettingsDialogContainer', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Terminal new tab',
     )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    // Nothing to save: the conflicting shortcut never became the draft.
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
   })
 
-  it('refuses an invalid remote execution host URL: error renders and Save is disabled', async () => {
+  it('refuses an invalid remote execution host URL: the error shows, and the stored address stays', async () => {
     primeStores(
       {
         defaultProviderId: 'claude-code',
@@ -906,13 +913,9 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'kuba-vps', 'https://daemon.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
-
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
 
     fireEvent.change(screen.getByLabelText('Execution host URL'), {
       target: { value: 'ftp://x' },
@@ -923,7 +926,17 @@ describe('AppSettingsDialogContainer', () => {
         'Remote execution host base URL must be a valid HTTP(S) URL.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    // A half-typed address never replaces the working one.
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalled()
+    })
+    expect(lastSaved()?.executionHostEndpoints).toEqual([
+      {
+        id: 'default',
+        label: 'kuba-vps',
+        baseUrl: 'https://daemon.example.com',
+      },
+    ])
   })
 
   it('refuses to save a row with no address, and points at Remove', async () => {
@@ -936,9 +949,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -947,7 +958,8 @@ describe('AppSettingsDialogContainer', () => {
     expect(
       await screen.findByText(/Enter a base URL, or remove this endpoint/),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    // Nothing is kept of a row with no address.
+    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
   })
 
   /**
@@ -964,9 +976,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -977,13 +987,11 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.change(screen.getByLabelText('Execution host URL'), {
       target: { value: 'https://daemon.example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalled()
     })
-    const saved = vi.mocked(window.electronAPI.appSettings.set).mock.calls[0][0]
-      .executionHostEndpoints
+    const saved = lastSaved()?.executionHostEndpoints
     expect(saved).toEqual([
       {
         id: expect.any(String),
@@ -1008,9 +1016,7 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     // Wait for the count so the removal is not blocked on an unknown one.
@@ -1023,6 +1029,11 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove endpoint kuba-vps' }),
     )
+    // A stored endpoint's removal is kept at once, so it asks first (R5).
+    await answerConfirm('Remove endpoint')
+    await waitFor(() => {
+      expect(lastSaved()?.executionHostEndpoints).toEqual([])
+    })
     fireEvent.click(screen.getByRole('button', { name: /Add endpoint/ }))
     fireEvent.change(await screen.findByLabelText('Endpoint name'), {
       target: { value: 'backpack-automations' },
@@ -1030,14 +1041,11 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.change(screen.getByLabelText('Execution host URL'), {
       target: { value: 'https://backpack.example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(window.electronAPI.appSettings.set).toHaveBeenCalled()
+      expect(lastSaved()?.executionHostEndpoints).toHaveLength(1)
     })
-    const saved = vi.mocked(window.electronAPI.appSettings.set).mock.calls[0][0]
-      .executionHostEndpoints
-    expect(saved).toHaveLength(1)
+    const saved = lastSaved()?.executionHostEndpoints
     expect(saved?.[0].label).toBe('backpack-automations')
     expect(saved?.[0].id).not.toBe('default')
   })
@@ -1052,9 +1060,7 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -1066,13 +1072,11 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.change(screen.getAllByLabelText('Execution host URL')[1], {
       target: { value: 'https://backpack.example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(window.electronAPI.appSettings.set).toHaveBeenCalled()
+      expect(lastSaved()?.executionHostEndpoints).toHaveLength(2)
     })
-    const saved = vi.mocked(window.electronAPI.appSettings.set).mock.calls[0][0]
-      .executionHostEndpoints
+    const saved = lastSaved()?.executionHostEndpoints
     // The first row keeps the id sessions already point at; the second is a
     // machine of its own, never a second name for the first one's token.
     expect(saved).toEqual([
@@ -1102,16 +1106,13 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Execution host URL'), {
       target: { value: 'https://kuba-moved.example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
@@ -1144,25 +1145,19 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove endpoint kuba-vps' }),
     )
-    expect(
-      await screen.findByText(/2 sessions run on “kuba-vps”/),
-    ).toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Confirm removing endpoint kuba-vps',
-      }),
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      /2 sessions run on “kuba-vps”/,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
+
+    await answerConfirm('Remove endpoint')
 
     await waitFor(() => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
@@ -1191,21 +1186,19 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     await waitFor(() => expect(counts).toHaveBeenCalledTimes(1))
 
-    // A count that landed and said zero: this removal costs nothing and asks
-    // nothing.
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Remove endpoint kuba-vps' }),
+    // A count that landed and said zero: Remove is free to ask.
+    await waitFor(() =>
+      expect(
+        isUnavailable(
+          screen.getByRole('button', { name: 'Remove endpoint kuba-vps' }),
+        ),
+      ).toBe(false),
     )
-    expect(
-      screen.queryByRole('button', { name: 'Remove endpoint kuba-vps' }),
-    ).not.toBeInTheDocument()
 
     act(() => {
       useDialogStore.setState({ openDialog: null, payload: null })
@@ -1253,9 +1246,7 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
@@ -1283,9 +1274,7 @@ describe('AppSettingsDialogContainer', () => {
       [endpoint('default', 'Remote daemon', 'https://daemon.example.com')],
     )
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
     await waitFor(() =>
@@ -1316,9 +1305,7 @@ describe('AppSettingsDialogContainer', () => {
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
 
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
@@ -1328,7 +1315,7 @@ describe('AppSettingsDialogContainer', () => {
       ).toHaveBeenCalledTimes(1),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     // Settings are loaded by now, so nothing reloads them on the second open.
     // The sweep must not be riding on that load.
     fireEvent.click(screen.getByText('Open'))
@@ -1342,22 +1329,21 @@ describe('AppSettingsDialogContainer', () => {
     expect(window.electronAPI.appSettings.get).toHaveBeenCalledTimes(0)
   })
 
-  it('Cancel closes without dispatching save', async () => {
+  it('Done closes without saving when nothing changed', async () => {
     primeStores({
       defaultProviderId: 'claude-code',
       defaultModelId: 'sonnet',
       defaultEffortId: 'medium',
     })
 
-    render(
-      <AppSettingsDialogContainer trigger={<Button size="lg">Open</Button>} />,
-    )
+    renderSettings()
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
+    await waitFor(() => expect(useDialogStore.getState().openDialog).toBeNull())
     expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
   })
 })

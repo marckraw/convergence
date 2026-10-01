@@ -1,5 +1,5 @@
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import type {
   ProviderInfo,
   ReasoningEffort,
@@ -7,8 +7,15 @@ import type {
 } from '@/entities/session'
 import { getProviderLifecycleBadge } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
-import { SessionStartSelect } from '@/features/session-start'
-import { SettingsControlField } from './settings-control-field.presentational'
+import {
+  Badge,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SettingsSection,
+} from '@convergence/ui'
 import { ProviderSettingsMetadata } from './provider-settings-metadata.presentational'
 
 interface SessionDefaultsFieldsProps {
@@ -19,6 +26,26 @@ interface SessionDefaultsFieldsProps {
   onEffortChange: (id: ReasoningEffort | '') => void
 }
 
+/** A provider as its row reads: its mark, its vendor, and ALPHA where it is early. */
+function ProviderChoice({ provider }: { provider: ProviderInfo }) {
+  const badge = getProviderLifecycleBadge(provider)
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <ProviderIcon
+        providerId={provider.id}
+        vendorLabel={provider.vendorLabel}
+        name={provider.name}
+      />
+      <span className="truncate">{provider.vendorLabel || provider.name}</span>
+      {badge ? <Badge tone="warning">{badge.label}</Badge> : null}
+    </span>
+  )
+}
+
+/**
+ * The defaults a new session starts from (R9): the provider and the effort
+ * are a few fixed choices, so Selects; the model is the model picker.
+ */
 export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
   providers,
   selection,
@@ -26,44 +53,50 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
   onModelChange,
   onEffortChange,
 }) => {
-  const providerItems = providers.map((provider) => ({
-    id: provider.id,
-    icon: (
-      <ProviderIcon
-        providerId={provider.id}
-        vendorLabel={provider.vendorLabel}
-        name={provider.name}
-      />
-    ),
-    label: provider.vendorLabel || provider.name,
-    description:
-      provider.vendorLabel && provider.vendorLabel !== provider.name
-        ? provider.name
-        : undefined,
-    badge: getProviderLifecycleBadge(provider) ?? undefined,
+  const providerItems: Record<string, ReactNode> = Object.fromEntries(
+    providers.map((provider) => [
+      provider.id,
+      <ProviderChoice key={provider.id} provider={provider} />,
+    ]),
+  )
+  const efforts = selection.model?.effortOptions ?? []
+  const effortItems = efforts.map((effort) => ({
+    value: effort.id,
+    label: effort.label,
   }))
-  const effortItems =
-    selection.model?.effortOptions.map((effort) => ({
-      id: effort.id,
-      label: effort.label,
-      description: effort.description,
-    })) ?? []
 
   return (
     <div className="space-y-4">
-      <SettingsControlField
+      <SettingsSection
+        compact
         title="Default provider"
         description="Used as the provider for every new session unless you override it."
       >
-        <SessionStartSelect
-          selectedId={selection.providerId}
-          value={selection.providerLabel || 'Select provider'}
+        <Select
           items={providerItems}
-          onChange={onProviderChange}
-        />
-      </SettingsControlField>
+          value={selection.providerId || null}
+          onValueChange={(next: string) => onProviderChange(next)}
+          disabled={providers.length === 0}
+        >
+          <SelectTrigger
+            size="md"
+            aria-label="Default provider"
+            className="min-w-40 text-xs"
+          >
+            <SelectValue placeholder="Select provider" />
+          </SelectTrigger>
+          <SelectContent>
+            {providers.map((provider) => (
+              <SelectItem key={provider.id} value={provider.id}>
+                <ProviderChoice provider={provider} />
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsSection>
 
-      <SettingsControlField
+      <SettingsSection
+        compact
         title="Default model"
         description="Model that runs by default for the selected provider."
       >
@@ -75,20 +108,35 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
           onChange={(providerId, modelId) => onModelChange(modelId, providerId)}
           triggerClassName="px-2 text-xs"
         />
-      </SettingsControlField>
+      </SettingsSection>
 
       {effortItems.length > 0 && (
-        <SettingsControlField
+        <SettingsSection
+          compact
           title="Default reasoning effort"
           description="Reasoning effort the model uses by default."
         >
-          <SessionStartSelect
-            selectedId={selection.effortId}
-            value={selection.effort?.label ?? 'Select effort'}
+          <Select
             items={effortItems}
-            onChange={(id) => onEffortChange(id as ReasoningEffort)}
-          />
-        </SettingsControlField>
+            value={selection.effortId || null}
+            onValueChange={(next: ReasoningEffort) => onEffortChange(next)}
+          >
+            <SelectTrigger
+              size="md"
+              aria-label="Default reasoning effort"
+              className="min-w-32 text-xs"
+            >
+              <SelectValue placeholder="Select effort" />
+            </SelectTrigger>
+            <SelectContent>
+              {efforts.map((effort) => (
+                <SelectItem key={effort.id} value={effort.id}>
+                  {effort.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingsSection>
       )}
 
       <ProviderSettingsMetadata provider={selection.provider} />
