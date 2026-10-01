@@ -38,15 +38,12 @@ const SIZE_CLASS: Record<(typeof STEPS)[number][0], string> = {
 
 function TypeScale() {
   return (
-    <div className="grid w-[40rem] gap-8 bg-canvas p-6 text-ink">
+    <div className="grid w-160 gap-8 bg-canvas p-6 text-ink">
       <section aria-label="Sizes">
         <ul className="grid gap-3">
           {STEPS.map(([step, px, use]) => (
-            <li
-              key={step}
-              className="grid grid-cols-[10rem_1fr] items-baseline gap-4"
-            >
-              <span className="font-mono text-xs text-ink-muted">
+            <li key={step} className="flex items-baseline gap-4">
+              <span className="w-40 shrink-0 font-mono text-xs text-ink-muted">
                 text-{step} · {px} px
               </span>
               <span data-step={step} className={SIZE_CLASS[step]}>

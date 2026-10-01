@@ -21,6 +21,7 @@ import {
   comboboxItem,
   comboboxList,
   comboboxPopup,
+  comboboxPositioner,
   comboboxSearch,
 } from './combobox.styles'
 import { filterComboboxItems, groupComboboxItems } from './combobox.pure'
@@ -406,7 +407,7 @@ function Combobox(props: ComboboxProps) {
           align="start"
           sideOffset={4}
           collisionPadding={16}
-          className="z-50 outline-none app-no-drag"
+          className={comboboxPositioner}
         >
           <ComboboxPrimitive.Popup
             // The popup is a dialog to assistive tech; it takes its trigger's

@@ -14,7 +14,7 @@ describe('the focus rings', () => {
       'focusRingInset',
       focusRingInset,
       'focus-visible:',
-      'outline-offset-[calc(var(--focus-width,1px)*-1)]',
+      '-outline-offset-(--focus-width)',
     ],
     ['focusRingField', focusRingField, 'focus-visible:', '-outline-offset-1'],
     [
@@ -32,7 +32,7 @@ describe('the focus rings', () => {
       expect(classes).toEqual(
         expect.arrayContaining([
           `${when}outline-solid`,
-          `${when}outline-[length:var(--focus-width,1px)]`,
+          `${when}outline-(length:--focus-width)`,
           `${when}outline-ring`,
           `${when}${offset}`,
         ]),

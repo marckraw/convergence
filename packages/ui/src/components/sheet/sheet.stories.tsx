@@ -152,7 +152,7 @@ function SkillDetails() {
   return (
     <div
       ref={area}
-      className="relative h-96 w-[40rem] overflow-hidden rounded-xl border border-line"
+      className="relative h-96 w-160 overflow-hidden rounded-xl border border-line"
     >
       <div className="p-4">
         <Button variant="secondary" onClick={() => setOpen(true)}>

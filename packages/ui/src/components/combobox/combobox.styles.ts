@@ -5,13 +5,23 @@
  */
 
 /**
+ * Where the popup sits: a flex row that caps it at a picker's size (24 rem
+ * each way). The popup shrinks along the row to fit it and stretches across
+ * it to at most its height, so the popup takes the smaller of its own room
+ * and the picker's.
+ */
+export const comboboxPositioner =
+  'z-50 flex max-h-picker max-w-picker outline-none app-no-drag'
+
+/**
  * The popup: as wide as the trigger (at least 13 rem, at most 24 rem or the
- * window), as tall as the room below or above it allows, up to 24 rem.
+ * room the window leaves), as tall as the room below or above it allows, up
+ * to 24 rem.
  */
 export const comboboxPopup = [
   'flex min-h-0 flex-col overflow-hidden rounded-md border border-line bg-raised text-ink shadow-raised outline-none',
-  'w-(--anchor-width) min-w-52 max-w-[min(24rem,calc(100vw-2rem))]',
-  'max-h-[min(24rem,var(--available-height))]',
+  'w-(--anchor-width) min-w-52 max-w-(--available-width)',
+  'max-h-(--available-height)',
 ].join(' ')
 
 /** The search field's strip at the top. */

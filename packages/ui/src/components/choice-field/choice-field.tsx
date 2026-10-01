@@ -45,7 +45,7 @@ export function ChoiceField({
       {...props}
     >
       {/* At least the words' first line tall, so a small control sits on it. */}
-      <div className="flex min-h-[1lh] shrink-0 items-center text-sm leading-tight has-data-[slot=switch]:order-last">
+      <div className="flex min-h-lh shrink-0 items-center text-sm leading-tight has-data-[slot=switch]:order-last">
         {children}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">

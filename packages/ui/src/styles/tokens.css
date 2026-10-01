@@ -97,6 +97,11 @@
   --control-fill: light-dark(oklch(0.88 0 0), oklch(0.28 0.005 260));
   /* Focus rings; was --ring: 5.6 / 6.6 */
   --focus: light-dark(oklch(0.5 0 0), oklch(0.72 0 0));
+  /*
+   * The focus ring's width: the kit's ring-1 (R0). One value, so a redesign raises every ring at
+   * once (focus-ring.styles.ts: outline-(length:--focus-width))
+   */
+  --focus-width: 1px;
 
   /*
    * Overlays: the theme-safe replacements for the 131 border-white/ and bg-white/ classes that
@@ -588,6 +593,16 @@
   /* A dialog's default width and greatest height (w-[min(720px,…)], max-h-[min(80vh,720px)]) */
   --layout-dialog: 45rem;
   --layout-dialog-height: 45rem;
+  /*
+   * Dialog and Sheet's other widths (their size prop): 420, 560, 960 and 1280 px; lg is
+   * --layout-dialog. A sheet slides in at the first three, so the scale is one (R11)
+   */
+  --layout-dialog-sm: 26.25rem;
+  --layout-dialog-md: 35rem;
+  --layout-dialog-xl: 60rem;
+  --layout-dialog-2xl: 80rem;
+  /* A picker's popup at its widest and tallest: the Combobox, today's SearchableSelect (24 rem) */
+  --layout-picker: 24rem;
 
   /*
    * Motion -------------------------------------------------------------------------------------
