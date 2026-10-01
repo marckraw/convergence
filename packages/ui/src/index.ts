@@ -27,6 +27,14 @@ export {
   type CardProps,
   type CardSurface,
 } from './components/card/card'
+export { Chip, type ChipProps } from './components/chip/chip'
+export {
+  Code,
+  CodeBlock,
+  type CodeBlockHeight,
+  type CodeBlockProps,
+  type CodeProps,
+} from './components/code-block/code-block'
 export {
   CopyButton,
   type CopyButtonProps,
@@ -77,12 +85,28 @@ export {
   type ListRowProps,
 } from './components/list-row/list-row'
 export { MetaLine, type MetaLineProps } from './components/meta-line/meta-line'
+export {
+  Meter,
+  type MeterProps,
+  type MeterSize,
+  type MeterThresholds,
+} from './components/meter/meter'
 export { Notice, type NoticeProps } from './components/notice/notice'
 export {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from './components/popover/popover'
+export {
+  ResizeHandle,
+  type ResizeHandleProps,
+} from './components/resize-handle/resize-handle'
+export {
+  DragRegion,
+  type DragRegionProps,
+  ScreenHeader,
+  type ScreenHeaderProps,
+} from './components/screen-header/screen-header'
 export { SearchableSelect } from './components/searchable-select/searchable-select.container'
 export type {
   SearchableSelectAction,
@@ -110,6 +134,19 @@ export {
   SelectTrigger,
   SelectValue,
 } from './components/select/select'
+export {
+  SettingsSection,
+  type SettingsSectionProps,
+} from './components/settings-section/settings-section'
+export {
+  PanelHeader,
+  type PanelHeaderProps,
+  SidePanel,
+  SidePanelBody,
+  type SidePanelBodyProps,
+  type SidePanelProps,
+  type SidePanelWidth,
+} from './components/side-panel/side-panel'
 export {
   StatusDot,
   type StatusDotProps,
