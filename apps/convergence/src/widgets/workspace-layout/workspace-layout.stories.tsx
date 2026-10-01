@@ -19,7 +19,7 @@ const conversation = (
 const terminal = (
   <section
     aria-label="Terminal dock"
-    className="flex h-40 min-w-56 shrink-0 flex-col bg-[#0b0b0f] p-3 font-mono text-xs text-zinc-100"
+    className="flex h-40 min-w-56 shrink-0 flex-col bg-terminal-bg p-3 font-mono text-xs text-terminal-ink"
   >
     <span>~/Projects/Private/convergence $ npm run test:stories</span>
   </section>
@@ -37,7 +37,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="h-[30rem] border border-border">
+      <div className="h-120 border border-border">
         <Story />
       </div>
     ),
