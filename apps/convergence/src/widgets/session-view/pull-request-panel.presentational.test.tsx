@@ -14,6 +14,6 @@ it('says no branch recorded, including project-root sessions (mutation: workspac
     />,
   )
   expect(
-    screen.getByText('no branch recorded for this session'),
+    screen.getByText('No branch recorded for this session'),
   ).toBeInTheDocument()
 })

@@ -32,18 +32,22 @@ describe('parallelDockMode (MAR-3426 R1) — mutation ignore otherDockedWidths t
 })
 
 // The row pays for the PR and Space panels by this constant, so it must stay
-// the width they render at. A class change there without one here turns red.
+// the width they render at: SidePanel's default, w-side-panel. A panel that
+// stops being a SidePanel, or picks another width, turns this red.
 it.each([
   'pull-request-panel.presentational.tsx',
   'space-context-panel.presentational.tsx',
-])('SIDE_PANEL_WIDTH is the w-80 the %s aside renders at', (file) => {
-  const source = readFileSync(resolve(__dirname, file), 'utf8')
-  const aside = /<aside[\s\S]*?className="([^"]*)"/.exec(source)?.[1] ?? ''
-  expect({
-    w80: aside.split(/\s+/).includes('w-80'),
-    px: SIDE_PANEL_WIDTH,
-  }).toEqual({
-    w80: true,
-    px: 80 * 4,
-  })
-})
+])(
+  'SIDE_PANEL_WIDTH is the w-side-panel the %s SidePanel renders at',
+  (file) => {
+    const source = readFileSync(resolve(__dirname, file), 'utf8')
+    const panel = /<SidePanel\b([^>]*)>/.exec(source)?.[1]
+    expect({
+      sidePanel: panel !== undefined && !/\bwidth=/.test(panel),
+      px: SIDE_PANEL_WIDTH,
+    }).toEqual({
+      sidePanel: true,
+      px: 320,
+    })
+  },
+)

@@ -172,7 +172,7 @@ function renderComposerArea(
 ): ReactNode {
   if (composerDisabledReason) {
     return (
-      <div className="mx-auto w-full max-w-2xl rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+      <div className="mx-auto w-full max-w-conversation rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
         {composerDisabledReason}
       </div>
     )

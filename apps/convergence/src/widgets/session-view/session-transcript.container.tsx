@@ -751,7 +751,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       style={{ overflowAnchor: 'none' }}
       onScroll={updateBottomFollow}
     >
-      <div className="mx-auto max-w-2xl py-4">
+      <div className="mx-auto max-w-conversation py-4">
         <div
           className="relative w-full"
           style={{ height: rowVirtualizer.getTotalSize() }}

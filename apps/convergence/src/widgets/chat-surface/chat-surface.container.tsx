@@ -555,7 +555,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
               Open Space
             </Button>
           </div>
-          <div className="mb-3 w-full max-w-2xl rounded-lg border border-border/70 bg-card/30 px-3 py-3">
+          <div className="mb-3 w-full max-w-conversation rounded-lg border border-border/70 bg-card/30 px-3 py-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
               <CheckSquare className="h-3.5 w-3.5" />
               <span>Context for this chat</span>

@@ -76,7 +76,7 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
   renderExpanded,
 }) => (
   <div
-    className="mx-auto mb-2 flex w-full max-w-2xl items-center gap-2"
+    className="mx-auto mb-2 flex w-full max-w-conversation items-center gap-2"
     data-testid="annotation-tray"
   >
     <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">

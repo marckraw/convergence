@@ -1,7 +1,18 @@
-import type { FC, ReactNode } from 'react'
+import type { FC } from 'react'
 import { GitBranch, GitPullRequest, RefreshCw, X } from 'lucide-react'
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
-import { Button, cn, IconButton } from '@convergence/ui'
+import {
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  Notice,
+  PanelHeader,
+  SectionLabel,
+  SidePanel,
+  SidePanelBody,
+  Spinner,
+} from '@convergence/ui'
 
 interface PullRequestPanelProps {
   pullRequest: SessionPullRequest | null
@@ -21,76 +32,77 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
   onClose,
 }) => {
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-background">
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <GitPullRequest className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm font-medium">Pull request</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <IconButton
-            label="Refresh PR status"
-            type="button"
-            variant="ghost"
-            onClick={onRefresh}
-            disabled={loading}
-            size="sm"
-          >
-            <RefreshCw
-              className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
-            />
-          </IconButton>
-          <IconButton
-            label="Close pull request panel"
-            type="button"
-            variant="ghost"
-            onClick={onClose}
-            size="sm"
-          >
-            <X className="h-3.5 w-3.5" />
-          </IconButton>
-        </div>
-      </div>
+    <SidePanel>
+      <PanelHeader
+        title="Pull request"
+        icon={<GitPullRequest />}
+        actions={
+          <>
+            <IconButton
+              label="Refresh PR status"
+              variant="quiet"
+              onClick={onRefresh}
+              disabled={loading}
+              size="sm"
+            >
+              {loading ? (
+                <Spinner size="sm" />
+              ) : (
+                <RefreshCw aria-hidden className="size-3.5" />
+              )}
+            </IconButton>
+            <IconButton
+              label="Close pull request panel"
+              variant="quiet"
+              onClick={onClose}
+              size="sm"
+            >
+              <X aria-hidden className="size-3.5" />
+            </IconButton>
+          </>
+        }
+      />
 
-      <div className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        {!branchName && !error && !loading
-          ? renderEmptyState('no branch recorded for this session')
-          : null}
+      <SidePanelBody>
+        {!branchName && !error && !loading ? (
+          <EmptyState title="No branch recorded for this session" />
+        ) : null}
 
         {branchName ? (
-          <section className="rounded-lg border border-border/70 bg-card/30 p-3">
-            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+          <Card render={<section />}>
+            <SectionLabel as="h3" className="mb-2">
               Session branch
-            </div>
+            </SectionLabel>
             <div className="flex min-w-0 items-center gap-2 text-sm">
-              <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate">{branchName ?? 'Unknown branch'}</span>
+              <GitBranch
+                aria-hidden
+                className="size-4 shrink-0 text-ink-muted"
+              />
+              <span className="truncate">{branchName}</span>
             </div>
-          </section>
+          </Card>
         ) : null}
 
         {error ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <Notice tone="danger" title="Couldn't check the pull request">
             {error}
-          </div>
+          </Notice>
         ) : null}
 
-        {branchName && !pullRequest && !loading && !error
-          ? renderEmptyState(
-              'No PR status cached yet. Refresh to ask GitHub CLI for the current branch.',
-            )
-          : null}
+        {branchName && !pullRequest && !loading && !error ? (
+          <EmptyState
+            title="No PR status cached yet"
+            detail="Refresh to ask GitHub CLI for the current branch."
+          />
+        ) : null}
 
         {pullRequest ? (
-          <section className="rounded-lg border border-border p-3 text-sm">
+          <Card render={<section />} className="text-sm">
             <p className="font-medium">
               #{pullRequest.number} · {pullRequest.state}
             </p>
-            <p className="mt-2 break-all text-muted-foreground">
-              {pullRequest.url}
-            </p>
+            <p className="mt-2 break-all text-ink-muted">{pullRequest.url}</p>
             <Button
-              type="button"
               variant="secondary"
               onClick={() => {
                 if (/^https:\/\//.test(pullRequest.url))
@@ -101,17 +113,9 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
             >
               Open in browser
             </Button>
-          </section>
+          </Card>
         ) : null}
-      </div>
-    </aside>
-  )
-}
-
-function renderEmptyState(message: string): ReactNode {
-  return (
-    <div className="rounded-lg border border-dashed border-border/70 px-3 py-6 text-center text-sm text-muted-foreground">
-      {message}
-    </div>
+      </SidePanelBody>
+    </SidePanel>
   )
 }

@@ -663,7 +663,7 @@ export const Composer: FC<ComposerProps> = ({
   const visibleDeliveryModes = deliveryModes.filter((mode) => mode !== 'normal')
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-conversation">
       {/*
         The card and the strip are one drop target. Stacking them made the
         strip a sibling of the card rather than a child, and drag handlers left
