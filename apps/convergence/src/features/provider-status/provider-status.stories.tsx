@@ -255,9 +255,11 @@ export const Busy: Story = {
   args: { statuses: [], isLoading: true },
   play: async () => {
     const dialog = await openedDialog()
-    await expect(
-      within(dialog).getByText('Checking installed providers…'),
-    ).toBeVisible()
+    // The loading words wait 300 ms, so a quick check never flashes them.
+    const words = await within(dialog).findByText(
+      'Checking installed providers…',
+    )
+    await waitFor(() => expect(words).toBeVisible())
     await expect(
       within(dialog).getByRole('button', { name: 'Refresh' }),
     ).toBeDisabled()
@@ -267,20 +269,10 @@ export const Busy: Story = {
 /** Updating one CLI: every Update waits for it. */
 export const Updating: Story = {
   args: { updatingProviderId: 'claude-code' },
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: with every Update waiting, the dialog's scrolling body holds nothing focusable and is not focusable itself, so a keyboard cannot scroll it — fixed by the sweep (DS4)
-          { id: 'scrollable-region-focusable', enabled: false },
-        ],
-      },
-    },
-  },
   play: async () => {
     const dialog = await openedDialog()
     await expect(
-      within(dialog).getByRole('button', { name: 'Updating' }),
+      within(dialog).getByRole('button', { name: 'Updating…' }),
     ).toBeDisabled()
   },
 }

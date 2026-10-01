@@ -26,7 +26,7 @@ const meta = {
   // The picker floats above the composer's field, as it does in the app.
   decorators: [
     (Story) => (
-      <div className="relative mt-56 w-[36rem] max-w-full rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
+      <div className="relative mt-56 w-144 max-w-full rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
         <Story />
         ::
       </div>

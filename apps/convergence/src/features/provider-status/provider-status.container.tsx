@@ -140,7 +140,7 @@ export const ProviderStatusDialogContainer: FC<
               <Bot className="h-3.5 w-3.5" />
               Providers
             </span>
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-2xs text-ink-muted">
               {statuses.length > 0
                 ? `${availableCount}/${statuses.length}`
                 : 'View'}

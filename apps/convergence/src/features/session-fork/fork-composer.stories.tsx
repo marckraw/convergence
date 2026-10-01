@@ -115,7 +115,7 @@ const meta = {
     onEffortChange: fn(),
   },
   render: (args) => (
-    <div className="w-[36rem] max-w-full space-y-2">
+    <div className="w-144 max-w-full space-y-2">
       <label htmlFor="fork-instruction" className="text-sm font-medium">
         Additional instruction (optional)
       </label>

@@ -58,7 +58,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="h-[32rem] w-[48rem] max-w-full bg-background">
+      <div className="h-128 w-192 max-w-full bg-background">
         <Story />
       </div>
     ),
