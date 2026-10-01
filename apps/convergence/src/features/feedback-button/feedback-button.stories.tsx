@@ -25,7 +25,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="relative h-[36rem] bg-background">
+        <div className="relative h-144 bg-background">
           <Story />
         </div>
       </TooltipProvider>
@@ -53,22 +53,26 @@ export const Dark: Story = {
 }
 
 /**
- * The form, empty: Send waits for a title and a description; the priority
- * is three toggles, one of them on.
+ * The form, under the button's own name: Send waits for a title and a
+ * description, and says why; the priority is one choice of three, Medium on.
  */
 export const Open: Story = {
   args: { open: true },
   play: async ({ args, userEvent }) => {
     const dialog = await screen.findByRole('dialog', {
-      name: 'Request a feature',
+      name: 'Send feedback',
     })
     await waitFor(() => expect(dialog).toBeVisible())
     const form = within(dialog)
-    await expect(form.getByRole('button', { name: 'Send' })).toBeDisabled()
-    await expect(form.getByRole('button', { name: 'Medium' })).toHaveAttribute(
-      'aria-pressed',
+    // Unavailable with a reason (R2): focusable, and its tooltip says why.
+    await expect(form.getByRole('button', { name: 'Send' })).toHaveAttribute(
+      'aria-disabled',
       'true',
     )
+    await expect(
+      form.getByRole('radiogroup', { name: 'Priority' }),
+    ).toBeInTheDocument()
+    await expect(form.getByRole('radio', { name: 'Medium' })).toBeChecked()
 
     await userEvent.type(form.getByRole('textbox', { name: 'Title' }), 'E')
     await expect(args.onTitleChange).toHaveBeenCalledWith('E')
@@ -77,8 +81,11 @@ export const Open: Story = {
       'W',
     )
     await expect(args.onDescriptionChange).toHaveBeenCalledWith('W')
-    await userEvent.click(form.getByRole('button', { name: 'High' }))
+    await userEvent.click(form.getByRole('radio', { name: 'High' }))
     await expect(args.onPriorityChange).toHaveBeenCalledWith('high')
+    // The word Priority names the group; it is not a control of its own.
+    await userEvent.click(form.getByText('Priority'))
+    await expect(args.onPriorityChange).toHaveBeenCalledTimes(1)
 
     await userEvent.click(form.getByRole('button', { name: 'Cancel' }))
     await expect(args.onOpenChange).toHaveBeenCalledWith(false)
@@ -103,7 +110,7 @@ export const Filled: Story = {
   },
   play: async ({ args, userEvent }) => {
     const dialog = await screen.findByRole('dialog', {
-      name: 'Request a feature',
+      name: 'Send feedback',
     })
     const send = within(dialog).getByRole('button', { name: 'Send' })
     await expect(send).toBeEnabled()
@@ -115,23 +122,22 @@ export const Filled: Story = {
   },
 }
 
-/** Sending: nothing can be sent or cancelled twice. */
+/** Sending: Send says so, and a second press sends nothing more. */
 export const Busy: Story = {
   args: { ...Filled.args, submitting: true },
-  play: async () => {
+  play: async ({ args, userEvent }) => {
     const dialog = await screen.findByRole('dialog', {
-      name: 'Request a feature',
+      name: 'Send feedback',
     })
-    await expect(
-      within(dialog).getByRole('button', { name: 'Send' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Cancel' }),
-    ).toBeDisabled()
+    const send = within(dialog).getByRole('button', { name: /Send/ })
+    await waitFor(() => expect(send).toHaveAttribute('aria-busy', 'true'))
+    await expect(send).toHaveTextContent('Sending…')
+    await userEvent.click(send)
+    await expect(args.onSubmit).not.toHaveBeenCalled()
   },
 }
 
-/** A request that could not be sent says why, inside the form. */
+/** A request that could not be sent says why, over the buttons, and is announced. */
 export const Failed: Story = {
   args: {
     ...Filled.args,
@@ -139,14 +145,12 @@ export const Failed: Story = {
   },
   play: async () => {
     const dialog = await screen.findByRole('dialog', {
-      name: 'Request a feature',
+      name: 'Send feedback',
     })
     await waitFor(() =>
-      expect(
-        within(dialog).getByText(
-          'The feedback service did not answer. Try again in a minute.',
-        ),
-      ).toBeVisible(),
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        'The feedback service did not answer. Try again in a minute.',
+      ),
     )
   },
 }
