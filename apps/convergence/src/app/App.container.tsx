@@ -20,7 +20,7 @@ import {
 import { updatesApi, useUpdatesStore } from '@/entities/updates'
 import { useProviderUpdatesStore } from '@/entities/provider-updates'
 import { taskProgressApi, useTaskProgressStore } from '@/entities/task-progress'
-import { Toaster, toast } from 'sonner'
+import { toast } from 'sonner'
 import { TooltipProvider } from '@convergence/ui'
 import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
@@ -38,6 +38,7 @@ import { ContextDrillHostContainer } from '@/features/context-drill-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
+import { ThemedToasterContainer } from './themed-toaster.container'
 import { AppShell } from './App.layout'
 import {
   findRouteSession,
@@ -540,7 +541,7 @@ export function App({
       <UpdatesToastContainer />
       <ProviderUpdatesToastContainer />
       <FeedbackButtonContainer />
-      <Toaster position="bottom-right" />
+      <ThemedToasterContainer />
     </TooltipProvider>
   )
 }
