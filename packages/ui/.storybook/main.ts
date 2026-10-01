@@ -79,9 +79,11 @@ const config: StorybookConfig = {
         include: [
           '@base-ui/react/button',
           '@base-ui/react/checkbox',
+          '@base-ui/react/collapsible',
           '@base-ui/react/field',
           '@base-ui/react/fieldset',
           '@base-ui/react/input',
+          '@base-ui/react/meter',
           '@base-ui/react/radio',
           '@base-ui/react/radio-group',
           '@base-ui/react/switch',

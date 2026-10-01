@@ -7,6 +7,12 @@
  * list of what the package promises.
  */
 export {
+  Badge,
+  type BadgeHue,
+  type BadgeProps,
+  type BadgeShape,
+} from './components/badge/badge'
+export {
   Button,
   type ButtonProps,
   type ButtonSize,
@@ -23,9 +29,33 @@ export {
   type ChoiceFieldProps,
 } from './components/choice-field/choice-field'
 export {
+  Card,
+  CardAction,
+  type CardActionProps,
+  type CardPadding,
+  type CardProps,
+  type CardSurface,
+} from './components/card/card'
+export { Chip, type ChipProps } from './components/chip/chip'
+export {
+  Code,
+  CodeBlock,
+  type CodeBlockHeight,
+  type CodeBlockProps,
+  type CodeProps,
+} from './components/code-block/code-block'
+export {
   CopyButton,
   type CopyButtonProps,
 } from './components/copy-button/copy-button'
+export {
+  DescriptionItem,
+  type DescriptionItemProps,
+  DescriptionList,
+  type DescriptionListDensity,
+  type DescriptionListLayout,
+  type DescriptionListProps,
+} from './components/description-list/description-list'
 export {
   Dialog,
   DialogBody,
@@ -37,6 +67,7 @@ export {
   DialogTitle,
   DialogTrigger,
 } from './components/dialog/dialog'
+export { Divider, type DividerProps } from './components/divider/divider'
 export {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,6 +97,13 @@ export {
   type FormErrorProps,
 } from './components/form-error/form-error'
 export {
+  EmptyState,
+  type EmptyStateLayout,
+  type EmptyStateProps,
+  type EmptyStateSize,
+  type EmptyStateVariant,
+} from './components/empty-state/empty-state'
+export {
   IconButton,
   type IconButtonProps,
 } from './components/icon-button/icon-button'
@@ -82,6 +120,19 @@ export {
   type NavTabsProps,
 } from './components/nav-tabs/nav-tabs'
 export {
+  ListRow,
+  type ListRowDensity,
+  type ListRowProps,
+} from './components/list-row/list-row'
+export { MetaLine, type MetaLineProps } from './components/meta-line/meta-line'
+export {
+  Meter,
+  type MeterProps,
+  type MeterSize,
+  type MeterThresholds,
+} from './components/meter/meter'
+export { Notice, type NoticeProps } from './components/notice/notice'
+export {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -96,12 +147,31 @@ export {
   SearchField,
   type SearchFieldProps,
 } from './components/search-field/search-field'
+export {
+  ResizeHandle,
+  type ResizeHandleProps,
+} from './components/resize-handle/resize-handle'
+export {
+  DragRegion,
+  type DragRegionProps,
+  ScreenHeader,
+  type ScreenHeaderProps,
+} from './components/screen-header/screen-header'
 export { SearchableSelect } from './components/searchable-select/searchable-select.container'
 export type {
   SearchableSelectAction,
   SearchableSelectItem,
   SearchableSelectProps,
 } from './components/searchable-select/searchable-select.presentational'
+export {
+  SectionHeader,
+  type SectionHeaderProps,
+} from './components/section-header/section-header'
+export {
+  SectionLabel,
+  type SectionLabelProps,
+  sectionLabel,
+} from './components/section-label/section-label'
 export {
   Select,
   SelectContent,
@@ -144,6 +214,39 @@ export {
   type ToggleVariant,
 } from './components/toggle/toggle'
 export {
+  SettingsSection,
+  type SettingsSectionProps,
+} from './components/settings-section/settings-section'
+export {
+  PanelHeader,
+  type PanelHeaderProps,
+  SidePanel,
+  SidePanelBody,
+  type SidePanelBodyProps,
+  type SidePanelProps,
+  type SidePanelWidth,
+} from './components/side-panel/side-panel'
+export {
+  StatusDot,
+  type StatusDotProps,
+  type StatusDotSize,
+} from './components/status-dot/status-dot'
+export {
+  StatusPill,
+  type StatusPillProps,
+} from './components/status-pill/status-pill'
+export { TextLink, type TextLinkProps } from './components/text-link/text-link'
+export {
+  Timestamp,
+  type TimestampProps,
+} from './components/timestamp/timestamp'
+export {
+  formatTimestamp,
+  fullDateLabel,
+  type TimestampFormat,
+  type TimestampOptions,
+} from './components/timestamp/timestamp.pure'
+export {
   Tooltip,
   type TooltipOptions,
   type TooltipProps,
@@ -173,10 +276,19 @@ export {
   type AppliedTheme,
   type ThemeChoice,
 } from './lib/theme'
+export { TONES, type Tone } from './lib/tone.styles'
 export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'
 export { layoutPx } from './styles/layout.tokens'
 export { terminalTokens } from './styles/terminal.tokens'
+export {
+  Collapsible,
+  CollapsiblePanel,
+  type CollapsiblePanelProps,
+  type CollapsibleProps,
+  CollapsibleTrigger,
+  type CollapsibleTriggerProps,
+} from './motion/collapsible/collapsible'
 export {
   advanceDelayedLoading,
   type DelayedLoading,
