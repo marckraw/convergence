@@ -1,5 +1,5 @@
 // The composer's usage pill: the original the next file pastes.
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 export interface UsagePillProps {
   label: string

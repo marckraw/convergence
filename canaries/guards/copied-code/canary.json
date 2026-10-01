@@ -1,7 +1,8 @@
 {
-  "why": "A pill pasted from one composer part into the next and renamed, as the usage and context-window pills were (the baseline's codex-usage-pill and context-window-dot). Runs with the repo's own .jscpd.json, so it goes silent if minTokens is ever raised past a pasted pill.",
+  "why": "A pill pasted from one composer part into the next and renamed, as the usage and context-window pills were (the baseline's codex-usage-pill and context-window-dot). A design-system meter pasted into the app, so the copy goes unreported if .jscpd.json stops reading packages/ui/src (MAR-3610). Runs with the repo's own .jscpd.json, so it goes silent if minTokens is ever raised past a pasted pill.",
   "args": ["--root", ".", "--config", "../../../.jscpd.json"],
   "expect": [
+    "apps/convergence/src/features/composer/budget-meter.presentational.tsx:9-22 and packages/ui/src/components/meter/meter.tsx:10-23: 14 lines (134 tokens) copied",
     "apps/convergence/src/features/composer/context-pill.presentational.tsx:11-25 and apps/convergence/src/features/composer/usage-pill.presentational.tsx:11-25: 15 lines (113 tokens) copied"
   ]
 }

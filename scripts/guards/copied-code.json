@@ -1,3 +1,11 @@
 {
-  "allowlist": []
+  "allowlist": [
+    {
+      "files": [
+        "apps/convergence/src/test-setup.ts",
+        "packages/ui/src/test-setup.ts"
+      ],
+      "reason": "Each workspace's jsdom setup stands alone: the design system's tests may not import the app (MAR-3610), so the shims its primitives need (ResizeObserver, scrollIntoView, the Event constructors) are written out again there. Test support, not product code."
+    }
+  ]
 }

@@ -1,8 +1,9 @@
 {
-  "why": "A header bar pasted from one pane into the next, then a third time into a styles file with its classes reordered; its label's classes a third time inside cn() and through triggerClassName. The copy in a test must not count: each expected line names exactly three copies. Runs with the repo's own scripts/guards/repeated-classes.json.",
+  "why": "A header bar pasted from one pane into the next, then a third time into a styles file with its classes reordered; its label's classes a third time inside cn() and through triggerClassName. A design-system panel bar with two of its three copies in packages/ui/src, so the line goes missing if the guard stops reading the package (MAR-3610). The copies in a test and in a story must not count: each expected line names exactly three copies. Runs with the repo's own scripts/guards/repeated-classes.json.",
   "args": ["--root", "."],
   "expect": [
     "\"border-b border-border px-3 flex min-w-0 items-center gap-2\": 3 copies, at most 2: apps/convergence/src/features/composer/composer.styles.ts:4, apps/convergence/src/widgets/mission-control/board-header.presentational.tsx:7, apps/convergence/src/widgets/session-view/session-header.presentational.tsx:4",
+    "\"flex items-center justify-between gap-3 px-4 py-2\": 3 copies, at most 2: apps/convergence/src/features/composer/composer-footer.presentational.tsx:3, packages/ui/src/components/panel/panel.tsx:7, packages/ui/src/components/panel/panel.tsx:11",
     "\"text-[11px] uppercase tracking-wide text-muted-foreground\": 3 copies, at most 2: apps/convergence/src/features/composer/model-select.presentational.tsx:7, apps/convergence/src/widgets/mission-control/board-header.presentational.tsx:10, apps/convergence/src/widgets/session-view/session-header.presentational.tsx:5"
   ]
 }

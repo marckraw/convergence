@@ -1,6 +1,6 @@
 // The label's classes a third time, handed to a Select through triggerClassName: a class
 // attribute too.
-import { Select } from '@/shared/ui/select'
+import { Select } from '@convergence/ui'
 
 export function ModelSelect() {
   return (

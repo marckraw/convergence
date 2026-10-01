@@ -1,5 +1,5 @@
 // The context-window pill, pasted from the usage pill and renamed: a pasted component.
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 export interface ContextPillProps {
   label: string
