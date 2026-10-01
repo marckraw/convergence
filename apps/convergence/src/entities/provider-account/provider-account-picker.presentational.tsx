@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { KeyRound } from 'lucide-react'
-import { SearchableSelect } from '@convergence/ui'
+import { Combobox } from '@convergence/ui'
 import {
   AMBIENT_DEFAULT_ACCOUNT_ID,
   buildProviderAccountPickerItems,
@@ -60,7 +60,7 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
 
   return (
     <span title={help}>
-      <SearchableSelect
+      <Combobox
         selectedId={selectedAccountId ?? AMBIENT_DEFAULT_ACCOUNT_ID}
         value={
           ambientIsCurrent && selectedAccountId === null
@@ -82,9 +82,8 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
         icon={<KeyRound className="h-3.5 w-3.5" />}
         searchPlaceholder="Search accounts..."
         emptyMessage="No matching accounts."
-        triggerVariant="ghost"
-        triggerSize="md"
-        triggerClassName="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+        variant="ghost"
+        className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
         open={open}
         onOpenChange={onOpenChange}
       />

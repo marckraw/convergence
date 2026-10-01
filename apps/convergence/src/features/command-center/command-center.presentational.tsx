@@ -1,17 +1,16 @@
-import type { FC } from 'react'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from 'cmdk'
+import { useId, type FC } from 'react'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
+  EmptyState,
+  Listbox,
+  ListboxGroup,
+  ListboxOption,
+  listboxOptionId,
+  listboxStep,
+  SearchField,
 } from '@convergence/ui'
 import type {
   CuratedSection,
@@ -34,6 +33,20 @@ interface CommandCenterPaletteProps {
   onSelect: (item: PaletteItem) => void
 }
 
+/** The rows in the order they are shown: the ranked list, or every section's in turn. */
+function visibleRows(view: CommandCenterView): PaletteItem[] {
+  if (view.mode === 'ranked') return view.items.map(({ item }) => item)
+  return view.sections.flatMap((section) => section.items)
+}
+
+/**
+ * ⌘K (MAR-3616 DS3e): a Dialog holding a SearchField and the Listbox it
+ * drives. The field keeps the focus; the arrows (and Home, End, Control-N
+ * and -P) move the active row, which the container keeps (`selectedValue`),
+ * Enter picks it, and Escape closes the palette. With nothing typed the rows
+ * sit under their sections' headings (ListboxGroup); with a query, one
+ * ranked list. With nothing to show, an EmptyState says what to try.
+ */
 export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
   open,
   query,
@@ -44,19 +57,26 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
   onSelectedValueChange,
   onSelect,
 }) => {
-  const renderRow = (item: PaletteItem) => {
+  const listId = useId()
+  const rows = visibleRows(view)
+  const selectedIndex = rows.findIndex((item) => item.id === selectedValue)
+  const active = rows.length === 0 ? null : Math.max(selectedIndex, 0)
+  const hasRows = rows.length > 0
+
+  const renderRow = (item: PaletteItem, index: number) => {
     const { primary, secondary } = describeItem(item)
     const kindLabel = describeKind(item.kind)
     const accessibleLabel = secondary
       ? `${kindLabel}: ${primary} — ${secondary}`
       : `${kindLabel}: ${primary}`
     return (
-      <CommandItem
+      <ListboxOption
         key={item.id}
-        value={item.id}
+        index={index}
         aria-label={accessibleLabel}
-        onSelect={() => onSelect(item)}
-        className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
+        onPick={() => onSelect(item)}
+        onHover={() => onSelectedValueChange?.(item.id)}
+        className="justify-between gap-3 px-3 py-2"
       >
         <span className="truncate">{primary}</span>
         {secondary ? (
@@ -64,43 +84,20 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
             {secondary}
           </span>
         ) : null}
-      </CommandItem>
+      </ListboxOption>
     )
   }
 
-  const renderBody = () => {
-    if (view.mode === 'ranked') {
-      if (view.items.length === 0) {
-        return (
-          <CommandEmpty>
-            No results. Try a session name, branch, or project.
-          </CommandEmpty>
-        )
-      }
-      return <>{view.items.map(({ item }) => renderRow(item))}</>
-    }
-
-    const nonEmpty = view.sections.filter((section) => section.items.length > 0)
-    if (nonEmpty.length === 0) {
-      return (
-        <CommandEmpty>
-          No recents yet. Start a session to see it here.
-        </CommandEmpty>
-      )
-    }
-    return (
-      <>
-        {nonEmpty.map((section) => (
-          <CommandGroup
-            key={section.id}
-            heading={section.title}
-            className="mb-1"
-          >
-            {section.items.map(renderRow)}
-          </CommandGroup>
-        ))}
-      </>
-    )
+  const renderRows = () => {
+    if (view.mode === 'ranked') return rows.map(renderRow)
+    let index = 0
+    return view.sections
+      .filter((section) => section.items.length > 0)
+      .map((section) => (
+        <ListboxGroup key={section.id} label={section.title} className="mb-1">
+          {section.items.map((item) => renderRow(item, index++))}
+        </ListboxGroup>
+      ))
   }
 
   return (
@@ -110,28 +107,56 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
         <DialogDescription className="sr-only">
           Jump to projects, workspaces, sessions, or dialogs.
         </DialogDescription>
-        <Command
-          shouldFilter={false}
-          label="Command palette"
-          value={selectedValue}
-          onValueChange={onSelectedValueChange}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <div className="border-b border-white/10 px-4 py-3">
-            <CommandInput
-              value={query}
-              onValueChange={onQueryChange}
-              placeholder="Search projects, workspaces, sessions, dialogs…"
-              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-          <CommandList
+        <div className="border-b border-white/10 px-4 py-3">
+          <SearchField
+            role="combobox"
+            aria-label="Command palette"
+            aria-autocomplete="list"
+            aria-expanded={hasRows}
+            aria-controls={hasRows ? listId : undefined}
+            aria-activedescendant={
+              active === null ? undefined : listboxOptionId(listId, active)
+            }
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              // cmdk's steps: they stop at the ends rather than wrapping.
+              const next = listboxStep(active, rows.length, event, {
+                loop: false,
+              })
+              if (next !== undefined) {
+                onSelectedValueChange?.(rows[next].id)
+              } else if (event.key === 'Enter' && active !== null) {
+                onSelect(rows[active])
+              } else {
+                return
+              }
+              event.preventDefault()
+            }}
+            placeholder="Search projects, workspaces, sessions, dialogs…"
+          />
+        </div>
+        {hasRows ? (
+          <Listbox
+            // A new query starts the list from its top.
             key={`${view.mode}:${query}`}
+            id={listId}
+            aria-label="Results"
+            active={active}
             className="max-h-[60vh] overflow-y-auto px-2 py-2"
           >
-            {renderBody()}
-          </CommandList>
-        </Command>
+            {renderRows()}
+          </Listbox>
+        ) : (
+          <EmptyState
+            variant="plain"
+            detail={
+              view.mode === 'ranked'
+                ? 'No results. Try a session name, branch, or project.'
+                : 'No recents yet. Start a session to see it here.'
+            }
+          />
+        )}
       </DialogContent>
     </Dialog>
   )

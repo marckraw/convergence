@@ -1,0 +1,39 @@
+/*
+ * The Combobox's look (MAR-3616 DS3e), today's SearchableSelect in DS2's
+ * tokens (R0): the raised popup surface (R8), rows that take the highlight
+ * fill, and hairlines between the search, the list and the footer.
+ */
+
+/**
+ * The popup: as wide as the trigger (at least 13 rem, at most 24 rem or the
+ * window), as tall as the room below or above it allows, up to 24 rem.
+ */
+export const comboboxPopup = [
+  'flex min-h-0 flex-col overflow-hidden rounded-md border border-line bg-raised text-ink shadow-raised outline-none',
+  'w-(--anchor-width) min-w-52 max-w-[min(24rem,calc(100vw-2rem))]',
+  'max-h-[min(24rem,var(--available-height))]',
+].join(' ')
+
+/** The search field's strip at the top. */
+export const comboboxSearch = 'shrink-0 border-b border-line p-1.5'
+
+/** The list: it scrolls inside the popup, under the search. */
+export const comboboxList =
+  'app-scrollbar min-h-0 flex-1 overflow-y-auto p-1 outline-none'
+
+/**
+ * A row: the highlight (keyboard or pointer) takes today's hover fill. A
+ * disabled row is dimmed and starts at the top, as its reason may wrap.
+ */
+export const comboboxItem = [
+  'group flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-sm outline-none select-none',
+  'data-highlighted:bg-highlight data-highlighted:text-on-highlight',
+  'data-disabled:items-start data-disabled:opacity-50',
+].join(' ')
+
+/** A group's heading: a small muted label above its rows. */
+export const comboboxGroupLabel =
+  'px-2 pt-2 pb-1 text-2xs font-medium text-ink-muted'
+
+/** The strip under the list: the action, or the caller's footer. */
+export const comboboxFooter = 'shrink-0 border-t border-line p-1'

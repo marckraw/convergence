@@ -24,6 +24,8 @@ export interface ConversationActionsViewProps {
     notice: string | null
     query: string
   }
+  /** The Skills row the search's Up and Down have reached, or null with none listed. */
+  activeSkill: number | null
   routines: {
     loaded: boolean
     error: string | null
@@ -44,6 +46,8 @@ export interface ConversationActionsViewProps {
   onMenuKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
   onQueryChange: (query: string) => void
   onSkill: (id: string) => void
+  /** A moving pointer reached a Skills row: it becomes the active one. */
+  onSkillHover: (index: number) => void
   onRoutine: (id: RoutineRowView['id']) => void
   onCancelDrill: () => void
   onProject: (id: string) => void

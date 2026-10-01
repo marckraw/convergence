@@ -1,10 +1,12 @@
 import type { FC } from 'react'
-import { BookOpenText, Loader2 } from 'lucide-react'
+import { BookOpenText } from 'lucide-react'
 import type { PromptLibraryEntry } from '@/entities/prompt-library'
-import { Button, cn } from '@convergence/ui'
+import { Button, Listbox, ListboxOption, Spinner } from '@convergence/ui'
 
 interface ComposerPromptInjectionPickerProps {
   open: boolean
+  /** The list's id: the message field names it (aria-controls) and its active row. */
+  listId: string
   items: PromptLibraryEntry[]
   highlightedIndex: number
   isLoading: boolean
@@ -14,10 +16,17 @@ interface ComposerPromptInjectionPickerProps {
   onDismiss: () => void
 }
 
+/**
+ * The prompt library under `::prompt::`: a Listbox the message field drives
+ * (MAR-3616 DS3e). The field keeps the focus; its arrows move the active row
+ * and Enter picks it. The heading, the loading, failed and empty lines and
+ * the hidden Close sit beside the list, never in it.
+ */
 export const ComposerPromptInjectionPicker: FC<
   ComposerPromptInjectionPickerProps
 > = ({
   open,
+  listId,
   items,
   highlightedIndex,
   isLoading,
@@ -32,7 +41,6 @@ export const ComposerPromptInjectionPicker: FC<
     <div
       className="absolute right-0 bottom-full left-0 z-50 mb-2 max-h-72 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
       data-testid="composer-prompt-injection-picker"
-      role="listbox"
     >
       <div className="border-b border-border/70 px-2 py-1.5">
         <div className="flex items-center gap-1.5 text-xs font-medium">
@@ -44,10 +52,15 @@ export const ComposerPromptInjectionPicker: FC<
         </div>
       </div>
       {error ? (
-        <div className="px-3 py-2 text-xs text-destructive">{error}</div>
+        <div role="alert" className="px-3 py-2 text-xs text-destructive">
+          {error}
+        </div>
       ) : isLoading ? (
-        <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <div
+          role="status"
+          className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <Spinner size="sm" />
           Loading prompts...
         </div>
       ) : items.length === 0 ? (
@@ -58,23 +71,20 @@ export const ComposerPromptInjectionPicker: FC<
           No matching prompts.
         </div>
       ) : (
-        items.map((prompt, index) => {
-          const isActive = index === highlightedIndex
-          return (
-            <Button
+        <Listbox
+          id={listId}
+          aria-label="Prompts"
+          active={highlightedIndex}
+          multiline
+        >
+          {items.map((prompt, index) => (
+            <ListboxOption
               key={prompt.id}
-              type="button"
-              variant="ghost"
-              role="option"
-              aria-selected={isActive}
-              onMouseEnter={() => onHover(index)}
-              onClick={() => onSelect(prompt)}
+              index={index}
+              onHover={() => onHover(index)}
+              onPick={() => onSelect(prompt)}
               data-testid={`composer-prompt-injection-item-${prompt.id}`}
-              size="lg"
-              className={cn(
-                'flex h-auto w-full flex-col items-start gap-0.5 rounded px-2 py-1.5 text-left text-xs',
-                isActive && 'bg-accent text-accent-foreground',
-              )}
+              className="items-start rounded px-2 py-1.5 text-xs"
             >
               <span className="flex w-full min-w-0 items-center gap-1.5">
                 <span className="truncate font-medium">{prompt.title}</span>
@@ -99,9 +109,9 @@ export const ComposerPromptInjectionPicker: FC<
                   ))}
                 </span>
               ) : null}
-            </Button>
-          )
-        })
+            </ListboxOption>
+          ))}
+        </Listbox>
       )}
       <Button
         type="button"

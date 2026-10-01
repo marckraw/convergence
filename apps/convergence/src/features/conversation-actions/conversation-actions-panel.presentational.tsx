@@ -21,15 +21,20 @@ const GROUP_TITLE: Record<ActionsMenuGroup, string> = {
 /**
  * One group's compact list (frames 03, 04, 06–09), placed by the container:
  * 286 wide, growing upward from the button, inside the surface.
+ *
+ * Routines and Project are menus. Skills is a search and the list it drives
+ * (MAR-3616 DS3e), which a menu cannot hold, so its panel is a dialog named
+ * "Skills" and its back control a plain button.
  */
 export const ConversationActionsPanel: FC<
   ConversationActionsViewProps & { group: ActionsMenuGroup }
 > = (props) => {
   const { group, placement, menuRef, onMenuKeyDown, onBack } = props
+  const isMenu = group !== 'skills'
   return (
     <div
       ref={menuRef}
-      role="menu"
+      role={isMenu ? 'menu' : 'dialog'}
       aria-label={GROUP_TITLE[group]}
       data-testid={`conversation-actions-${group}`}
       tabIndex={-1}
@@ -55,7 +60,7 @@ export const ConversationActionsPanel: FC<
           size="lg"
           type="button"
           variant="ghost"
-          role="menuitem"
+          role={isMenu ? 'menuitem' : undefined}
           data-actions-item=""
           aria-label={`Back from ${GROUP_TITLE[group]}`}
           className={styles.back}

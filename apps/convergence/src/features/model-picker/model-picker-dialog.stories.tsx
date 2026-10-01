@@ -234,22 +234,46 @@ export const Open: Story = {
   },
 }
 
-/** Nothing matches the search. */
+/** Nothing matches the search: the words stand in for the list, which isn't drawn empty. */
 export const Empty: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: with no match, cmdk's listbox holds only the "No models found." message, a listbox without options — fixed by the sweep (DS4)
-          { id: 'aria-required-children', enabled: false },
-        ],
-      },
-    },
-  },
   args: { open: true, query: 'llama', models: [] },
   play: async () => {
     const dialog = await openedDialog()
     await expect(within(dialog).getByText('No models found.')).toBeVisible()
+    await expect(within(dialog).queryByRole('listbox')).toBeNull()
+    await expect(
+      within(dialog).getByRole('combobox', { name: 'Search models' }),
+    ).toHaveAttribute('aria-expanded', 'false')
+  },
+}
+
+/**
+ * The keyboard: the search keeps the focus, the arrows move the active row
+ * (the field names it), and Enter picks it.
+ */
+export const Keyboard: Story = {
+  parameters: knownNestedFavorite,
+  args: { open: true },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openedDialog()
+    const search = within(dialog).getByRole('combobox', {
+      name: 'Search models',
+    })
+    await waitFor(() => expect(search).toHaveFocus())
+    await expect(within(dialog).getByRole('listbox')).toHaveAccessibleName(
+      'Models',
+    )
+    const options = within(dialog).getAllByRole('option')
+    await expect(search).toHaveAttribute('aria-activedescendant', options[0].id)
+    await expect(options[0]).toHaveAttribute('aria-selected', 'true')
+    await userEvent.keyboard('{ArrowDown}')
+    await expect(args.onSelectedValueChange).toHaveBeenLastCalledWith(
+      'claude-code:sonnet',
+    )
+    await expect(search).toHaveAttribute('aria-activedescendant', options[1].id)
+    await userEvent.keyboard('{Enter}')
+    await expect(args.onSelect).toHaveBeenCalledWith(models[1])
+    await expect(search).toHaveFocus()
   },
 }
 

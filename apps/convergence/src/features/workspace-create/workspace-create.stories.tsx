@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
-import type { SearchableSelectItem } from '@convergence/ui'
+import type { ComboboxItem } from '@convergence/ui'
 import {
   PROJECT_DEFAULT_ID,
   WorkspaceCreateDialog,
 } from './workspace-create.presentational'
 
-const baseBranchItems: SearchableSelectItem[] = [
+const baseBranchItems: ComboboxItem[] = [
   {
     id: PROJECT_DEFAULT_ID,
     label: 'Use project default',

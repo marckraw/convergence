@@ -1,10 +1,10 @@
 import type { FC } from 'react'
-import { SearchableSelect, type SearchableSelectItem } from '@convergence/ui'
+import { Combobox, type ComboboxItem } from '@convergence/ui'
 
 interface SessionStartSelectProps {
   selectedId: string
   value: string
-  items: SearchableSelectItem[]
+  items: ComboboxItem[]
   onChange: (id: string) => void
 }
 
@@ -14,15 +14,14 @@ export const SessionStartSelect: FC<SessionStartSelectProps> = ({
   items,
   onChange,
 }) => (
-  <SearchableSelect
+  <Combobox
     selectedId={selectedId}
     value={value}
     items={items}
     onChange={onChange}
     searchPlaceholder="Search options..."
     emptyMessage="No matching options."
-    triggerVariant="secondary"
-    triggerSize="md"
-    triggerClassName="px-2 text-xs"
+    variant="secondary"
+    className="px-2 text-xs"
   />
 )

@@ -30,6 +30,7 @@ function renderPicker(
   render(
     <ComposerSkillInjectionPicker
       open
+      listId="skills"
       items={[skill]}
       selectedSkills={[]}
       highlightedIndex={0}

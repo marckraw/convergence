@@ -1,6 +1,11 @@
-import type { FC } from 'react'
-import { Button, Input } from '@convergence/ui'
-import { ConversationActionItem } from './conversation-action-item.presentational'
+import { useId, type FC } from 'react'
+import {
+  Button,
+  Input,
+  Listbox,
+  ListboxOption,
+  listboxOptionId,
+} from '@convergence/ui'
 import {
   SKILLS_EMPTY_LABEL,
   SKILLS_LOADING_LABEL,
@@ -9,15 +14,26 @@ import {
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
 
-/** The Skills list (frames 03 and 08), with loading and failure told apart. */
+/**
+ * The Skills list (frames 03 and 08), with loading and failure told apart.
+ *
+ * The search drives the list (MAR-3616 DS3e): it keeps the focus, Up and
+ * Down move the active row (aria-activedescendant) and Enter adds it; a click
+ * adds a row too. A skill that is not offered is listed with its reason,
+ * announced as unavailable, and adds nothing.
+ */
 export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
   skills,
+  activeSkill,
   searchRef,
   onQueryChange,
   onSkill,
+  onSkillHover,
   onOpenGroup,
 }) => {
+  const listId = useId()
   const { state } = skills
+  const hasRows = skills.rows.length > 0
   return (
     <>
       {skills.notice ? (
@@ -31,6 +47,15 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
             size="md"
             ref={searchRef}
             type="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={hasRows}
+            aria-controls={hasRows ? listId : undefined}
+            aria-activedescendant={
+              hasRows && activeSkill !== null
+                ? listboxOptionId(listId, activeSkill)
+                : undefined
+            }
             data-actions-item=""
             aria-label="Find a skill"
             placeholder="Find a skill…"
@@ -38,15 +63,32 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
             value={skills.query}
             onChange={(event) => onQueryChange(event.target.value)}
           />
-          <div className={styles.list}>
-            {skills.rows.map((row) => (
-              <ConversationActionItem
-                key={row.id}
-                row={row}
-                onActivate={onSkill}
-              />
-            ))}
-          </div>
+          {hasRows ? (
+            <Listbox
+              id={listId}
+              aria-label="Skills"
+              active={activeSkill}
+              multiline
+              className={styles.list}
+            >
+              {skills.rows.map((row, index) => (
+                <ListboxOption
+                  key={row.id}
+                  index={index}
+                  aria-label={row.label}
+                  disabled={!row.offered}
+                  onPick={() => onSkill(row.id)}
+                  onHover={() => onSkillHover(index)}
+                  className={styles.option}
+                >
+                  <span>{row.label}</span>
+                  {row.reason ? (
+                    <span className={styles.optionReason}>{row.reason}</span>
+                  ) : null}
+                </ListboxOption>
+              ))}
+            </Listbox>
+          ) : null}
           <p className={styles.hint}>Add a skill chip · nothing sends yet</p>
         </>
       ) : null}
@@ -68,7 +110,6 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
             size="lg"
             type="button"
             variant="ghost"
-            role="menuitem"
             data-actions-item=""
             className={styles.item}
             onClick={() => onOpenGroup('routines')}
