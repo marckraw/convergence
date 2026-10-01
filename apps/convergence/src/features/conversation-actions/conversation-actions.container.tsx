@@ -31,6 +31,7 @@ import {
 } from '@/entities/session'
 import { remoteSkillsNotice, useSkillStore } from '@/entities/skill'
 import { detectShortcutPlatform } from '@/shared/lib/keyboard-shortcut.pure'
+import { listboxStep } from '@convergence/ui'
 import {
   isSearchCaretKey,
   levelAfterEscape,
@@ -126,6 +127,8 @@ function ConversationActionsContainerView({
 }: ConversationActionsContainerProps) {
   const [level, setLevel] = useState<ActionsMenuLevel>('closed')
   const [query, setQuery] = useState('')
+  /** The Skills row the search's Up and Down have reached (MAR-3616 DS3e). */
+  const [activeSkill, setActiveSkill] = useState(0)
   const [cancelRefusal, setCancelRefusal] = useState<string | null>(null)
   const [compactError, setCompactError] = useState<string | null>(null)
   const [placement, setPlacement] = useState<ActionsPanelPlacement | null>(null)
@@ -251,6 +254,10 @@ function ConversationActionsContainerView({
     skillActions,
     skillsOpen,
   ])
+  const skillActive =
+    skills.rows.length === 0
+      ? null
+      : Math.min(activeSkill, skills.rows.length - 1)
   const routineRows = resolveRoutineRows({
     routines: routines.routines,
     drillBeat,
@@ -283,6 +290,7 @@ function ConversationActionsContainerView({
   const openGroup = useCallback(
     (group: ActionsMenuGroup) => {
       setLevel(group)
+      setActiveSkill(0)
       if (group !== 'skills') return
       const store = useSkillStore.getState()
       if (catalogProjectId === null) {
@@ -401,6 +409,23 @@ function ConversationActionsContainerView({
     }
   }, [boundaryRef, isGroup])
 
+  const onSkill = useCallback(
+    (id: string) => {
+      const action = skillActions.find(
+        (row): row is Extract<typeof row, { kind: 'skill' }> =>
+          row.kind === 'skill' && row.id === id,
+      )
+      if (!action?.offered) return
+      postComposerIntent(sessionId, {
+        kind: 'add-skill',
+        skill: action.skill,
+      })
+      // Focus goes to the composer, which moves it itself.
+      close(false)
+    },
+    [close, sessionId, skillActions],
+  )
+
   const onMenuKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Escape') {
@@ -427,13 +452,29 @@ function ConversationActionsContainerView({
       const inSearch = target === searchRef.current
       // The caret keys belong to the search text while typing in it (R11).
       if (inSearch && isSearchCaretKey(event.key)) return
+      // In Skills the search drives the list (MAR-3616 DS3e): Up and Down
+      // move the active row and Enter adds it, while the focus stays in the
+      // search, which names the row (aria-activedescendant).
+      if (inSearch && level === 'skills' && skillActive !== null) {
+        const step = listboxStep(skillActive, skills.rows.length, event)
+        if (step !== undefined) {
+          event.preventDefault()
+          setActiveSkill(step)
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onSkill(skills.rows[skillActive].id)
+          return
+        }
+      }
       const next = nextFocusIndex(event.key, index, items.length)
       if (next !== null) {
         event.preventDefault()
         items[next]?.focus()
         return
       }
-      // Typing on a skill row goes to the search.
+      // Typing anywhere else in Skills (its back control) goes to the search.
       if (
         level === 'skills' &&
         !inSearch &&
@@ -446,24 +487,7 @@ function ConversationActionsContainerView({
         searchRef.current?.focus()
       }
     },
-    [close, level],
-  )
-
-  const onSkill = useCallback(
-    (id: string) => {
-      const action = skillActions.find(
-        (row): row is Extract<typeof row, { kind: 'skill' }> =>
-          row.kind === 'skill' && row.id === id,
-      )
-      if (!action?.offered) return
-      postComposerIntent(sessionId, {
-        kind: 'add-skill',
-        skill: action.skill,
-      })
-      // Focus goes to the composer, which moves it itself.
-      close(false)
-    },
-    [close, sessionId, skillActions],
+    [close, level, onSkill, skillActive, skills.rows],
   )
 
   const setRoutinePending = useCallback((id: RoutineId, on: boolean) => {
@@ -550,6 +574,7 @@ function ConversationActionsContainerView({
       fanGroups={fanGroups}
       placement={placement}
       skills={skills}
+      activeSkill={skillActive}
       routines={{
         loaded: routines.loaded,
         error: routines.error,
@@ -578,8 +603,12 @@ function ConversationActionsContainerView({
       }}
       onOpenGroup={openGroup}
       onMenuKeyDown={onMenuKeyDown}
-      onQueryChange={setQuery}
+      onQueryChange={(next) => {
+        setQuery(next)
+        setActiveSkill(0)
+      }}
       onSkill={onSkill}
+      onSkillHover={setActiveSkill}
       onRoutine={onRoutine}
       onCancelDrill={onCancelDrill}
       onProject={onProject}

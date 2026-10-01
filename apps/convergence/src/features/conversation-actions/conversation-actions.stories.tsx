@@ -55,7 +55,7 @@ function WithRefs(props: ComponentProps<typeof ConversationActionsView>) {
   )
 }
 
-// a11y-known: a list's menu also holds its search field, its status and alert lines and its hints, which are not menu items — fixed by the sweep (DS4)
+// a11y-known: a Routines menu also holds its status and alert lines and its hints, which are not menu items — fixed by the sweep (DS4)
 const menuHoldsNonItems = { id: 'aria-required-children', enabled: false }
 
 const meta = {
@@ -89,6 +89,7 @@ const meta = {
       notice: null,
       query: '',
     },
+    activeSkill: 0,
     routines: {
       loaded: true,
       error: null,
@@ -123,6 +124,7 @@ const meta = {
     onMenuKeyDown: fn(),
     onQueryChange: fn(),
     onSkill: fn(),
+    onSkillHover: fn(),
     onRoutine: fn(),
     onCancelDrill: fn(),
     onProject: fn(),
@@ -171,20 +173,30 @@ export const Fan: Story = {
   },
 }
 
-/** Skills: search, then pick one; a skill not offered says why and does nothing. */
+/**
+ * Skills: a search and the list it drives (MAR-3616 DS3e). The search names
+ * the active row; pick one with a click; a skill not offered says why and
+ * does nothing.
+ */
 export const Skills: Story = {
-  parameters: { a11y: { config: { rules: [menuHoldsNonItems] } } },
   args: { level: 'skills' },
   play: async ({ args, canvas, userEvent }) => {
-    const menu = canvas.getByRole('menu', { name: 'Skills' })
-    await userEvent.type(
-      within(menu).getByRole('textbox', { name: 'Find a skill' }),
-      'd',
+    const menu = canvas.getByRole('dialog', { name: 'Skills' })
+    const search = within(menu).getByRole('combobox', { name: 'Find a skill' })
+    const list = within(menu).getByRole('listbox', { name: 'Skills' })
+    await expect(search).toHaveAttribute('aria-controls', list.id)
+    await expect(search).toHaveAttribute(
+      'aria-activedescendant',
+      within(list).getByRole('option', { name: 'diagnose' }).id,
     )
+    await userEvent.type(search, 'd')
     await expect(args.onQueryChange).toHaveBeenCalledWith('d')
-    await userEvent.click(within(menu).getByRole('menuitem', { name: 'tdd' }))
+    const tdd = within(menu).getByRole('option', { name: 'tdd' })
+    await userEvent.hover(tdd)
+    await expect(args.onSkillHover).toHaveBeenCalledWith(1)
+    await userEvent.click(tdd)
     await expect(args.onSkill).toHaveBeenCalledWith('skill-tdd')
-    const deploy = within(menu).getByRole('menuitem', { name: 'legacy-deploy' })
+    const deploy = within(menu).getByRole('option', { name: 'legacy-deploy' })
     await expect(deploy).toHaveAttribute('aria-disabled', 'true')
     await userEvent.click(deploy)
     await expect(args.onSkill).toHaveBeenCalledOnce()
@@ -192,7 +204,7 @@ export const Skills: Story = {
       expect(within(menu).getByText('Disabled in this project.')).toBeVisible(),
     )
     await userEvent.click(
-      within(menu).getByRole('menuitem', { name: 'Back from Skills' }),
+      within(menu).getByRole('button', { name: 'Back from Skills' }),
     )
     await expect(args.onBack).toHaveBeenCalledOnce()
   },
@@ -200,7 +212,6 @@ export const Skills: Story = {
 
 /** Skills while the catalog is read. */
 export const SkillsBusy: Story = {
-  parameters: { a11y: { config: { rules: [menuHoldsNonItems] } } },
   name: 'Skills, busy',
   args: {
     level: 'skills',
@@ -215,7 +226,6 @@ export const SkillsBusy: Story = {
 
 /** Skills could not be read: said as a failure, never as "no skills". */
 export const SkillsFailed: Story = {
-  parameters: { a11y: { config: { rules: [menuHoldsNonItems] } } },
   name: 'Skills, failed',
   args: {
     level: 'skills',
@@ -249,7 +259,7 @@ export const SkillsEmpty: Story = {
         canvas.getByText('No skills available for this agent'),
       ).toBeVisible(),
     )
-    await userEvent.click(canvas.getByRole('menuitem', { name: 'Routines →' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Routines →' }))
     await expect(args.onOpenGroup).toHaveBeenCalledWith('routines')
   },
 }
@@ -405,7 +415,6 @@ export const Project: Story = {
 
 /** A long list in a placed panel scrolls inside it. */
 export const Long: Story = {
-  parameters: { a11y: { config: { rules: [menuHoldsNonItems] } } },
   args: {
     level: 'skills',
     placement: { right: 0, bottom: 46, width: 286, maxHeight: 320 },
