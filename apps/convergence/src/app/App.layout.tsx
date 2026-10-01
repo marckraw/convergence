@@ -221,7 +221,7 @@ export const AppShell: FC<AppShellProps> = ({
    * it opened is portalled out of it and handles its own Escape.
    */
   const handleSidebarKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
+    (event: KeyboardEvent<HTMLElement>) => {
       if (event.key !== 'Escape' || !sidebarCollapsed || !sidebarPeekOpen)
         return
       if (!event.currentTarget.contains(event.target as Node)) return
