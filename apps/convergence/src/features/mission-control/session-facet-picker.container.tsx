@@ -8,9 +8,13 @@ import {
   CommandList,
 } from 'cmdk'
 import { Check, ChevronDown } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import {
+  cn,
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@convergence/ui'
 import {
   filterFacetOptions,
   formatFacetSummary,

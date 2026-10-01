@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { FileWarning } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 interface MissingAttachmentChipProps {
   attachmentId: string

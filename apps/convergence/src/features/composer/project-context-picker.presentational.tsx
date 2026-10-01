@@ -1,8 +1,12 @@
 import type { FC } from 'react'
 import type { ProjectContextItem } from '@/entities/project-context'
-import { Button } from '@/shared/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { cn } from '@/shared/lib/cn.pure'
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@convergence/ui'
 import { Check, FileText, Repeat } from 'lucide-react'
 
 interface ProjectContextPickerProps {

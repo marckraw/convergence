@@ -1,8 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import { GitBranch, GitPullRequest, RefreshCw, X } from 'lucide-react'
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 
 interface PullRequestPanelProps {
   pullRequest: SessionPullRequest | null

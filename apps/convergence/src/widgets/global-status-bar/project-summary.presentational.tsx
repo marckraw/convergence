@@ -6,7 +6,7 @@ import {
   isSessionCompacting,
   type ProjectActivity,
 } from '@/entities/session'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { dotClass } from './global-status-bar.styles'
 
 interface ProjectSummaryProps {

@@ -1,8 +1,7 @@
 import { CheckCircle2, ExternalLink } from 'lucide-react'
 import type { FC } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import {
   waveRowKey,
   waveRowMetaWords,

@@ -9,9 +9,13 @@ import {
   NotebookPen,
   PanelLeftOpen,
 } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import {
+  Button,
+  cn,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
 import {

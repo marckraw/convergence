@@ -1,6 +1,5 @@
 import type { FC } from 'react'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
-import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
+import { SearchableSelect, type SearchableSelectItem } from '@convergence/ui'
 
 interface SessionStartSelectProps {
   selectedId: string

@@ -15,18 +15,20 @@ import {
   needsYouCardModel,
   type CardContext,
 } from '@/features/needs-you'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
-import { Input } from '@/shared/ui/input'
-import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
-import { cn } from '@/shared/lib/cn.pure'
+  Input,
+  LOOM_NO_DRAG_STYLE,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+} from '@convergence/ui'
 import {
   Archive,
   ChevronRight,

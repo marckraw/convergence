@@ -6,8 +6,7 @@ import {
   type NeedsYouCardModel,
   type NeedsYouCardProps,
 } from '@/features/needs-you'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import { FoldedGlyphs } from './needs-you-fold-glyphs.presentational'
 import { FoldedLine } from './needs-you-fold-line.presentational'
 export interface NeedsYouSectionProps {

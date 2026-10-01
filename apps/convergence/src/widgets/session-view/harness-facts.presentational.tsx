@@ -1,5 +1,5 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   compactionLabel,
   hiddenPluginSentence,

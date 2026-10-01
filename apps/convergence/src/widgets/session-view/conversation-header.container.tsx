@@ -9,16 +9,16 @@ import {
   type ReactNode,
 } from 'react'
 import { MoreVertical, Pin } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+  cn,
+} from '@convergence/ui'
 import { useElementWidth } from '@/shared/hooks/use-element-width'
-import { cn } from '@/shared/lib/cn.pure'
 import {
   headerLayout,
   headerLayoutKey,

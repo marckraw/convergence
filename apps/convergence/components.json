@@ -11,7 +11,7 @@
   },
   "aliases": {
     "components": "@/shared/ui",
-    "utils": "@/shared/lib/cn.pure",
+    "utils": "@convergence/ui",
     "ui": "@/shared/ui",
     "lib": "@/shared/lib",
     "hooks": "@/shared/hooks"

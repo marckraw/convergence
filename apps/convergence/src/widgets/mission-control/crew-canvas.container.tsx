@@ -102,7 +102,7 @@ import type {
   SessionCard,
   SessionCrewGroup,
 } from '@/features/mission-control'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { SessionCanvas } from './session-canvas.container'
 import type { SessionCanvasAuthoring } from './session-canvas.container'
 

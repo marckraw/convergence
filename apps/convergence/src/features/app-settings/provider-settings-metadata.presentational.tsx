@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { ProviderInfo } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 interface ProviderSettingsMetadataProps {
   provider: ProviderInfo | null

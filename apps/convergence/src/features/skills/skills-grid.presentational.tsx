@@ -1,8 +1,7 @@
 import type { FC } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { SkillCatalogEntry } from '@/entities/skill'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 import type { SkillGridGroup } from './skills-browser.pure'
 import {
   renderProviderChip,

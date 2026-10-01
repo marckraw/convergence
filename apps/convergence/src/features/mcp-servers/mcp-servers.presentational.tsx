@@ -13,14 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
-import { Button } from '@/shared/ui/button'
-import {
+  Button,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/shared/ui/tooltip'
+} from '@convergence/ui'
 import {
   Ban,
   CircleAlert,

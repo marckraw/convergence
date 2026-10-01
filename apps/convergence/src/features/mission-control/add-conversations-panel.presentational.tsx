@@ -1,9 +1,6 @@
 import type { FC } from 'react'
 import { Users, X } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import { cn, Button, Input, SearchableSelect } from '@convergence/ui'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import { SeatRefusal } from './seat-refusal.presentational'
 

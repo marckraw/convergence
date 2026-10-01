@@ -2,17 +2,17 @@ import type { FC } from 'react'
 import { Bot, Sparkles } from 'lucide-react'
 import type { ProviderInfo } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
-import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
+  SearchableSelect,
+  type SearchableSelectItem,
+} from '@convergence/ui'
 
 interface GenerateProfileDialogProps {
   open: boolean

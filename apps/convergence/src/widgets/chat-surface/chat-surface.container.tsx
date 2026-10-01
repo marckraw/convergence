@@ -26,8 +26,7 @@ import {
   ParallelWork,
   useParallelWork,
 } from '@/widgets/session-view'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
   SpaceHome,

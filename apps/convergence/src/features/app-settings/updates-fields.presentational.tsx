@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
-import { Button } from '@/shared/ui/button'
-import { SwitchRow } from '@/shared/ui/switch'
+import { Button, SwitchRow } from '@convergence/ui'
 
 interface UpdatesFieldsProps {
   status: UpdateStatus

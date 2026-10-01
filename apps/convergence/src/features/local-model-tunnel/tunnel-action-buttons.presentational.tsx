@@ -3,7 +3,7 @@ import type {
   LocalModelTunnelConnectionKind,
   LocalModelTunnelState,
 } from '@/entities/local-model-tunnel'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { Play, RefreshCw, RotateCcw, Square } from 'lucide-react'
 
 interface TunnelActionButtonsProps {

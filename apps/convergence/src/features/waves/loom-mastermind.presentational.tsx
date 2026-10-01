@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomMastermindVerdictLine,

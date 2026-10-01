@@ -1,6 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import type { LoomSheet } from './wave-panel-sheet.pure'
 import {
   LOOM_SHEET_TITLE_CLASS,

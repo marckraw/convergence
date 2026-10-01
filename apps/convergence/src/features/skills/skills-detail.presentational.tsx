@@ -19,17 +19,19 @@ import type {
   SkillWarning,
 } from '@/entities/skill'
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
-import { Button } from '@/shared/ui/button'
-import { CopyButton } from '@/shared/ui/copy-button'
 import {
+  Button,
+  CopyButton,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+} from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
-import { cn } from '@/shared/lib/cn.pure'
 import {
   ACTIVATION_CONFIRMATION_LABELS,
   CATALOG_SOURCE_LABELS,

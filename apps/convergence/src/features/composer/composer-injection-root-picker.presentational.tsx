@@ -1,8 +1,7 @@
 import type { FC } from 'react'
 import { BookOpenText, FileText, Library } from 'lucide-react'
 import type { ComposerInjectionRootItem } from './composer-injection-trigger.pure'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 
 interface ComposerInjectionRootPickerProps {
   open: boolean

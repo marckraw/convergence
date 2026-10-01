@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { useMemo } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import {
   buildPierreChangedFilesTreeInput,
   type PierreChangedFileInput,

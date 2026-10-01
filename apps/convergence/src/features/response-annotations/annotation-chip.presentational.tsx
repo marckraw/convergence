@@ -1,7 +1,6 @@
 import type { FC, FormEvent } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 import { Check, Pencil, X } from 'lucide-react'
 import { toChipExcerpt } from './annotation-selection.pure'
 

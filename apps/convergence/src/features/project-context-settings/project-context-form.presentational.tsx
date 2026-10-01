@@ -1,10 +1,7 @@
 import type { FC, FormEvent } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { ProjectContextReinjectMode } from '@/entities/project-context'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { SwitchRow } from '@/shared/ui/switch'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button, Input, SwitchRow, Textarea } from '@convergence/ui'
 
 interface ProjectContextFormProps {
   mode: 'create' | 'edit'

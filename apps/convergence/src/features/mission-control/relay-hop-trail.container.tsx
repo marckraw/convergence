@@ -5,8 +5,7 @@ import {
   selectHopTrailForCrew,
   useSessionRelayStore,
 } from '@/entities/session-relay'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import { RelayHopRow } from './relay-hop-row.presentational'
 import {
   buildRelayHopLine,

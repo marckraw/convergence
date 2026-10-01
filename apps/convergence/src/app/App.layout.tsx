@@ -10,7 +10,7 @@ import { NotificationsOnboardingContainer } from '@/features/notifications-onboa
 import { WavePanel } from '@/features/waves'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { SessionSummary } from '@/entities/session'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
 import { RouteFallbackView } from './route-fallback.presentational'
 import type { MainViewRouteFallback } from './routes/main-view-route-resolution.pure'

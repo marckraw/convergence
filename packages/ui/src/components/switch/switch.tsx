@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '#lib/cn.pure'
 
 interface SwitchRowProps {
   id: string

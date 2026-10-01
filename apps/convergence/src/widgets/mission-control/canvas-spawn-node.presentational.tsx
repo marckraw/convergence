@@ -6,7 +6,7 @@ import {
   CANVAS_SPAWN_NODE_HEIGHT,
   formatSpawnNodeSpec,
 } from '@/features/mission-control'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasSpawnNodeData } from './session-canvas.types'
 

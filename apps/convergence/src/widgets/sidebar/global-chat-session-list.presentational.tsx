@@ -8,16 +8,18 @@ import {
 import { memo } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type { SpaceAttemptRole } from '@/entities/space'
-import { Button } from '@/shared/ui/button'
-import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import {
+  Button,
+  LOOM_NO_DRAG_STYLE,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
-import { cn } from '@/shared/lib/cn.pure'
+  cn,
+} from '@convergence/ui'
 import {
   Archive,
   ChevronDown,

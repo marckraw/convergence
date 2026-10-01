@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import type { ProviderModelOption } from '@/entities/session'
-import { Input } from '@/shared/ui/input'
-import { Button } from '@/shared/ui/button'
+import { Input, Button } from '@convergence/ui'
 
 interface PiModelVisibilityFieldsProps {
   providerExists: boolean

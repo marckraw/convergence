@@ -3,7 +3,7 @@ import {
   render as renderWithoutProvider,
   type RenderOptions,
 } from '@testing-library/react'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 
 /**
  * The provider Loom's controls now need, for suites that mount Loom alone

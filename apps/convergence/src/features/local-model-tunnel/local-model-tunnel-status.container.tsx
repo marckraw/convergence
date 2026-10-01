@@ -9,8 +9,8 @@ import {
   type LocalModelTunnelProfile,
   type LocalModelTunnelProfileInput,
 } from '@/entities/local-model-tunnel'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogBody,
   DialogContent,
@@ -18,9 +18,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 import { Pencil, Plus } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
 import { TunnelPopoverRow } from './tunnel-popover-row.presentational'

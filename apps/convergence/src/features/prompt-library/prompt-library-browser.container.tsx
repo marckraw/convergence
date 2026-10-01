@@ -4,7 +4,7 @@ import { BookOpenText } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import { usePromptLibraryStore } from '@/entities/prompt-library'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   collectPromptTags,
   filterPromptLibraryCatalog,

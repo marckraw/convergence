@@ -5,8 +5,7 @@ import {
   openRouterCredentialsApi,
   type OpenRouterCredentialStatus,
 } from '@/entities/app-settings'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 
 function statusText(status: OpenRouterCredentialStatus | null): string {
   if (!status) return 'Checking...'

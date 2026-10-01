@@ -1,5 +1,5 @@
 import type { ReleaseCandidate } from '@/entities/release'
-import { Input } from '@/shared/ui/input'
+import { Input } from '@convergence/ui'
 
 export function MergeReviewedRow({
   row,

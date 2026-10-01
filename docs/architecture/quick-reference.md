@@ -44,6 +44,11 @@ The repository is an npm-workspaces monorepo:
   creation app for the EF disciplines. At this stage a shell that boots and
   consumes the shared client core; its constitution is MAR-2705.
 - `packages/execution-host-client` — the daemon client core, shared.
+- `packages/ui` — `@convergence/ui`, the design system (MAR-3610): the
+  theme (`@convergence/ui/theme.css`) and the primitives. Convergence imports
+  it by name only; `apps/convergence/src/app/global.css` imports the theme and
+  names the package's source with `@source`, because Tailwind does not scan
+  another workspace on its own. Its rules are in `packages/ui/AGENTS.md`.
 
 ### The client-core boundary
 

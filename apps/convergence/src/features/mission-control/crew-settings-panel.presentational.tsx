@@ -14,8 +14,7 @@ import {
   type SeatDraftField,
   type SessionCrewMember,
 } from '@/entities/session-crew'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 import { flowRunCeilingNote } from './crew-loop.pure'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'

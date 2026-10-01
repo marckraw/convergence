@@ -1,7 +1,6 @@
 import type { FC, FormEvent } from 'react'
 import { MessageSquareQuote, X } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button, Input } from '@convergence/ui'
 
 /**
  * The floating affordance over a selection: react in one click, or say

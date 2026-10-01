@@ -8,7 +8,7 @@ import type {
   CrewImportDecisions,
   CrewImportReport,
 } from '@/shared/types/crew-import.types'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { CrewImportView } from './crew-import.presentational'
 
 export function CrewImport({

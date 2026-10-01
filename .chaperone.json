@@ -2,12 +2,14 @@
   "version": "1.0.0",
   "extends": [
     "./apps/convergence/tools/chaperone/presets/convergence-renderer-architecture.json",
-    "./apps/convergence/tools/chaperone/presets/single-react-component-per-file.json"
+    "./apps/convergence/tools/chaperone/presets/single-react-component-per-file.json",
+    "./packages/ui/tools/chaperone/presets/ui-package-boundaries.json"
   ],
   "include": [
     "apps/convergence/src/**/*",
     "apps/backpack-studio/src/**/*",
-    "packages/execution-host-client/src/**/*"
+    "packages/execution-host-client/src/**/*",
+    "packages/ui/src/**/*"
   ],
   "exclude": ["/canaries"],
   "rules": {

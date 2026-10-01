@@ -1,0 +1,59 @@
+{
+  "rules": {
+    "custom": [
+      {
+        "id": "ui-package-imports-no-app",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "packages/ui/src/**/*.{ts,tsx}",
+        "restrictions": [
+          {
+            "source": "(^|/)apps/",
+            "allowedIn": [],
+            "message": "@convergence/ui imports nothing from apps/. Props in, events out: the app passes what a part needs (MAR-3610)."
+          },
+          {
+            "source": "^(convergence|backpack-studio)(/|$)",
+            "allowedIn": [],
+            "message": "@convergence/ui imports nothing from an app workspace, by any name (MAR-3610)."
+          },
+          {
+            "source": "^@/",
+            "allowedIn": [],
+            "message": "The @/ alias is the app's. Inside @convergence/ui import relatively or through #lib/* (MAR-3610)."
+          },
+          {
+            "source": "^electron(/|$)",
+            "allowedIn": [],
+            "message": "@convergence/ui never imports Electron; the app reaches it through its *.api.ts wrappers (MAR-3610)."
+          }
+        ],
+        "checkPatterns": [
+          {
+            "pattern": "\\bwindow\\.electronAPI\\b",
+            "allowedIn": [],
+            "message": "@convergence/ui never touches window.electronAPI; the app passes data in as props (MAR-3610)."
+          }
+        ],
+        "includeTypeImports": true
+      },
+      {
+        "id": "ui-package-named-exports",
+        "type": "regex",
+        "severity": "error",
+        "files": "packages/ui/src/**/*.{ts,tsx}",
+        "exclude": ["packages/ui/src/**/*.stories.tsx"],
+        "pattern": "(^|\\n)\\s*export\\s+default\\b",
+        "message": "@convergence/ui uses named exports only (a story file's meta is the one default export Storybook needs)."
+      },
+      {
+        "id": "ui-package-index-names-each-export",
+        "type": "regex",
+        "severity": "error",
+        "files": "packages/ui/src/index.ts",
+        "pattern": "(^|\\n)\\s*export\\s+(type\\s+)?\\*",
+        "message": "src/index.ts re-exports names one by one, never with export *: it is the whole list of what the package promises."
+      }
+    ]
+  }
+}

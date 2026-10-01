@@ -10,9 +10,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { cn, Button, Input } from '@convergence/ui'
 import {
   LOCAL_HOST_ID,
   ROLE_CARD_LIMIT,

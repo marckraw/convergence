@@ -1,7 +1,7 @@
 import type { CSSProperties, FC } from 'react'
 import { Users } from 'lucide-react'
 import type { NodeProps } from '@xyflow/react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import type { CanvasCrewClusterData } from './session-canvas.types'
 
 /**

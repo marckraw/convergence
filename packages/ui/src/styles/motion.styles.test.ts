@@ -3,24 +3,33 @@ import { join, resolve } from 'node:path'
 import { createElement } from 'react'
 import { render, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { Dialog, DialogContent, DialogTitle } from './dialog'
+import { Dialog, DialogContent, DialogTitle } from '../components/dialog/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from './dropdown-menu'
-import { Popover, PopoverContent, PopoverTrigger } from './popover'
-import { Select, SelectContent, SelectItem, SelectTrigger } from './select'
+} from '../components/dropdown-menu/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../components/popover/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '../components/select/select'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from './tooltip'
+} from '../components/tooltip/tooltip'
 
-const sourceRoot = resolve(__dirname, '../..')
-const stylesheet = readFileSync(join(sourceRoot, 'app/global.css'), 'utf8')
+const componentsRoot = resolve(__dirname, '../components')
+const stylesheet = readFileSync(join(__dirname, 'theme.css'), 'utf8')
 const primitives = ['tooltip', 'dropdown-menu', 'popover', 'select', 'dialog']
 const pluginTokens =
   /animate-in|animate-out|fade-in-|fade-out-|zoom-in-|zoom-out-|slide-in-from-|slide-out-to-/
@@ -30,9 +39,10 @@ describe('MAR-3319: surface motion has real stylesheet definitions', () => {
     const names = new Set(
       primitives.flatMap((name) =>
         Array.from(
-          readFileSync(join(__dirname, `${name}.tsx`), 'utf8').matchAll(
-            /\banimate-([a-z-]+)/g,
-          ),
+          readFileSync(
+            join(componentsRoot, name, `${name}.tsx`),
+            'utf8',
+          ).matchAll(/\banimate-([a-z-]+)/g),
           (match) => match[1],
         ).filter((name) => name !== 'none'),
       ),

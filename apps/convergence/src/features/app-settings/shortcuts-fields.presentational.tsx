@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { CommandCenterShortcutPrefs } from '@/entities/app-settings'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { SettingsControlField } from './settings-control-field.presentational'
 
 interface ShortcutsFieldsProps {

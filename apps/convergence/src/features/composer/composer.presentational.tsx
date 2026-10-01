@@ -33,10 +33,14 @@ import type { PromptLibraryEntry } from '@/entities/prompt-library'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import type { ComposerInjectionRootItem } from './composer-injection-trigger.pure'
 import { ModelPickerDialog } from '@/features/model-picker'
-import { Button } from '@/shared/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { Textarea } from '@/shared/ui/textarea'
-import { cn } from '@/shared/lib/cn.pure'
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Textarea,
+  cn,
+} from '@convergence/ui'
 import {
   ArrowUp,
   Bell,

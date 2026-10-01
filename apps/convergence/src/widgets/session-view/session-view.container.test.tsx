@@ -19,7 +19,7 @@ import { useTerminalStore } from '@/entities/terminal'
 import { useAgentMeterStore } from '@/entities/agent-meter'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useTranscriptViewStore } from './transcript-view.model'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 const navigationScroll = vi.hoisted(() => vi.fn())
 // Every context the composer was handed, in order (MAR-3325).

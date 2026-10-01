@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { TooltipProvider } from './tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { ContextWindowIndicator } from './context-window-indicator.presentational'
 
 describe('ContextWindowIndicator', () => {

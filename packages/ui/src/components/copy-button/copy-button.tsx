@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FC } from 'react'
 import { Check, Copy } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '#lib/cn.pure'
 
 interface CopyButtonProps {
   text: string

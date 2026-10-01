@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import { Fragment } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import type { PaneTree } from '@/entities/terminal'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { LeafPaneView } from './leaf-pane.presentational'
 import type { LeafPaneHandlers } from './leaf-pane.presentational'
 

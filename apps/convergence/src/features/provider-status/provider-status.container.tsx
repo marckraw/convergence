@@ -12,7 +12,7 @@ import {
   type ProviderAccountHealth,
 } from '@/entities/provider-account'
 import { useDialogStore } from '@/entities/dialog'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { ProviderStatusDialog } from './provider-status.presentational'
 
 interface ProviderStatusDialogContainerProps {

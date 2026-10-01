@@ -12,7 +12,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, type Project } from '@/entities/project'
 import type { SessionSummary } from '@/entities/session'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import {
   SidebarConversations,
   type SidebarConversationsProps,

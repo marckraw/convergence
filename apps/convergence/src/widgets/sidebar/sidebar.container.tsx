@@ -33,11 +33,15 @@ import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
-import { Button } from '@/shared/ui/button'
-import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import {
+  Button,
+  LOOM_NO_DRAG_STYLE,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+} from '@convergence/ui'
 import type { AppSurface } from '@/shared/types/app-surface.types'
-import { cn } from '@/shared/lib/cn.pure'
 import {
   BarChart3,
   ChevronRight,

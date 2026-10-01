@@ -1,4 +1,4 @@
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { ProviderIcon } from './provider-icon.presentational'
 import { resolveProviderIcon } from './provider-icon.pure'
 

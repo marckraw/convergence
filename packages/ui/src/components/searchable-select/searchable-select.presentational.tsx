@@ -7,9 +7,9 @@ import {
 } from 'cmdk'
 import { Check, ChevronDown } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button, type ButtonProps } from './button'
-import { Popover, PopoverContent, PopoverTrigger } from './popover'
+import { cn } from '#lib/cn.pure'
+import { Button, type ButtonProps } from '../button/button'
+import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover'
 
 export interface SearchableSelectItem {
   id: string

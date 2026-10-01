@@ -1,13 +1,13 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { Input } from './input'
+import { Input } from './input/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './select'
+} from './select/select'
 
 /**
  * MAR-3460: the shared field controls paint the tested roles — an opaque

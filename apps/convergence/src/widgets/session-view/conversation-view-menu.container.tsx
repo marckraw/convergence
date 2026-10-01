@@ -1,13 +1,13 @@
 import { useRef, type FC, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
 import { TranscriptViewMenuItems } from './transcript-view-switch.presentational'
 import {

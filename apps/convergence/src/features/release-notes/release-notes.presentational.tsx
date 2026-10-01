@@ -14,8 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
-import { Button } from '@/shared/ui/button'
+  Button,
+} from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 
 export interface ReleaseHistoryPageItem {

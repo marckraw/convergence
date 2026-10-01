@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import type { SessionSummary } from '@/entities/session'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { GlobalStatusBar } from './global-status-bar.presentational'
 
 it('R4 status bar renders totals and a CPU-sorted hover list with shared and remote labels', async () => {

@@ -17,21 +17,21 @@ import {
   spaceAttemptRoleLabels,
   spaceStatusLabels,
 } from '@/entities/space'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
 import {
+  Button,
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+  cn,
+} from '@convergence/ui'
 import {
   SELECT_EMPTY_VALUE,
   fromSelectValue,
   toSelectValue,
 } from '@/shared/lib/select-value.pure'
-import { cn } from '@/shared/lib/cn.pure'
 import {
   Box,
   Archive,

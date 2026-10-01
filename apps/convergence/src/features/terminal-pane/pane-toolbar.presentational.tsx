@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { SplitSquareHorizontal, SplitSquareVertical, X } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 interface PaneToolbarProps {
   onSplitHorizontal: () => void

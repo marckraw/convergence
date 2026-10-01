@@ -1,5 +1,5 @@
 import { CheckCircle2, Layers, Pencil, Timer } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import { LoomSheetView } from './loom-sheet.presentational'
 import { LoomTitleView } from './loom-title.presentational'
 import { loomSheetCounts, loomSheetTitle } from './loom-sheets.pure'

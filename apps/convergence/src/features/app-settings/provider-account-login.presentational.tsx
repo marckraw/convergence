@@ -1,8 +1,6 @@
 import { ExternalLink, Loader2 } from 'lucide-react'
 import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
-import { Button } from '@/shared/ui/button'
-import { CopyButton } from '@/shared/ui/copy-button'
-import { Input } from '@/shared/ui/input'
+import { Button, CopyButton, Input } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 
 export function ProviderAccountLoginProgress({

@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 
 /**
  * A harness alert in the header's row, only while the alert is true (CH4 R3):

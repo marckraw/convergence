@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { KeyRound } from 'lucide-react'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import { SearchableSelect } from '@convergence/ui'
 import {
   AMBIENT_DEFAULT_ACCOUNT_ID,
   buildProviderAccountPickerItems,

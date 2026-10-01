@@ -6,15 +6,15 @@ import {
   useProjectOpenApps,
 } from '@/features/project-open-menu'
 import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
 import {
+  cn,
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
 
 interface ConversationProjectMenuProps {

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { LocalModelTunnelState } from '@/entities/local-model-tunnel'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 
 interface StatusDotProps {
   state: LocalModelTunnelState

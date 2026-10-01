@@ -3,7 +3,7 @@ import type {
   ProviderQuotaSnapshot,
   ProviderQuotaWindow,
 } from '@/entities/provider-quota'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { ProviderUsageWindowRow } from './provider-usage-window-row.presentational'
 
 interface ProviderUsageCardProps {

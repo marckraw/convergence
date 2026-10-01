@@ -14,7 +14,7 @@ import {
   type ProjectOpenApp,
   type ProjectOpenAppId,
 } from '@/entities/project-open'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   filterSkillCatalog,
   findSkillInGroups,

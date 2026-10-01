@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 import type { SkillBrowserFilters } from './skills-browser.pure'
 import { SKILL_ORIGIN_META } from './skills-browser.styles'
 import type { SkillsOverview } from './skills-overview.pure'

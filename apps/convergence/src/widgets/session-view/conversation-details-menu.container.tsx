@@ -7,12 +7,12 @@ import {
   type RefObject,
 } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
 import { interactionKeepsFocusWhereItIs } from './conversation-header.pure'
 

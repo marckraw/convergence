@@ -1,20 +1,22 @@
 import type { FormEvent } from 'react'
 import type { FeedbackPriority } from '@/entities/feedback'
 import { Loader2, MessageSquarePlus, Send } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { FLOATING_CORNER_BUTTON_CLASS } from '@/shared/ui/floating-corner.pure'
 import {
+  cn,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import { Textarea } from '@/shared/ui/textarea'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+  Input,
+  Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
+import { FLOATING_CORNER_BUTTON_CLASS } from '@/shared/ui/floating-corner.pure'
 
 interface FeedbackButtonProps {
   open: boolean

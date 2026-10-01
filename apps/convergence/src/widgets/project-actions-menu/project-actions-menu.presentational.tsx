@@ -5,9 +5,7 @@ import type {
   ProjectScriptRunOutput,
 } from '@/entities/project-script'
 import { ProjectScriptIcon } from '@/entities/project-script'
-import { Button } from '@/shared/ui/button'
-import { DropdownMenuContent } from '@/shared/ui/dropdown-menu'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, DropdownMenuContent, cn } from '@convergence/ui'
 import {
   ChevronDown,
   ChevronRight,

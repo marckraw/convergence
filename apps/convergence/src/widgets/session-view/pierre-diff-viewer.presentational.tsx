@@ -17,7 +17,7 @@ import {
   Loader2,
   RotateCcw,
 } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   DEFAULT_DIFF_CONTEXT_LINES,
   foldUnifiedDiffContext,

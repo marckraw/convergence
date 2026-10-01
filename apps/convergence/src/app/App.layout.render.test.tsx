@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { useSessionStore } from '@/entities/session'
 import { useSessionCrewStore, type SessionCrew } from '@/entities/session-crew'
 import { useWorkLedgerStore } from '@/entities/work-ledger'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { TooltipProvider } from '@convergence/ui'
 import { AppShell } from './App.layout'
 
 vi.mock('sonner', () => ({

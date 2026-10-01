@@ -8,16 +8,16 @@ import type {
   MissionControlViewMode,
   SessionCardOrderPreset,
 } from '@/features/mission-control'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
 import {
+  cn,
+  Button,
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+} from '@convergence/ui'
 
 interface MissionControlViewProps {
   totalCount: number

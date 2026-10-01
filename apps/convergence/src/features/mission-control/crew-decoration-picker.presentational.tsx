@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { Ban } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import {
   CREW_ACCENT_COLORS,
   CREW_EMOJI_CHOICES,

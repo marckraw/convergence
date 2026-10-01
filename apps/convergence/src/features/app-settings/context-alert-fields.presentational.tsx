@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import type { ContextAlertSettings } from '@/entities/app-settings'
-import { Input } from '@/shared/ui/input'
-import { SwitchRow } from '@/shared/ui/switch'
+import { Input, SwitchRow } from '@convergence/ui'
 
 interface ContextAlertFieldsProps {
   alert: ContextAlertSettings

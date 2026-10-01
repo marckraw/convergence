@@ -1,5 +1,5 @@
 import { ExternalLink, X } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type { LoomIssueDetail } from './loom-detail.pure'
 import {
   LOOM_DETAIL_CHIP_CLASS,

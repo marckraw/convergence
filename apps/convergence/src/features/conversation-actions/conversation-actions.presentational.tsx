@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { Sparkles } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import { ConversationActionsFan } from './conversation-actions-fan.presentational'
 import { ConversationActionsPanel } from './conversation-actions-panel.presentational'
 import {

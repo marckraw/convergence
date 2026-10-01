@@ -1,8 +1,12 @@
 import { cardStateTone, type FoldedSectionSummary } from '@/features/needs-you'
-import { cn } from '@/shared/lib/cn.pure'
-import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
+import {
+  cn,
+  LOOM_NO_DRAG_STYLE,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 /**
  * What a folded section still says on its title row (MAR-3366 R4): one

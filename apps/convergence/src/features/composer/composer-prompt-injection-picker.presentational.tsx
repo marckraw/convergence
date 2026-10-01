@@ -1,8 +1,7 @@
 import type { FC } from 'react'
 import { BookOpenText, Loader2 } from 'lucide-react'
 import type { PromptLibraryEntry } from '@/entities/prompt-library'
-import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, cn } from '@convergence/ui'
 
 interface ComposerPromptInjectionPickerProps {
   open: boolean

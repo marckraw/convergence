@@ -8,7 +8,7 @@ import {
   type WorkspaceStartStrategy,
 } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { ProjectSettingsDialog } from './project-settings.presentational'
 
 interface ProjectSettingsDialogContainerProps {

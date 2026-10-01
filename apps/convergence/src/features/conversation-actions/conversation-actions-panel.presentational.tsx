@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { ChevronLeft } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import {
   ACTIONS_PANEL_GAP,
   ACTIONS_PANEL_WIDTH,

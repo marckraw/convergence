@@ -39,8 +39,7 @@ import {
 } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
-import { Button } from '@/shared/ui/button'
-import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
+import { Button, DropdownMenuItem } from '@convergence/ui'
 import {
   Archive,
   ArrowLeftRight,

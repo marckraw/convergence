@@ -7,14 +7,15 @@ import {
   CommandList,
 } from 'cmdk'
 import { Check, ChevronDown, Search, Star } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button, type ButtonProps } from '@/shared/ui/button'
 import {
+  cn,
+  Button,
+  type ButtonProps,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type {
   ModelPickerModelItem,

@@ -10,9 +10,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
-import { Textarea } from '@/shared/ui/textarea'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, Textarea, cn } from '@convergence/ui'
 import { ModelSelectorRow } from './model-selector-row.presentational'
 
 interface ForkComposerProps {

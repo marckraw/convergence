@@ -1,7 +1,9 @@
 import type { FC } from 'react'
-import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
-import { Input } from '@/shared/ui/input'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import {
+  type SearchableSelectItem,
+  Input,
+  SearchableSelect,
+} from '@convergence/ui'
 import {
   stripFactClass,
   stripInputClass,

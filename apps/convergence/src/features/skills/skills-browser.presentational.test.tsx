@@ -1,8 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi } from 'vitest'
-import { Button } from '@/shared/ui/button'
-import { TooltipProvider } from '@/shared/ui/tooltip'
+import { Button, TooltipProvider } from '@convergence/ui'
 import { SkillsBrowserDialog } from './skills-browser.presentational'
 import type {
   ProjectSkillCatalog,

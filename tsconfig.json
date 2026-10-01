@@ -9,9 +9,9 @@
   //
   // WHAT THIS FILE COVERS, exactly, and what it does not (MAR-2737):
   //
-  //   covered — `apps/convergence/src`, `apps/backpack-studio/src`, and
-  //   `packages/execution-host-client/src`: every renderer tree plus the shared
-  //   client core.
+  //   covered — `apps/convergence/src`, `apps/backpack-studio/src`,
+  //   `packages/execution-host-client/src` and `packages/ui/src`: every
+  //   renderer tree, the shared client core and the design system (MAR-3610).
   //
   //   NOT covered — every `electron/` tree. Those compile under a *different*
   //   config (`tsconfig.node.json`: no DOM lib, no JSX, no `@/*`), and folding
@@ -29,6 +29,7 @@
   "include": [
     "apps/convergence/src",
     "apps/backpack-studio/src",
-    "packages/execution-host-client/src"
+    "packages/execution-host-client/src",
+    "packages/ui/src"
   ]
 }

@@ -8,9 +8,7 @@ import type {
 import { getProviderLifecycleBadge } from '@/entities/session'
 import type { ProjectContextItem } from '@/entities/project-context'
 import { ModelPickerDialog } from '@/features/model-picker'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button, Input, cn } from '@convergence/ui'
 import { Play, Repeat } from 'lucide-react'
 import { SessionStartSelect } from './session-start-select.presentational'
 

@@ -1,7 +1,6 @@
 import type { FC, FormEvent } from 'react'
 import type { InteractionResponse } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button, Textarea } from '@convergence/ui'
 
 interface PlanRequestFormProps {
   onSubmit: (response: InteractionResponse, displayText: string) => void

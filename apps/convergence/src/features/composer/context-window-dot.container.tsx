@@ -4,14 +4,18 @@ import type {
   SessionContextWindow,
   SessionSummary,
 } from '@/entities/session'
-import { Button } from '@/shared/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@convergence/ui'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import {
   resolveContextDrillAction,
   useContextDrillStore,
 } from '@/entities/context-drill'
-import { cn } from '@/shared/lib/cn.pure'
 import { resolveContextCompactionAction } from './context-compaction.pure'
 import {
   describeContextAlert,

@@ -2,16 +2,16 @@ import type { FC } from 'react'
 import { CheckCircle2, GitBranch, Loader2 } from 'lucide-react'
 import type { LaneCreateProgressPhase } from '@/entities/project'
 import { laneProgressLabel } from '@/entities/project'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
+  Input,
+} from '@convergence/ui'
 
 export type LaneCreateStage =
   | { kind: 'form' }

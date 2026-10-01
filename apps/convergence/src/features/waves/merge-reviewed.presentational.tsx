@@ -1,6 +1,6 @@
 import type { ReleasePlan } from '@/entities/release'
-import { Button } from '@/shared/ui/button'
 import {
+  Button,
   Dialog,
   DialogBody,
   DialogContent,
@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/shared/ui/dialog'
+} from '@convergence/ui'
 import { canMergeReviewed, mergeActWords } from './merge-reviewed.pure'
 import { MergeReviewedRow } from './merge-reviewed.row.presentational'
 

@@ -1,8 +1,7 @@
 import type { DispatchPlan } from '@/shared/types/tracker.types'
 import type { ReactNode, UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import {
   loomNowRows,
   loomSheetCounts,

@@ -1,6 +1,6 @@
 import type { ProviderInfo } from '@/entities/session'
 import type { ProviderLifecycleBadge } from '@/entities/session'
-import type { ButtonProps } from '@/shared/ui/button'
+import type { ButtonProps } from '@convergence/ui'
 
 export interface ModelPickerDialogProps {
   providers: ProviderInfo[]

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import type { SkillCatalogEntry, SkillScope } from '@/entities/skill'
-import { cn } from '@/shared/lib/cn.pure'
+import { cn } from '@convergence/ui'
 import {
   SCOPE_LABELS,
   SKILL_ORIGIN_META,

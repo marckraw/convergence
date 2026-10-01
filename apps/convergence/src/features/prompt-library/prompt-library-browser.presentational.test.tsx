@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import type {
   PromptLibraryCatalog,
   PromptLibraryDetails,

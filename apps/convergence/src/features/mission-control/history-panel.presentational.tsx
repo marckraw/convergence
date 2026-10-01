@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { X } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { cn, Button } from '@convergence/ui'
 import {
   HISTORY_TONE_BORDER,
   HISTORY_TONE_TEXT,

@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Plus } from 'lucide-react'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@convergence/ui'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
 import type {
   ExecutionHostEndpointDraft,

@@ -1,8 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
-import { Button } from '@/shared/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { cn } from '@/shared/lib/cn.pure'
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@convergence/ui'
 import { RefreshCw } from 'lucide-react'
 import {
   describeCodexUsagePill,
