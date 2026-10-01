@@ -24,6 +24,9 @@ export const comboboxPopup = [
   'max-h-(--available-height)',
 ].join(' ')
 
+/** A choice's name and its badge side by side: in a row of the list, and on the trigger. */
+export const comboboxNameRow = 'flex min-w-0 items-center gap-2'
+
 /** The search field's strip at the top. */
 export const comboboxSearch = 'shrink-0 border-b border-line p-1.5'
 

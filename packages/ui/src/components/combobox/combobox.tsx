@@ -21,6 +21,7 @@ import {
   comboboxGroupLabel,
   comboboxItem,
   comboboxList,
+  comboboxNameRow,
   comboboxPopup,
   comboboxPositioner,
   comboboxSearch,
@@ -265,7 +266,7 @@ function Combobox(props: ComboboxProps) {
         ) : null}
         {item.icon}
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="flex min-w-0 items-center gap-2">
+          <span className={comboboxNameRow}>
             <span className="truncate font-medium">{item.label}</span>
             {item.badge ? (
               <Tooltip label={item.badge.title}>
@@ -394,7 +395,7 @@ function Combobox(props: ComboboxProps) {
           />
         }
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className={comboboxNameRow}>
           {triggerIcon}
           <span className="truncate">{value}</span>
           {chosen?.badge && !props.multiple ? (
