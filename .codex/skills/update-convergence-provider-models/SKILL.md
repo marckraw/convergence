@@ -95,7 +95,7 @@ fnm exec --using "$(cat .nvmrc)" npm install
 fnm exec --using "$(cat .nvmrc)" npm run typecheck
 fnm exec --using "$(cat .nvmrc)" npm run test:pure
 fnm exec --using "$(cat .nvmrc)" npm run test:unit
-fnm exec --using "$(cat .nvmrc)" chaperone check --fix
+fnm exec --using "$(cat .nvmrc)" npm run chaperone -- check --fix
 ```
 
 If `fnm` is unavailable, use the installed Node version manager that can run `.nvmrc` exactly. If the required Node version is unavailable, report that explicitly.

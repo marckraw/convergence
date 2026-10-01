@@ -101,7 +101,12 @@ After every finished task, agents must run these commands in this repo:
 - `npm run typecheck`
 - `npm run test:pure`
 - `npm run test:unit`
-- `chaperone check --fix`
+- `npm run chaperone -- check --fix`
+
+`npm run chaperone` runs the Chaperone version the repo pins in
+`scripts/chaperone.mjs` (downloaded once, checksum-verified); a global
+`chaperone` on your PATH is ignored, because another version answers
+differently and CI runs the pinned one (MAR-3609).
 
 If a command fails because the current phase has not introduced that tool yet, report the failure clearly and fix the missing bootstrap in the next relevant task. Do not silently skip verification.
 
@@ -137,7 +142,7 @@ if it records a long-lived code or architecture decision, keep it in the repo.
 
 ## Prettier formatting
 
-Always accept Prettier's reformatting. `chaperone check --fix` runs Prettier
+Always accept Prettier's reformatting. `npm run chaperone -- check --fix` runs Prettier
 across the repo and may rewrite files that were committed unformatted on a
 prior branch. When that happens:
 
@@ -148,7 +153,7 @@ prior branch. When that happens:
   those formatting fixes in a separate `chore: prettier` commit on the same
   branch rather than leaving them dirty in the working tree or reverting
   them.
-- Never commit code that fails `chaperone check` (no `--fix`). Run the
+- Never commit code that fails `npm run chaperone -- check` (no `--fix`). Run the
   non-fix variant before opening a PR if you suspect drift.
 
 When modifying `apps/convergence/electron-builder.yml`, any `package:mac*`

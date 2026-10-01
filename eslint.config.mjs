@@ -1,5 +1,6 @@
 import js from '@eslint/js'
 import reactHooks from 'eslint-plugin-react-hooks'
+import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
@@ -18,6 +19,15 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    /**
+     * The root `scripts/` are Node programs (the Chaperone wrapper, the
+     * canaries, the guards, MAR-3609): linted like everything else, with
+     * Node's globals rather than an ignore like `tools/` has.
+     */
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: globals.node },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     rules: {

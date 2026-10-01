@@ -334,6 +334,7 @@ After every finished task, the expected verification flow is:
 - `npm install`
 - `npm run test:pure`
 - `npm run test:unit`
-- `chaperone check --fix`
+- `npm run chaperone -- check --fix` (the version `scripts/chaperone.mjs`
+  pins, never a global `chaperone`)
 
 Phase 0 must bootstrap the repo until these commands are real and useful.
