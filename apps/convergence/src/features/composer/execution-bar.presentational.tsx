@@ -3,7 +3,7 @@ import { AlertTriangle } from 'lucide-react'
 import { Badge, type ComboboxItem } from '@convergence/ui'
 import { ComposerSelect } from './composer-select.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
-import { stripFactClass, WorkAddressSlot } from '@/entities/execution-host'
+import { stripFactSize, WorkAddressSlot } from '@/entities/execution-host'
 import type { WorkAddressSlotView } from '@/entities/execution-host'
 import {
   stripClass,
@@ -78,7 +78,7 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
         <>
           {/* The machine, once the session is live and the choice is no
               longer one: the entity's quiet fact (CONV-18). */}
-          <Badge shape="label" outline className={stripFactClass}>
+          <Badge shape="label" outline size={stripFactSize}>
             {view.label}
           </Badge>
           {view.warning ? (

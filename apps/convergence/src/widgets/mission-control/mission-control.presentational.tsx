@@ -122,7 +122,8 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
               <SelectTrigger
                 size="md"
                 aria-label="Order session cards"
-                className="gap-1.5 text-xs"
+                density="compact"
+                className="gap-1.5"
               >
                 <ArrowDownWideNarrow className="size-3.5" />
                 <SelectValue />

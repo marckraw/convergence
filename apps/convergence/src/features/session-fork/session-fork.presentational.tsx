@@ -320,7 +320,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                     <Notice
                       tone="warning"
                       data-testid="fork-preview-stale"
-                      className="text-xs"
+                      size="sm"
                       title="No output in the last 30s. The provider may be stuck."
                     />
                   )}
@@ -347,7 +347,8 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                   aria-label="Summary seed"
                   value={seedMarkdown}
                   onChange={(event) => onSeedMarkdownChange(event.target.value)}
-                  className="min-h-55 font-mono text-xs"
+                  density="compact"
+                  className="min-h-55 font-mono"
                   disabled={isSubmitting}
                 />
               )}

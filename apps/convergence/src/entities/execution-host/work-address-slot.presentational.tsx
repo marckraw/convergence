@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Badge, type ComboboxItem, Input, Combobox } from '@convergence/ui'
 import {
-  stripFactClass,
+  stripFactSize,
   stripInputClass,
   stripLabelClass,
   stripNoticeClass,
@@ -65,7 +65,7 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
         <Badge
           shape="label"
           outline
-          className={stripFactClass}
+          size={stripFactSize}
           data-testid="work-address-fact"
         >
           {view.label}

@@ -347,7 +347,7 @@ function renderProviderAccounts(
       {summary.hasSettingsOverride && (
         <Notice
           tone="warning"
-          className="text-xs"
+          size="sm"
           title="Shared settings.json supplies a credential to every Claude process, so account selection has no effect until it is removed."
         />
       )}

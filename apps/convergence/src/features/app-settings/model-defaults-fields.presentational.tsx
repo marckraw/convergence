@@ -73,7 +73,8 @@ export const ModelDefaultsFields: FC<ModelDefaultsFieldsProps> = ({
             value={selectedLabel}
             label={`${purpose} model: ${provider.vendorLabel || provider.name}`}
             onChange={(_, modelId) => onModelChange(provider.id, modelId)}
-            triggerClassName="px-2 text-xs"
+            triggerVariant="field"
+            triggerDensity="compact"
           />
         </SettingsSection>
       )

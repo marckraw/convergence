@@ -122,7 +122,8 @@ export const ChangedFilesTreeModel: FC<ChangedFilesTreeModelProps> = ({
               <Input
                 size="sm"
                 aria-label="Search changed files"
-                className="min-w-0 flex-1 rounded px-2 font-mono text-xs"
+                density="compact"
+                className="min-w-0 flex-1 rounded font-mono"
                 placeholder="Search files"
                 value={search.value}
                 onChange={(event) => search.setValue(event.target.value)}

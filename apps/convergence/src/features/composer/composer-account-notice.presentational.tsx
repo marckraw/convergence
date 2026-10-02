@@ -35,7 +35,7 @@ export function ComposerAccountNotice({
             </Button>
           ) : undefined
         }
-        className="text-xs"
+        size="sm"
       >
         {refusal.message}
       </Notice>
@@ -46,7 +46,7 @@ export function ComposerAccountNotice({
       tone="info"
       icon={<LoaderCircle />}
       title="Switching accounts…"
-      className="text-xs"
+      size="sm"
     >
       Your message has not been accepted yet.
     </Notice>
@@ -55,7 +55,7 @@ export function ComposerAccountNotice({
       tone="info"
       icon={<KeyRound />}
       title="Your next turn will use the selected account."
-      className="text-xs"
+      size="sm"
     >
       Switching accounts restarts idle servers. Running work elsewhere on either
       account can block a switch. Your conversation is preserved.

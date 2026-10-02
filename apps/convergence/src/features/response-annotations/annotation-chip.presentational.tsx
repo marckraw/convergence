@@ -66,7 +66,8 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
           value={editValue}
           onChange={(event) => onEditValueChange(event.target.value)}
           aria-label={`Edit response to “${excerpt}”`}
-          className="w-40 text-xs"
+          density="compact"
+          className="w-40"
         />
         <IconButton
           label="Save response"

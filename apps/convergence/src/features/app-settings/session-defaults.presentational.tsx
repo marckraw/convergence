@@ -77,8 +77,9 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
         >
           <SelectTrigger
             size="md"
+            density="compact"
             aria-label="Default provider"
-            className="min-w-40 text-xs"
+            className="min-w-40"
           >
             <SelectValue placeholder="Select provider" />
           </SelectTrigger>
@@ -104,7 +105,8 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
           value={selection.model?.label ?? 'Select model'}
           label="Default model"
           onChange={(providerId, modelId) => onModelChange(modelId, providerId)}
-          triggerClassName="px-2 text-xs"
+          triggerVariant="field"
+          triggerDensity="compact"
         />
       </SettingsSection>
 
@@ -121,8 +123,9 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
           >
             <SelectTrigger
               size="md"
+              density="compact"
               aria-label="Default reasoning effort"
-              className="min-w-32 text-xs"
+              className="min-w-32"
             >
               <SelectValue placeholder="Select effort" />
             </SelectTrigger>

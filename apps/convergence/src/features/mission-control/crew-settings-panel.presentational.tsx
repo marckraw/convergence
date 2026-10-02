@@ -472,7 +472,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               value={crewName}
               disabled={busy}
               onChange={(event) => onCrewNameChange(event.target.value)}
-              className="text-xs"
+              density="compact"
             />
           </Field>
 
@@ -503,7 +503,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onDeliveryLimitChange(readLimit(event.target.value))
                 }
-                className="w-16 text-xs"
+                density="compact"
+                className="w-16"
               />
               <span className="text-2xs text-ink-muted">per run</span>
             </Field>
@@ -524,7 +525,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onAttentionMinutesChange(readLimit(event.target.value))
                 }
-                className="w-16 text-xs"
+                density="compact"
+                className="w-16"
               />
               <span className="text-2xs text-ink-muted">minutes</span>
             </Field>
@@ -546,7 +548,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onLapCapChange(readLimit(event.target.value))
                 }
-                className="w-16 text-xs"
+                density="compact"
+                className="w-16"
               />
               <span className="text-2xs text-ink-muted">per issue</span>
             </Field>
@@ -615,7 +618,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
 
           <Notice
             title="A run can contain several laps"
-            className="text-2xs text-ink"
+            size="xs"
+            className="text-ink"
           >
             <span className="text-3xs text-ink-muted">
               Correction laps stay in the same run until a human handoff. The

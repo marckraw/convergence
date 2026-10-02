@@ -319,7 +319,8 @@ export const ProjectTree = memo(function ProjectTree({
                   cancelRename()
                 }
               }}
-              className="flex-1 min-w-0 text-xs"
+              density="compact"
+              className="flex-1 min-w-0"
               autoFocus
               aria-label={`Rename ${session.name}`}
             />

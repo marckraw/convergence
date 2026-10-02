@@ -87,7 +87,10 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
           searchPlaceholder="Search accounts…"
           emptyMessage="No matching accounts."
           variant="ghost"
-          className="gap-1.5 px-2 text-xs text-ink-muted hover:text-ink"
+          // The composer toolbar's step, 28 px (R3): its room and words are
+          // the size's, never a className's.
+          size="sm"
+          className="text-ink-muted hover:text-ink"
           open={open}
           onOpenChange={onOpenChange}
         />
