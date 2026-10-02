@@ -153,7 +153,7 @@ export const ModelPickerDialogPresentational: FC<
               }
               event.preventDefault()
             }}
-            placeholder="Search models..."
+            placeholder="Search models…"
           />
           {/*
             The keyboard's way to star a model: the active row's star, beside

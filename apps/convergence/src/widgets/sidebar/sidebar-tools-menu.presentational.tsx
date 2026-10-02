@@ -58,40 +58,40 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
       <MenuContent align="start" side="bottom">
         <MenuItem onClick={() => openDialog('space-workboard')}>
           <GitBranch className="h-3.5 w-3.5" />
-          <span>Spaces</span>
+          <span>Spaces…</span>
         </MenuItem>
         <MenuItem
           disabled={activeSurface !== 'code' || !hasActiveProject}
           onClick={() => openDialog('project-settings')}
         >
           <Settings2 className="h-3.5 w-3.5" />
-          <span>Project Settings</span>
+          <span>Project settings…</span>
         </MenuItem>
         <MenuSeparator />
         <MenuItem onClick={() => openDialog('providers')}>
           <Bot className="h-3.5 w-3.5" />
-          <span>Providers</span>
+          <span>Providers…</span>
         </MenuItem>
         <MenuItem
           disabled={activeSurface === 'code' && !hasActiveProject}
           onClick={() => openDialog('mcp-servers')}
         >
           <Cable className="h-3.5 w-3.5" />
-          <span>MCP Servers</span>
+          <span>MCP servers…</span>
         </MenuItem>
         <MenuItem
           disabled={!hasActiveProject}
           onClick={() => openDialog('skills-browser')}
         >
           <Library className="h-3.5 w-3.5" />
-          <span>Skills</span>
+          <span>Skills…</span>
         </MenuItem>
         <MenuItem
           disabled={!hasActiveProject}
           onClick={() => openDialog('prompt-library')}
         >
           <BookOpenText className="h-3.5 w-3.5" />
-          <span>Prompt Library</span>
+          <span>Prompt library…</span>
         </MenuItem>
         <MenuSeparator />
         <MenuItem onClick={() => openDialog('release-notes')}>

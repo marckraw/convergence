@@ -186,7 +186,7 @@ export const Default: Story = {
     // Search takes focus as the dialog opens.
     await waitFor(() =>
       expect(
-        within(dialog).getByPlaceholderText('Search models...'),
+        within(dialog).getByPlaceholderText('Search models…'),
       ).toHaveFocus(),
     )
     await userEvent.keyboard('{Escape}')
@@ -201,7 +201,7 @@ export const Open: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openedDialog()
     await userEvent.type(
-      within(dialog).getByPlaceholderText('Search models...'),
+      within(dialog).getByPlaceholderText('Search models…'),
       'gpt',
     )
     await expect(args.onQueryChange).toHaveBeenLastCalledWith('gpt')

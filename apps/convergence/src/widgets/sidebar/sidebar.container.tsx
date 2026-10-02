@@ -236,7 +236,7 @@ export const Sidebar: FC<SidebarProps> = ({
         ...prev,
         [sessionId]: requestId,
       }))
-      toast.loading('Regenerating session name...', { id: toastId })
+      toast.loading('Regenerating session name…', { id: toastId })
 
       void sessionApi
         .regenerateName(sessionId, requestId)

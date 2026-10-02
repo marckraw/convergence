@@ -3172,7 +3172,7 @@ describe('SessionView', () => {
         for (let open = 0; open < 2; open += 1) {
           openGroup('Project')
           const menu = await screen.findByRole('dialog')
-          expect(within(menu).queryByText('Detecting apps...')).toBeNull()
+          expect(within(menu).queryByText('Detecting apps…')).toBeNull()
           expect(
             within(menu).getByRole('button', { name: 'Open in VS Code' }),
           ).toBeInTheDocument()

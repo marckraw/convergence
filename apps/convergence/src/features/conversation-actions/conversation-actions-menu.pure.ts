@@ -31,7 +31,7 @@ export type ActionsMenuGroup = Exclude<ActionsMenuLevel, 'closed' | 'fan'>
 export const ROUTINE_LABELS: Record<ConversationRoutineAction['id'], string> = {
   drill: 'Run the drill',
   compact: 'Compact',
-  fork: 'Fork',
+  fork: 'Fork…',
   'hand-off': 'Hand off to another account',
 }
 

@@ -469,7 +469,7 @@ describe('ComposerContainer', () => {
         }}
       />,
     )
-    return screen.getByPlaceholderText('Send a follow-up...')
+    return screen.getByPlaceholderText('Send a follow-up…')
   }
 
   it('CH5 forwards an optional wires slot and updates it across the memo boundary', () => {
@@ -637,11 +637,9 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    const textbox = screen.getByPlaceholderText('Send a follow-up...')
+    const textbox = screen.getByPlaceholderText('Send a follow-up…')
 
-    expect(
-      screen.getByPlaceholderText('Send a follow-up...'),
-    ).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Send a follow-up…')).toBeInTheDocument()
 
     fireEvent.change(textbox, {
       target: { value: 'Try again in this session' },
@@ -678,7 +676,7 @@ describe('ComposerContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
     fireEvent.click(screen.getByRole('button', { name: /Planning/ }))
 
-    const textbox = screen.getByPlaceholderText('Send a follow-up...')
+    const textbox = screen.getByPlaceholderText('Send a follow-up…')
     fireEvent.change(textbox, {
       target: { value: 'Try again with planning' },
     })
@@ -2354,7 +2352,7 @@ describe('ComposerContainer', () => {
         postComposerIntent('session-1', { kind: 'open-account-picker' })
       })
       expect(
-        await screen.findByPlaceholderText('Search accounts...'),
+        await screen.findByPlaceholderText('Search accounts…'),
       ).toBeInTheDocument()
 
       // A turn starts (a relay, a queued input): the picker locks.
@@ -2364,7 +2362,7 @@ describe('ComposerContainer', () => {
           screen.getByRole('combobox', { name: /account|login/i }),
         ).toBeDisabled(),
       )
-      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+      expect(screen.queryByPlaceholderText('Search accounts…')).toBeNull()
 
       // The user is typing when the turn ends.
       textbox.focus()
@@ -2374,7 +2372,7 @@ describe('ComposerContainer', () => {
           screen.getByRole('combobox', { name: /account|login/i }),
         ).not.toBeDisabled(),
       )
-      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+      expect(screen.queryByPlaceholderText('Search accounts…')).toBeNull()
       expect(document.activeElement).toBe(textbox)
     })
 
@@ -2421,7 +2419,7 @@ describe('ComposerContainer', () => {
           screen.getByRole('combobox', { name: /account|login/i }),
         ).not.toBeDisabled(),
       )
-      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+      expect(screen.queryByPlaceholderText('Search accounts…')).toBeNull()
     })
 
     it('opens its own account picker on a hand-off, and sends nothing (R4)', async () => {
@@ -2430,14 +2428,14 @@ describe('ComposerContainer', () => {
       await waitFor(() =>
         expect(window.electronAPI.providerAccounts.list).toHaveBeenCalled(),
       )
-      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+      expect(screen.queryByPlaceholderText('Search accounts…')).toBeNull()
 
       act(() => {
         postComposerIntent('session-1', { kind: 'open-account-picker' })
       })
 
       expect(
-        await screen.findByPlaceholderText('Search accounts...'),
+        await screen.findByPlaceholderText('Search accounts…'),
       ).toBeInTheDocument()
       expect(
         useSessionStore.getState().sendMessageToSession,
@@ -3126,7 +3124,7 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    const textbox = screen.getByPlaceholderText('Queue a follow-up...')
+    const textbox = screen.getByPlaceholderText('Queue a follow-up…')
     fireEvent.change(textbox, {
       target: { value: 'Check auth after this' },
     })
@@ -3180,7 +3178,7 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    expect(screen.getByPlaceholderText('Session is running...')).toBeDisabled()
+    expect(screen.getByPlaceholderText('Session is running…')).toBeDisabled()
   })
 
   it('sends answer mode when the provider is waiting for input', () => {
@@ -3214,7 +3212,7 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    const textbox = screen.getByPlaceholderText('Respond to the agent...')
+    const textbox = screen.getByPlaceholderText('Respond to the agent…')
     fireEvent.change(textbox, {
       target: { value: 'Use option B' },
     })
@@ -3283,7 +3281,7 @@ describe('ComposerContainer', () => {
       expect(screen.getByTestId('composer-root')).toContainElement(
         screen.getByText(explanation),
       )
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      const textbox = screen.getByPlaceholderText('Send a follow-up…')
       fireEvent.change(textbox, { target: { value: 'queued for B' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
       await waitFor(() => expect(textbox).toHaveValue(''))
@@ -3359,7 +3357,7 @@ describe('ComposerContainer', () => {
         fireEvent.click(await screen.findByText('a@example.com'))
         expect(screen.getByText('Workspace workspace-b')).toBeInTheDocument()
         fireEvent.click(screen.getByText('b@example.com'))
-        const textbox = screen.getByPlaceholderText('Send a follow-up...')
+        const textbox = screen.getByPlaceholderText('Send a follow-up…')
         fireEvent.change(textbox, {
           target: { value: 'Continue on B with my draft' },
         })
@@ -3414,7 +3412,7 @@ describe('ComposerContainer', () => {
       )
       fireEvent.click(await screen.findByText('a@example.com'))
       fireEvent.click(screen.getByText('b@example.com'))
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      const textbox = screen.getByPlaceholderText('Send a follow-up…')
       fireEvent.change(textbox, { target: { value: 'older draft' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
       rerender(
@@ -3528,7 +3526,7 @@ describe('ComposerContainer', () => {
         render(<ComposerContainer context={handoffContext} />)
         fireEvent.click(await screen.findByText('a@example.com'))
         fireEvent.click(screen.getByText('b@example.com'))
-        const textbox = screen.getByPlaceholderText('Send a follow-up...')
+        const textbox = screen.getByPlaceholderText('Send a follow-up…')
         fireEvent.change(textbox, { target: { value: 'keep this draft' } })
         fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
         const refusal = await screen.findByRole('alert')
@@ -3622,7 +3620,7 @@ describe('ComposerContainer', () => {
       fireEvent.click(await screen.findByText('Default account'))
       fireEvent.click(await screen.findByText('b@example.com'))
 
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      const textbox = screen.getByPlaceholderText('Send a follow-up…')
       fireEvent.change(textbox, { target: { value: 'continue on B' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
 
@@ -3718,7 +3716,7 @@ describe('ComposerContainer', () => {
 
       await screen.findByText('Runs on')
 
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      const textbox = screen.getByPlaceholderText('Send a follow-up…')
       fireEvent.change(textbox, { target: { value: 'run this remotely' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
 
@@ -3792,7 +3790,7 @@ describe('ComposerContainer', () => {
 
       fireEvent.click(option)
 
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      const textbox = screen.getByPlaceholderText('Send a follow-up…')
       fireEvent.change(textbox, { target: { value: 'should stay ambient' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
 
@@ -4385,7 +4383,7 @@ describe('ComposerContainer', () => {
         renderComposer()
 
         fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
-        await screen.findByPlaceholderText('Search models...')
+        await screen.findByPlaceholderText('Search models…')
 
         // The filter that names the foreign provider is not there to click.
         expect(screen.queryByText('OpenAI')).toBeNull()
@@ -4395,7 +4393,7 @@ describe('ComposerContainer', () => {
         expect(screen.queryByText('GPT-5.5')).toBeNull()
 
         // Nor does the search box, which answers from the same catalog.
-        fireEvent.change(screen.getByPlaceholderText('Search models...'), {
+        fireEvent.change(screen.getByPlaceholderText('Search models…'), {
           target: { value: 'gpt' },
         })
         expect(await screen.findByText('No models found.')).toBeInTheDocument()
@@ -4417,7 +4415,7 @@ describe('ComposerContainer', () => {
         )
 
         fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
-        await screen.findByPlaceholderText('Search models...')
+        await screen.findByPlaceholderText('Search models…')
 
         fireEvent.click(screen.getByRole('button', { name: /^OpenAI/ }))
         expect(await screen.findByText('GPT-5.5')).toBeInTheDocument()

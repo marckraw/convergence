@@ -69,7 +69,7 @@ export const useWorkLedgerStore = create<WorkLedgerStore>((set, get) => ({
     } catch (error) {
       set({
         error:
-          error instanceof Error ? error.message : 'Could not read the ledger',
+          error instanceof Error ? error.message : 'Couldn’t read the ledger.',
       })
     }
   },

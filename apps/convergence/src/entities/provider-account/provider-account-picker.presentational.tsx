@@ -84,7 +84,7 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
           }
           disabled={disabled}
           icon={<KeyRound className="h-3.5 w-3.5" />}
-          searchPlaceholder="Search accounts..."
+          searchPlaceholder="Search accounts…"
           emptyMessage="No matching accounts."
           variant="ghost"
           className="gap-1.5 px-2 text-xs text-ink-muted hover:text-ink"

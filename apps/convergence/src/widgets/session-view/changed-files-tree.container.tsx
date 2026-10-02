@@ -37,7 +37,7 @@ export const ChangedFilesTree: FC<ChangedFilesTreeProps> = ({
 
   if (loading) {
     return (
-      <div className="p-3 text-xs text-ink-muted">Loading changed files...</div>
+      <div className="p-3 text-xs text-ink-muted">Loading changed files…</div>
     )
   }
 

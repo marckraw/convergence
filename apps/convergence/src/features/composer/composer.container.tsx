@@ -1678,7 +1678,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
 
     const baseName = trimmed || attachments[0]?.filename || 'New session'
     const name =
-      baseName.length > 40 ? baseName.substring(0, 40) + '...' : baseName
+      baseName.length > 40 ? baseName.substring(0, 40) + '…' : baseName
     if (context.kind === 'global') {
       void (async () => {
         const startMessage = prepareNewSessionMessage
@@ -2184,18 +2184,18 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
           selectionLocks.mode === 'stranded'
             ? `${activeSession?.providerId ?? 'This session'} is unavailable, so this session cannot continue.`
             : activeSession?.attention === 'needs-input'
-              ? 'Respond to the agent...'
+              ? 'Respond to the agent…'
               : activeSession?.status === 'running'
                 ? midRunPolicy.disabled
-                  ? 'Session is running...'
+                  ? 'Session is running…'
                   : deliveryMode === 'steer'
-                    ? 'Steer current run...'
-                    : 'Queue a follow-up...'
+                    ? 'Steer current run…'
+                    : 'Queue a follow-up…'
                 : selectionLocks.canContinue
-                  ? 'Send a follow-up...'
+                  ? 'Send a follow-up…'
                   : isSessionDone
                     ? 'What would you like to work on?'
-                    : 'Session is running...'
+                    : 'Session is running…'
         }
         disabled={isComposerDisabled}
         attachments={attachments}

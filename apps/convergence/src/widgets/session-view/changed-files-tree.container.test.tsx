@@ -34,7 +34,7 @@ describe('ChangedFilesTree', () => {
   it('renders a loading state without mounting Pierre Tree', () => {
     render(<ChangedFilesTree files={[]} selectedFile={null} loading />)
 
-    expect(screen.getByText('Loading changed files...')).toBeInTheDocument()
+    expect(screen.getByText('Loading changed files…')).toBeInTheDocument()
   })
 
   it('renders an empty state without replacing the active changed-files UI', () => {

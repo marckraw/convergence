@@ -177,7 +177,7 @@ describe('ModelPickerDialog', () => {
       )
     })
     expect(onChange).not.toHaveBeenCalled()
-    expect(screen.getByPlaceholderText('Search models...')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search models…')).toBeInTheDocument()
   })
 
   it('sorts favorites first and filters to favorites from the sidebar', async () => {

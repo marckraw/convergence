@@ -792,7 +792,7 @@ describe('MAR-3118 lap 2 — E: the WIP stepper steps from what the field shows'
 })
 
 describe('MAR-3118 lap 4 — C: the refusal marker is drawn on the closed row', () => {
-  it('shows the amber marker on a closed seat with a standing refusal, and none without', () => {
+  it('shows the danger marker on a closed seat with a standing refusal, and none without', () => {
     const { rerender, props } = renderPanel(null, null, [opus], vi.fn(), {
       ...seatCtx,
       problem: {

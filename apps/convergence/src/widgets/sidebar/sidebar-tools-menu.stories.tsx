@@ -34,19 +34,19 @@ export const Default: Story = {
     const menu = await screen.findByRole('menu')
     await waitFor(() => expect(menu).toBeVisible())
     for (const name of [
-      'Spaces',
-      'Project Settings',
-      'Providers',
-      'MCP Servers',
-      'Skills',
-      'Prompt Library',
+      'Spaces…',
+      'Project settings…',
+      'Providers…',
+      'MCP servers…',
+      'Skills…',
+      'Prompt library…',
       "What's New",
     ]) {
       await expect(screen.getByRole('menuitem', { name })).not.toHaveAttribute(
         'aria-disabled',
       )
     }
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Providers' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Providers…' }))
     await expect(args.onOpenDialog).toHaveBeenCalledWith('providers', undefined)
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     await expect(trigger).toHaveFocus()
@@ -67,10 +67,10 @@ export const Disabled: Story = {
     )
     await screen.findByRole('menu')
     for (const name of [
-      'Project Settings',
-      'MCP Servers',
-      'Skills',
-      'Prompt Library',
+      'Project settings…',
+      'MCP servers…',
+      'Skills…',
+      'Prompt library…',
     ]) {
       await expect(screen.getByRole('menuitem', { name })).toHaveAttribute(
         'aria-disabled',
@@ -78,7 +78,7 @@ export const Disabled: Story = {
       )
     }
     await expect(
-      screen.getByRole('menuitem', { name: 'Spaces' }),
+      screen.getByRole('menuitem', { name: 'Spaces…' }),
     ).not.toHaveAttribute('aria-disabled')
     // Ends closed: an open modal menu hides the trigger from assistive tech.
     await userEvent.keyboard('{Escape}')
@@ -101,7 +101,7 @@ export const Rail: Story = {
     await screen.findByRole('menu')
     // On the chat surface the project's settings are not this menu's to open.
     await expect(
-      screen.getByRole('menuitem', { name: 'Project Settings' }),
+      screen.getByRole('menuitem', { name: 'Project settings…' }),
     ).toHaveAttribute('aria-disabled', 'true')
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())

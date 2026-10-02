@@ -25,7 +25,7 @@ const routineRows: RoutineRowView[] = [
     reason: null,
     progress: null,
   },
-  { id: 'fork', label: 'Fork', offered: true, reason: null, progress: null },
+  { id: 'fork', label: 'Fork…', offered: true, reason: null, progress: null },
   {
     id: 'hand-off',
     label: 'Hand off to another account',
@@ -269,7 +269,7 @@ export const Routines: Story = {
   args: { level: 'routines' },
   play: async ({ args, canvas, userEvent }) => {
     const menu = canvas.getByRole('menu', { name: 'Routines' })
-    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Fork' }))
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Fork…' }))
     await expect(args.onRoutine).toHaveBeenCalledWith('fork')
     await expect(
       within(menu).getByRole('menuitem', {

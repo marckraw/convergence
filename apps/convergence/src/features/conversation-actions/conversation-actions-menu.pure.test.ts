@@ -306,7 +306,7 @@ describe('resolveRoutineRows (R4/R5)', () => {
     expect(rows.map((row) => row.label)).toEqual([
       'Run the drill',
       'Compact',
-      'Fork',
+      'Fork…',
       'Hand off to another account',
     ])
     expect(rows[3]).toMatchObject({

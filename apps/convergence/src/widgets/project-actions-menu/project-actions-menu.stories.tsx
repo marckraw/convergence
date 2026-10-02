@@ -66,7 +66,7 @@ const items: ProjectActionItem[] = [
     latestRun: run(build, {
       status: 'failed',
       exitCode: 1,
-      stdout: 'vite v7 building for production...\n',
+      stdout: 'vite v7 building for production…\n',
       stderr: 'error TS2307: Cannot find module "./missing"\n',
     }),
     running: false,

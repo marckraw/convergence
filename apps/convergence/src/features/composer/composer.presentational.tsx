@@ -313,7 +313,7 @@ export const Composer: FC<ComposerProps> = ({
   selectionDisabled = false,
   modelSelectionDisabled = false,
   sessionProviderId = null,
-  placeholder = 'Ask anything, @tag files/folders, :: for injections...',
+  placeholder = 'Ask anything, @tag files/folders, :: for injections…',
   disabled = false,
   hasPendingAnnotations = false,
   attachments,

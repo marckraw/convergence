@@ -519,14 +519,14 @@ describe('App', () => {
     expect(
       sidebar.queryByRole('button', { name: /open a project/i }),
     ).toBeNull()
-    expect(sidebar.queryByText('Project Settings')).toBeNull()
+    expect(sidebar.queryByText('Project settings…')).toBeNull()
     fireEvent.click(
       sidebar.getByRole('button', { name: /open sidebar tools/i }),
     )
-    expect(screen.getByText('Providers')).toBeInTheDocument()
-    expect(screen.getByText('MCP Servers')).toBeInTheDocument()
-    expect(screen.getAllByText('Skills').length).toBeGreaterThan(0)
-    expect(screen.getByText('Prompt Library')).toBeInTheDocument()
+    expect(screen.getByText('Providers…')).toBeInTheDocument()
+    expect(screen.getByText('MCP servers…')).toBeInTheDocument()
+    expect(screen.getAllByText('Skills…').length).toBeGreaterThan(0)
+    expect(screen.getByText('Prompt library…')).toBeInTheDocument()
   })
 
   it('opens a Space home from the Chat sidebar', async () => {
@@ -750,7 +750,7 @@ describe('App', () => {
 
     render(<App />)
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
   it('falls back cleanly when system info is unavailable', async () => {

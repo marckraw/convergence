@@ -237,7 +237,7 @@ export const AppShell: FC<AppShellProps> = ({
         <DragRegion />
         {showDevelopmentRibbon ? <DevBuildRibbon /> : null}
         <p className="flex flex-1 items-center justify-center pb-12 text-ink-muted">
-          Loading...
+          Loading…
         </p>
       </div>
     )
