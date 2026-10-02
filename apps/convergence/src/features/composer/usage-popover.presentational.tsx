@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { cn, EmptyState, Meter, type Tone } from '@convergence/ui'
+import { EmptyState, Meter, type Tone } from '@convergence/ui'
 
 /**
  * The composer's two usage popovers, the Codex quota and the context window,
@@ -9,11 +9,15 @@ import { cn, EmptyState, Meter, type Tone } from '@convergence/ui'
  */
 
 /** The popover's title, the line under it, and an action at its end. */
-export const UsageHeading: FC<{
+export const renderUsageHeading = ({
+  title,
+  detail,
+  action,
+}: {
   title: string
   detail: ReactNode
   action?: ReactNode
-}> = ({ title, detail, action }) => (
+}) => (
   <div className="flex items-start justify-between gap-3">
     <div>
       <p className="text-sm font-semibold text-ink">{title}</p>
@@ -59,16 +63,6 @@ export const UsageMeterRow: FC<{
 )
 
 /** Nothing to read yet, or the reading is unavailable: why, in a quiet box. */
-export const UsageNote: FC<{ children: ReactNode }> = ({ children }) => (
+export const renderUsageNote = (children: ReactNode) => (
   <EmptyState size="compact" detail={children} />
-)
-
-/** A part of the popover under a hairline: the credits, an action, a footnote. */
-export const UsageSection: FC<{
-  children: ReactNode
-  className?: string
-}> = ({ children, className }) => (
-  <div className={cn('border-t border-line-soft pt-2', className)}>
-    {children}
-  </div>
 )

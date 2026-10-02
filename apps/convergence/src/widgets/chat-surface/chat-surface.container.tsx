@@ -18,10 +18,9 @@ import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
-  ActivityStatus,
   ConversationHeader,
-  DraftPlaceName,
   DraftStart,
+  HeaderStatus,
   ConversationViewMenu,
   headerFocusTarget,
   leadingStatusSlots,
@@ -541,12 +540,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           <DraftStart
             title={draftSpace.title}
             icon={<Folder />}
-            place={
-              <>
-                Starting in Space:{' '}
-                <DraftPlaceName>{draftSpace.title}</DraftPlaceName>
-              </>
-            }
+            place="Starting in Space"
+            placeName={draftSpace.title}
             action={{
               label: 'Open Space',
               onClick: () => onCancelSpaceAttempt?.(),
@@ -738,7 +733,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                   side: 'left' as const,
                   group: 'status' as const,
                   node: (
-                    <ActivityStatus
+                    <HeaderStatus
+                      kind="activity"
                       label={activityLabel}
                       testId="chat-session-activity-indicator"
                     />

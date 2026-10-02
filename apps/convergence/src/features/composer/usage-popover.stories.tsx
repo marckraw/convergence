@@ -1,11 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect } from 'storybook/test'
+import { cn } from '@convergence/ui'
 import {
-  UsageHeading,
+  renderUsageHeading,
+  renderUsageNote,
   UsageMeterRow,
-  UsageNote,
-  UsageSection,
 } from './usage-popover.presentational'
+import { usageSection } from './usage-pill.styles'
 
 type UsagePanelProps = { available: boolean }
 
@@ -13,7 +14,7 @@ type UsagePanelProps = { available: boolean }
 function UsagePanel({ available }: UsagePanelProps) {
   return (
     <div className="w-80 max-w-full space-y-3 rounded-md border border-line bg-raised p-3">
-      <UsageHeading title="Codex usage" detail="checked 14:07" />
+      {renderUsageHeading({ title: 'Codex usage', detail: 'checked 14:07' })}
       {available ? (
         <div className="space-y-2">
           <UsageMeterRow
@@ -41,11 +42,11 @@ function UsagePanel({ available }: UsagePanelProps) {
           />
         </div>
       ) : (
-        <UsageNote>Codex usage is unavailable.</UsageNote>
+        renderUsageNote('Codex usage is unavailable.')
       )}
-      <UsageSection className="text-2xs text-ink-muted">
+      <div className={cn(usageSection, 'text-2xs text-ink-muted')}>
         Refreshes quietly while visible
-      </UsageSection>
+      </div>
     </div>
   )
 }

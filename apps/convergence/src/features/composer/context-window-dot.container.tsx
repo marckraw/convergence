@@ -26,12 +26,15 @@ import {
   getContextTone,
 } from './context-window-tone.pure'
 import {
-  UsageHeading,
+  renderUsageHeading,
+  renderUsageNote,
   UsageMeterRow,
-  UsageNote,
-  UsageSection,
 } from './usage-popover.presentational'
-import { contextDotHalo, usagePillTone } from './usage-pill.styles'
+import {
+  contextDotHalo,
+  usagePillTone,
+  usageSection,
+} from './usage-pill.styles'
 import { useHoverPopover } from './use-hover-popover'
 
 interface ContextWindowDotProps {
@@ -211,17 +214,18 @@ export function ContextWindowDot({
         onPointerLeave={closePanelSoon}
         initialFocus={false}
       >
-        <UsageHeading
-          title="Context window"
-          detail="Current conversation capacity, separate from provider usage limits."
-        />
+        {renderUsageHeading({
+          title: 'Context window',
+          detail:
+            'Current conversation capacity, separate from provider usage limits.',
+        })}
 
         {!contextWindow ? (
-          <UsageNote>
-            Context usage has not been reported for this session yet.
-          </UsageNote>
+          renderUsageNote(
+            'Context usage has not been reported for this session yet.',
+          )
         ) : contextWindow.availability === 'unavailable' ? (
-          <UsageNote>{contextWindow.reason}</UsageNote>
+          renderUsageNote(contextWindow.reason)
         ) : (
           <div className="space-y-2">
             <UsageMeterRow
@@ -231,7 +235,7 @@ export function ContextWindowDot({
               tone={tone}
               meterLabel="Context window remaining"
             />
-            <UsageSection>
+            <div className={usageSection}>
               <DescriptionList layout="inline" className="gap-1.5">
                 <DescriptionItem term="Used">
                   {contextWindow.usedPercentage}% ·{' '}
@@ -246,7 +250,7 @@ export function ContextWindowDot({
                     : 'Estimated'}
                 </DescriptionItem>
               </DescriptionList>
-            </UsageSection>
+            </div>
             {alertLine ? (
               <p className="text-2xs leading-relaxed text-warning-ink">
                 {alertLine}
@@ -256,7 +260,7 @@ export function ContextWindowDot({
         )}
 
         {compaction.visible ? (
-          <UsageSection className="space-y-2 pt-3">
+          <div className={cn(usageSection, 'space-y-2 pt-3')}>
             <Button
               type="button"
               disabled={
@@ -294,11 +298,11 @@ export function ContextWindowDot({
                 {actionMessage.text}
               </p>
             ) : null}
-          </UsageSection>
+          </div>
         ) : null}
 
         {drill.visible ? (
-          <UsageSection className="space-y-2 pt-3">
+          <div className={cn(usageSection, 'space-y-2 pt-3')}>
             <Button
               type="button"
               variant="tonal"
@@ -337,7 +341,7 @@ export function ContextWindowDot({
                 {cancelRefusal}
               </p>
             ) : null}
-          </UsageSection>
+          </div>
         ) : null}
       </PopoverContent>
     </Popover>

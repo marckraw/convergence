@@ -64,7 +64,7 @@ interface ProviderStatusDialogProps {
 const badgeWords = 'font-medium uppercase tracking-eyebrow'
 
 /** A term in the provider's facts: the eyebrow look, over its value. */
-const Term: FC<{ children: ReactNode }> = ({ children }) => (
+const renderTerm = (children: ReactNode) => (
   <span className={sectionLabel}>{children}</span>
 )
 
@@ -134,16 +134,16 @@ function renderRuntimeInfo(runtimeInfo: ProviderRuntimeInfo | null) {
         density="compact"
         className="mt-2 grid gap-2 sm:grid-cols-2"
       >
-        <DescriptionItem term={<Term>App version</Term>}>
+        <DescriptionItem term={renderTerm('App version')}>
           {runtimeInfo.appVersion}
         </DescriptionItem>
-        <DescriptionItem term={<Term>Embedded app Node</Term>}>
+        <DescriptionItem term={renderTerm('Embedded app Node')}>
           {runtimeInfo.appNodeVersion} via Electron
         </DescriptionItem>
-        <DescriptionItem term={<Term>Electron</Term>}>
+        <DescriptionItem term={renderTerm('Electron')}>
           {runtimeInfo.electronVersion ?? 'Unknown'}
         </DescriptionItem>
-        <DescriptionItem term={<Term>Build</Term>}>
+        <DescriptionItem term={renderTerm('Build')}>
           {runtimeInfo.isPackaged ? 'Packaged' : 'Development'} ·{' '}
           {runtimeInfo.platform}/{runtimeInfo.arch}
         </DescriptionItem>
@@ -207,11 +207,11 @@ function renderProviderRow(
             )}
             <DescriptionList density="compact" className="gap-2">
               {provider.version && (
-                <DescriptionItem term={<Term>Version</Term>}>
+                <DescriptionItem term={renderTerm('Version')}>
                   {provider.version}
                 </DescriptionItem>
               )}
-              <DescriptionItem term={<Term>Latest</Term>}>
+              <DescriptionItem term={renderTerm('Latest')}>
                 {provider.update.latestVersion ??
                   (provider.update.checkError
                     ? `Unable to check: ${provider.update.checkError}`
@@ -242,29 +242,27 @@ function renderProviderRow(
             )}
             <DescriptionList density="compact" className="gap-2">
               <DescriptionItem
-                term={
-                  <Term>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Wrench aria-hidden className="size-3.5" />
-                      CLI binary path
-                    </span>
-                  </Term>
-                }
+                term={renderTerm(
+                  <span className="inline-flex items-center gap-1.5">
+                    <Wrench aria-hidden className="size-3.5" />
+                    CLI binary path
+                  </span>,
+                )}
               >
                 {provider.binaryPath}
               </DescriptionItem>
               {provider.install && (
                 <>
-                  <DescriptionItem term={<Term>Install manager</Term>}>
+                  <DescriptionItem term={renderTerm('Install manager')}>
                     {formatInstallManager(provider.install.manager)}
                   </DescriptionItem>
-                  <DescriptionItem term={<Term>CLI Node</Term>}>
+                  <DescriptionItem term={renderTerm('CLI Node')}>
                     {provider.install.nodeVersion ?? 'Unknown'} ·{' '}
                     {provider.install.nodePath ?? 'Node path unknown'}
                   </DescriptionItem>
                   {provider.install.manager === 'npm' &&
                     provider.install.prefixDirectory && (
-                      <DescriptionItem term={<Term>Global npm prefix</Term>}>
+                      <DescriptionItem term={renderTerm('Global npm prefix')}>
                         {provider.install.prefixDirectory}
                         <span className="mt-1 block text-2xs text-ink-muted">
                           Updates run in this prefix. To move a provider to
@@ -274,7 +272,7 @@ function renderProviderRow(
                       </DescriptionItem>
                     )}
                   {provider.install.manager === 'homebrew' && (
-                    <DescriptionItem term={<Term>Homebrew prefix</Term>}>
+                    <DescriptionItem term={renderTerm('Homebrew prefix')}>
                       {provider.install.brewPrefix ?? 'Unknown'}
                     </DescriptionItem>
                   )}

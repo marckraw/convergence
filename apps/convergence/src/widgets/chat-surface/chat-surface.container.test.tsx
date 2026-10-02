@@ -102,11 +102,8 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
     ConversationViewMenu: actual.ConversationViewMenu,
     parallelWorkInRow: actual.parallelWorkInRow,
     // The header's real status pills (CONV-3).
-    ActivityStatus: actual.ActivityStatus,
-    ArchivedStatus: actual.ArchivedStatus,
-    ParallelWorkStatus: actual.ParallelWorkStatus,
+    HeaderStatus: actual.HeaderStatus,
     leadingStatusSlots: actual.leadingStatusSlots,
-    DraftPlaceName: actual.DraftPlaceName,
     DraftStart: actual.DraftStart,
     useParallelWork: () => ({ rows: [], error: null, loading: false }),
     ParallelWork: ({

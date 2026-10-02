@@ -20,7 +20,6 @@ import {
 import {
   Badge,
   Button,
-  Card,
   Chip,
   cn,
   CodeBlock,
@@ -41,6 +40,7 @@ import { ConversationItemShell } from './conversation-item-shell.presentational'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
 import { ToolVisibilityBadge } from './tool-visibility-badge.presentational'
+import { RequestCard } from './request-card.presentational'
 import { ChoiceRequestForm } from './choice-request-form.presentational'
 import { PlanRequestForm } from './plan-request-form.presentational'
 import { FormRequestForm } from './form-request-form.presentational'
@@ -100,13 +100,7 @@ const AVATARS = {
   quiet: 'bg-surface-muted text-ink-muted',
 } as const
 
-function Avatar({
-  of,
-  children,
-}: {
-  of: keyof typeof AVATARS
-  children: ReactNode
-}) {
+function renderAvatar(of: keyof typeof AVATARS, children: ReactNode) {
   return (
     <div
       aria-hidden
@@ -125,11 +119,9 @@ const foldPill =
   'rounded-full border border-line-soft px-2 py-0.5 text-xs text-ink-muted hover:bg-fill-hover hover:text-ink'
 
 /** "↳ description (type)": which subagent made it. */
-function AgentAttribution({
-  attribution,
-}: {
-  attribution: Parameters<typeof agentAttributionLabel>[0]
-}) {
+function renderAgentAttribution(
+  attribution: Parameters<typeof agentAttributionLabel>[0],
+) {
   return (
     <div className="mb-1 truncate text-xs text-muted-foreground">
       {agentAttributionLabel(attribution)}
@@ -141,7 +133,7 @@ function AgentAttribution({
  * A tool call or its result (CONV-11): a disc, the time and the visibility
  * badge, and the call folded to one line that opens on the whole text.
  */
-function ToolEntry({
+function renderToolEntry({
   viewModel,
   icon,
   text,
@@ -156,7 +148,7 @@ function ToolEntry({
   return (
     <ConversationItemShell copyText={viewModel.copyText}>
       <div className="flex gap-3 py-2">
-        <Avatar of="quiet">{icon}</Avatar>
+        {renderAvatar('quiet', icon)}
         <div className="min-w-0 flex-1 pt-1">
           {attribution}
           <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">
@@ -193,55 +185,8 @@ function ToolEntry({
   )
 }
 
-/**
- * A card where the agent waits on you (CONV-8): an approval, a plan, a form,
- * a link, a question. Each is the warning tone (R1: waiting on you), with its
- * glyph, its title (which also names it) and its time; what it asks goes
- * under them.
- */
-function RequestCard({
-  title,
-  icon,
-  timestamp,
-  testId,
-  children,
-}: {
-  title: string
-  icon: ReactNode
-  timestamp: ReactNode
-  testId?: string
-  children: ReactNode
-}) {
-  return (
-    <Card
-      tone="warning"
-      padding="md"
-      className="my-2 max-w-full overflow-hidden"
-      data-testid={testId}
-      role="group"
-      aria-label={title}
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        <span
-          aria-hidden
-          className="mt-0.5 flex shrink-0 text-warning-ink [&_svg]:size-5"
-        >
-          {icon}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
-            <p className="text-sm font-medium">{title}</p>
-            {timestamp}
-          </div>
-          {children}
-        </div>
-      </div>
-    </Card>
-  )
-}
-
 /** A boundary across the transcript: a restart, a model change (CONV-13). */
-function Boundary({
+function renderBoundary({
   testId,
   icon,
   tone,
@@ -297,9 +242,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
             <div className="flex gap-3 py-3">
-              <Avatar of="user">
-                <User className="size-4" />
-              </Avatar>
+              {renderAvatar('user', <User className="size-4" />)}
               <div className="min-w-0 flex-1 pt-0.5">
                 <ConversationItemHeader
                   createdAt={entry.createdAt}
@@ -386,9 +329,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-3">
-            <Avatar of="agent">
-              <Bot className="size-4" />
-            </Avatar>
+            {renderAvatar('agent', <Bot className="size-4" />)}
             <div className="min-w-0 flex-1 pt-0.5">
               <ConversationItemHeader
                 createdAt={entry.createdAt}
@@ -423,9 +364,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-3">
-            <Avatar of="quiet">
-              <Bot className="size-4" />
-            </Avatar>
+            {renderAvatar('quiet', <Bot className="size-4" />)}
             <div className="min-w-0 flex-1 pt-0.5">
               <ConversationItemHeader
                 createdAt={entry.createdAt}
@@ -443,34 +382,26 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       )
 
     case 'tool-call':
-      return (
-        <ToolEntry
-          viewModel={viewModel}
-          icon={<Wrench className="size-3.5" />}
-          text={entry.inputText}
-          attribution={
-            entry.agentRunId ? (
-              <AgentAttribution attribution={entry.agentAttribution} />
-            ) : undefined
-          }
-        />
-      )
+      return renderToolEntry({
+        viewModel,
+        icon: <Wrench className="size-3.5" />,
+        text: entry.inputText,
+        attribution: entry.agentRunId
+          ? renderAgentAttribution(entry.agentAttribution)
+          : undefined,
+      })
 
     case 'tool-result':
-      return (
-        <ToolEntry
-          viewModel={viewModel}
-          icon={<Terminal className="size-3.5" />}
-          text={entry.outputText}
-        />
-      )
+      return renderToolEntry({
+        viewModel,
+        icon: <Terminal className="size-3.5" />,
+        text: entry.outputText,
+      })
 
     case 'approval-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
-          {entry.agentRunId && (
-            <AgentAttribution attribution={entry.agentAttribution} />
-          )}
+          {entry.agentRunId && renderAgentAttribution(entry.agentAttribution)}
           <RequestCard
             testId="approval-request-card"
             title={approvalCardTitle(entry.resolution)}
@@ -634,13 +565,12 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       if (entry.providerMeta?.providerEventType === 'session.restarted') {
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
-            <Boundary
-              testId="session-restart-boundary"
-              tone="warning"
-              icon={<RotateCcw />}
-            >
-              {entry.text}
-            </Boundary>
+            {renderBoundary({
+              testId: 'session-restart-boundary',
+              tone: 'warning',
+              icon: <RotateCcw />,
+              children: entry.text,
+            })}
           </ConversationItemShell>
         )
       }
@@ -653,13 +583,12 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       if (entry.providerMeta?.providerEventType === 'session.model-changed') {
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
-            <Boundary
-              testId="session-model-change-boundary"
-              tone="info"
-              icon={<Shuffle />}
-            >
-              {entry.text}
-            </Boundary>
+            {renderBoundary({
+              testId: 'session-model-change-boundary',
+              tone: 'info',
+              icon: <Shuffle />,
+              children: entry.text,
+            })}
           </ConversationItemShell>
         )
       }

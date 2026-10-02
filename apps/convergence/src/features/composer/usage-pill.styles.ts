@@ -30,3 +30,6 @@ export const contextDotHalo: Record<UsageTone, string> = {
   danger: 'shadow-halo shadow-danger-solid/16',
   neutral: 'shadow-halo shadow-neutral-solid/16',
 }
+
+/** A part of a usage popover under a hairline: the credits, an action, a footnote. */
+export const usageSection = 'border-t border-line-soft pt-2'

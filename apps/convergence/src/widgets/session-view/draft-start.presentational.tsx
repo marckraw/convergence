@@ -6,8 +6,10 @@ interface DraftStartProps {
   title: string
   /** A 12 px glyph for the place: a branch, a folder. */
   icon?: ReactNode
-  /** Where it starts, in words: "Starting in main repo". */
-  place?: ReactNode
+  /** Where it starts, in words: "Starting in main repo", "Starting in worktree". */
+  place?: string
+  /** The place's name after the words, in the ink: a branch, a Space. */
+  placeName?: string
   /** What to do about the place instead: "Use main repo", "Open Space". */
   action?: { label: string; onClick: () => void }
 }
@@ -22,6 +24,7 @@ export const DraftStart: FC<DraftStartProps> = ({
   title,
   icon,
   place,
+  placeName,
   action,
 }) => (
   <>
@@ -38,7 +41,14 @@ export const DraftStart: FC<DraftStartProps> = ({
             {icon}
           </span>
         )}
-        <span>{place}</span>
+        <span>
+          {place}
+          {placeName ? (
+            <>
+              : <span className="font-medium text-ink">{placeName}</span>
+            </>
+          ) : null}
+        </span>
         {action ? (
           <Button variant="link" onClick={action.onClick} className="ml-1">
             {action.label}
@@ -47,9 +57,4 @@ export const DraftStart: FC<DraftStartProps> = ({
       </div>
     )}
   </>
-)
-
-/** The place's name, in the ink, inside DraftStart's `place` words. */
-export const DraftPlaceName: FC<{ children: ReactNode }> = ({ children }) => (
-  <span className="font-medium text-ink">{children}</span>
 )

@@ -2,12 +2,10 @@ import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
 import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
-import { DraftPlaceName, DraftStart } from './draft-start.presentational'
+import { DraftStart } from './draft-start.presentational'
 import {
-  ActivityStatus,
+  HeaderStatus,
   leadingStatusSlots,
-  RemoteStatus,
-  WorktreeRemovedStatus,
 } from './header-status.presentational'
 import { HarnessFactsSections } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
@@ -494,18 +492,16 @@ export const SessionView: FC = () => {
               title={title}
               icon={<GitBranch />}
               place={
-                activeProject ? (
-                  draftWorkspace ? (
-                    <>
-                      Starting in worktree:{' '}
-                      <DraftPlaceName>
-                        {draftWorkspace.branchName}
-                      </DraftPlaceName>
-                    </>
-                  ) : (
-                    'Starting in main repo'
-                  )
-                ) : undefined
+                activeProject
+                  ? draftWorkspace
+                    ? 'Starting in worktree'
+                    : 'Starting in main repo'
+                  : undefined
+              }
+              placeName={
+                activeProject && draftWorkspace
+                  ? draftWorkspace.branchName
+                  : undefined
               }
               action={
                 activeProject && draftWorkspace
@@ -619,7 +615,7 @@ export const SessionView: FC = () => {
                     id: 'remote',
                     side: 'left' as const,
                     group: 'status' as const,
-                    node: <RemoteStatus />,
+                    node: <HeaderStatus kind="remote" />,
                   },
                 ]
               : []),
@@ -630,7 +626,8 @@ export const SessionView: FC = () => {
                     side: 'left' as const,
                     group: 'status' as const,
                     node: (
-                      <ActivityStatus
+                      <HeaderStatus
+                        kind="activity"
                         label={activityLabel}
                         testId="session-activity-indicator"
                       />
@@ -644,7 +641,7 @@ export const SessionView: FC = () => {
                     id: 'worktree-removed',
                     side: 'left' as const,
                     group: 'status' as const,
-                    node: <WorktreeRemovedStatus />,
+                    node: <HeaderStatus kind="worktree-removed" />,
                   },
                 ]
               : []),

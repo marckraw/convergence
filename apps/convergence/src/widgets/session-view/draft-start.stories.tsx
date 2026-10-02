@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Folder, GitBranch } from 'lucide-react'
 import { expect, fn } from 'storybook/test'
-import { DraftPlaceName, DraftStart } from './draft-start.presentational'
+import { DraftStart } from './draft-start.presentational'
 
 const meta = {
   title: 'Widgets/SessionView/DraftStart',
@@ -9,11 +9,8 @@ const meta = {
   args: {
     title: 'convergence',
     icon: <GitBranch />,
-    place: (
-      <>
-        Starting in worktree: <DraftPlaceName>ui/ds4-sweep-conv</DraftPlaceName>
-      </>
-    ),
+    place: 'Starting in worktree',
+    placeName: 'ui/ds4-sweep-conv',
     action: { label: 'Use main repo', onClick: fn() },
   },
   decorators: [
@@ -48,7 +45,11 @@ export const Dark: Story = {
 
 /** In the main repo: nothing to switch to. */
 export const MainRepo: Story = {
-  args: { place: 'Starting in main repo', action: undefined },
+  args: {
+    place: 'Starting in main repo',
+    placeName: undefined,
+    action: undefined,
+  },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Starting in main repo')).toBeVisible()
     await expect(canvas.queryByRole('button')).toBeNull()
@@ -60,11 +61,8 @@ export const Space: Story = {
   args: {
     title: 'Design system sweep',
     icon: <Folder />,
-    place: (
-      <>
-        Starting in Space: <DraftPlaceName>Design system sweep</DraftPlaceName>
-      </>
-    ),
+    place: 'Starting in Space',
+    placeName: 'Design system sweep',
     action: { label: 'Open Space', onClick: fn() },
   },
 }

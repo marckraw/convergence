@@ -1,12 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn } from 'storybook/test'
-import {
-  ActivityStatus,
-  ArchivedStatus,
-  ParallelWorkStatus,
-  RemoteStatus,
-  WorktreeRemovedStatus,
-} from './header-status.presentational'
+import { HeaderStatus } from './header-status.presentational'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
 
 const onToggle = fn()
@@ -16,15 +10,20 @@ const onOpen = fn()
 function StatusRow({ activity }: { activity: string }) {
   return (
     <div className="flex w-200 max-w-full flex-wrap items-center gap-1.5 rounded-md bg-canvas p-3">
-      <ParallelWorkStatus
+      <HeaderStatus
+        kind="parallel-work"
         label="2 running"
         expanded={false}
         onToggle={onToggle}
       />
-      <ArchivedStatus />
-      <RemoteStatus />
-      <ActivityStatus label={activity} testId="session-activity-indicator" />
-      <WorktreeRemovedStatus />
+      <HeaderStatus kind="archived" />
+      <HeaderStatus kind="remote" />
+      <HeaderStatus
+        kind="activity"
+        label={activity}
+        testId="session-activity-indicator"
+      />
+      <HeaderStatus kind="worktree-removed" />
       <HarnessAlertChip
         label="Harness: rate limited until 14:00"
         expanded={false}

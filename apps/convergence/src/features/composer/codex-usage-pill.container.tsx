@@ -19,11 +19,10 @@ import {
 } from './codex-usage-pill.pure'
 import { CodexUsageQuotaRow } from './codex-usage-quota-row.presentational'
 import {
-  UsageHeading,
-  UsageNote,
-  UsageSection,
+  renderUsageHeading,
+  renderUsageNote,
 } from './usage-popover.presentational'
-import { usagePillTone } from './usage-pill.styles'
+import { usagePillTone, usageSection } from './usage-pill.styles'
 import { useHoverPopover } from './use-hover-popover'
 
 interface CodexUsagePillContainerProps {
@@ -111,17 +110,17 @@ export function CodexUsagePillContainer({
         onPointerLeave={closePanelSoon}
         initialFocus={false}
       >
-        <UsageHeading
-          title="Codex usage"
-          detail={
+        {renderUsageHeading({
+          title: 'Codex usage',
+          detail: (
             <>
               checked {formatCheckedAt(snapshot?.lastCheckedAt)}
               {snapshot?.status === 'available' && snapshot.stale
                 ? ' (stale)'
                 : ''}
             </>
-          }
-          action={
+          ),
+          action: (
             <IconButton
               label="Refresh Codex usage"
               variant="ghost"
@@ -138,8 +137,8 @@ export function CodexUsagePillContainer({
                 <RefreshCw aria-hidden className="size-3.5" />
               )}
             </IconButton>
-          }
-        />
+          ),
+        })}
 
         {snapshot?.status === 'available' ? (
           <div className="space-y-2">
@@ -154,7 +153,9 @@ export function CodexUsagePillContainer({
               reset={weekly?.resetsAt ?? null}
             />
             {snapshot.credits ? (
-              <UsageSection className="flex items-center gap-2 text-xs">
+              <div
+                className={cn(usageSection, 'flex items-center gap-2 text-xs')}
+              >
                 <span className="w-18 shrink-0 font-medium text-ink">
                   Credits
                 </span>
@@ -170,16 +171,19 @@ export function CodexUsagePillContainer({
                     ? 'Any'
                     : (snapshot.credits.balance ?? '0')}
                 </span>
-              </UsageSection>
+              </div>
             ) : null}
           </div>
         ) : (
-          <UsageNote>
-            {unavailableReason ?? 'Codex usage is unavailable.'}
-          </UsageNote>
+          renderUsageNote(unavailableReason ?? 'Codex usage is unavailable.')
         )}
 
-        <UsageSection className="flex items-center justify-between text-2xs text-ink-muted">
+        <div
+          className={cn(
+            usageSection,
+            'flex items-center justify-between text-2xs text-ink-muted',
+          )}
+        >
           <span>Refreshes quietly while visible</span>
           <Button
             variant="link"
@@ -191,7 +195,7 @@ export function CodexUsagePillContainer({
           >
             Settings
           </Button>
-        </UsageSection>
+        </div>
       </PopoverContent>
     </Popover>
   )
