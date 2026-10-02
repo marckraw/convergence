@@ -111,6 +111,12 @@ type ComboboxSharedProps = {
    * it, and the popup takes the same name.
    */
   ariaLabel?: string
+  /**
+   * The ids of what describes the trigger, out of a Field: a note under it
+   * that says why the choice matters now (MC-12). In a Field its
+   * description does this already.
+   */
+  ariaDescribedBy?: string
   /** One more thing to do, as a row under the list. */
   action?: ComboboxAction
   /** Anything else under the list, such as a form to make a new item. */
@@ -214,6 +220,7 @@ function Combobox(props: ComboboxProps) {
     icon,
     chevron = true,
     ariaLabel,
+    ariaDescribedBy,
     action,
     footer,
     searchable = true,
@@ -410,6 +417,8 @@ function Combobox(props: ComboboxProps) {
       <ComboboxPrimitive.Trigger
         ref={setTrigger}
         aria-label={name}
+        // Only when asked: in a Field, Base UI describes it by the Field's own.
+        {...(ariaDescribedBy ? { 'aria-describedby': ariaDescribedBy } : {})}
         {...(variant === 'field'
           ? {
               'data-slot': 'combobox-trigger',

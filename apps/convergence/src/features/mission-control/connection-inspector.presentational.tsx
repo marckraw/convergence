@@ -2,7 +2,7 @@ import {
   WorkAddressSlot,
   type WorkAddressSlotView,
 } from '@/entities/execution-host'
-import type { FC } from 'react'
+import { useId, type FC } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { ProviderAccountPicker } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
@@ -183,6 +183,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
     projectOptions.find(
       (option) => option.id === (spec?.projectId ?? GLOBAL_PROJECT_OPTION_ID),
     )?.label ?? 'Pick a project'
+  // The warning lines under a control describe it, so a screen reader says
+  // why with what (MC-12): the recipient's note, the opener's, and what
+  // keeps Save from saving yet.
+  const ids = useId()
+  const recipientNoteId = `${ids}-recipient-note`
+  const openerNoteId = `${ids}-opener-note`
+  const problemId = `${ids}-problem`
 
   return (
     <section
@@ -278,9 +285,12 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           disabled={busy}
           searchPlaceholder="Find a conversation in this crew…"
           emptyMessage="No other conversations in this crew."
+          ariaDescribedBy={recipientNote ? recipientNoteId : undefined}
         />
         {recipientNote ? (
-          <p className="text-3xs text-warning-ink">{recipientNote}</p>
+          <p id={recipientNoteId} className="text-3xs text-warning-ink">
+            {recipientNote}
+          </p>
         ) : null}
         {spawning ? null : (
           <p className={INSPECTOR_NOTE_CLASS}>
@@ -515,6 +525,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               value={draft.customOpener}
               placeholder="/clear"
               aria-label="The first message, sent on its own"
+              aria-describedby={customOpenerNote ? openerNoteId : undefined}
               disabled={busy}
               onChange={(event) => onCustomOpenerChange(event.target.value)}
               className="text-xs"
@@ -524,7 +535,9 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             {activeBeforeDelivery?.help ?? ''}
           </p>
           {customOpenerNote ? (
-            <p className="text-3xs text-warning-ink">{customOpenerNote}</p>
+            <p id={openerNoteId} className="text-3xs text-warning-ink">
+              {customOpenerNote}
+            </p>
           ) : null}
         </div>
       )}
@@ -548,11 +561,14 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
       <div className="mt-auto flex flex-col gap-2">
         {/* Why it can't be saved yet: a heads-up, not a failure, so the
             warning ink; the line keeps its room so the buttons never jump. */}
-        <p className="min-h-4 text-2xs text-warning-ink">{problem ?? ''}</p>
+        <p id={problemId} className="min-h-4 text-2xs text-warning-ink">
+          {problem ?? ''}
+        </p>
         <div className="flex items-center gap-1.5">
           <Button
             type="button"
             variant="tonal"
+            aria-describedby={problem !== null ? problemId : undefined}
             disabled={busy || problem !== null || (!isNew && !dirty)}
             onClick={onSave}
           >
