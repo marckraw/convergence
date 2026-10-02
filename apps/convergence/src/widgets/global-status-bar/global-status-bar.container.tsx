@@ -8,6 +8,7 @@ import {
   useSessionStore,
 } from '@/entities/session'
 import { LocalModelTunnelStatusContainer } from '@/features/local-model-tunnel'
+import { needsYouSessions, needsYouTone } from '@/features/needs-you'
 import { GlobalStatusBar } from './global-status-bar.presentational'
 
 interface GlobalStatusBarContainerProps {
@@ -27,9 +28,15 @@ export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
   const activeProject = useProjectStore((state) => state.activeProject)
   const setActiveProject = useProjectStore((state) => state.setActiveProject)
 
+  // "N need you" is one count (ruling 6): the rail and Mission Control derive
+  // it from the same sessions with the same function.
+  const needsYou = useMemo(
+    () => needsYouSessions(globalSessions, dismissals),
+    [globalSessions, dismissals],
+  )
   const status = useMemo(
-    () => selectGlobalStatus(globalSessions, dismissals, projects),
-    [globalSessions, dismissals, projects],
+    () => selectGlobalStatus(globalSessions, needsYou, projects),
+    [globalSessions, needsYou, projects],
   )
 
   const recency = useMemo(() => {
@@ -64,7 +71,8 @@ export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
       meter={meter}
       meterSessions={globalSessions}
       runningCount={status.running.length}
-      attentionCount={status.needsAttention.length}
+      attentionCount={needsYou.length}
+      attentionTone={needsYouTone(needsYou)}
       byProject={status.byProject}
       recency={recency}
       providers={providers}

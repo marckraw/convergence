@@ -3,6 +3,7 @@ import { Cloud, TriangleAlert } from 'lucide-react'
 import { expect, fn } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
 import { Spinner } from '../../motion/spinner/spinner'
+import { Button } from '../button/button'
 import { StatusDot } from '../status-dot/status-dot'
 import { StatusPill, StatusPillButton } from './status-pill'
 
@@ -140,5 +141,75 @@ export const Pressable: Story = {
 export const PressableDark: Story = {
   ...Pressable,
   name: 'Pressable, dark',
+  globals: { theme: 'dark' },
+}
+
+const onUsage = fn()
+
+/**
+ * Small (`size="sm"`): R3's 28 px with 12 px words, among a toolbar's sm
+ * controls, as the composer's usage pills sit beside its pickers. With only
+ * its glyph (the context dot) it is round, named and tooltipped by its
+ * label. A plain sm pill holds words that act at its end.
+ */
+export const Small: Story = {
+  render: () => (
+    <div className="flex items-center gap-1 rounded-md bg-canvas p-3">
+      <StatusPillButton
+        size="sm"
+        tone="success"
+        leading={<StatusDot tone="success" />}
+        onClick={onUsage}
+      >
+        Codex 72%
+      </StatusPillButton>
+      <StatusPillButton
+        size="sm"
+        tone="warning"
+        label="Context window: 81% used"
+        leading={<StatusDot tone="warning" size="lg" />}
+      />
+      <StatusPill
+        size="sm"
+        leading={<Cloud className="size-3" />}
+        action={
+          <Button variant="link" onClick={onUsage}>
+            Use main repo
+          </Button>
+        }
+      >
+        Starting in worktree: ui/ds8-composer
+      </StatusPill>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const codex = canvas.getByRole('button', { name: 'Codex 72%' })
+    await expect(codex.getBoundingClientRect().height).toBe(28)
+    await expect(getComputedStyle(codex).fontSize).toBe('12px')
+    await expect(getComputedStyle(codex).color).toBe(
+      tokenColor('--success-ink'),
+    )
+    const dot = canvas.getByRole('button', {
+      name: 'Context window: 81% used',
+    })
+    const box = dot.getBoundingClientRect()
+    await expect(box.height).toBe(28)
+    await expect(box.width).toBe(28)
+    await expect(dot).toHaveAttribute(
+      'data-tooltip',
+      'Context window: 81% used',
+    )
+    const place = canvas
+      .getByText(/Starting in worktree/)
+      .closest('[data-slot="status-pill"]') as HTMLElement
+    await expect(place.getBoundingClientRect().height).toBe(28)
+    await userEvent.click(canvas.getByRole('button', { name: 'Use main repo' }))
+    await expect(onUsage).toHaveBeenCalled()
+  },
+}
+
+export const SmallDark: Story = {
+  ...Small,
+  name: 'Small, dark',
   globals: { theme: 'dark' },
 }

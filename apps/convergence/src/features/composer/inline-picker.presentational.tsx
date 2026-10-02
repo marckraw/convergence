@@ -1,24 +1,25 @@
 import type { FC, ReactNode } from 'react'
-import { Button, cn, EmptyState, popupSurface } from '@convergence/ui'
+import { cn, EmptyState, popupSurface } from '@convergence/ui'
 
 /**
  * The composer's inline pickers (`@`, `::`, `::skill::`, `::prompt::`) are
  * one shape (CONV-6, MAR-3617): a popup over the field, an optional heading,
- * what it lists (a Listbox the field drives, or why there is nothing to list),
- * and a hidden Close for screen readers. Drawn once here; each picker brings
- * its rows.
+ * and what it lists (a Listbox the field drives, or why there is nothing to
+ * list). Drawn once here; each picker brings its rows.
+ *
+ * The field keeps the focus, so Escape in the field closes it. It had a
+ * hidden Close too, which the keyboard reached and saw nothing (DS-7, ruling
+ * 5), and which, 32 px tall inside a 1 px box, left the popup 27 px to scroll
+ * with nothing in them; it is gone.
  */
 export const InlinePicker: FC<{
   testId: string
   /** Its heading: a glyph, a name and a line under it. None for `@` and `::`. */
   heading?: { icon: ReactNode; title: string; detail: string }
-  /** The hidden Close's name: "Close skill injection picker". */
-  closeLabel: string
-  onDismiss: () => void
   /** max-h-64 for the short pickers, max-h-72 for the ones with a heading. */
   tall?: boolean
   children: ReactNode
-}> = ({ testId, heading, closeLabel, onDismiss, tall = false, children }) => (
+}> = ({ testId, heading, tall = false, children }) => (
   <div
     className={cn(
       'absolute right-0 bottom-full left-0 z-50 mb-2 overflow-y-auto p-1',
@@ -39,14 +40,6 @@ export const InlinePicker: FC<{
       </div>
     ) : null}
     {children}
-    <Button
-      variant="ghost"
-      onClick={onDismiss}
-      aria-label={closeLabel}
-      className="sr-only"
-    >
-      Close
-    </Button>
   </div>
 )
 

@@ -134,7 +134,7 @@ export const Order: Story = {
 export const Empty: Story = {
   args: { totalCount: 0, visibleCount: 0, attentionCount: 0, runningCount: 0 },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('no sessions')).toBeVisible()
+    await expect(canvas.getByText('No sessions')).toBeVisible()
     await expect(canvas.getByText('No sessions yet')).toBeVisible()
     await expect(
       canvas.queryByRole('list', { name: 'Session cards' }),

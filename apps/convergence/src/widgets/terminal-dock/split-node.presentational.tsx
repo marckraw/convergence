@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import { Fragment } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import type { PaneTree } from '@/entities/terminal'
-import { cn } from '@convergence/ui'
+import { cn, resizeHandleStyles } from '@convergence/ui'
 import { LeafPaneView } from './leaf-pane.presentational'
 import type { LeafPaneHandlers } from './leaf-pane.presentational'
 
@@ -47,12 +47,18 @@ export const SplitNodeView: FC<SplitNodeProps> = (props) => {
             />
           </Panel>
           {index < tree.children.length - 1 ? (
+            // The resize line's one look (NAV-16): a 13 px hit area, a
+            // hairline under the pointer, the focus colour for the keyboard;
+            // react-resizable-panels keeps the gesture and the keys. Panes
+            // side by side part on a line running down. The panes have no
+            // edge of their own, so the line shows at rest too.
             <Separator
               className={cn(
-                'relative z-10 shrink-0 bg-line/50 transition-colors hover:bg-line',
+                resizeHandleStyles.base,
                 tree.direction === 'horizontal'
-                  ? 'w-px cursor-col-resize'
-                  : 'h-px cursor-row-resize',
+                  ? resizeHandleStyles.vertical
+                  : resizeHandleStyles.horizontal,
+                'bg-line/50',
               )}
             />
           ) : null}

@@ -140,7 +140,7 @@ export const FromSession: Story = {
     )
     await expect(
       within(dialog).getByText(
-        'Create a durable Chat context, with this session as its seed attempt.',
+        'Create a durable chat context, with this session as its seed attempt.',
       ),
     ).toBeVisible()
   },

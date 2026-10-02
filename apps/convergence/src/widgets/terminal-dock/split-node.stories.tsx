@@ -92,7 +92,16 @@ export const Default: Story = {
         canvas.getByRole('region', { name: `Terminal ${name}` }),
       ).toBeVisible()
     }
+    const [across, down] = canvas.getAllByRole('separator')
     await expect(canvas.getAllByRole('separator')).toHaveLength(2)
+    // Each line is the resize line (NAV-16): a 13 px hit area across its
+    // thin side, and the keyboard reaches it.
+    await expect(across.getBoundingClientRect().width).toBe(13)
+    await expect(getComputedStyle(across).width).toBe('1px')
+    await expect(down.getBoundingClientRect().height).toBe(13)
+    await expect(getComputedStyle(down).height).toBe('1px')
+    across.focus()
+    await expect(across).toHaveFocus()
 
     // A click in a pane focuses that pane.
     await userEvent.click(canvas.getByRole('tab', { name: 'git status' }))

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applySpaceContextToMessage,
   buildSpaceContextBlock,
+  withSpaceContextSource,
 } from './space-context.pure'
 
 const space = {
@@ -63,5 +64,25 @@ describe('space context preview', () => {
       '<space_context />\n\nUser request:\nShip it',
     )
     expect(applySpaceContextToMessage('Ship it', null)).toBe('Ship it')
+  })
+})
+
+describe('choosing a source (CONV-30)', () => {
+  const selection = {
+    includeBrief: true,
+    includeMemory: false,
+    selectedSourceIds: ['a'],
+  }
+
+  it('adds a chosen source once and drops a let-go one, keeping the rest — mutation keep a let-go source or add a chosen one twice turns red', () => {
+    expect({
+      added: withSpaceContextSource(selection, 'b', true),
+      again: withSpaceContextSource(selection, 'a', true),
+      dropped: withSpaceContextSource(selection, 'a', false),
+    }).toEqual({
+      added: { ...selection, selectedSourceIds: ['a', 'b'] },
+      again: { ...selection, selectedSourceIds: ['a'] },
+      dropped: { ...selection, selectedSourceIds: [] },
+    })
   })
 })

@@ -4,10 +4,14 @@ import type {
   RecordedPluginMcpServerFact,
   SessionHarnessFacts,
 } from '../../shared/types/harness-facts.types'
+/**
+ * The header's harness chip (CH4 R3): its facts, one by one, for a MetaLine
+ * to join (CONV-23), whether any is an alert, and the alerts themselves.
+ */
 export function harnessPill(facts: SessionHarnessFacts | null): {
-  label: string
+  facts: string[]
   alert: boolean
-  reason: string | null
+  reasons: string[]
 } {
   const current = facts?.currentTurn
   const retry = current?.retries
@@ -42,9 +46,7 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
       `${omitted} more integration${omitted === 1 ? ' needs' : 's need'} attention`,
     )
   if (retry?.state === 'in-flight') reasons.push('retrying')
-  const reason = reasons.length ? reasons.join(' · ') : null
-  const parts = ['Harness']
-  if (reason) parts.push(reason)
+  const parts = ['Harness', ...reasons]
   if (current?.hooks.length) parts.push(`hooks ${current.hooks.length}`)
   if (retry && retry.state !== 'in-flight')
     parts.push(
@@ -55,11 +57,13 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
           : `retry ${retry.attempts}`,
     )
   if (current?.denials?.length) parts.push(`denied ${current.denials.length}`)
-  return { label: parts.join(' · '), alert: reason !== null, reason }
+  return { facts: parts, alert: reasons.length > 0, reasons }
 }
-export function compactionLabel(
+
+/** A compaction's facts, one by one, for a MetaLine to join (CONV-23). */
+export function compactionFacts(
   fact: SessionHarnessFacts['compactions'][number],
-): string {
+): string[] {
   const format = (n: number) =>
     new Intl.NumberFormat('en', {
       notation: 'compact',
@@ -69,11 +73,16 @@ export function compactionLabel(
       .toLowerCase()
   const counts =
     fact.preTokens !== null && fact.postTokens !== null
-      ? ` · ${format(fact.preTokens)} → ${format(fact.postTokens)} tokens`
+      ? `${format(fact.preTokens)} → ${format(fact.postTokens)} tokens`
       : fact.preTokens !== null
-        ? ` · ${format(fact.preTokens)} tokens before`
-        : ''
-  return `Compacted (${fact.trigger ?? 'not reported'})${counts}${fact.truncated ? ' · record truncated' : ''}${fact.fieldBounds ? ' · text truncated' : ''}`
+        ? `${format(fact.preTokens)} tokens before`
+        : null
+  return [
+    `Compacted (${fact.trigger ?? 'not reported'})`,
+    ...(counts ? [counts] : []),
+    ...(fact.truncated ? ['record truncated'] : []),
+    ...(fact.fieldBounds ? ['text truncated'] : []),
+  ]
 }
 
 export function placeCompactions(
@@ -174,7 +183,8 @@ export function mcpReconnectUnavailable(
  * The MCP list's heading (MAR-3206 R5, R7, R13): the connected count over the
  * whole status, since when it has been unchanged, and whether a process runs
  * now -- a status outlives the process it was read from, and says so
- * whenever none runs. `running` is null when the caller cannot tell.
+ * whenever none runs. `running` is null when the caller cannot tell. Its
+ * facts one by one, for a MetaLine to join (CONV-23).
  *
  * The time is the status's own: an unchanged re-read records nothing, so the
  * time is when the list last changed, never when it was last read. The
@@ -185,14 +195,15 @@ export function mcpStatusHeading(
   status: Extract<HarnessFact, { kind: 'harness.mcpStatus' }>,
   running: boolean | null,
   writeTime: (at: Date) => string,
-): string {
+): string[] {
   const since = new Date(status.at)
   const parts = [
-    `MCP servers · ${status.connected} connected of ${status.servers.length + status.omitted}`,
+    'MCP servers',
+    `${status.connected} connected of ${status.servers.length + status.omitted}`,
     `unchanged since ${Number.isNaN(since.getTime()) ? status.at : writeTime(since)}`,
   ]
   if (running !== null) parts.push(running ? 'process running' : NO_PROCESS)
-  return parts.join(' · ')
+  return parts
 }
 
 /**

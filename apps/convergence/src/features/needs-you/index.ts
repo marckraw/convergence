@@ -35,7 +35,14 @@ export {
   NEEDS_YOU,
   needsYouCount,
   needsYouVerb,
+  WAITING_ON_YOU,
 } from './needs-you-words.pure'
+export {
+  needsYouSessions,
+  needsYouTone,
+  waitsOnYou,
+} from './needs-you-sessions.pure'
+export type { NeedsYouTone } from './needs-you-sessions.pure'
 export type {
   FoldAsk,
   FoldAskState,

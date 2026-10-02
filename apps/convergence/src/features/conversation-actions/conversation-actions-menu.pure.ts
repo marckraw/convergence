@@ -7,7 +7,7 @@ import type {
   ConversationAction,
   ConversationRoutineAction,
 } from '@/entities/conversation-actions'
-import { COMPACTING_CONTEXT_LABEL } from '@/entities/session'
+import { COMPACTING_CONTEXT_LABEL, FORK_ACTION_LABEL } from '@/entities/session'
 import {
   filterComposerSkills,
   type ProjectSkillCatalog,
@@ -31,7 +31,7 @@ export type ActionsMenuGroup = Exclude<ActionsMenuLevel, 'closed' | 'fan'>
 export const ROUTINE_LABELS: Record<ConversationRoutineAction['id'], string> = {
   drill: 'Run the drill',
   compact: 'Compact',
-  fork: 'Fork…',
+  fork: FORK_ACTION_LABEL,
   'hand-off': 'Hand off to another account',
 }
 

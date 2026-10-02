@@ -138,7 +138,7 @@ export const Failed: Story = {
   play: async ({ canvas }) => {
     await expect(
       canvas.getByText(
-        "Couldn't check: Codex did not answer within 20 seconds.",
+        'Couldn’t check: Codex did not answer within 20 seconds.',
       ),
     ).toBeVisible()
   },

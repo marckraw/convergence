@@ -365,12 +365,12 @@ export const Busy: Story = {
 
 /** Failed: an alert says what went wrong, with Try again. */
 export const Failed: Story = {
-  args: { error: "Couldn't read the branches", onRetry: fn() },
+  args: { error: 'Couldn’t read the branches', onRetry: fn() },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('combobox', { name: 'Project' }))
     const dialog = await openedList()
     await expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      "Couldn't read the branches",
+      'Couldn’t read the branches',
     )
     await userEvent.click(
       within(dialog).getByRole('button', { name: 'Try again' }),

@@ -1,5 +1,5 @@
 import { fullDateLabel } from '@convergence/ui'
-import { metaText } from '@/shared/testing/meta-line'
+import { metaText, seen } from '@/shared/testing/meta-line'
 import { render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
@@ -81,14 +81,17 @@ it('RUN64 R2 unknown last sighting has a relative age and provisional identity s
   expect({
     title: Boolean(screen.queryByText('Subagent')),
     idInTitle: container.textContent?.includes('tool-provisional'),
-    fixed: Boolean(screen.queryByText(metaText('Unknown · last seen 4 m ago'))),
+    // Timestamp writes the moment after the words that say which (CONV-22).
+    fixed: Boolean(
+      screen.queryByText(metaText('Unknown · last seen 4 minutes ago')),
+    ),
   }).toEqual({ title: true, idInTitle: false, fixed: true })
 })
 
 it.each([
   'Inspect routing',
   'Explore · haiku · depth 2',
-  'Failed · 59 m ago',
+  'Failed · 1 hour ago',
   'Last tool: Read',
   'Reported by the harness: Upstream refused the request',
 ])('R2/R7 renders %s — mutation omit that reported field turns red', (text) => {
@@ -143,9 +146,9 @@ it.each([
         onClose={vi.fn()}
       />,
     )
-    expect(
-      screen.getByText(metaText(`${label} · < 1 m ago`)),
-    ).toBeInTheDocument()
+    // The moment is told against a clock never before it: a report from a
+    // clock ahead of ours reads "now", never the future (CONV-22).
+    expect(screen.getByText(metaText(`${label} · now`))).toBeInTheDocument()
   },
 )
 
@@ -321,13 +324,14 @@ it('RUN64 R2′ task labels distinguish sighting and missing time with ISO title
   )
   expect({
     seen: screen
-      .queryByText(metaText('Running · seen 4 m ago'))
+      .queryByText(metaText('Running · seen 4 minutes ago'))
+      ?.querySelector('time')
       ?.getAttribute('data-tooltip'),
     legacy: screen
       .queryByText(metaText('Running · time not reported'))
       ?.hasAttribute('data-tooltip'),
   }).toEqual({
-    // The whole moment, as a Timestamp's tooltip says it (CONV-22).
+    // The whole moment, in the Timestamp's own tooltip (CONV-22).
     seen: fullDateLabel(new Date('2026-09-09T00:00:00Z')),
     legacy: false,
   })
@@ -359,10 +363,10 @@ it('RUN64 round3 bucket uses the folded seen anchor — mutation restate ended-o
       onClose={vi.fn()}
     />,
   )
+  // A MetaLine (CONV-23): its dot is silent, and a screen reader hears a comma.
   expect(
-    screen.queryByRole('button', { name: '2 older · newest 3 h ago' })
-      ?.textContent,
-  ).toBe('2 older · newest 3 h ago')
+    seen(screen.queryByRole('button', { name: '2 older, newest 3 hours ago' })),
+  ).toBe('2 older · newest 3 hours ago')
 })
 
 it('RUN64 round3 rendered children belong to the agent on an id collision — mutation reverse view parent precedence turns red', () => {

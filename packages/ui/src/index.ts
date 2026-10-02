@@ -475,3 +475,11 @@ export {
 } from './components/radio-group/radio-group'
 export { type ToggleHue } from './components/toggle/toggle'
 export { type ComboboxVariant } from './components/combobox/combobox'
+// DS8 lane words (MAR-3608): appended, so the parallel lanes' additions merge as unions.
+export { failureTitle, reasonOf } from './components/toaster/notify.pure'
+// DS8 lane rest (MAR-3608): appended, so the parallel lanes' additions merge as unions.
+export { disclosureChevron } from './motion/collapsible/collapsible.styles'
+// DS8 lane composer (MAR-3608): appended, so the parallel lanes' additions merge as unions.
+export { type SelectTriggerVariant } from './components/select/select'
+export { focusRingAroundField } from './lib/focus-ring.styles'
+export { type StatusPillSize } from './components/status-pill/status-pill'

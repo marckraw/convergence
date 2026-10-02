@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AnalyticsOverview } from '@/entities/analytics'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import { WorkStyleTab } from './work-style-tab.presentational'
 
 const provider = {
@@ -104,6 +105,34 @@ describe('WorkStyleTab', () => {
     ).toBeInTheDocument()
   })
 
+  it.each([
+    [
+      { isGeneratingProfile: true, canGenerateProfile: true },
+      'A profile is being generated.',
+    ],
+    [
+      { isGeneratingProfile: false, canGenerateProfile: false },
+      'Set up a provider first.',
+    ],
+  ])(
+    'R2: Generate… says why it waits (%o) — mutation: a bare disabled turns red',
+    (state, reason) => {
+      const onGenerateProfile = vi.fn()
+      render(
+        <WorkStyleTab
+          overview={overview}
+          isLoading={false}
+          {...state}
+          onGenerateProfile={onGenerateProfile}
+          onDeleteGeneratedProfile={vi.fn()}
+        />,
+      )
+      const generate = screen.getByRole('button', { name: 'Generate…' })
+      expect(isUnavailable(generate)).toBe(true)
+      expect(generate).toHaveAccessibleDescription(reason)
+    },
+  )
+
   it('renders an empty state when no local sessions exist', () => {
     render(
       <WorkStyleTab
@@ -176,7 +205,7 @@ describe('WorkStyleTab', () => {
     screen.getByRole('button', { name: 'Delete…' }).click()
     expect(onDeleteGeneratedProfile).toHaveBeenCalledTimes(1)
 
-    screen.getByRole('button', { name: 'Regenerate' }).click()
+    screen.getByRole('button', { name: 'Regenerate…' }).click()
     expect(onGenerateProfile).toHaveBeenCalledTimes(1)
   })
 })

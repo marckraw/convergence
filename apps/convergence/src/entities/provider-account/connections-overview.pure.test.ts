@@ -282,7 +282,7 @@ describe('MAR-3518 one cell per service', () => {
         state: 'failed',
         account: null,
       }).text,
-    ).toBe("Couldn't use it · ChatGPT app")
+    ).toBe('Couldn’t use it · ChatGPT app')
   })
   it('says when it checked, or nothing', () => {
     expect(describeConnectionsCheckedAt('2026-09-28T08:42:00.000Z')).toMatch(

@@ -54,6 +54,7 @@ tokens and their TypeScript mirrors are written.
 | `no-white-overlays`   | `border-white/`, `bg-white/`, `ring-white/`, `divide-white/` and their `black` twins, in the app only                                                                                                                                                                                                                          | the theme-safe tokens: `border-line-soft` for a hairline, `bg-fill-hover` and `bg-fill-selected` for the hover and chosen fills, `bg-fill-quiet` for a faint panel, `bg-chip` for a chip                                                                                                   | DS-2       |
 | `no-streamdown-names` | a name `theme.css` keeps painting for Streamdown's bundle alone, on any colour utility, with any variant or opacity: `bg-background`, `text-foreground`, `bg-muted`, `text-muted-foreground`, `border-border`, `bg-sidebar`, `bg-primary`, `text-primary-foreground`, `bg-black`; or its custom property, `var(--color-muted)` | the token the DS5 codemod moved each one to: `canvas`, `ink`, `surface-muted`, `ink-muted`, `line` (`line-soft` for `border-border/60` to `/80`), `surface-sunken`, `strong`, `on-strong`; black is `viewer` behind a picture and `scrim` behind a dialog                                  | MAR-3618   |
 | `motion-from-tokens`  | `duration-150`, `delay-75`, `transition-all`; and in a stylesheet too (`.css`, DS6), an `animation` or `transition` (or its `-duration`, `-delay`, `-timing-function`) with a time or an easing typed out: `600ms`, `ease-out`, `cubic-bezier(…)`                                                                              | `duration-exit`, `duration-fast`, `duration-panel`, `duration-slow` (a bare `transition` is already `duration-fast`), and a transition that names what moves: `transition-colors`, `transition-opacity`, `transition-transform`; in CSS, `var(--motion-pulse)`, `var(--motion-ease-enter)` | DS-33      |
+| `no-magic-stroke`     | an icon's stroke weight typed by hand: `stroke-[2.25]` (DS8, NAV-6)                                                                                                                                                                                                                                                            | lucide's own stroke, so every glyph has one weight; a weight the design needs is a token in `tokens.css` and `theme.css`                                                                                                                                                                   | NAV-6      |
 
 `no-raw-colors` is narrower than accent.'s on purpose, so that it fires only on colours:
 
@@ -312,6 +313,15 @@ review's: a space before the dots (`'Loading ...'`), and words that reach the sc
 21 to zero before it turned on, as an error (MAR-3608). Its canary is
 `canaries/chaperone/apps/convergence/src/widgets/sidebar/rename-session.container.tsx`.
 
+`no-ascii-couldnt`, a `regex` rule over the same files: a failure typed "Couldn't …" with the
+ASCII apostrophe. R10's failure reads "Couldn’t <verb> <thing>." with the typographic one (U+2019),
+which is how `notify.failure` and `failureTitle` write it, so a toast, a dialog's error and a
+Notice say a failure the same way (DLG-31). It reads only the capital "Couldn't" that starts a
+failure, skips comment lines, and, like the ellipsis rule, can't see a message that comes from
+`apps/convergence/electron`. DS8 swept 66 to zero, stories included, before it turned on, as an
+error (MAR-3608). Its canary is
+`canaries/chaperone/apps/convergence/src/widgets/sidebar/sync-env-failure.container.tsx`.
+
 ## Rules not ported, and why
 
 - **`use-external-link-props`.** accent. has a props helper, `externalLinkProps(href)`, and the
@@ -386,6 +396,8 @@ its new pattern is taken out.
 | `no-buttons-as-rows`         | `design-system-drift.json`      | error    |
 | `use-section-label`          | `design-system-drift.json`      | error    |
 | `use-badge-caps`             | `design-system-drift.json`      | error    |
+| `no-magic-stroke`            | `design-system-drift.json`      | error    |
+| `no-ascii-couldnt`           | `design-system-drift.json`      | error    |
 | `focus-colour-is-for-focus`  | `design-system-drift.json`      | error    |
 
 A rule is never relaxed to reach zero, and never turned back into a warning to let a change

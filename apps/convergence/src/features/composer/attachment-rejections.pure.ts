@@ -10,6 +10,6 @@ export function attachmentRejectionsTitle(
 ): string {
   const [only] = rejections
   if (rejections.length === 1 && only)
-    return `Couldn't attach ${only.filename}.`
-  return `Couldn't attach ${rejections.length} files.`
+    return `Couldn’t attach ${only.filename}.`
+  return `Couldn’t attach ${rejections.length} files.`
 }

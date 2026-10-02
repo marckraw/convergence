@@ -150,9 +150,8 @@ export const Default: Story = {
     await expect(canvas.getByText('Utilization').tagName).toBe('DT')
     await expect(canvas.getByText('82%').tagName).toBe('DD')
     await expect(canvas.getByText('Claude Code 2.4.1')).toBeVisible()
-    await expect(
-      canvas.getByText('Connected: linear, figma, context7'),
-    ).toBeVisible()
+    await expect(canvas.getByText('Connected').tagName).toBe('DT')
+    await expect(canvas.getByText('linear, figma, context7').tagName).toBe('DD')
     // A hook's output stays folded until asked for.
     const preview = canvas.getByText(/prettier: apps\/convergence/)
     await expect(preview).not.toBeVisible()
@@ -199,7 +198,7 @@ export const Failed: Story = {
   },
   play: async ({ args, canvas, userEvent }) => {
     const alert = canvas.getByRole('alert')
-    await expect(alert).toHaveTextContent("Couldn't read the harness facts.")
+    await expect(alert).toHaveTextContent('Couldn’t read the harness facts.')
     await expect(alert).toHaveTextContent('The session database is locked.')
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
     await expect(args.onRetry).toHaveBeenCalledOnce()
@@ -319,7 +318,7 @@ export const McpReconnectFailed: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      "Couldn't reconnect sentry: spawn sentry-mcp ENOENT",
+      'Couldn’t reconnect sentry: spawn sentry-mcp ENOENT',
     )
   },
 }

@@ -99,7 +99,7 @@ export const SessionConversationSurface: FC<
         <div className="px-4 pt-2">
           <Notice
             tone="danger"
-            title="Couldn't read parallel work."
+            title="Couldn’t read parallel work."
             actions={
               <Button type="button" variant="link" onClick={onParallelRetry}>
                 Retry

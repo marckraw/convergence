@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Button } from '@convergence/ui'
 import { pressOption } from '@/shared/testing/select-option'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import type {
   PromptLibraryCatalog,
   PromptLibraryDetails,
@@ -106,6 +107,18 @@ describe('PromptLibraryBrowserDialog', () => {
     expect(screen.getAllByText('review')).not.toHaveLength(0)
     expect(screen.getAllByText('/tmp/prompts/review-pr.md')).not.toHaveLength(0)
     expect(screen.getAllByText('Review this pull request.')).toHaveLength(2)
+  })
+
+  it('R2: while a change saves, New, Edit and Delete… say why they wait — mutation: a bare disabled turns red', () => {
+    renderDialog({ isMutating: true })
+
+    for (const name of ['New', 'Edit', 'Delete…']) {
+      const button = screen.getByRole('button', { name })
+      expect(isUnavailable(button)).toBe(true)
+      expect(button).toHaveAccessibleDescription(
+        'Wait for the last change to save.',
+      )
+    }
   })
 
   it('surfaces catalog and details errors', () => {

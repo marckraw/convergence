@@ -82,7 +82,7 @@ async function openTunnels() {
     </UiProvider>,
   )
   fireEvent.click(await screen.findByTestId('local-model-tunnel-pill'))
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit…' }))
   const dialog = await screen.findByRole('dialog', {
     name: 'Local model tunnels',
   })

@@ -226,7 +226,7 @@ export function connectionPathLine(path: ConnectionPath): {
     case 'needs-sign-in':
       return { text: `Needs sign-in again · ${path.via}`, tone: 'warn' }
     case 'failed':
-      return { text: `Couldn't use it · ${path.via}`, tone: 'warn' }
+      return { text: `Couldn’t use it · ${path.via}`, tone: 'warn' }
   }
 }
 

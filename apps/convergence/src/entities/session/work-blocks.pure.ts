@@ -352,21 +352,24 @@ const VERB_ORDER: readonly WorkVerb[] = [
 ]
 
 /**
- * The block's line, in lower case (`read 10 files in src/x · 3 searches`).
- * Counts per verb; files are counted by distinct path only when every step of
- * that verb carried one, else the steps themselves are counted. A block of
- * results that answer calls outside it says how many results it holds.
+ * The block's facts, in lower case (`read 10 files in src/x`, `3 searches`),
+ * one by one, for a MetaLine to join (CONV-23). Counts per verb; files are
+ * counted by distinct path only when every step of that verb carried one,
+ * else the steps themselves are counted. A block of results that answer calls
+ * outside it says how many results it holds.
  */
 export function workBlockSummary(
   items: readonly WorkBlockItem[],
   root: string | null = null,
-): string {
+): string[] {
   const steps = workSteps(items)
   if (steps.length === 0) {
     const results = items.filter((item) => item.kind === 'tool-result').length
-    return results > 0
-      ? plural(results, 'tool result', 'tool results')
-      : plural(items.length, 'step', 'steps')
+    return [
+      results > 0
+        ? plural(results, 'tool result', 'tool results')
+        : plural(items.length, 'step', 'steps'),
+    ]
   }
 
   const byVerb = new Map<WorkVerb, WorkStep[]>()
@@ -388,7 +391,7 @@ export function workBlockSummary(
     }
     parts.push(part)
   }
-  return parts.join(' · ')
+  return parts
 }
 
 function describeVerb(verb: WorkVerb, steps: readonly WorkStep[]): string {
@@ -413,14 +416,17 @@ function describeVerb(verb: WorkVerb, steps: readonly WorkStep[]): string {
 }
 
 /**
- * What the block's row says (R2, R4). A block the agent is still adding to
- * reads `Working… <facts>`; a closed one reads its facts, capitalised.
+ * What the block's row says (R2, R4), its facts one by one (CONV-23). A block
+ * the agent is still adding to reads `Working… <facts>`; a closed one reads
+ * its facts, capitalised.
  */
 export function workBlockLabel(
   items: readonly WorkBlockItem[],
   options: { working: boolean; root?: string | null },
-): string {
-  const summary = workBlockSummary(items, options.root ?? null)
-  if (options.working) return `Working… ${summary}`
-  return summary.charAt(0).toUpperCase() + summary.slice(1)
+): string[] {
+  const [first = '', ...rest] = workBlockSummary(items, options.root ?? null)
+  const lead = options.working
+    ? `Working… ${first}`
+    : first.charAt(0).toUpperCase() + first.slice(1)
+  return [lead, ...rest]
 }

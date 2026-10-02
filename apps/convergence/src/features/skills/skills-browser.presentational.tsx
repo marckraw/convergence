@@ -314,7 +314,7 @@ function renderCatalogPlaceholder({
     return (
       <EmptyState
         state="failed"
-        title="Couldn't read the skills"
+        title="Couldn’t read the skills"
         detail={catalogError}
         onRetry={onRefresh}
         retrying={isCatalogLoading}

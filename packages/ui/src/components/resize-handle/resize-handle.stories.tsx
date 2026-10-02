@@ -54,6 +54,10 @@ export const Default: Story = {
     await expect(handle).toHaveAttribute('aria-valuenow', '160')
     await expect(handle).toHaveAttribute('aria-valuemin', '120')
     await expect(handle).toHaveAttribute('aria-valuemax', '240')
+    // A 1 px line in a 13 px hit area: the line is what it paints, so it must
+    // have its 1 px, not lose it to the borders.
+    await expect(handle.getBoundingClientRect().width).toBe(13)
+    await expect(getComputedStyle(handle).width).toBe('1px')
     await userEvent.tab()
     await expect(handle).toHaveFocus()
     const focus = tokenColor('--focus')

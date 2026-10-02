@@ -237,7 +237,7 @@ export const WorkStyle: Story = {
     await expect(
       canvas.getByText(/Long sessions in one main project/),
     ).toBeVisible()
-    await userEvent.click(canvas.getByRole('button', { name: 'Generate' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Generate…' }))
     await expect(args.onGenerateDialogOpenChange).toHaveBeenCalledWith(true)
   },
 }
@@ -280,7 +280,7 @@ export const GeneratedProfile: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Delete…' }))
     await expect(args.onDeleteGeneratedProfile).toHaveBeenCalledOnce()
     await expect(
-      canvas.getByRole('button', { name: 'Regenerate' }),
+      canvas.getByRole('button', { name: 'Regenerate…' }),
     ).toBeEnabled()
   },
 }

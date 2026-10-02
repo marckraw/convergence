@@ -91,7 +91,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
         title="Mission Control"
         subtitle={
           totalCount === 0
-            ? 'no sessions'
+            ? 'No sessions'
             : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${needsYouCount(attentionCount)} · ${runningCount} running`
         }
         end={

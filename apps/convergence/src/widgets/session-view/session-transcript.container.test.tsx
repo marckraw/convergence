@@ -1,3 +1,4 @@
+import { seen } from '@/shared/testing/meta-line'
 import {
   fireEvent,
   render,
@@ -942,7 +943,8 @@ it('places compaction at its recorded boundary — mutation omit marker placemen
   )
   const marker = screen.queryByTestId('compaction-marker')
   expect({
-    text: marker?.textContent,
+    // Its facts on a MetaLine (CONV-23), read as the eye reads them.
+    text: seen(marker),
     before:
       !!marker &&
       (screen.getByText('Before compact').compareDocumentPosition(marker) &

@@ -94,7 +94,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
               </p>
             </div>
             <Button type="button" variant="ghost" onClick={onBrowseAll}>
-              Browse all
+              Browse all…
             </Button>
           </div>
           <SearchField

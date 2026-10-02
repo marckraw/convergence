@@ -260,7 +260,7 @@ export const ParallelWork: FC<Props> = ({
       )}
       {detail.error && (
         <FormError>
-          Couldn't read the earlier part of this work: {detail.error}
+          Couldn’t read the earlier part of this work: {detail.error}
         </FormError>
       )}
       {transcriptRows.map((row) =>
@@ -383,7 +383,7 @@ export const ParallelWork: FC<Props> = ({
       )}
       {(error || results.error) && (
         <FormError className="p-5">
-          Couldn't read parallel work: {error ?? results.error}
+          Couldn’t read parallel work: {error ?? results.error}
         </FormError>
       )}
       <ParallelWorkPanel

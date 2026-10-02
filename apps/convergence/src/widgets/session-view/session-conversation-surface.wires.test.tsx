@@ -216,7 +216,8 @@ describe.each(['global', 'project'] as const)(
       // The header row's pressable state (StatusPillButton), not a Button
       // restyled into one; its target still reaches 28 px under the pointer.
       expect(trigger).toHaveAttribute('data-tone', 'neutral')
-      expect(trigger).not.toHaveAttribute('data-size')
+      // The header row's 11 px pill: a size no Button has.
+      expect(trigger).toHaveAttribute('data-size', 'default')
       expect(trigger).toHaveAttribute('data-armed', 'true')
     })
 

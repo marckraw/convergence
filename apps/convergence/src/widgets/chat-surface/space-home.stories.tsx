@@ -258,11 +258,11 @@ export const Artifacts: Story = {
       expect.objectContaining({ kind: 'documentation' }),
     )
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
-    await userEvent.click(canvas.getByRole('button', { name: 'Add artifact' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Add Artifact' }))
     await expect(args.onSubmitArtifact).toHaveBeenCalledOnce()
     await userEvent.click(
       canvas.getByRole('button', {
-        name: 'Edit artifact #915 The design system is its own package',
+        name: 'Edit Artifact #915 The design system is its own package',
       }),
     )
     await expect(args.onEditArtifact).toHaveBeenCalledWith(artifacts[0])
@@ -274,9 +274,9 @@ export const Disabled: Story = {
   args: { activeTab: 'artifacts', artifacts: [] },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('button', { name: 'Add artifact' }),
+      canvas.getByRole('button', { name: 'Add Artifact' }),
     ).toBeDisabled()
-    await expect(canvas.getByText('No artifacts yet')).toBeVisible()
+    await expect(canvas.getByText('No Artifacts yet')).toBeVisible()
   },
 }
 
@@ -295,7 +295,7 @@ export const EditingArtifact: Story = {
   },
   play: async ({ args, canvas, userEvent }) => {
     await expect(
-      canvas.getByRole('heading', { name: 'Edit artifact' }),
+      canvas.getByRole('heading', { name: 'Edit Artifact' }),
     ).toBeVisible()
     await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }))
     await expect(args.onCancelArtifactEdit).toHaveBeenCalledOnce()

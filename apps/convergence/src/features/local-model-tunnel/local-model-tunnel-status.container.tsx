@@ -236,7 +236,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
               onClick={() => handleOpenManage()}
             >
               <Pencil className="size-3.5" />
-              Edit
+              Edit…
             </Button>
           </div>
 
