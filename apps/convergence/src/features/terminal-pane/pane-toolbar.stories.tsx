@@ -46,6 +46,7 @@ export const Shortcuts: Story = {
       'split-vertical': '⌘D',
       'split-horizontal': '⌘⇧D',
       'close-tab': '⌘W',
+      'toggle-dock': '⌘`',
     },
   },
   play: async ({ canvas }) => {

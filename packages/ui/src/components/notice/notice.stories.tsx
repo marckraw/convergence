@@ -168,10 +168,11 @@ export const Dismissible: Story = {
 }
 
 /**
- * Sizes (ruling 10): the body size (`md`, the default), 12 px (`sm`) for the
- * composer's strip and Settings' dense rows, and 11 px (`xs`) for Mission
- * Control's panels. The room around the words stays the same; a glyph sits
- * on the first line at every size. Never a text size in its className.
+ * Sizes (ruling 10): the body size (`md`, the default) and one compact size,
+ * 12 px (`sm`), for the composer's strip, Settings' dense rows and Mission
+ * Control's panels (one compact size, not two: Marcin, 2 Oct 2026). The room
+ * around the words stays the same; a glyph sits on the first line at both
+ * sizes. Never a text size in its className.
  */
 export const Sizes: Story = {
   render: () => (
@@ -183,15 +184,8 @@ export const Sizes: Story = {
         icon={<TriangleAlert />}
         title="Compact, sm."
       >
-        Twelve pixels, as the composer's notices are.
-      </Notice>
-      <Notice
-        tone="warning"
-        size="xs"
-        icon={<TriangleAlert />}
-        title="Smallest, xs."
-      >
-        Eleven pixels, as a Mission Control panel is.
+        Twelve pixels, as the composer's notices and a Mission Control panel's
+        are.
       </Notice>
     </div>
   ),
@@ -199,7 +193,6 @@ export const Sizes: Story = {
     const sizes = [
       ['Body size, md.', 'md', '14px'],
       ['Compact, sm.', 'sm', '12px'],
-      ['Smallest, xs.', 'xs', '11px'],
     ] as const
     for (const [name, size, px] of sizes) {
       const notice = canvas.getByRole('alert', { name })

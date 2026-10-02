@@ -223,7 +223,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           panel says both — a failure that only said "couldn't save" would
           leave the person unsure which version is live. */}
       {saveError ? (
-        <Notice tone="danger" title="Couldn’t save the connection" size="xs">
+        <Notice tone="danger" title="Couldn’t save the connection" size="sm">
           <span className="block text-ink-muted">
             Your draft is kept here. The saved connection has not changed.
           </span>
@@ -233,7 +233,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
 
       {/* Frame 10-01. The row survives; only its far end is gone. */}
       {recipientMissing ? (
-        <Notice tone="warning" title="Recipient unavailable" size="xs">
+        <Notice tone="warning" title="Recipient unavailable" size="sm">
           <span className="block text-ink-muted">
             This conversation is no longer available. Choose a replacement to
             continue editing this connection.

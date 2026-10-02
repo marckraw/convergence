@@ -25,6 +25,11 @@ export interface LeafPaneHandlers {
   renderTerminal: (pane: TerminalPaneSlot) => ReactNode
   /** The keys for New tab, the splits and the open tab's ✕, in words, for their tooltips (NAV-23). */
   shortcutLabels?: TerminalShortcutLabels
+  /**
+   * The dock's own controls (Hide terminal), after the splits at the strip's
+   * end. A split hands them to the one pane at the dock's top-right corner.
+   */
+  dockControls?: ReactNode
 }
 
 interface LeafPaneViewProps extends LeafPaneHandlers {
@@ -32,9 +37,10 @@ interface LeafPaneViewProps extends LeafPaneHandlers {
 }
 
 /**
- * One pane of the terminal dock: its tab strip, the split buttons, and the
- * open tab's terminal under them. Each tab carries its own ✕, so the toolbar
- * draws no second close for the open one (NAV-9).
+ * One pane of the terminal dock: its tab strip, the split buttons (and, on
+ * the corner pane, the dock's own controls), and the open tab's terminal
+ * under them. Each tab carries its own ✕, so the toolbar draws no second
+ * close for the open one (NAV-9).
  */
 export const LeafPaneView: FC<LeafPaneViewProps> = ({
   leaf,
@@ -46,6 +52,7 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
   onFocusLeaf,
   renderTerminal,
   shortcutLabels,
+  dockControls,
 }) => {
   const activeTab = leaf.tabs.find((t) => t.id === leaf.activeTabId)
   const isFocused = focusedLeafId === leaf.id
@@ -67,11 +74,14 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
         newTabShortcut={shortcutLabels?.['new-tab']}
         closeTabShortcut={shortcutLabels?.['close-tab']}
         trailingSlot={
-          <PaneToolbar
-            onSplitHorizontal={() => onSplit(leaf.id, 'horizontal')}
-            onSplitVertical={() => onSplit(leaf.id, 'vertical')}
-            shortcuts={shortcutLabels}
-          />
+          <>
+            <PaneToolbar
+              onSplitHorizontal={() => onSplit(leaf.id, 'horizontal')}
+              onSplitVertical={() => onSplit(leaf.id, 'vertical')}
+              shortcuts={shortcutLabels}
+            />
+            {dockControls}
+          </>
         }
       />
       {activeTab ? (

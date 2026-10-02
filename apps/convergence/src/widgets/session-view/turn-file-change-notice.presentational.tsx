@@ -24,7 +24,7 @@ export const TurnFileChangeNotices: FC<TurnFileChangeNoticesProps> = ({
           tone="warning"
           icon={notice.kind === 'binary' ? <FileQuestion /> : <AlertTriangle />}
           title={notice.text}
-          size="xs"
+          size="sm"
         />
       ))}
     </div>

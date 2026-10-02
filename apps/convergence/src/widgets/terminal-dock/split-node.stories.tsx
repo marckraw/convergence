@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { LeafNode, PaneTree, TerminalTab } from '@/entities/terminal'
 import { expect, fn } from 'storybook/test'
+import { HideDockButton } from './hide-dock-button.presentational'
 import type { TerminalPaneSlot } from './leaf-pane.presentational'
 import { SplitNodeView } from './split-node.presentational'
 
@@ -120,5 +121,27 @@ export const Single: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getAllByRole('tablist')).toHaveLength(1)
     await expect(canvas.queryByRole('separator')).toBeNull()
+  },
+}
+
+/**
+ * The dock's own control (Hide terminal) is drawn once, on the pane at the
+ * dock's top-right corner: the right-hand side, then the top of that.
+ */
+export const DockControls: Story = {
+  args: {
+    dockControls: (
+      <HideDockButton placement="bottom" shortcut="⌘`" onHide={fn()} />
+    ),
+  },
+  play: async ({ canvas }) => {
+    const hide = canvas.getByRole('button', { name: 'Hide terminal' })
+    await expect(
+      canvas.getAllByRole('button', { name: 'Hide terminal' }),
+    ).toHaveLength(1)
+    await expect(hide.closest('[data-leaf-id]')).toHaveAttribute(
+      'data-leaf-id',
+      'top',
+    )
   },
 }

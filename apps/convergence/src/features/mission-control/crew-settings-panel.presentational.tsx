@@ -620,7 +620,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
 
           <Notice
             title="A run can contain several laps"
-            size="xs"
+            size="sm"
             className="text-ink"
           >
             <span className="text-3xs text-ink-muted">
