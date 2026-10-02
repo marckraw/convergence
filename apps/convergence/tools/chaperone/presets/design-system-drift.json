@@ -202,6 +202,20 @@
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
       },
       {
+        "id": "use-notify",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "restrictions": [
+          {
+            "source": "^sonner(/|$)",
+            "allowedIn": [],
+            "message": "sonner is the design system's toast engine, not the app's: raise a toast with notify from @convergence/ui (notify.failure(\"update Codex\", error) writes R10's \"Couldn’t update Codex.\" with the reason under it), or toast from @convergence/ui for what notify doesn't cover; the Toaster part draws it on the popup surface in R1's tones (ruling 2; MAR-3608; DS-8, DLG-31)."
+          }
+        ],
+        "includeTypeImports": true
+      },
+      {
         "id": "use-section-label",
         "type": "regex",
         "severity": "error",

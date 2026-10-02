@@ -1,6 +1,6 @@
-import { act, render, screen, fireEvent } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import {
   useContextDrillStore,
   type DrillOutcome,
@@ -8,14 +8,11 @@ import {
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { ContextDrillHostContainer } from './context-drill-host.container'
 
-vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+vi.mock('@convergence/ui', () => ({
+  notify: { success: vi.fn(), message: vi.fn(), error: vi.fn() },
 }))
 
-const toastMock = toast as unknown as ReturnType<typeof vi.fn> & {
-  success: ReturnType<typeof vi.fn>
-  error: ReturnType<typeof vi.fn>
-}
+const toastMock = vi.mocked(notify)
 
 function session(id: string, usedPercentage: number): SessionSummary {
   return {
@@ -32,7 +29,9 @@ function session(id: string, usedPercentage: number): SessionSummary {
   } as SessionSummary
 }
 
-let seq = 0
+// Far from the store's own counter, so an ending this test lands and one the
+// store records (an automatic run) never share a seq by accident.
+let seq = 1000
 
 /** Records an ending the way the store's `run` does. */
 function land(sessionId: string, outcome: DrillOutcome, before: number | null) {
@@ -48,9 +47,7 @@ function land(sessionId: string, outcome: DrillOutcome, before: number | null) {
 
 describe('ContextDrillHostContainer (MAR-3256 R4)', () => {
   beforeEach(() => {
-    toastMock.mockClear()
-    toastMock.success.mockClear()
-    toastMock.error.mockClear()
+    vi.clearAllMocks()
     useContextDrillStore.setState({
       descriptions: {},
       beats: {},
@@ -74,15 +71,19 @@ describe('ContextDrillHostContainer (MAR-3256 R4)', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('shows an automatic failure card and its manual retry, never a button-failure card', () => {
-    render(<ContextDrillHostContainer />)
+  it('keeps an automatic failure on screen with Run the drill, never a button failure (CONV-7)', () => {
+    const { container } = render(<ContextDrillHostContainer />)
     const outcome = {
       ok: false as const,
       beat: 'sealing' as const,
       reason: 'No seal.',
     }
     land('a', outcome, 90)
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // A failure of a run somebody pressed for: an ordinary toast that leaves.
+    expect(toastMock.error).toHaveBeenLastCalledWith(
+      'The drill stopped while sealing',
+      { id: 'context-drill:a', description: 'No seal.' },
+    )
     act(() =>
       useContextDrillStore.getState().handleChange({
         sessionId: 'a',
@@ -90,16 +91,45 @@ describe('ContextDrillHostContainer (MAR-3256 R4)', () => {
         automatic: { outcome, before: 90 },
       }),
     )
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'The drill stopped while sealing: No seal.',
+    // Mutation: drop `persistent` -> the toast leaves after a few seconds, red.
+    expect(toastMock.error).toHaveBeenLastCalledWith(
+      'The drill stopped while sealing',
+      expect.objectContaining({
+        id: 'context-drill:a',
+        description: 'No seal.',
+        persistent: true,
+        action: expect.objectContaining({ label: 'Run the drill' }),
+      }),
     )
-    expect(toastMock.error).toHaveBeenCalled()
+    // No card of its own in the toasts' corner any more.
+    expect(container).toBeEmptyDOMElement()
     const run = vi
       .spyOn(useContextDrillStore.getState(), 'run')
       .mockResolvedValue()
-    fireEvent.click(screen.getByRole('button', { name: 'Run the drill' }))
+    toastMock.error.mock.calls.at(-1)?.[1]?.action?.onClick()
     expect(run).toHaveBeenCalledWith('a')
     run.mockRestore()
+  })
+
+  it('offers Open beside Run the drill when the app hands down a focus path', () => {
+    const onFocusSession = vi.fn()
+    render(<ContextDrillHostContainer onFocusSession={onFocusSession} />)
+    act(() =>
+      useContextDrillStore.getState().handleChange({
+        sessionId: 'a',
+        beat: null,
+        automatic: {
+          outcome: { ok: false, beat: 'compacting', reason: 'Timed out.' },
+          before: 90,
+        },
+      }),
+    )
+    const options = toastMock.error.mock.calls.at(-1)?.[1]
+    expect(options?.secondaryAction?.label).toBe('Open')
+    options?.secondaryAction?.onClick()
+    expect(onFocusSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a' }),
+    )
   })
 
   it('tells the crossing when the drill finishes', () => {
@@ -133,7 +163,7 @@ describe('ContextDrillHostContainer (MAR-3256 R4)', () => {
 
     expect(toastMock.success).not.toHaveBeenCalled()
     expect(toastMock.error).not.toHaveBeenCalled()
-    expect(toastMock).not.toHaveBeenCalled()
+    expect(toastMock.message).not.toHaveBeenCalled()
   })
 
   it('names the beat that stopped when the drill fails', () => {
@@ -167,8 +197,8 @@ describe('ContextDrillHostContainer (MAR-3256 R4)', () => {
     )
 
     expect(toastMock.error).not.toHaveBeenCalled()
-    expect(toastMock).toHaveBeenCalledTimes(1)
-    expect(toastMock.mock.calls[0]![0]).toBe('The drill was cancelled')
+    expect(toastMock.message).toHaveBeenCalledTimes(1)
+    expect(toastMock.message.mock.calls[0]![0]).toBe('The drill was cancelled')
     expect(useContextDrillStore.getState().cancelRequested.a).toBeUndefined()
   })
 
@@ -178,11 +208,9 @@ describe('ContextDrillHostContainer (MAR-3256 R4)', () => {
 
     land('a', { ok: true }, 76)
 
-    const options = toastMock.success.mock.calls[0]![1] as {
-      action: { label: string; onClick: () => void }
-    }
-    expect(options.action.label).toBe('Open')
-    options.action.onClick()
+    const options = toastMock.success.mock.calls[0]![1]
+    expect(options?.action?.label).toBe('Open')
+    options?.action?.onClick()
     expect(onFocusSession).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'a' }),
     )

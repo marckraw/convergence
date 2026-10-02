@@ -1,5 +1,9 @@
 import type { FC } from 'react'
-import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
+import {
+  RELEASE_NOTES_TITLE,
+  type UpdatePrefs,
+  type UpdateStatus,
+} from '@/entities/updates'
 import { Button, ChoiceField, Switch } from '@convergence/ui'
 
 interface UpdatesFieldsProps {
@@ -87,7 +91,7 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
             onClick={onOpenReleaseNotes}
             disabled={isDev || isSaving}
           >
-            Release notes
+            {RELEASE_NOTES_TITLE}
           </Button>
         )}
       </div>

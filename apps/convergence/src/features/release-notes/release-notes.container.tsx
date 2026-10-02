@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import type { FC } from 'react'
 import { Info } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
+import { RELEASE_NOTES_TITLE } from '@/entities/updates'
 import releaseNotesBundle from '@/shared/generated/release-notes.generated.json'
 import { Button } from '@convergence/ui'
 import { ReleaseNotesDialog } from './release-notes.presentational'
@@ -68,7 +69,7 @@ export const ReleaseNotesDialogContainer: FC<
           >
             <span className="flex items-center gap-2">
               <Info className="size-3.5" />
-              What&apos;s new
+              {RELEASE_NOTES_TITLE}
             </span>
             <span className="text-2xs text-ink-muted">
               v{bundle.currentVersion}

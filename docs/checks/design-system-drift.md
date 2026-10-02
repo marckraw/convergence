@@ -105,6 +105,7 @@ mapping in its message is the DS5 codemod's table
 | `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
 | `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
+| `use-notify`              | an import of `sonner` (its `toast`, its `Toaster`, or a type) anywhere in the app, tests too                                                                                                                                               | `notify` from `@convergence/ui`: `notify.failure("update Codex", error)` reads "Couldn’t update Codex." with the reason under it (R10); `toast` for the rest                                 | DS-8        |
 | `use-section-label`       | a hand-typed eyebrow: `uppercase` and a `tracking-…` utility in one class string (a `className`, an argument to `cn`, a `*.styles.ts` constant), in the app                                                                                | `SectionLabel` (`size="sm"` for the 10 px step, `as="h3"` when it names a section), or `sectionLabel` / `sectionLabelVariants({ size })` where the element can't be one                      | DS-20       |
 | `use-badge-caps`          | `uppercase` in a `<Badge>`'s `className`                                                                                                                                                                                                   | Badge's `caps`: one look for a kind or a short state in capitals                                                                                                                             | DLG         |
 
@@ -115,6 +116,14 @@ the tag, past arrow functions"), so attribute order and line breaks don't matter
 a variant (`[&_svg]:size-4`, the size of the icon inside) is not the button's size, and doesn't
 count. Every regex rule skips a line that starts with a comment (`//`, `*`, `/*` or `{/*`), so a doc
 comment may name the recipe it replaced.
+
+`use-notify` is the one rule here that reads imports rather than text: a `forbidden-import` rule
+(the type Chaperone's import rules use), so a comment or a string that names `sonner` is not an
+import, and a type import counts too (`includeTypeImports`). Ruling 2 (2 Oct 2026) moved the
+toasts onto the design system: `Toaster` draws each one on the popup surface with its kind in R1's
+tones, and `notify` words a failure as R10 does, so a toast raised from `sonner` itself would skip
+both. Tests count too, unlike the regex rules': a test mocks `notify` from `@convergence/ui`, and a
+`vi.mock('sonner')` under it is not an import.
 
 `use-section-label` reads one class string at a time, wherever it is written, so a constant handed
 to an element is seen as well as a `className`; an eyebrow split across two strings is not. A
@@ -268,6 +277,7 @@ Streamdown name.
 | `app-parts-have-stories`     | `design-system-drift.json`      | error    |
 | `stories-titled-by-group`    | `design-system-drift.json`      | error    |
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
+| `use-notify`                 | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
 | `use-section-label`          | `design-system-drift.json`      | error    |

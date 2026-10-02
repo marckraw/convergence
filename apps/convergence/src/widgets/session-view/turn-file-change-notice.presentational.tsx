@@ -1,30 +1,31 @@
 import type { FC } from 'react'
 import { AlertTriangle, FileQuestion } from 'lucide-react'
+import { Notice } from '@convergence/ui'
 import type { TurnFileChangeNotice } from './turn-file-change-notice.pure'
 
 interface TurnFileChangeNoticesProps {
   notices: TurnFileChangeNotice[]
 }
 
+/**
+ * What a stored diff can't say about itself, above it: a warning Notice per
+ * fact (DS-5), in the strip the diff viewer starts under.
+ */
 export const TurnFileChangeNotices: FC<TurnFileChangeNoticesProps> = ({
   notices,
 }) => {
   if (notices.length === 0) return null
 
   return (
-    <div className="flex shrink-0 flex-col gap-1 border-b border-line bg-warning-soft/50 px-3 py-2">
+    <div className="flex shrink-0 flex-col gap-1 border-b border-line px-3 py-2">
       {notices.map((notice) => (
-        <p
+        <Notice
           key={notice.kind}
-          className="flex items-center gap-1.5 text-2xs text-warning-ink"
-        >
-          {notice.kind === 'binary' ? (
-            <FileQuestion className="h-3 w-3 shrink-0" />
-          ) : (
-            <AlertTriangle className="h-3 w-3 shrink-0" />
-          )}
-          {notice.text}
-        </p>
+          tone="warning"
+          icon={notice.kind === 'binary' ? <FileQuestion /> : <AlertTriangle />}
+          title={notice.text}
+          className="py-1 text-2xs"
+        />
       ))}
     </div>
   )

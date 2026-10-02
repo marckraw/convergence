@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { projectOpenApi, type ProjectOpenApp } from '@/entities/project-open'
 
 /** The apps a path can open in, and the one way to open it in one. */
@@ -40,16 +40,14 @@ export function useProjectOpenApps(targetPath: string | null) {
     void projectOpenApi
       .open({ appId: app.id, path: targetPath })
       .then(() => {
-        toast.success(
+        notify.success(
           app.kind === 'file-manager'
             ? 'Opened project in Finder'
             : `Opened project in ${app.label}`,
         )
       })
       .catch((err) => {
-        toast.error(
-          err instanceof Error ? err.message : 'Couldn’t open the project.',
-        )
+        notify.failure('open the project', err)
       })
   }
 

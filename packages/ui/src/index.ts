@@ -425,6 +425,17 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export {
+  Toaster,
+  type ToasterOffset,
+  type ToasterProps,
+  toast,
+} from './components/toaster/toaster'
+export {
+  notify,
+  type NotifyAction,
+  type NotifyOptions,
+} from './components/toaster/notify'
 export { chipFrame } from './components/chip/chip'
 export {
   type SectionLabelSize,

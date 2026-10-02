@@ -9,6 +9,7 @@ import {
   Button,
   cn,
   Divider,
+  FormError,
   sectionLabelVariants,
   Spinner,
   Tooltip,
@@ -770,12 +771,17 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                 </>
               ) : (
                 <>
+                  {/* R10 on one line, the room the list keeps: what failed,
+                      then why, then Retry (CONV-7). */}
                   {olderError && (
-                    <Tooltip label={olderError}>
-                      <span role="status" className="min-w-0 truncate">
-                        {olderError}
-                      </span>
-                    </Tooltip>
+                    <>
+                      <FormError className="shrink-0">
+                        Couldn't load earlier messages.
+                      </FormError>
+                      <Tooltip label={olderError} when="truncated">
+                        <span className="min-w-0 truncate">{olderError}</span>
+                      </Tooltip>
+                    </>
                   )}
                   <Button
                     variant="link"
@@ -785,7 +791,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                     }}
                     className="shrink-0 font-normal text-ink-muted"
                   >
-                    {olderError ? 'Try again' : 'Load earlier messages'}
+                    {olderError ? 'Retry' : 'Load earlier messages'}
                   </Button>
                 </>
               )}
