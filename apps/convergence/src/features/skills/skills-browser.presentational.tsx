@@ -24,6 +24,7 @@ import {
   EmptyState,
   IconButton,
   SearchField,
+  sectionLabel,
   SegmentedControl,
   SegmentedControlItem,
   Select,
@@ -276,10 +277,7 @@ function renderFilterToolbar({
 
       {viewMode === 'grid' ? (
         <div className="ml-auto flex items-center gap-1.5">
-          <span
-            aria-hidden
-            className="text-2xs tracking-eyebrow text-ink-muted uppercase"
-          >
+          <span aria-hidden className={sectionLabel}>
             Group by
           </span>
           {renderFilterSelect({
