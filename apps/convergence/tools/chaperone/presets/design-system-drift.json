@@ -200,6 +200,15 @@
         "files": "packages/ui/.storybook/preview.tsx",
         "requiredPatterns": ["a11y:\\s*\\{\\s*test:\\s*[\"']error[\"']"],
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
+      },
+      {
+        "id": "no-native-title",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.tsx",
+        "exclude": ["**/*.test.tsx"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:<[a-z][\\w.-]*\\b(?:[^>]|=>)*?\\stitle=(?!\"\"|\\{[\"'`]{2}\\})|<title>)",
+        "message": "A native title (R2): title= on a page element, or an SVG's <title>, is the browser's hint, slow, unstyled and never shown on focus. Wrap the element in <Tooltip label> from @convergence/ui (when=\"truncated\" for text cut short); an icon-only button is an IconButton, whose label is its tooltip. A part's title prop (EmptyState, Notice) is its words, not a hint, so only a lowercase element counts (MAR-3608; NAV-20; DS-3)."
       }
     ]
   }

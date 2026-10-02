@@ -10,7 +10,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 import {
   laneLabel,
   seatDisplayName,
@@ -84,29 +84,29 @@ export const SeatRow: FC<SeatRowProps> = ({
       >
         {source}
       </span>
-      <HostGlyph
-        aria-hidden
-        data-seat-host={hostIsLocal ? 'local' : 'remote'}
-        className="size-3.5 shrink-0 text-ink-muted"
-      >
-        <title>{host}</title>
-      </HostGlyph>
+      <Tooltip label={host}>
+        <HostGlyph
+          aria-hidden
+          data-seat-host={hostIsLocal ? 'local' : 'remote'}
+          className="size-3.5 shrink-0 text-ink-muted"
+        />
+      </Tooltip>
       {member.lanePolicy === 'main' ? (
-        <GitCommitHorizontal
-          aria-hidden
-          data-seat-lane="main"
-          className="size-3.5 shrink-0 text-ink-muted"
-        >
-          <title>{laneLabel(member.lanePolicy)}</title>
-        </GitCommitHorizontal>
+        <Tooltip label={laneLabel(member.lanePolicy)}>
+          <GitCommitHorizontal
+            aria-hidden
+            data-seat-lane="main"
+            className="size-3.5 shrink-0 text-ink-muted"
+          />
+        </Tooltip>
       ) : member.lanePolicy === 'own-worktree' ? (
-        <GitBranch
-          aria-hidden
-          data-seat-lane="own-worktree"
-          className="size-3.5 shrink-0 text-ink-muted"
-        >
-          <title>{laneLabel(member.lanePolicy)}</title>
-        </GitBranch>
+        <Tooltip label={laneLabel(member.lanePolicy)}>
+          <GitBranch
+            aria-hidden
+            data-seat-lane="own-worktree"
+            className="size-3.5 shrink-0 text-ink-muted"
+          />
+        </Tooltip>
       ) : null}
       <span
         aria-hidden
