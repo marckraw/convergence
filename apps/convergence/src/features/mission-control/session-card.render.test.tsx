@@ -349,9 +349,10 @@ const GLARE_SHADOW =
   '0 0 var(--breathe-blur) var(--breathe-spread) var(--breathe-color)'
 // The breath plays --motion-loops times: infinite, and 0 under either
 // reduced-motion switch (the system's, or data-motion="reduced"), which
-// tokens.css sets (MAR-3617).
+// tokens.css sets (MAR-3617). It eases on the motion tokens' pulsing curve
+// (DS-33), not a typed keyword.
 const GLARE_BREATH =
-  'session-card-breathe var(--breathe-period) ease-in-out var(--motion-loops)'
+  'session-card-breathe var(--breathe-period) var(--motion-ease-blink) var(--motion-loops)'
 
 describe('the breathing glow under prefers-reduced-motion', () => {
   it('renders the glare without the breath', () => {
