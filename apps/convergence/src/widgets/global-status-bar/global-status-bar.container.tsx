@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useAgentMeterStore, watchAgentMeter } from '@/entities/agent-meter'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { useProjectStore } from '@/entities/project'
 import {
   selectGlobalStatus,
@@ -13,10 +13,13 @@ import { GlobalStatusBar } from './global-status-bar.presentational'
 
 interface GlobalStatusBarContainerProps {
   onSelectProject?: (projectId: string) => void | Promise<void>
+  /** Show terminal, from the shell, while the workspace has a hidden dock. */
+  terminalSlot?: ReactNode
 }
 
 export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
   onSelectProject,
+  terminalSlot,
 }) => {
   useEffect(watchAgentMeter, [])
   const meter = useAgentMeterStore((state) => state.snapshot)
@@ -78,6 +81,7 @@ export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
       providers={providers}
       onSelectProject={handleSelectProject}
       localModelTunnelSlot={<LocalModelTunnelStatusContainer />}
+      terminalSlot={terminalSlot}
     />
   )
 }

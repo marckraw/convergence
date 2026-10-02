@@ -5,7 +5,7 @@ import type {
   SessionSummary,
 } from '@/entities/session'
 import type { AgentMeterSnapshot } from '@/shared/types/agent-meter.types'
-import { TooltipProvider } from '@convergence/ui'
+import { StatusPillButton, TooltipProvider } from '@convergence/ui'
 import { expect, fn, screen, within } from 'storybook/test'
 import { GlobalStatusBar } from './global-status-bar.presentational'
 
@@ -379,5 +379,27 @@ export const Long: Story = {
     await expect(chips).toHaveLength(12)
     const bar = chips[0].closest('[data-testid="global-status-bar"]')
     await expect(bar?.getBoundingClientRect().height).toBe(28)
+  },
+}
+
+/**
+ * A hidden terminal dock: the shell hands the bar its way back (the terminal
+ * dock's Show terminal, here a stand-in), drawn at the bar's end, after the
+ * last to finish.
+ */
+export const HiddenTerminal: Story = {
+  name: 'Hidden terminal',
+  args: {
+    terminalSlot: (
+      <StatusPillButton type="button" aria-label="Show terminal">
+        2
+      </StatusPillButton>
+    ),
+  },
+  play: async ({ canvas }) => {
+    const show = canvas.getByRole('button', { name: 'Show terminal' })
+    const bar = canvas.getByTestId('global-status-bar')
+    await expect(bar.lastElementChild).toBe(show)
+    await expect(bar.getBoundingClientRect().height).toBe(28)
   },
 }

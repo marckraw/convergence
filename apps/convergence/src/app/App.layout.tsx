@@ -6,6 +6,7 @@ import { ChatSurface } from '@/widgets/chat-surface'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { MissionControl } from '@/widgets/mission-control'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
+import { ShowTerminal } from '@/widgets/terminal-dock'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { WavePanel } from '@/features/waves'
 import { useAppSurfaceStore } from '@/entities/app-surface'
@@ -268,6 +269,19 @@ export const AppShell: FC<AppShellProps> = ({
   )
   useEffect(() => cancelPeekBlur, [cancelPeekBlur])
 
+  /**
+   * The content area shows a project's workspace (its conversation, and the
+   * terminal dock beside it), and Loom isn't covering it: the branch below
+   * that draws WorkspaceLayout. Only then does the status bar carry Show
+   * terminal, whose dock is there to come back to (MAR-3608).
+   */
+  const workspaceOnScreen =
+    hasProject &&
+    !routeFallback &&
+    !missionControlActive &&
+    activeSurface !== 'chat' &&
+    !loomExpanded
+
   if (loading) {
     return (
       <div className="app-chrome flex h-screen flex-col text-ink">
@@ -452,7 +466,10 @@ export const AppShell: FC<AppShellProps> = ({
         </main>
       </div>
 
-      <GlobalStatusBar onSelectProject={onSelectProjectRoot} />
+      <GlobalStatusBar
+        onSelectProject={onSelectProjectRoot}
+        terminalSlot={workspaceOnScreen ? <ShowTerminal /> : null}
+      />
     </div>
   )
 }

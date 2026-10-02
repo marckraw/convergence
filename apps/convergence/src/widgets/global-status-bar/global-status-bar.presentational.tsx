@@ -53,6 +53,11 @@ interface GlobalStatusBarProps {
   providers: ProviderInfo[]
   onSelectProject: (projectId: string) => void
   localModelTunnelSlot?: ReactNode
+  /**
+   * At the bar's end: the way back to a hidden terminal dock (Show
+   * terminal), handed in by the shell while the workspace on screen has one.
+   */
+  terminalSlot?: ReactNode
 }
 
 export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
@@ -66,6 +71,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
   providers,
   onSelectProject,
   localModelTunnelSlot,
+  terminalSlot,
 }) => {
   const isEmpty =
     runningCount === 0 && attentionCount === 0 && byProject.length === 0
@@ -225,6 +231,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
       ) : (
         <span className="ml-auto" aria-hidden />
       )}
+      {terminalSlot}
     </footer>
   )
 }
