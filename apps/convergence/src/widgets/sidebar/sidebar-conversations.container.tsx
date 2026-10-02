@@ -59,11 +59,13 @@ export interface SidebarConversationsProps {
   selectedSpaceId: string | null
   expandedSpaceIds: ReadonlySet<string>
   archivedSpacesExpanded: boolean
+  archivedChatsExpanded: boolean
   onNewGlobalSession: () => void
   onNewSpace: () => void
   onSelectSpace: (id: string) => void
   onToggleSpace: (id: string) => void
   onToggleArchivedSpaces: () => void
+  onToggleArchivedChats: () => void
   onArchiveSpace: (id: string) => void
   onUnarchiveSpace: (id: string) => void
   onSelectSpaceAttempt: (sessionId: string) => void
@@ -119,11 +121,13 @@ export const SidebarConversations = memo(function SidebarConversations({
   selectedSpaceId,
   expandedSpaceIds,
   archivedSpacesExpanded,
+  archivedChatsExpanded,
   onNewGlobalSession,
   onNewSpace,
   onSelectSpace,
   onToggleSpace,
   onToggleArchivedSpaces,
+  onToggleArchivedChats,
   onArchiveSpace,
   onUnarchiveSpace,
   onSelectSpaceAttempt,
@@ -215,11 +219,13 @@ export const SidebarConversations = memo(function SidebarConversations({
             selectedSpaceId={selectedSpaceId}
             expandedSpaceIds={expandedSpaceIds}
             archivedSpacesExpanded={archivedSpacesExpanded}
+            archivedChatsExpanded={archivedChatsExpanded}
             onNewSession={onNewGlobalSession}
             onNewSpace={onNewSpace}
             onSelectSpace={onSelectSpace}
             onToggleSpace={onToggleSpace}
             onToggleArchivedSpaces={onToggleArchivedSpaces}
+            onToggleArchivedChats={onToggleArchivedChats}
             onArchiveSpace={onArchiveSpace}
             onUnarchiveSpace={onUnarchiveSpace}
             onSelectSpaceAttempt={onSelectSpaceAttempt}

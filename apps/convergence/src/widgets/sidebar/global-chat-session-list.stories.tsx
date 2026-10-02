@@ -99,11 +99,13 @@ const meta = {
     selectedSpaceId: null,
     expandedSpaceIds: new Set(['design-system']),
     archivedSpacesExpanded: false,
+    archivedChatsExpanded: false,
     onNewSession: fn(),
     onNewSpace: fn(),
     onSelectSpace: fn(),
     onToggleSpace: fn(),
     onToggleArchivedSpaces: fn(),
+    onToggleArchivedChats: fn(),
     onArchiveSpace: fn(),
     onUnarchiveSpace: fn(),
     onSelectSpaceAttempt: fn(),
@@ -227,6 +229,41 @@ export const ArchivedSpaces: Story = {
     )
     await expect(args.onUnarchiveSpace).toHaveBeenCalledWith('garden')
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  },
+}
+
+/**
+ * Archived chats fold as the code tree's archive does (NAV-13): one
+ * disclosure row, folded unless opened, its chevron turning a quarter.
+ */
+export const ArchivedChats: Story = {
+  name: 'Archived chats',
+  play: async ({ args, canvas, userEvent }) => {
+    const fold = canvas.getByRole('button', { name: 'Expand archived chats' })
+    await expect(fold).toHaveAttribute('aria-expanded', 'false')
+    await expect(
+      canvas.queryByRole('button', {
+        name: 'Open chat session Last year’s tax questions',
+      }),
+    ).toBeNull()
+    await userEvent.click(fold)
+    await expect(args.onToggleArchivedChats).toHaveBeenCalledOnce()
+  },
+}
+
+/** Opened, the archived chats hang under their row. */
+export const ArchivedChatsOpen: Story = {
+  name: 'Archived chats, open',
+  args: { archivedChatsExpanded: true },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('button', { name: 'Collapse archived chats' }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await expect(
+      canvas.getByRole('button', {
+        name: 'Open chat session Last year’s tax questions',
+      }),
+    ).toBeVisible()
   },
 }
 
