@@ -446,9 +446,9 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                 <section className={suggestionBox}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h4 className="text-xs font-medium text-info-ink uppercase">
+                      <SectionLabel as="h4" className="text-info-ink">
                         Suggested updates
-                      </h4>
+                      </SectionLabel>
                       <p className="mt-1 text-xs text-ink-muted">
                         Review and accept only the parts that should become
                         stable Space state.
@@ -499,7 +499,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
 
                   {synthesisPreview.artifacts.length > 0 ? (
                     <div className="space-y-2">
-                      <SectionLabel>Proposed Artifacts</SectionLabel>
+                      <SectionLabel>Proposed artifacts</SectionLabel>
                       {synthesisPreview.artifacts.map((artifact) => (
                         <div key={artifact.id} className={suggestionRow}>
                           <div className="min-w-0">
