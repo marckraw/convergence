@@ -56,6 +56,11 @@ type CodeBlockProps = {
   copyable?: boolean
   /** md (224 px, as tool output today) unless told otherwise. */
   maxHeight?: CodeBlockHeight
+  /**
+   * Long lines wrap instead of scrolling sideways: for text that is prose more
+   * than code (injected context, a context preview, tool output).
+   */
+  wrap?: boolean
   className?: string
 }
 
@@ -74,6 +79,7 @@ function CodeBlock({
   label = 'Code',
   copyable = false,
   maxHeight = 'md',
+  wrap = false,
   className,
 }: CodeBlockProps) {
   const box = useFocusableWhileScrolling(children)
@@ -90,6 +96,7 @@ function CodeBlock({
         className={cn(
           'overflow-auto overscroll-contain rounded-md border border-line bg-surface-muted/20 p-3 font-mono text-xs text-ink',
           HEIGHTS[maxHeight],
+          wrap && 'whitespace-pre-wrap wrap-anywhere',
           copyable && 'pr-10',
           focusRingInset,
         )}

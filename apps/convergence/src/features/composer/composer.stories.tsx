@@ -213,7 +213,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="w-[44rem] max-w-full pt-56">
+      <div className="w-176 max-w-full pt-56">
         <Story />
       </div>
     ),
@@ -262,16 +262,6 @@ export const Empty: Story = {
 
 /** A file, a skill and a context note ride along; each can be taken off. */
 export const WithResources: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the every-turn context badge is amber-700 on an amber tint, 4.37:1 in light — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     value: 'Here is the console log from the last run.',
     attachments: [attachment],

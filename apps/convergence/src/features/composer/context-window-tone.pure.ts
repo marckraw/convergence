@@ -4,13 +4,22 @@ import {
   type ContextAlertSettings,
 } from '@/shared/lib/context-alert-settings.pure'
 
-export type ContextWindowTone = 'green' | 'amber' | 'red' | 'muted'
+import type { Tone } from '@convergence/ui'
 
 /**
- * What colour the context dot is (MAR-3250).
+ * The dot's tone, in R1's words: room left (success), over the threshold
+ * (warning), nearly out of room (danger), or nothing reported (neutral).
+ */
+export type ContextWindowTone = Extract<
+  Tone,
+  'neutral' | 'success' | 'warning' | 'danger'
+>
+
+/**
+ * What tone the context dot wears (MAR-3250, R1).
  *
- * Red is still the provider's own "nearly out of room" figure, untouched.
- * Amber is now the threshold Marcin set, so the one place that decides whether
+ * Danger (red) is still the provider's own "nearly out of room" figure, untouched.
+ * Warning (amber) is now the threshold Marcin set, so the one place that decides whether
  * a conversation is over the line is `readContextAlert` -- the dot cannot
  * disagree with the toast about it.
  *
@@ -23,16 +32,16 @@ export function getContextTone(
   alert: ContextAlertSettings,
 ): ContextWindowTone {
   if (!contextWindow || contextWindow.availability === 'unavailable') {
-    return 'muted'
+    return 'neutral'
   }
 
   // Red outranks amber: a conversation that is both over the threshold and
   // nearly out of room is the more urgent of the two facts.
-  if (contextWindow.remainingPercentage <= 15) return 'red'
+  if (contextWindow.remainingPercentage <= 15) return 'danger'
   if (alert.enabled) {
-    return readContextAlert(contextWindow, alert).over ? 'amber' : 'green'
+    return readContextAlert(contextWindow, alert).over ? 'warning' : 'success'
   }
-  return contextWindow.remainingPercentage <= 35 ? 'amber' : 'green'
+  return contextWindow.remainingPercentage <= 35 ? 'warning' : 'success'
 }
 
 /**

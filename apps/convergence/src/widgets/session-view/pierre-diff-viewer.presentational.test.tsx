@@ -106,7 +106,7 @@ describe('PierreDiffViewer', () => {
     expect(screen.getByText('Select a file first')).toBeInTheDocument()
   })
 
-  it('renders a loading state without mounting Pierre Diffs', () => {
+  it('renders a loading state without mounting Pierre Diffs', async () => {
     render(
       <PierreDiffViewer
         file="src/app.ts"
@@ -118,7 +118,7 @@ describe('PierreDiffViewer', () => {
 
     expect(screen.getByText('src/app.ts')).toBeInTheDocument()
     expect(screen.getByText('Current workspace diff')).toBeInTheDocument()
-    expect(screen.getByText('Loading diff...')).toBeInTheDocument()
+    expect(await screen.findByText('Loading diff…')).toBeInTheDocument()
     expect(patchDiff.props).toHaveLength(0)
   })
 
@@ -131,7 +131,7 @@ describe('PierreDiffViewer', () => {
       />,
     )
 
-    expect(screen.queryByText('Loading diff...')).toBeNull()
+    expect(screen.queryByText('Loading diff…')).toBeNull()
     expect(screen.getByText('Pierre diff')).toBeInTheDocument()
     expect(patchDiff.props.at(-1)?.patch).toContain('+new')
   })

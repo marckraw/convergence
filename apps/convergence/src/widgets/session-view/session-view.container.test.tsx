@@ -1631,18 +1631,16 @@ describe('SessionView', () => {
     expect(
       await screen.findByText('do you have a chaperone project path ?'),
     ).toBeInTheDocument()
-    expect(screen.getByTestId('injected-context-details')).not.toHaveAttribute(
-      'open',
-    )
+    // A Collapsible (CONV-12): its trigger says whether it is open.
+    const trigger = screen.getByRole('button', { name: 'Injected context' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
 
-    fireEvent.click(screen.getByText('Injected context'))
+    fireEvent.click(trigger)
 
     expect(screen.getByTestId('injected-context-details')).toHaveTextContent(
       '/Users/marckraw/Projects/OpenSource/chaperone',
     )
-    expect(screen.getByTestId('injected-context-details')).toHaveAttribute(
-      'open',
-    )
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
   })
 
   describe('MAR-3377 R2 a status update reloads nothing', () => {
@@ -2104,7 +2102,10 @@ describe('SessionView', () => {
       const identity = screen.getByRole('group', {
         name: 'Test session, in emergence',
       })
-      expect(identity).toHaveAttribute('title', 'emergence / Test session')
+      expect(identity).toHaveAttribute(
+        'data-tooltip',
+        'emergence / Test session',
+      )
       expect(identity).toHaveTextContent('emergence')
       expect(identity).toHaveTextContent('Test session')
       expect(identity).not.toHaveTextContent('convergence')
@@ -2797,17 +2798,24 @@ describe('SessionView', () => {
       })
       renderView()
       await screen.findByTestId('harness-alert')
-      const buttons = [...header().querySelectorAll('button')]
+      const all = [...header().querySelectorAll('button')]
       // The whole row: Parallel work, the harness chip, the three groups,
       // Stop and More.
-      expect(buttons.length).toBeGreaterThanOrEqual(7)
-      // One size for the whole row, read from the part (MAR-3616): sm, 28 px.
+      expect(all.length).toBeGreaterThanOrEqual(7)
+      // The states you can press (Parallel work, the harness chip) are status
+      // pills, the height of the row's other states (CONV-3, MAR-3617).
+      const pills = all.filter(
+        (button) => button.getAttribute('data-slot') === 'status-pill',
+      )
+      expect(pills).toHaveLength(2)
+      const buttons = all.filter((button) => !pills.includes(button))
+      // One size for every control in the row, read from the part (MAR-3616): sm, 28 px.
       for (const button of buttons)
         expect(
           button.getAttribute('data-size'),
           button.textContent || button.getAttribute('aria-label') || '',
         ).toBe('sm')
-      for (const button of buttons)
+      for (const button of all)
         expect(button.className).not.toMatch(/\bh-(8|9|10)\b/)
     })
 
@@ -3187,11 +3195,9 @@ describe('SessionView', () => {
             name: /harness/i,
           }),
         ).toHaveLength(1)
+        // focusRingInset (MAR-3617): the drawn outline, inside the edge.
         expect(harness.className.split(/\s+/)).toEqual(
-          expect.arrayContaining([
-            'focus-visible:ring-2',
-            'focus-visible:ring-ring',
-          ]),
+          expect.arrayContaining(['focus-visible:outline-solid']),
         )
       })
     })

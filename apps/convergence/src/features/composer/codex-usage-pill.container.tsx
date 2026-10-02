@@ -1,12 +1,13 @@
-import { useCallback, useRef, useState } from 'react'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
 import {
   Button,
   cn,
   IconButton,
+  Meter,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Spinner,
 } from '@convergence/ui'
 import { RefreshCw } from 'lucide-react'
 import {
@@ -15,26 +16,20 @@ import {
   getCodexWindow,
   getPrimaryCodexWindow,
   isCodexUsageWarmingUp,
-  type CodexUsageTone,
 } from './codex-usage-pill.pure'
 import { CodexUsageQuotaRow } from './codex-usage-quota-row.presentational'
-import { CodexUsageRing } from './codex-usage-ring.presentational'
+import {
+  renderUsageHeading,
+  renderUsageNote,
+} from './usage-popover.presentational'
+import { usagePillTone, usageSection } from './usage-pill.styles'
+import { useHoverPopover } from './use-hover-popover'
 
 interface CodexUsagePillContainerProps {
   snapshot: ProviderQuotaSnapshot | null
   isLoading: boolean
   onRefresh: () => void
   onOpenSettings: () => void
-}
-
-const toneClass: Record<CodexUsageTone, string> = {
-  green:
-    'border-emerald-700/55 bg-emerald-950/45 text-emerald-100 hover:border-emerald-600/80 hover:bg-emerald-950/55 hover:text-emerald-100',
-  amber:
-    'border-amber-600/55 bg-amber-950/45 text-amber-100 hover:border-amber-500/80 hover:bg-amber-950/55 hover:text-amber-100',
-  red: 'border-rose-600/55 bg-rose-950/45 text-rose-100 hover:border-rose-500/80 hover:bg-rose-950/55 hover:text-rose-100',
-  muted:
-    'border-border/80 bg-muted/30 text-muted-foreground hover:border-border hover:bg-muted/40 hover:text-muted-foreground',
 }
 
 function formatCheckedAt(value: string | null | undefined): string {
@@ -53,8 +48,7 @@ export function CodexUsagePillContainer({
   onRefresh,
   onOpenSettings,
 }: CodexUsagePillContainerProps) {
-  const [open, setOpen] = useState(false)
-  const closeTimerRef = useRef<number | null>(null)
+  const { open, setOpen, openPanel, closePanelSoon } = useHoverPopover()
   const primary = getPrimaryCodexWindow(snapshot)
   const weekly = getCodexWindow(snapshot, 'weekly')
   const remaining = primary?.remainingPercent ?? null
@@ -63,25 +57,6 @@ export function CodexUsagePillContainer({
   const warmingUp = isCodexUsageWarmingUp(snapshot)
   const unavailableReason =
     snapshot?.status === 'unavailable' ? snapshot.reason : null
-
-  const clearCloseTimer = useCallback(() => {
-    if (closeTimerRef.current === null) return
-    window.clearTimeout(closeTimerRef.current)
-    closeTimerRef.current = null
-  }, [])
-
-  const openPanel = useCallback(() => {
-    clearCloseTimer()
-    setOpen(true)
-  }, [clearCloseTimer])
-
-  const closePanelSoon = useCallback(() => {
-    clearCloseTimer()
-    closeTimerRef.current = window.setTimeout(() => {
-      setOpen(false)
-      closeTimerRef.current = null
-    }, 120)
-  }, [clearCloseTimer])
 
   return (
     <Popover
@@ -106,16 +81,23 @@ export function CodexUsagePillContainer({
               }}
               size="sm"
               className={cn(
-                'shrink-0 rounded-full border font-semibold shadow-none gap-2',
-                toneClass[tone],
+                'shrink-0 gap-2 font-semibold',
+                usagePillTone[tone],
               )}
             />
           }
         >
-          <CodexUsageRing
-            value={remaining}
+          <Meter
+            shape="ring"
+            value={remaining ?? 0}
+            label="Codex quota remaining"
             tone={tone}
-            isLoading={isLoading || warmingUp}
+            // Asking: the ring beats, and stands still under reduced motion.
+            className={
+              isLoading || warmingUp
+                ? 'animate-pulse motion-reduce:animate-none'
+                : undefined
+            }
           />
           <span>Codex {label.text}</span>
         </PopoverTrigger>
@@ -128,34 +110,35 @@ export function CodexUsagePillContainer({
         onPointerLeave={closePanelSoon}
         initialFocus={false}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-popover-foreground">
-              Codex usage
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+        {renderUsageHeading({
+          title: 'Codex usage',
+          detail: (
+            <>
               checked {formatCheckedAt(snapshot?.lastCheckedAt)}
               {snapshot?.status === 'available' && snapshot.stale
                 ? ' (stale)'
                 : ''}
-            </p>
-          </div>
-          <IconButton
-            label="Refresh Codex usage"
-            type="button"
-            variant="ghost"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              onRefresh()
-            }}
-            size="xs"
-          >
-            <RefreshCw
-              className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')}
-            />
-          </IconButton>
-        </div>
+            </>
+          ),
+          action: (
+            <IconButton
+              label="Refresh Codex usage"
+              variant="ghost"
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onRefresh()
+              }}
+              size="xs"
+            >
+              {isLoading ? (
+                <Spinner size="sm" />
+              ) : (
+                <RefreshCw aria-hidden className="size-3.5" />
+              )}
+            </IconButton>
+          ),
+        })}
 
         {snapshot?.status === 'available' ? (
           <div className="space-y-2">
@@ -170,18 +153,20 @@ export function CodexUsagePillContainer({
               reset={weekly?.resetsAt ?? null}
             />
             {snapshot.credits ? (
-              <div className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-2 border-t border-border/70 pt-2 text-xs">
-                <span className="font-medium text-popover-foreground">
+              <div
+                className={cn(usageSection, 'flex items-center gap-2 text-xs')}
+              >
+                <span className="w-18 shrink-0 font-medium text-ink">
                   Credits
                 </span>
-                <span className="truncate text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-ink-muted">
                   {snapshot.credits.unlimited
                     ? 'Unlimited'
                     : snapshot.credits.hasCredits
                       ? 'Available'
                       : 'No credits remaining'}
                 </span>
-                <span className="text-right font-medium text-popover-foreground">
+                <span className="w-10 shrink-0 text-right font-medium text-ink">
                   {snapshot.credits.unlimited
                     ? 'Any'
                     : (snapshot.credits.balance ?? '0')}
@@ -190,22 +175,23 @@ export function CodexUsagePillContainer({
             ) : null}
           </div>
         ) : (
-          <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {unavailableReason ?? 'Codex usage is unavailable.'}
-          </p>
+          renderUsageNote(unavailableReason ?? 'Codex usage is unavailable.')
         )}
 
-        <div className="flex items-center justify-between border-t border-border/70 pt-2 text-[11px] text-muted-foreground">
+        <div
+          className={cn(
+            usageSection,
+            'flex items-center justify-between text-2xs text-ink-muted',
+          )}
+        >
           <span>Refreshes quietly while visible</span>
           <Button
-            type="button"
-            variant="ghost"
+            variant="link"
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
               onOpenSettings()
             }}
-            className="h-auto px-0 text-[11px] font-medium text-blue-300 shadow-none hover:bg-transparent hover:text-blue-200"
           >
             Settings
           </Button>

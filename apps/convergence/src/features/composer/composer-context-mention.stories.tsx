@@ -48,7 +48,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="relative mt-64 w-[36rem] max-w-full rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
+      <div className="relative mt-64 w-144 max-w-full rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
         <Story />
         @gat
       </div>
@@ -82,7 +82,7 @@ export const Empty: Story = {
   args: { items: [] },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByText('No matching project context items.'),
+      canvas.getByText('No matching project context items'),
     ).toBeVisible()
   },
 }

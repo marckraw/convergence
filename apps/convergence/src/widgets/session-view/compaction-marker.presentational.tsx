@@ -1,4 +1,5 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
+import { Divider } from '@convergence/ui'
 import { compactionLabel } from './harness-facts.pure'
 
 export function CompactionMarker({
@@ -6,15 +7,12 @@ export function CompactionMarker({
 }: {
   fact: SessionHarnessFacts['compactions'][number]
 }) {
+  // A boundary across the transcript, named by its words (CONV-13).
   return (
-    <div
-      role="note"
+    <Divider
       data-testid="compaction-marker"
-      className="my-3 flex items-center gap-2 text-xs text-muted-foreground"
-    >
-      <span className="h-px flex-1 bg-border" />
-      <span>{compactionLabel(fact)}</span>
-      <span className="h-px flex-1 bg-border" />
-    </div>
+      className="my-3"
+      label={compactionLabel(fact)}
+    />
   )
 }

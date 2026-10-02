@@ -1,6 +1,7 @@
-import type { FC, FormEvent } from 'react'
+import type { FC } from 'react'
 import type { InteractionResponse } from '@/entities/session'
 import { Button, Textarea } from '@convergence/ui'
+import { submitterValue } from './request-card.pure'
 
 interface PlanRequestFormProps {
   onSubmit: (response: InteractionResponse, displayText: string) => void
@@ -15,7 +16,7 @@ export const PlanRequestForm: FC<PlanRequestFormProps> = ({ onSubmit }) => {
         const form = event.currentTarget
         const formData = new FormData(form)
         const message = String(formData.get('message') ?? '').trim()
-        const decision = getSubmitDecision(event)
+        const decision = submitterValue(event.nativeEvent) ?? 'approve'
 
         if (decision === 'reject') {
           onSubmit(
@@ -24,7 +25,7 @@ export const PlanRequestForm: FC<PlanRequestFormProps> = ({ onSubmit }) => {
               decision: 'reject',
               message: message || undefined,
             },
-            message ? `Rejected plan\n\n${message}` : 'Rejected plan',
+            message ? `Denied plan\n\n${message}` : 'Denied plan',
           )
           return
         }
@@ -39,25 +40,20 @@ export const PlanRequestForm: FC<PlanRequestFormProps> = ({ onSubmit }) => {
       }}
     >
       <Textarea
-        aria-label="Plan rejection instructions"
+        aria-label="Why you deny the plan"
         className="min-h-20 resize-y"
         name="message"
-        placeholder="Optional rejection notes or requested changes"
+        placeholder="Optional: why, or the changes you want"
       />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" name="decision" value="approve">
           Approve plan
         </Button>
+        {/* R10: a plan review is a permission, refused with Deny. */}
         <Button type="submit" name="decision" value="reject" variant="ghost">
-          Reject plan
+          Deny plan
         </Button>
       </div>
     </form>
   )
-}
-
-function getSubmitDecision(event: FormEvent<HTMLFormElement>): string {
-  const nativeEvent = event.nativeEvent as SubmitEvent
-  const submitter = nativeEvent.submitter
-  return submitter instanceof HTMLButtonElement ? submitter.value : 'approve'
 }

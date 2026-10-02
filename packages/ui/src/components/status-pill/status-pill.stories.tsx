@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Cloud, TriangleAlert } from 'lucide-react'
-import { expect } from 'storybook/test'
+import { expect, fn } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
 import { Spinner } from '../../motion/spinner/spinner'
 import { StatusDot } from '../status-dot/status-dot'
-import { StatusPill } from './status-pill'
+import { StatusPill, StatusPillButton } from './status-pill'
 
 /** A conversation header's status row: one pill per tone. */
 function StatusRow() {
@@ -98,4 +98,47 @@ export const Long: Story = {
     const glyph = canvasElement.querySelector('svg') as SVGElement
     await expect(glyph.getBoundingClientRect().width).toBe(12)
   },
+}
+
+const onPress = fn()
+
+/**
+ * Pressable: a state that opens what it is about (Parallel work's "2 running",
+ * a harness alert). The same box and print as the plain pill beside it, so
+ * the row is one height, with a focus ring and a target that reaches 4 px
+ * further than it looks.
+ */
+export const Pressable: Story = {
+  render: () => (
+    <div className="flex items-center gap-1.5 rounded-md bg-canvas p-3">
+      <StatusPill>Edited 2 files</StatusPill>
+      <StatusPillButton tone="info" aria-expanded={false} onClick={onPress}>
+        2 running
+      </StatusPillButton>
+      <StatusPillButton tone="danger">Harness: rate limited</StatusPillButton>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const pressable = canvas.getByRole('button', { name: '2 running' })
+    const plain = canvas
+      .getByText('Edited 2 files')
+      .closest('[data-slot="status-pill"]') as Element
+    await expect(pressable.getBoundingClientRect().height).toBe(
+      plain.getBoundingClientRect().height,
+    )
+    await expect(getComputedStyle(pressable).color).toBe(
+      tokenColor('--info-ink'),
+    )
+    await userEvent.tab()
+    await expect(pressable).toHaveFocus()
+    await expect(getComputedStyle(pressable).outlineStyle).not.toBe('none')
+    await userEvent.keyboard('{Enter}')
+    await expect(onPress).toHaveBeenCalled()
+  },
+}
+
+export const PressableDark: Story = {
+  ...Pressable,
+  name: 'Pressable, dark',
+  globals: { theme: 'dark' },
 }

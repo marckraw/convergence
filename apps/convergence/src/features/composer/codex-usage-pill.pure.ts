@@ -1,10 +1,18 @@
+import type { Tone } from '@convergence/ui'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import type {
   ProviderQuotaSnapshot,
   ProviderQuotaWindow,
 } from '@/entities/provider-quota'
 
-export type CodexUsageTone = 'green' | 'amber' | 'red' | 'muted'
+/**
+ * The pill's tone, in R1's words: plenty left (success), running low
+ * (warning), nearly gone (danger), or unknown (neutral).
+ */
+export type CodexUsageTone = Extract<
+  Tone,
+  'neutral' | 'success' | 'warning' | 'danger'
+>
 
 /**
  * Whether this composer governs the local Codex CLI's own billing (MAR-2682).
@@ -58,10 +66,10 @@ export function getCodexWindow(
 export function getCodexUsageTone(
   remainingPercent: number | null | undefined,
 ): CodexUsageTone {
-  if (typeof remainingPercent !== 'number') return 'muted'
-  if (remainingPercent <= 15) return 'red'
-  if (remainingPercent <= 40) return 'amber'
-  return 'green'
+  if (typeof remainingPercent !== 'number') return 'neutral'
+  if (remainingPercent <= 15) return 'danger'
+  if (remainingPercent <= 40) return 'warning'
+  return 'success'
 }
 
 export function formatCodexRemainingPercent(

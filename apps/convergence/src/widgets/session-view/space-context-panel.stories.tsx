@@ -73,7 +73,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="flex h-[48rem] justify-end bg-background">
+      <div className="flex h-192 justify-end bg-canvas">
         <Story />
       </div>
     ),
@@ -104,22 +104,12 @@ export const Empty: Story = {
   args: { space: { ...space, brief: '  ' }, artifacts: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No Space brief yet.')).toBeVisible()
-    await expect(canvas.getByText('No artifacts yet.')).toBeVisible()
+    await expect(canvas.getByText('No artifacts yet')).toBeVisible()
   },
 }
 
 /** A long brief and many attempts: the panel scrolls. */
 export const Long: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the panel's scrolling body has no focusable content and is not focusable itself, so a keyboard cannot scroll it — fixed by the sweep (DS4)
-          { id: 'scrollable-region-focusable', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     space: {
       ...space,

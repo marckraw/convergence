@@ -89,7 +89,7 @@ export const ConversationDetailsMenu: FC<ConversationDetailsMenuProps> = ({
         ref={panelRef}
         aria-label="Details"
         align="end"
-        className="max-h-[min(70vh,var(--available-height))] w-96 max-w-[calc(100vw-2rem)] overflow-auto p-2 text-xs"
+        className="max-h-(--available-height) w-96 max-w-(--available-width) overflow-auto p-2 text-xs"
         // The panel takes the focus, so it reads as one place; opened at a
         // section (the harness, from its alert chip), that section does.
         initialFocus={() => {

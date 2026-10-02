@@ -35,13 +35,19 @@ import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import type { ComposerInjectionRootItem } from './composer-injection-trigger.pure'
 import { ModelPickerDialog } from '@/features/model-picker'
 import {
+  Badge,
   Button,
+  Chip,
+  Kbd,
   cn,
   IconButton,
   listboxOptionId,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  SegmentedControl,
+  SegmentedControlItem,
+  StatusPill,
   Textarea,
   Tooltip,
 } from '@convergence/ui'
@@ -54,10 +60,10 @@ import {
   Plus,
   Repeat,
   SlidersHorizontal,
-  X,
   Zap,
 } from 'lucide-react'
 import { CatalogNotice } from './catalog-notice.presentational'
+import { composerAttachedRow, composerToolbarControl } from './composer.styles'
 import { ComposerSelect } from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
@@ -663,7 +669,7 @@ export const Composer: FC<ComposerProps> = ({
   const visibleDeliveryModes = deliveryModes.filter((mode) => mode !== 'normal')
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-conversation">
       {/*
         The card and the strip are one drop target. Stacking them made the
         strip a sibling of the card rather than a child, and drag handlers left
@@ -697,7 +703,7 @@ export const Composer: FC<ComposerProps> = ({
           />
           {selectedSkills.length > 0 ? (
             <div
-              className="mb-2 flex flex-wrap gap-1.5"
+              className={composerAttachedRow}
               data-testid="selected-skills-row"
             >
               {selectedSkills.map((selection) => (
@@ -711,43 +717,37 @@ export const Composer: FC<ComposerProps> = ({
           ) : null}
           {projectContextEnabled && selectedContextItems.length > 0 ? (
             <div
-              className="mb-2 flex flex-wrap gap-1.5"
+              className={composerAttachedRow}
               data-testid="selected-project-context-row"
             >
-              {selectedContextItems.map((item) => (
-                <span
-                  key={item.id}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
-                >
-                  <FileText className="h-3 w-3 shrink-0" />
-                  <span className="truncate">
-                    {item.label?.trim() ? item.label : 'Untitled'}
-                  </span>
-                  <IconButton
-                    label={`Remove ${item.label?.trim() ? item.label : 'Untitled'} context`}
-                    type="button"
-                    variant="ghost"
-                    onClick={() => onContextRemove(item.id)}
-                    size="xs"
-                    className="rounded-full"
+              {selectedContextItems.map((item) => {
+                const label = item.label?.trim() ? item.label : 'Untitled'
+                return (
+                  <Chip
+                    key={item.id}
+                    icon={<FileText />}
+                    onRemove={() => onContextRemove(item.id)}
+                    removeLabel={`Remove ${label} context`}
                   >
-                    <X className="h-3 w-3" />
-                  </IconButton>
-                </span>
-              ))}
+                    {label}
+                  </Chip>
+                )
+              })}
             </div>
           ) : null}
           {projectContextEnabled && everyTurnContextCount > 0 ? (
-            <div
-              className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-200"
-              data-testid="every-turn-context-badge"
-              title="Every-turn project context items are re-sent on every message in this session."
-            >
-              <Repeat className="h-3 w-3" />
-              <span>
-                Every-turn context active · {everyTurnContextCount} item
-                {everyTurnContextCount === 1 ? '' : 's'}
-              </span>
+            <div className="mb-2">
+              <Tooltip label="Every-turn project context items are re-sent on every message in this session.">
+                <StatusPill
+                  tone="warning"
+                  leading={<Repeat aria-hidden className="size-3" />}
+                  className="font-medium"
+                  data-testid="every-turn-context-badge"
+                >
+                  Every-turn context active · {everyTurnContextCount} item
+                  {everyTurnContextCount === 1 ? '' : 's'}
+                </StatusPill>
+              </Tooltip>
             </div>
           ) : null}
           <div className="relative">
@@ -855,9 +855,7 @@ export const Composer: FC<ComposerProps> = ({
                       <Plus className="h-3.5 w-3.5" />
                       Add
                       {resourceCount > 0 ? (
-                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-                          {resourceCount}
-                        </span>
+                        <Badge shape="count">{resourceCount}</Badge>
                       ) : null}
                     </Button>
                   }
@@ -881,9 +879,9 @@ export const Composer: FC<ComposerProps> = ({
                     <Paperclip className="h-3.5 w-3.5" />
                     Attach file
                     {attachments.length > 0 ? (
-                      <span className="ml-auto rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                      <Badge shape="count" className="ml-auto">
                         {attachments.length}
-                      </span>
+                      </Badge>
                     ) : null}
                   </Button>
                   <SkillPicker
@@ -947,7 +945,7 @@ export const Composer: FC<ComposerProps> = ({
                     items={providerItems}
                     onChange={onProviderChange}
                     disabled={selectionDisabled}
-                    className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className={cn('gap-1.5', composerToolbarControl)}
                   />
                   <ModelPickerDialog
                     providers={modelCatalogProviders}
@@ -964,7 +962,7 @@ export const Composer: FC<ComposerProps> = ({
                     disabled={modelSelectionDisabled || !selection.provider}
                     triggerVariant="ghost"
                     triggerSize="md"
-                    triggerClassName="px-2 text-xs text-muted-foreground hover:text-foreground"
+                    triggerClassName={composerToolbarControl}
                   />
                   {effortItems.length > 0 && (
                     <ComposerSelect
@@ -973,7 +971,7 @@ export const Composer: FC<ComposerProps> = ({
                       items={effortItems}
                       onChange={(id) => onEffortChange(id as ReasoningEffort)}
                       disabled={modelSelectionDisabled || !selection.model}
-                      className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                      className={composerToolbarControl}
                     />
                   )}
                   {(providerAccountPickerVisible ??
@@ -1019,7 +1017,7 @@ export const Composer: FC<ComposerProps> = ({
                       onChange={onCodexSpeedChange}
                       disabled={disabled || modelSelectionDisabled}
                       className={cn(
-                        'px-2 text-xs text-muted-foreground hover:text-foreground',
+                        composerToolbarControl,
                         codexSpeedId !== 'default' &&
                           'bg-secondary text-foreground',
                       )}
@@ -1055,7 +1053,7 @@ export const Composer: FC<ComposerProps> = ({
                           )
                         }
                         disabled={disabled || !selection.provider}
-                        className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                        className={composerToolbarControl}
                       />
                       {canCustomizePermissions ? (
                         <IconButton
@@ -1078,9 +1076,7 @@ export const Composer: FC<ComposerProps> = ({
                           <SlidersHorizontal className="h-3.5 w-3.5" />
                         </IconButton>
                       ) : selection.providerId === 'pi' ? (
-                        <span className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                          Provider-managed
-                        </span>
+                        <Badge shape="label">Provider-managed</Badge>
                       ) : null}
                     </>
                   ) : null}
@@ -1116,36 +1112,26 @@ export const Composer: FC<ComposerProps> = ({
               {usagePill}
               {contextWindowDot}
               {visibleDeliveryModes.length > 1 ? (
-                <div
-                  className="flex h-7 items-center rounded-md border border-border bg-background p-0.5"
+                <SegmentedControl
                   aria-label="Delivery mode"
-                  role="radiogroup"
+                  size="xs"
+                  value={deliveryMode}
+                  onValueChange={(mode) =>
+                    onDeliveryModeChange(mode as MidRunInputMode)
+                  }
+                  disabled={disabled}
                 >
                   {visibleDeliveryModes.map((mode) => (
-                    <Button
-                      key={mode}
-                      type="button"
-                      variant="ghost"
-                      role="radio"
-                      aria-checked={deliveryMode === mode}
-                      onClick={() => onDeliveryModeChange(mode)}
-                      disabled={disabled}
-                      className={cn(
-                        'h-5 rounded-sm px-2 text-[11px] font-medium text-muted-foreground shadow-none transition-colors',
-                        deliveryMode === mode
-                          ? 'bg-secondary text-secondary-foreground'
-                          : 'hover:text-foreground',
-                      )}
-                    >
+                    <SegmentedControlItem key={mode} value={mode}>
                       {modeLabels[mode] ?? mode}
-                    </Button>
+                    </SegmentedControlItem>
                   ))}
-                </div>
+                </SegmentedControl>
               ) : visibleDeliveryModes.length === 1 ? (
-                <span className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                <Badge shape="label">
                   {modeLabels[visibleDeliveryModes[0]] ??
                     visibleDeliveryModes[0]}
-                </span>
+                </Badge>
               ) : null}
             </div>
             <IconButton
@@ -1193,7 +1179,7 @@ export const Composer: FC<ComposerProps> = ({
                       onCodexApprovalPolicyChange(id as CodexApprovalPolicy)
                     }
                     disabled={disabled}
-                    className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className={composerToolbarControl}
                   />
                   <ComposerSelect
                     selectedId={codexConfig.sandbox}
@@ -1207,7 +1193,7 @@ export const Composer: FC<ComposerProps> = ({
                       onCodexSandboxChange(id as CodexSandboxMode)
                     }
                     disabled={disabled}
-                    className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className={composerToolbarControl}
                   />
                 </>
               ) : (
@@ -1225,7 +1211,7 @@ export const Composer: FC<ComposerProps> = ({
                     )
                   }
                   disabled={disabled}
-                  className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                  className={composerToolbarControl}
                 />
               )}
             </div>
@@ -1240,8 +1226,8 @@ export const Composer: FC<ComposerProps> = ({
           onWorkAddressBranchChange={onWorkAddressBranchChange}
         />
       </div>
-      <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
-        ⌘ + Enter to send
+      <p className="mt-1.5 text-center text-3xs text-ink-muted">
+        <Kbd>⌘ Enter</Kbd> to send
       </p>
     </div>
   )

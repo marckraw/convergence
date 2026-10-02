@@ -1,7 +1,9 @@
 import type { FC } from 'react'
 import { BookOpenText, FileText, Library } from 'lucide-react'
 import type { ComposerInjectionRootItem } from './composer-injection-trigger.pure'
-import { Button, Listbox, ListboxOption } from '@convergence/ui'
+import { Code, Listbox, ListboxOption } from '@convergence/ui'
+import { InlinePicker, InlinePickerState } from './inline-picker.presentational'
+import { inlinePickerRow } from './inline-picker.styles'
 
 interface ComposerInjectionRootPickerProps {
   open: boolean
@@ -44,17 +46,13 @@ export const ComposerInjectionRootPicker: FC<
   if (!open) return null
 
   return (
-    <div
-      className="absolute right-0 bottom-full left-0 z-50 mb-2 max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-      data-testid="composer-injection-root-picker"
+    <InlinePicker
+      testId="composer-injection-root-picker"
+      closeLabel="Close injection picker"
+      onDismiss={onDismiss}
     >
       {items.length === 0 ? (
-        <div
-          className="px-3 py-2 text-xs text-muted-foreground"
-          data-testid="composer-injection-root-empty"
-        >
-          No matching injections.
-        </div>
+        <InlinePickerState state="empty" title="No matching injections" />
       ) : (
         <Listbox id={listId} aria-label="Injections" active={highlightedIndex}>
           {items.map((item, index) => (
@@ -64,19 +62,15 @@ export const ComposerInjectionRootPicker: FC<
               onHover={() => onHover(index)}
               onPick={() => onSelect(item)}
               data-testid={`composer-injection-root-item-${item.kind}`}
-              className="items-start rounded px-2 py-1.5 text-xs"
+              className={inlinePickerRow}
             >
-              <span className="mt-0.5 text-muted-foreground">
-                {itemIcon(item)}
-              </span>
+              <span className="mt-0.5 text-ink-muted">{itemIcon(item)}</span>
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate font-medium">{item.label}</span>
-                  <code className="rounded border border-border/70 bg-muted/40 px-1 py-0.5 text-[10px] text-muted-foreground">
-                    {item.alias}
-                  </code>
+                  <Code className="text-3xs text-ink-muted">{item.alias}</Code>
                 </span>
-                <span className="line-clamp-1 w-full text-[11px] text-muted-foreground">
+                <span className="line-clamp-1 w-full text-2xs text-ink-muted">
                   {item.description}
                 </span>
               </span>
@@ -84,15 +78,6 @@ export const ComposerInjectionRootPicker: FC<
           ))}
         </Listbox>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onDismiss}
-        aria-label="Close injection picker"
-        className="sr-only"
-      >
-        Close
-      </Button>
-    </div>
+    </InlinePicker>
   )
 }

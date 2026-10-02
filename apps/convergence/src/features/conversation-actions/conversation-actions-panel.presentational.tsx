@@ -49,7 +49,8 @@ export const ConversationActionsPanel: FC<
             }
           : {
               right: 0,
-              bottom: 34 + ACTIONS_PANEL_GAP,
+              // Above the button, h-control-lg (36 px), and the gap.
+              bottom: 36 + ACTIONS_PANEL_GAP,
               width: ACTIONS_PANEL_WIDTH,
             }
       }

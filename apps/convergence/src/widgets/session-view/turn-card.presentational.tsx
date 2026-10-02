@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import { Badge, Button, cn, StatusDot } from '@convergence/ui'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { ChangedFilesTree } from './changed-files-tree.container'
 import {
@@ -55,44 +55,50 @@ export const TurnCard: FC<TurnCardProps> = ({
         type="button"
         variant="ghost"
         onClick={onToggle}
+        aria-expanded={expanded}
         size="lg"
         className="h-auto w-full justify-start rounded-none px-3 text-left font-normal"
       >
         <ChevronRight
+          aria-hidden
           className={cn(
-            'mt-0.5 h-3 w-3 shrink-0 transition-transform',
+            'mt-0.5 size-3 shrink-0 transition-transform motion-reduce:transition-none',
             expanded && 'rotate-90',
           )}
         />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="font-mono text-[11px] text-muted-foreground">
+            <span className="font-mono text-2xs text-muted-foreground">
               Turn {turn.sequence}
             </span>
+            {/* R1: a turn under way is working (info); one that errored failed (danger). */}
             {turn.status === 'running' && (
-              <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-500">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+              <Badge
+                tone="info"
+                shape="label"
+                icon={<StatusDot tone="info" size="sm" pulse />}
+              >
                 in progress
-              </span>
+              </Badge>
             )}
             {turn.status === 'errored' && (
-              <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
+              <Badge tone="danger" shape="label">
                 errored
-              </span>
+              </Badge>
             )}
           </span>
           {turn.summary && (
-            <span className="mt-0.5 block truncate text-[11px] text-foreground">
+            <span className="mt-0.5 block truncate text-2xs text-foreground">
               {turn.summary}
             </span>
           )}
-          <span className="mt-1 flex items-baseline gap-2 text-[10px] text-muted-foreground">
+          <span className="mt-1 flex items-baseline gap-2 text-3xs text-muted-foreground">
             <span>{fileLabel}</span>
             {counts.additions > 0 && (
-              <span className="text-green-500">+{counts.additions}</span>
+              <span className="text-diff-added">+{counts.additions}</span>
             )}
             {counts.deletions > 0 && (
-              <span className="text-red-500">−{counts.deletions}</span>
+              <span className="text-diff-removed">−{counts.deletions}</span>
             )}
           </span>
         </span>

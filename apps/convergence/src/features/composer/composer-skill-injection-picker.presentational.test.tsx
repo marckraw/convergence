@@ -56,18 +56,18 @@ describe('ComposerSkillInjectionPicker remote skills note', () => {
     expect(onSelect).toHaveBeenCalledWith(skill)
   })
 
-  it('shows the note while skills are loading', () => {
+  it('shows the note while skills are loading', async () => {
     renderPicker({ isLoading: true, items: [] })
 
     expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
-    expect(screen.getByText('Loading skills...')).toBeInTheDocument()
+    expect(await screen.findByText('Loading skills…')).toBeInTheDocument()
   })
 
   it('shows the note when no skills match', () => {
     renderPicker({ items: [] })
 
     expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
-    expect(screen.getByText('No matching skills.')).toBeInTheDocument()
+    expect(screen.getByText('No matching skills')).toBeInTheDocument()
   })
 
   it('shows the note above an error', () => {

@@ -16,6 +16,7 @@ import { useElementWidth } from '@/shared/hooks/use-element-width'
 import {
   ConfirmDialog,
   DialogTitle,
+  FormError,
   Sheet,
   SheetContent,
 } from '@convergence/ui'
@@ -254,9 +255,9 @@ export const ParallelWork: FC<Props> = ({
         <p className="text-xs text-muted-foreground">Not reported</p>
       )}
       {detail.error && (
-        <p role="alert" className="text-xs text-red-500">
-          Could not read the earlier part of this work: {detail.error}
-        </p>
+        <FormError>
+          Couldn't read the earlier part of this work: {detail.error}
+        </FormError>
       )}
       {transcriptRows.map((row) =>
         row.kind === 'block' ? (
@@ -364,9 +365,9 @@ export const ParallelWork: FC<Props> = ({
         </p>
       )}
       {(error || results.error) && (
-        <p role="alert" className="p-5 text-xs text-red-500">
-          Could not read parallel work: {error ?? results.error}
-        </p>
+        <FormError className="p-5">
+          Couldn't read parallel work: {error ?? results.error}
+        </FormError>
       )}
       <ParallelWorkPanel
         olderOpen={olderOpen}

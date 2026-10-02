@@ -129,7 +129,7 @@ export const ChangedFilesTreeModel: FC<ChangedFilesTreeModelProps> = ({
                 onKeyDown={handleSearchKeyDown}
               />
               {search.value && (
-                <span className="w-10 text-right text-[10px] tabular-nums text-muted-foreground">
+                <span className="w-10 text-right text-3xs tabular-nums text-muted-foreground">
                   {search.matchingPaths.length}
                 </span>
               )}
@@ -190,9 +190,32 @@ export const ChangedFilesTreeModel: FC<ChangedFilesTreeModelProps> = ({
   )
 }
 
+/**
+ * The tree draws in our tokens, so it follows the theme like everything
+ * around it (it kept a light row background under dark text in dark before):
+ * the ink, the line, R7's chosen and hover fills, the focus colour, and the
+ * git states in R1's tones and the diff hues.
+ */
 const TREE_HOST_STYLE = {
-  '--trees-fg-override': 'var(--foreground)',
-  '--trees-border-color-override': 'var(--border)',
-  '--trees-selected-bg-override':
-    'color-mix(in srgb, var(--accent) 55%, transparent)',
+  // The tree's own stylesheet sets `color-scheme: light dark` on its host,
+  // which follows the system's setting, not the app's theme: the host takes
+  // the app's scheme back, so every token resolves to the theme on screen.
+  colorScheme: 'inherit',
+  '--trees-fg-override': 'var(--ink)',
+  '--trees-fg-muted-override': 'var(--ink-muted)',
+  '--trees-bg-override': 'transparent',
+  '--trees-bg-muted-override': 'var(--fill-hover)',
+  '--trees-input-bg-override': 'var(--canvas)',
+  '--trees-search-bg-override': 'var(--canvas)',
+  '--trees-search-fg-override': 'var(--ink)',
+  '--trees-border-color-override': 'var(--line)',
+  '--trees-selected-bg-override': 'var(--fill-selected)',
+  '--trees-selected-fg-override': 'var(--on-highlight)',
+  '--trees-focus-ring-color-override': 'var(--focus)',
+  '--trees-git-added-color-override': 'var(--diff-added)',
+  '--trees-git-deleted-color-override': 'var(--diff-removed)',
+  '--trees-git-modified-color-override': 'var(--warning-ink)',
+  '--trees-git-renamed-color-override': 'var(--info-ink)',
+  '--trees-git-untracked-color-override': 'var(--success-ink)',
+  '--trees-git-ignored-color-override': 'var(--ink-muted)',
 } as CSSProperties

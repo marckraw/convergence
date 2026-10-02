@@ -2041,7 +2041,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
       {waitReason ? (
         <div
           role="status"
-          className="mx-auto mb-2 w-full max-w-2xl rounded-md border border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground"
+          className="mx-auto mb-2 w-full max-w-conversation rounded-md border border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground"
           data-testid="composer-wait-notice"
         >
           {COMPOSER_WAIT_NOTICES[waitReason]}
@@ -2234,7 +2234,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
       />
       {queuedInputs.length > 0 ? (
         <div
-          className="mx-auto mt-2 w-full max-w-2xl rounded-md border border-border bg-muted/30 px-3 py-2"
+          className="mx-auto mt-2 w-full max-w-conversation rounded-md border border-border bg-muted/30 px-3 py-2"
           data-testid="queued-inputs"
         >
           <div className="space-y-2">
@@ -2244,7 +2244,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
                 className="flex items-start justify-between gap-3 text-xs"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <div className="flex items-center gap-2 text-3xs uppercase tracking-wide text-muted-foreground">
                     <span>
                       {DELIVERY_MODE_LABELS[input.deliveryMode] ??
                         input.deliveryMode}
@@ -2312,7 +2312,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
       {rejections.length > 0 && (
         <div
           role="status"
-          className="mx-auto mt-2 w-full max-w-2xl rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
+          className="mx-auto mt-2 w-full max-w-conversation rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
         >
           {rejections.map((r, i) => (
             <div key={`${r.filename}-${i}`}>

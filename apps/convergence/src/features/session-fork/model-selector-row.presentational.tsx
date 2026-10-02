@@ -1,13 +1,15 @@
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type { FC } from 'react'
-import {
-  getProviderLifecycleBadge,
-  type ProviderInfo,
-  type ReasoningEffort,
-  type ResolvedProviderSelection,
+import type {
+  ProviderInfo,
+  ReasoningEffort,
+  ResolvedProviderSelection,
 } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
-import { SessionStartSelect } from '@/features/session-start'
+import {
+  effortSelectItems,
+  providerSelectItems,
+  SessionStartSelect,
+} from '@/features/session-start'
 
 interface ModelSelectorRowProps {
   providers: ProviderInfo[]
@@ -28,28 +30,8 @@ export const ModelSelectorRow: FC<ModelSelectorRowProps> = ({
   onModelChange,
   onEffortChange,
 }) => {
-  const providerItems = providers.map((provider) => ({
-    id: provider.id,
-    icon: (
-      <ProviderIcon
-        providerId={provider.id}
-        vendorLabel={provider.vendorLabel}
-        name={provider.name}
-      />
-    ),
-    label: provider.vendorLabel || provider.name,
-    description:
-      provider.vendorLabel && provider.vendorLabel !== provider.name
-        ? provider.name
-        : undefined,
-    badge: getProviderLifecycleBadge(provider) ?? undefined,
-  }))
-  const effortItems =
-    selection.model?.effortOptions.map((effort) => ({
-      id: effort.id,
-      label: effort.label,
-      description: effort.description,
-    })) ?? []
+  const providerItems = providerSelectItems(providers)
+  const effortItems = effortSelectItems(selection)
 
   return (
     <>

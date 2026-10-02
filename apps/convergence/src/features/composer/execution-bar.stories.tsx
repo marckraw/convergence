@@ -23,7 +23,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="w-[42rem] max-w-full">
+      <div className="w-conversation max-w-full">
         <div className="relative z-10 h-16 rounded-xl border border-border bg-card" />
         <Story />
       </div>

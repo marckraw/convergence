@@ -38,7 +38,7 @@ export const Default: Story = {
     ).toHaveAttribute('aria-checked', 'true')
     const full = screen.getByRole('menuitemradio', { name: 'Full' })
     await expect(full).toHaveAttribute('aria-checked', 'false')
-    await expect(full).toHaveAttribute('title', 'Show every entry')
+    await expect(full).toHaveAttribute('data-tooltip', 'Show every entry')
     await userEvent.click(full)
     await expect(args.onChange).toHaveBeenCalledWith('full')
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())

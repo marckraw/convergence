@@ -101,6 +101,10 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
     // here as in the app.
     ConversationViewMenu: actual.ConversationViewMenu,
     parallelWorkInRow: actual.parallelWorkInRow,
+    // The header's real status pills (CONV-3).
+    HeaderStatus: actual.HeaderStatus,
+    leadingStatusSlots: actual.leadingStatusSlots,
+    DraftStart: actual.DraftStart,
     useParallelWork: () => ({ rows: [], error: null, loading: false }),
     ParallelWork: ({
       open,
@@ -447,15 +451,14 @@ describe('ChatSurface', () => {
     )
 
     expect(
-      screen.getByRole('heading', { name: 'Launch plan' }),
+      screen.getByRole('heading', { level: 1, name: 'Launch plan' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /chats/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /sources/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /memory/i })).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /artifacts/i }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /brief/i })).toBeInTheDocument()
+    // Space home's sections are tabs (CONV-28).
+    expect(screen.getByRole('tab', { name: /chats/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /sources/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /memory/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /artifacts/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /brief/i })).toBeInTheDocument()
     expect(screen.getByText('Coordinate the launch work.')).toBeInTheDocument()
     expect(screen.getByText('Planning chat')).toBeInTheDocument()
     expect(screen.queryByTestId('composer')).not.toBeInTheDocument()
@@ -575,7 +578,7 @@ describe('ChatSurface', () => {
     })
 
     render(<ChatSurface selectedSpaceId="space-1" />)
-    fireEvent.click(screen.getByRole('button', { name: /sources/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /sources/i }))
 
     expect(screen.getByText('brief.md')).toBeInTheDocument()
     expect(screen.getByText(/2 KB/)).toBeInTheDocument()
@@ -617,14 +620,14 @@ describe('ChatSurface', () => {
 
     render(<ChatSurface selectedSpaceId="space-1" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /brief/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /brief/i }))
     fireEvent.change(screen.getByLabelText('Space brief'), {
       target: { value: 'New brief' },
     })
     fireEvent.click(screen.getByRole('button', { name: /save brief/i }))
     expect(updateSpace).toHaveBeenCalledWith('space-1', { brief: 'New brief' })
 
-    fireEvent.click(screen.getByRole('button', { name: /memory/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /memory/i }))
     fireEvent.change(screen.getByLabelText('Space memory and instructions'), {
       target: { value: 'New memory' },
     })
@@ -703,7 +706,7 @@ describe('ChatSurface', () => {
     })
 
     render(<ChatSurface selectedSpaceId="space-1" />)
-    fireEvent.click(screen.getByRole('button', { name: /artifacts/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /artifacts/i }))
 
     expect(screen.getByText('Existing doc')).toBeInTheDocument()
     expect(screen.getByText('From Planning chat')).toBeInTheDocument()
@@ -977,7 +980,7 @@ describe('ChatSurface', () => {
       const { unmount } = render(<ChatSurface selectedSpaceId={null} />)
       expect(
         screen.getByRole('group', { name: 'Planning chat, in emergence' }),
-      ).toHaveAttribute('title', 'emergence / Planning chat')
+      ).toHaveAttribute('data-tooltip', 'emergence / Planning chat')
       expect(
         screen.getByRole('button', { name: 'Stop Planning chat' }),
       ).toBeInTheDocument()
@@ -987,7 +990,7 @@ describe('ChatSurface', () => {
       useSessionStore.setState({ globalChatSessions: [globalSession] })
       render(<ChatSurface selectedSpaceId={null} />)
       const identity = screen.getByRole('group', { name: 'Planning chat' })
-      expect(identity).toHaveAttribute('title', 'Planning chat')
+      expect(identity).toHaveAttribute('data-tooltip', 'Planning chat')
       expect(identity).toHaveTextContent(/^Planning chat$/)
       expect(identity.querySelector('[data-header-project]')).toBeNull()
     })

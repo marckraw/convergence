@@ -12,16 +12,25 @@ import {
   type AttributedWorkItem,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
-import { Button, IconButton } from '@convergence/ui'
+import {
+  Button,
+  Card,
+  cn,
+  EmptyState,
+  FormError,
+  IconButton,
+  PanelHeader,
+  Tooltip,
+} from '@convergence/ui'
 import {
   descendantActivity,
   parallelWorkCardTone,
   workRowKey,
   workStatus,
   workTitle,
-  PARALLEL_WORK_CARD_TONE_CLASS,
-  PARALLEL_WORK_RETURNED_CLASS,
+  PARALLEL_WORK_CARD_TONE,
 } from './parallel-work.pure'
+import { parallelWorkReturnedRing } from './parallel-work.styles'
 
 export interface ParallelWorkPanelProps {
   olderOpen?: boolean
@@ -123,10 +132,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     const id = decisionIds.get(workRowKey(row))
     return id ? (
       <Button
-        variant="ghost"
+        variant="link"
         onClick={() => props.onDecision?.(id)}
-        size="lg"
-        className="h-auto justify-start rounded-none p-0 hover:bg-transparent text-left text-xs text-blue-500 hover:underline"
+        className="text-left text-xs"
       >
         Waiting for your decision in the conversation →
       </Button>
@@ -147,20 +155,18 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     return (
       <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
-          <span title={messageReason}>
-            <Button variant="secondary" disabled aria-label={messageReason}>
-              Message
-            </Button>
-          </span>
-          <span title={stopReason}>
-            <Button
-              variant="secondary"
-              disabled={Boolean(stopReason) || state?.pending}
-              onClick={() => props.onStop?.(workRowKey(row))}
-            >
-              {state?.error && running ? 'Retry stop' : 'Stop'}
-            </Button>
-          </span>
+          {/* Unavailable, they stay focusable and say why in our Tooltip (R2, CONV-27). */}
+          <Button variant="secondary" disabledReason={messageReason}>
+            Message
+          </Button>
+          <Button
+            variant="secondary"
+            disabledReason={stopReason}
+            disabled={state?.pending}
+            onClick={() => props.onStop?.(workRowKey(row))}
+          >
+            {state?.error && running ? 'Retry stop' : 'Stop'}
+          </Button>
           {row.run && (
             <Button
               variant="ghost"
@@ -185,15 +191,11 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           </Button>
         </div>
         {state?.pending && running && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             Stop requested… awaiting confirmation
           </p>
         )}
-        {state?.error && (
-          <p role="alert" className="text-xs text-red-500">
-            {state.error}
-          </p>
-        )}
+        <FormError>{state?.error}</FormError>
       </div>
     )
   }
@@ -201,29 +203,31 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     const time = parallelWorkTime(row, now)
     return (
       <>
+        {/* R11: today's 13 px title is the nearest step, text-sm. */}
         <Button
-          variant="ghost"
+          variant="link"
           onClick={() => props.onSelect(workRowKey(row))}
-          size="lg"
-          className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
+          className="block max-w-full truncate text-left text-sm font-medium"
         >
           {workTitle(row)}
         </Button>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-ink-muted">
           {row.run
             ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
             : (row.task?.taskType ?? 'Not reported')}
         </p>
-        <p className="text-[11px]" title={time.at ?? undefined}>
-          {workStatus(row)} · {time.label}
-        </p>
+        <Tooltip label={time.at ?? undefined}>
+          <p className="text-2xs">
+            {workStatus(row)} · {time.label}
+          </p>
+        </Tooltip>
         {row.run && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-ink-muted">
             Last tool: {row.run.lastToolName ?? 'Not reported'}
           </p>
         )}
         {parallelWorkRowState(row).fact?.status === 'failed' && (
-          <p className="text-xs text-red-500">
+          <p className="text-xs text-danger-ink">
             {parallelWorkRowState(row).fact?.endedSummary
               ? `Reported by the harness: ${parallelWorkRowState(row).fact!.endedSummary}`
               : 'Not reported'}
@@ -242,22 +246,28 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     const next = new Set([...seen, key])
     const children = childrenById.get(row) ?? []
     const hidden = collapsed.has(key)
-    const tone = parallelWorkCardTone(parallelWorkRowState(row).fact?.status)
+    const tone =
+      PARALLEL_WORK_CARD_TONE[
+        parallelWorkCardTone(parallelWorkRowState(row).fact?.status)
+      ]
     const returned = props.highlightedId === key
     return (
       <div key={key} className="space-y-2">
-        <div
-          className={`space-y-2 rounded-md border p-3 ${PARALLEL_WORK_CARD_TONE_CLASS[tone]}${returned ? ` ${PARALLEL_WORK_RETURNED_CLASS}` : ''}`}
+        <Card
+          tone={tone}
+          className={cn('space-y-2', returned && parallelWorkReturnedRing)}
           data-work-id={key}
+          data-tone={tone}
+          data-returned={returned ? '' : undefined}
         >
           {children.length > 0 && (
             <Button
-              variant="ghost"
+              variant="quiet"
+              size="xs"
               aria-expanded={!hidden}
               aria-label={`${hidden ? 'Expand' : 'Collapse'} ${workTitle(row)}`}
               onClick={() => props.onToggle?.(key)}
-              size="lg"
-              className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center gap-1 text-[11px] text-muted-foreground"
+              className="-ml-2 text-2xs"
             >
               {hidden ? (
                 <ChevronRight className="size-3" />
@@ -270,9 +280,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           )}
           {content(row)}
           {controls(row)}
-        </div>
+        </Card>
         {!hidden && children.length > 0 && (
-          <div className="ml-3.5 space-y-2 border-l border-border pl-3.5">
+          <div className="ml-3.5 space-y-2 border-l border-line pl-3.5">
             {children.map((child) => renderBranch(child, next))}
           </div>
         )}
@@ -282,44 +292,43 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
   return (
     <aside
       aria-label="Parallel work"
-      className="flex h-full min-h-0 w-full flex-col bg-background text-foreground"
+      className="flex h-full min-h-0 w-full flex-col bg-canvas text-ink"
     >
-      <header className="flex shrink-0 items-center justify-between border-b p-5">
-        {selected ? (
-          <Button
-            variant="ghost"
-            onClick={props.onBack}
-            size="lg"
-            className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center"
+      {/* The side panels' one header (CONV-20): 48 px, the title, a 28 px close. */}
+      <PanelHeader
+        title={
+          selected ? (
+            <Button variant="ghost" size="sm" onClick={props.onBack}>
+              <ArrowLeft aria-hidden className="size-4" />
+              Parallel work
+            </Button>
+          ) : (
+            'Parallel work'
+          )
+        }
+        actions={
+          <IconButton
+            label="Close parallel work"
+            variant="quiet"
+            size="sm"
+            onClick={props.onClose}
           >
-            <ArrowLeft className="size-4" />
-            Parallel work
-          </Button>
-        ) : (
-          <div>
-            <h2 className="text-base font-semibold">Parallel work</h2>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {inventoryLabel}
-            </p>
-          </div>
-        )}
-        <IconButton
-          label="Close parallel work"
-          variant="ghost"
-          onClick={props.onClose}
-        >
-          <X className="size-4" />
-        </IconButton>
-      </header>
+            <X aria-hidden className="size-3.5" />
+          </IconButton>
+        }
+      />
       <div
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4"
         data-parallel-scroll
       >
+        {!selected && (
+          <p className="text-2xs text-ink-muted">{inventoryLabel}</p>
+        )}
         {props.showEmpty !== false && !rows.length && (
-          <p className="text-sm text-muted-foreground">
-            No parallel work yet. Agents, background commands and monitors will
-            appear here when this session starts them.
-          </p>
+          <EmptyState
+            title="No parallel work yet"
+            detail="Agents, background commands and monitors will appear here when this session starts them."
+          />
         )}
         {selected ? (
           <>
@@ -341,7 +350,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
                   aria-expanded={props.olderOpen ?? false}
                   onClick={props.onToggleOlder}
                   size="lg"
-                  className="text-xs text-muted-foreground"
+                  className="text-xs text-ink-muted"
                 >
                   {archive.older.length} older ·{' '}
                   {archive.newest

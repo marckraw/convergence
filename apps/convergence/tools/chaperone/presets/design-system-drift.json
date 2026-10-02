@@ -163,7 +163,7 @@
           "apps/convergence/src/features/waves/{learn-loom-illustration,learn-loom-reference,loom-crew-picker,loom-horse-access,loom-search,loom-search-toggle,loom-sheet,loom-status,loom-title,merge-reviewed.row}.presentational.tsx",
           "apps/convergence/src/widgets/global-status-bar/{agent-meter-summary,aggregate-summary,project-summary}.presentational.tsx",
           "apps/convergence/src/widgets/project-actions-menu/project-action-run-log.presentational.tsx",
-          "apps/convergence/src/widgets/session-view/{conversation-item-header,conversation-item-shell,conversation-item-timestamp,tool-visibility-badge}.presentational.tsx",
+          "apps/convergence/src/widgets/session-view/{conversation-item-header,conversation-item-shell,conversation-item-timestamp,request-card,tool-visibility-badge}.presentational.tsx",
           "apps/convergence/src/widgets/sidebar/{activity-filter-choice,needs-you-fold-glyphs,needs-you-fold-line,needs-you-section}.presentational.tsx",
           "apps/convergence/src/widgets/workspace-layout/conversation-dock-placeholder.presentational.tsx"
         ],

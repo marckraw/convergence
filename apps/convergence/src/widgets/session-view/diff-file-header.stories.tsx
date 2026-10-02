@@ -15,7 +15,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="w-[32rem] max-w-full rounded-md border border-border bg-background">
+      <div className="w-128 max-w-full rounded-md border border-border bg-background">
         <Story />
       </div>
     ),
@@ -32,7 +32,7 @@ export const Default: Story = {
     const path = canvas.getByText(args.path)
     await expect(path).toBeVisible()
     // The whole path is in the tooltip, for when the row cuts it short.
-    await expect(path).toHaveAttribute('title', args.path)
+    await expect(path).toHaveAttribute('data-tooltip', args.path)
     await expect(canvas.getByText('M')).toBeVisible()
     await expect(canvas.getByText('Turn 4')).toBeVisible()
   },

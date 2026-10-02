@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@convergence/ui'
+import { Button, FormError } from '@convergence/ui'
 import { ConversationActionItem } from './conversation-action-item.presentational'
 import type { RoutineRowView } from './conversation-actions-menu.pure'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
@@ -58,14 +58,10 @@ export const ConversationRoutineRow: FC<{
         </>
       ) : null}
       {cancelRefusal ? (
-        <p className={styles.refusal} role="alert">
-          {cancelRefusal}
-        </p>
+        <FormError className={styles.refusal}>{cancelRefusal}</FormError>
       ) : null}
       {compactError ? (
-        <p className={styles.refusal} role="alert">
-          {compactError}
-        </p>
+        <FormError className={styles.refusal}>{compactError}</FormError>
       ) : null}
     </div>
   )

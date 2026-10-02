@@ -68,18 +68,17 @@ export const SessionWires: FC<SessionWiresProps> = ({
         render={
           <Tooltip label={summary}>
             <Button
-              type="button"
               variant="ghost"
               aria-label={summary}
               size="sm"
+              // A wire at rest is quieter than one that will fire (run 17).
+              data-armed={armedCount > 0 ? 'true' : 'false'}
               className={cn(
-                'rounded-full border border-border/70 text-[11px]',
-                armedCount === 0
-                  ? 'text-muted-foreground/60'
-                  : 'text-foreground',
+                'rounded-full border border-line-soft text-2xs',
+                armedCount === 0 ? 'text-ink-muted/60' : 'text-ink',
               )}
             >
-              <Waypoints className="h-3.5 w-3.5" />
+              <Waypoints aria-hidden className="size-3.5" />
               {formatSessionWireCount(lines.length)}
             </Button>
           </Tooltip>

@@ -201,9 +201,10 @@ describe('ConversationItemView', () => {
       },
     })
 
-    const details = screen.getByTestId('injected-context-details')
-
-    expect(details).not.toHaveAttribute('open')
+    // Folded until asked for: its trigger says it is closed.
+    expect(
+      screen.getByRole('button', { name: 'Injected context' }),
+    ).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByText('where is chaperone?')).toBeInTheDocument()
     for (const node of screen.getAllByText(/^<convergence:context>/)) {
       expect(node).not.toBeVisible()
@@ -384,25 +385,23 @@ describe('ConversationItemView', () => {
       },
     })
 
-    const details = document.querySelector('details')
-    const summary = document.querySelector('summary')
-    expect(details).not.toBeNull()
-    expect(summary).not.toBeNull()
-    expect(details).not.toHaveAttribute('open')
-    expect(summary).toHaveTextContent('/bin/zsh -lc "sed -n 1,20p app.tsx"')
-    expect(screen.queryByText('line 1')).toBeNull()
+    // A Collapsible (CONV-12): its trigger says whether it is open.
+    const trigger = screen.getByRole('button', {
+      name: /\/bin\/zsh -lc "sed -n 1,20p app\.tsx"/,
+    })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('figure', { name: 'Tool output' })).toBeNull()
 
-    fireEvent.click(summary as Element)
+    fireEvent.click(trigger)
 
-    expect(details).toHaveAttribute('open')
-    const pre = document.querySelector('pre')
-    expect(pre).not.toBeNull()
-    expect(pre).toHaveTextContent('line 1')
-    expect(pre).toHaveTextContent('line 2')
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const output = screen.getByRole('figure', { name: 'Tool output' })
+    expect(output).toHaveTextContent('line 1')
+    expect(output).toHaveTextContent('line 2')
 
-    fireEvent.click(summary as Element)
+    fireEvent.click(trigger)
 
-    expect(details).not.toHaveAttribute('open')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('marks Antigravity trajectory tool cards as post-run telemetry', () => {
@@ -429,8 +428,9 @@ describe('ConversationItemView', () => {
     expect(screen.getByTestId('tool-visibility-badge')).toHaveTextContent(
       'Post-run',
     )
+    // Its explanation is our Tooltip, never a native title (R2).
     expect(screen.getByTestId('tool-visibility-badge')).toHaveAttribute(
-      'title',
+      'data-tooltip',
       'Recovered from the Antigravity conversation database after the turn completed.',
     )
   })
@@ -584,10 +584,10 @@ describe('ConversationItemView', () => {
       const previews = screen.getAllByTestId('attachment-inline-preview')
       const grid = screen.getByTestId('history-image-attachments')
       expect(previews).toHaveLength(2)
-      expect(grid).toHaveClass(
-        'grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]',
-      )
-      expect(grid).toHaveClass('sm:max-w-[36rem]')
+      // Equal columns at least 14 rem wide, as many as fit (MAR-3617: a style
+      // on the spacing scale, not an arbitrary class).
+      expect(grid.style.gridTemplateColumns).toContain('auto-fit')
+      expect(grid).toHaveClass('sm:max-w-144')
       expect(screen.getByText('one.png')).toBeInTheDocument()
       expect(screen.getByText('two.png')).toBeInTheDocument()
 
@@ -622,10 +622,10 @@ describe('ConversationItemView', () => {
 
       const grid = screen.getByTestId('history-image-attachments')
       expect(screen.getAllByTestId('attachment-inline-preview')).toHaveLength(4)
-      expect(grid).toHaveClass(
-        'grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]',
-      )
-      expect(grid).toHaveClass('sm:max-w-[55rem]')
+      // Equal columns at least 14 rem wide, as many as fit (MAR-3617: a style
+      // on the spacing scale, not an arbitrary class).
+      expect(grid.style.gridTemplateColumns).toContain('auto-fit')
+      expect(grid).toHaveClass('sm:max-w-220')
     })
 
     it('renders chips for non-image resolved attachments below the user message text', () => {

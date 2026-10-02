@@ -1,4 +1,8 @@
-import { formatCodexRemainingPercent } from './codex-usage-pill.pure'
+import {
+  formatCodexRemainingPercent,
+  getCodexUsageTone,
+} from './codex-usage-pill.pure'
+import { UsageMeterRow } from './usage-popover.presentational'
 
 interface CodexUsageQuotaRowProps {
   label: string
@@ -24,25 +28,16 @@ export function CodexUsageQuotaRow({
   reset,
 }: CodexUsageQuotaRowProps) {
   const safeRemaining =
-    typeof remaining === 'number' ? Math.max(0, Math.min(100, remaining)) : 0
+    typeof remaining === 'number' ? Math.max(0, Math.min(100, remaining)) : null
 
   return (
-    <div className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-2 text-xs">
-      <div>
-        <p className="font-medium text-popover-foreground">{label}</p>
-        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-          {formatReset(reset)}
-        </p>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-emerald-400"
-          style={{ width: `${safeRemaining}%` }}
-        />
-      </div>
-      <span className="text-right font-medium text-popover-foreground">
-        {formatCodexRemainingPercent(remaining)}
-      </span>
-    </div>
+    <UsageMeterRow
+      label={label}
+      detail={formatReset(reset)}
+      value={safeRemaining}
+      valueLabel={formatCodexRemainingPercent(remaining)}
+      tone={getCodexUsageTone(remaining)}
+      meterLabel={`${label} quota remaining`}
+    />
   )
 }

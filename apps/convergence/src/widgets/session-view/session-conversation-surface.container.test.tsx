@@ -448,12 +448,23 @@ function placementTokens(
   return active
 }
 
+/** The R3 control heights the theme names (h-control-lg …), in px. */
+const CONTROL_PX: Record<string, number> = {
+  'control-xs': 24,
+  'control-sm': 28,
+  'control-md': 32,
+  'control-lg': 36,
+}
+
 function lengthPx(value: string | undefined, element: Element): number {
   if (value === undefined) return 0
   if (/^\d+$/.test(value)) return Number(value) * 4
+  if (value in CONTROL_PX) return CONTROL_PX[value]
   const literal = value.match(/^\[(\d+)px\]$/)
   if (literal) return Number(literal[1])
-  const variable = value.match(/^\[var\((--[\w-]+)\)\]$/)
+  // A custom property, written (--name) (MAR-3617) or [var(--name)].
+  const variable =
+    value.match(/^\((--[\w-]+)\)$/) ?? value.match(/^\[var\((--[\w-]+)\)\]$/)
   if (variable) {
     const set = (element as HTMLElement).style.getPropertyValue(variable[1])
     const px = set.match(/^(\d+)px$/)
@@ -527,11 +538,12 @@ describe('the Actions layer and the feedback corner (MAR-3416)', () => {
   it('R1: one layer holds the button, every fan pill and Close — above the composer card (z-10) and the feedback button (z-40), below dialogs (z-50)', () => {
     const root = renderSurface()
     const layer = (root.getAttribute('class') ?? '').match(
-      /(?:^|\s)z-\[(\d+)\](?:\s|$)/,
+      /(?:^|\s)z-(?:\[(\d+)\]|(\d+))(?:\s|$)/,
     )
     expect(layer, 'the Actions root carries no z-index layer').not.toBeNull()
-    expect(Number(layer![1])).toBeGreaterThan(40)
-    expect(Number(layer![1])).toBeLessThan(50)
+    const z = Number(layer![1] ?? layer![2])
+    expect(z).toBeGreaterThan(40)
+    expect(z).toBeLessThan(50)
     expect(root.className.split(/\s+/)).toContain('relative')
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }))

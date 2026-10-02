@@ -1,10 +1,12 @@
 import type { FC } from 'react'
+import { Badge, Tooltip } from '@convergence/ui'
 
 interface ToolVisibilityBadgeProps {
   label: string | null
   title: string | null
 }
 
+/** How a tool call was seen (post-run telemetry…), its explanation in our Tooltip (R2). */
 export const ToolVisibilityBadge: FC<ToolVisibilityBadgeProps> = ({
   label,
   title,
@@ -12,12 +14,13 @@ export const ToolVisibilityBadge: FC<ToolVisibilityBadgeProps> = ({
   if (!label) return null
 
   return (
-    <span
-      className="inline-flex items-center rounded-full border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-      title={title ?? undefined}
-      data-testid="tool-visibility-badge"
-    >
-      {label}
-    </span>
+    <Tooltip label={title ?? undefined}>
+      <Badge
+        className="font-medium tracking-eyebrow uppercase"
+        data-testid="tool-visibility-badge"
+      >
+        {label}
+      </Badge>
+    </Tooltip>
   )
 }

@@ -5,7 +5,13 @@ import {
   type SkillCatalogEntry,
   type SkillSelection,
 } from '@/entities/skill'
-import { Button, cn, Listbox, ListboxOption, Spinner } from '@convergence/ui'
+import { Badge, Listbox, ListboxOption } from '@convergence/ui'
+import { InlinePicker, InlinePickerState } from './inline-picker.presentational'
+import {
+  inlinePickerRow,
+  inlinePickerRowDetail,
+  inlinePickerRowLine,
+} from './inline-picker.styles'
 
 interface ComposerSkillInjectionPickerProps {
   open: boolean
@@ -51,46 +57,35 @@ export const ComposerSkillInjectionPicker: FC<
   if (!open) return null
 
   return (
-    <div
-      className="absolute right-0 bottom-full left-0 z-50 mb-2 max-h-72 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-      data-testid="composer-skill-injection-picker"
+    <InlinePicker
+      testId="composer-skill-injection-picker"
+      heading={{
+        icon: <Library />,
+        title: 'Skills',
+        detail: activeProviderLabel ?? 'Active provider',
+      }}
+      closeLabel="Close skill injection picker"
+      onDismiss={onDismiss}
+      tall
     >
-      <div className="border-b border-border/70 px-2 py-1.5">
-        <div className="flex items-center gap-1.5 text-xs font-medium">
-          <Library className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>Skills</span>
-        </div>
-        <div className="truncate text-[11px] text-muted-foreground">
-          {activeProviderLabel ?? 'Active provider'}
-        </div>
-      </div>
       {notice ? (
         <p
-          className="px-3 py-1.5 text-xs text-muted-foreground"
+          className="px-3 py-1.5 text-xs text-ink-muted"
           data-testid="remote-skills-notice"
         >
           {notice}
         </p>
       ) : null}
       {error ? (
-        <div role="alert" className="px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
+        <InlinePickerState
+          state="failed"
+          title="Couldn't load skills"
+          detail={error}
+        />
       ) : isLoading ? (
-        <div
-          role="status"
-          className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"
-        >
-          <Spinner size="sm" />
-          Loading skills...
-        </div>
+        <InlinePickerState state="loading" title="Loading skills…" />
       ) : items.length === 0 ? (
-        <div
-          className="px-3 py-2 text-xs text-muted-foreground"
-          data-testid="composer-skill-injection-empty"
-        >
-          No matching skills.
-        </div>
+        <InlinePickerState state="empty" title="No matching skills" />
       ) : (
         <Listbox
           id={listId}
@@ -109,28 +104,31 @@ export const ComposerSkillInjectionPicker: FC<
                 onHover={() => onHover(index)}
                 onPick={() => onSelect(skill)}
                 data-testid={`composer-skill-injection-item-${skill.id}`}
-                className={cn(
-                  'items-start rounded px-2 py-1.5 text-xs',
-                  selected && 'border border-primary/30 bg-primary/10',
-                )}
+                // One highlight, the active row's (CONV-6): an added skill
+                // says so with its check, not a second tint.
+                className={inlinePickerRow}
               >
-                <span className="flex w-full min-w-0 items-center gap-1.5">
+                <span className={inlinePickerRowLine}>
                   <span className="truncate font-medium">
                     {skill.displayName}
                   </span>
                   {selected ? (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <>
+                      <Check aria-hidden className="size-3.5 shrink-0" />
+                      <span className="sr-only">(added)</span>
+                    </>
                   ) : null}
                   {warningCount > 0 ? (
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-foreground" />
+                    <AlertTriangle
+                      aria-hidden
+                      className="size-3.5 shrink-0 text-warning-ink"
+                    />
                   ) : null}
                   {!skill.enabled ? (
-                    <span className="ml-auto shrink-0 text-[10px] uppercase text-muted-foreground">
-                      Disabled
-                    </span>
+                    <Badge className="ml-auto uppercase">Disabled</Badge>
                   ) : null}
                 </span>
-                <span className="line-clamp-2 w-full text-[11px] text-muted-foreground">
+                <span className={inlinePickerRowDetail}>
                   {skill.shortDescription ||
                     skill.description ||
                     'No description.'}
@@ -140,15 +138,6 @@ export const ComposerSkillInjectionPicker: FC<
           })}
         </Listbox>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onDismiss}
-        aria-label="Close skill injection picker"
-        className="sr-only"
-      >
-        Close
-      </Button>
-    </div>
+    </InlinePicker>
   )
 }

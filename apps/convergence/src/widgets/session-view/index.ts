@@ -18,3 +18,8 @@ export {
   headerFocusTarget,
 } from './conversation-header.container'
 export { parallelWorkInRow } from './conversation-header.pure'
+export {
+  HeaderStatus,
+  leadingStatusSlots,
+} from './header-status.presentational'
+export { DraftStart } from './draft-start.presentational'

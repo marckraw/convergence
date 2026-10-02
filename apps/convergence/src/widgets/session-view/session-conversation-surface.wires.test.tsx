@@ -155,9 +155,11 @@ describe.each(['global', 'project'] as const)(
       useSessionRelayStore.setState({ relays })
       renderSurface()
       expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
-      expect(screen.getByRole('button', { name: summary(relays) })).toHaveClass(
-        'text-muted-foreground/60',
-      )
+      // Grey: the chip says none of its wires is armed (MAR-3617 reads the
+      // state, not the class).
+      expect(
+        screen.getByRole('button', { name: summary(relays) }),
+      ).toHaveAttribute('data-armed', 'false')
     })
 
     it('R2 shows neither wires nor Quiet with no outgoing wires', () => {

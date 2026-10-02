@@ -119,7 +119,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="w-[44rem] max-w-full">
+      <div className="w-176 max-w-full">
         <Story />
       </div>
     ),
@@ -235,7 +235,7 @@ export const UserMessage: Story = {
     const context = canvas.getByText(/Repository: convergence/)
     await expect(context).not.toBeVisible()
     await userEvent.click(canvas.getByText('Injected context'))
-    await expect(context).toBeVisible()
+    await waitFor(() => expect(context).toBeVisible())
     await userEvent.click(
       canvas.getByRole('button', { name: /Preview renderer-console\.log/ }),
     )
@@ -291,7 +291,7 @@ export const ToolCall: Story = {
     )
     await expect(input).not.toBeVisible()
     await userEvent.click(summary)
-    await expect(input).toBeVisible()
+    await waitFor(() => expect(input).toBeVisible())
   },
 }
 
@@ -341,9 +341,10 @@ export const ToolResult: Story = {
     await userEvent.click(
       canvas.getByText(/^RUN v4\.1\.4/, { selector: 'span' }),
     )
-    await expect(
-      canvas.getByText(/Tests 6 passed \(6\)/, { selector: 'pre' }),
-    ).toBeVisible()
+    const output = canvas.getByText(/Tests 6 passed \(6\)/, {
+      selector: 'code',
+    })
+    await waitFor(() => expect(output).toBeVisible())
   },
 }
 
@@ -364,9 +365,10 @@ export const PostRunToolResult: Story = {
     }),
   },
   play: async ({ canvas }) => {
-    const badge = canvas.getByText('Post-run')
+    const badge = canvas.getByTestId('tool-visibility-badge')
+    await expect(badge).toHaveTextContent('Post-run')
     await expect(badge).toHaveAttribute(
-      'title',
+      'data-tooltip',
       'Recovered from the Antigravity conversation database after the turn completed.',
     )
   },
@@ -393,7 +395,8 @@ export const Failed: Story = {
     await userEvent.click(
       canvas.getByText(/error TS2322/, { selector: 'span' }),
     )
-    await expect(canvas.getByText(/Exit code 2/)).toBeVisible()
+    const output = canvas.getByText(/Exit code 2/)
+    await waitFor(() => expect(output).toBeVisible())
   },
 }
 
@@ -528,7 +531,8 @@ export const PlanRequest: Story = {
       within(card).getByText('.claude/plans/composer-focus.md'),
     ).toBeVisible()
     await userEvent.click(within(card).getByText('Requested prompts'))
-    await expect(within(card).getByText('run tests')).toBeVisible()
+    const prompt = within(card).getByText('run tests')
+    await waitFor(() => expect(prompt).toBeVisible())
     await userEvent.click(
       within(card).getByRole('button', { name: 'Approve plan' }),
     )

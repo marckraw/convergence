@@ -5,7 +5,8 @@ import {
 } from '@/entities/session'
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { perfApi } from '@/shared/lib/perf.api'
-import { Button } from '@convergence/ui'
+import { Button, Divider, Spinner, Tooltip } from '@convergence/ui'
+import { agentAttributionLabel } from './request-card.pure'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { placeCompactions } from './harness-facts.pure'
 import { CompactionMarker } from './compaction-marker.presentational'
@@ -730,14 +731,11 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
         <CompactionMarker key={fact.sequence} fact={fact} />
       ))}
       {renderEntry.turnBoundary && (
-        <div
-          className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+        <Divider
+          className="my-3 font-mono text-3xs tracking-eyebrow uppercase"
           data-turn-id={renderEntry.item.turnId}
-        >
-          <span className="h-px flex-1 bg-border" />
-          <span className="font-mono">Turn {renderEntry.turnSequence}</span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
+          label={`Turn ${renderEntry.turnSequence}`}
+        />
       )}
     </>
   )
@@ -751,7 +749,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       style={{ overflowAnchor: 'none' }}
       onScroll={updateBottomFollow}
     >
-      <div className="mx-auto max-w-2xl py-4">
+      <div className="mx-auto max-w-conversation py-4">
         <div
           className="relative w-full"
           style={{ height: rowVirtualizer.getTotalSize() }}
@@ -759,26 +757,26 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
           {hasOlder && (
             <div className="absolute top-0 flex w-full items-center justify-center gap-2 text-xs text-muted-foreground">
               {loadingOlder ? (
-                'Loading earlier messages…'
+                <>
+                  <Spinner size="xs" />
+                  Loading earlier messages…
+                </>
               ) : (
                 <>
                   {olderError && (
-                    <span
-                      role="status"
-                      title={olderError}
-                      className="min-w-0 truncate"
-                    >
-                      {olderError}
-                    </span>
+                    <Tooltip label={olderError}>
+                      <span role="status" className="min-w-0 truncate">
+                        {olderError}
+                      </span>
+                    </Tooltip>
                   )}
                   <Button
-                    type="button"
-                    variant="quiet"
+                    variant="link"
                     onClick={() => {
                       fillEpisode.current.pages = 5
                       requestOlder(Boolean(olderError))
                     }}
-                    className="h-auto shrink-0 px-1 font-normal"
+                    className="shrink-0 font-normal text-ink-muted"
                   >
                     {olderError ? 'Try again' : 'Load earlier messages'}
                   </Button>
@@ -859,9 +857,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                     !knownAgentIds.has(entry.agentRunId!) &&
                     entry.kind !== 'tool-call' && (
                       <div className="mb-1 truncate text-xs text-muted-foreground">
-                        {entry.agentAttribution?.description?.trim()
-                          ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
-                          : '↳ subagent'}
+                        {agentAttributionLabel(entry.agentAttribution)}
                       </div>
                     )}
                   {workMarker && (

@@ -1,13 +1,10 @@
 import { render, screen } from '@testing-library/react'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
 import * as rowHelpers from './parallel-work.pure'
 import * as workHelpers from '@/shared/lib/parallel-work.pure'
 import { ParallelWorkPanel } from './parallel-work.presentational'
-import { PARALLEL_WORK_CARD_TONE_CLASS } from './parallel-work.pure'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -39,16 +36,23 @@ it('R6 renders capability reasons with disabled controls — mutation enable una
       onClose={vi.fn()}
     />,
   )
+  // Unavailable, each stays focusable (aria-disabled) and gives its reason as
+  // its description and tooltip (R2, CONV-27).
+  const stop = screen.getByRole('button', { name: 'Stop' })
+  const message = screen.getByRole('button', { name: 'Message' })
   expect({
-    stop: screen
-      .queryByTitle('Stop is not available on this Claude Code version')
-      ?.querySelector('button')?.disabled,
-    message: (
-      screen.queryByRole('button', {
-        name: 'Message is not available on this Claude Code version',
-      }) as HTMLButtonElement | null
-    )?.disabled,
-  }).toEqual({ stop: true, message: true })
+    stop: [
+      stop.getAttribute('aria-disabled'),
+      stop.getAttribute('aria-description'),
+    ],
+    message: [
+      message.getAttribute('aria-disabled'),
+      message.getAttribute('aria-description'),
+    ],
+  }).toEqual({
+    stop: ['true', 'Stop is not available on this Claude Code version'],
+    message: ['true', 'Message is not available on this Claude Code version'],
+  })
 })
 
 it('RUN64 R2 unknown last sighting has a relative age and provisional identity stays out of the title — mutation omit relative age or show provider id turns red', () => {
@@ -106,9 +110,10 @@ it('R7 renders the frozen empty state — mutation omit empty copy turns red', (
       onClose={vi.fn()}
     />,
   )
+  expect(screen.getByText('No parallel work yet')).toBeInTheDocument()
   expect(
     screen.getByText(
-      'No parallel work yet. Agents, background commands and monitors will appear here when this session starts them.',
+      'Agents, background commands and monitors will appear here when this session starts them.',
     ),
   ).toBeInTheDocument()
 })
@@ -308,10 +313,12 @@ it('RUN64 R2′ task labels distinguish sighting and missing time with ISO title
     />,
   )
   expect({
-    seen: screen.queryByText('Running · seen 4 m ago')?.getAttribute('title'),
+    seen: screen
+      .queryByText('Running · seen 4 m ago')
+      ?.getAttribute('data-tooltip'),
     legacy: screen
       .queryByText('Running · time not reported')
-      ?.hasAttribute('title'),
+      ?.hasAttribute('data-tooltip'),
   }).toEqual({ seen: '2026-09-09T00:00:00Z', legacy: false })
 })
 
@@ -406,16 +413,16 @@ it('RUN64 round3 computes one time per rendered row — mutation recompute the l
   )
   expect({
     calls: time.mock.calls,
-    title: screen.getByText('Running · 4 m').title,
+    title: screen.getByText('Running · 4 m').getAttribute('data-tooltip'),
   }).toEqual({ calls: [[rows[0], now]], title: agent.startedAt })
 })
 
 it.each([
-  ['running', 'border-blue-500/40 bg-blue-500/10'],
-  ['completed', 'border-emerald-500/30 bg-emerald-500/[0.06]'],
-  ['failed', 'border-red-500/40 bg-red-500/10'],
-  ['stopped', 'border-amber-500/30 bg-amber-500/[0.06]'],
-  ['unknown', 'border-border/50 bg-muted/30'],
+  ['running', 'info'],
+  ['completed', 'success'],
+  ['failed', 'danger'],
+  ['stopped', 'warning'],
+  ['unknown', 'neutral'],
 ] as const)(
   'MAR-3308 R1 a %s card wears its state with no selection memory at all — mutation key the tone on highlightedId turns red',
   (status, tone) => {
@@ -429,9 +436,9 @@ it.each([
     )
     const card = container.querySelector('[data-work-id="agent:agent"]')!
     expect({
-      tone: tone.split(' ').every((name) => card.classList.contains(name)),
-      ring: card.className.includes('ring-'),
-    }).toEqual({ tone: true, ring: false })
+      tone: card.getAttribute('data-tone'),
+      ring: card.hasAttribute('data-returned'),
+    }).toEqual({ tone, ring: false })
   },
 )
 
@@ -451,44 +458,17 @@ it('MAR-3308 R2 the card you came back to keeps its state tone and adds a ring �
       onClose={vi.fn()}
     />,
   )
-  const classesOf = (key: string) =>
-    container.querySelector(`[data-work-id="${key}"]`)!.className
+  const card = (key: string) =>
+    container.querySelector(`[data-work-id="${key}"]`)!
   expect({
-    returnedTone: classesOf('agent:agent').includes(
-      'border-emerald-500/30 bg-emerald-500/[0.06]',
-    ),
-    returnedRing: classesOf('agent:agent').includes(
-      'ring-1 ring-inset ring-blue-500/50',
-    ),
-    returnedNotBlueTint: classesOf('agent:agent').includes('bg-blue-500/10'),
-    otherTone: classesOf('agent:other').includes(
-      'border-blue-500/40 bg-blue-500/10',
-    ),
-    otherRing: classesOf('agent:other').includes('ring-'),
+    returnedTone: card('agent:agent').getAttribute('data-tone'),
+    returnedRing: card('agent:agent').hasAttribute('data-returned'),
+    otherTone: card('agent:other').getAttribute('data-tone'),
+    otherRing: card('agent:other').hasAttribute('data-returned'),
   }).toEqual({
-    returnedTone: true,
+    returnedTone: 'success',
     returnedRing: true,
-    returnedNotBlueTint: false,
-    otherTone: true,
+    otherTone: 'info',
     otherRing: false,
   })
-})
-
-/**
- * Tailwind emits a class only if it has SCANNED that exact text, so the tone
- * map's value being right at runtime proves nothing: `border-${colour}-500/40`
- * evaluates to the same string and emits no CSS at all — the card would lose
- * its colour in the packaged app with every test green (the shape that killed
- * the code-block buttons in MAR-2760). This canary reads the source Tailwind
- * reads and asserts each class appears there verbatim.
- */
-it('MAR-3308 R1 every tone class is literal in the source Tailwind scans — mutation assemble a tone from parts turns red', () => {
-  const source = readFileSync(
-    resolve(__dirname, 'parallel-work.pure.ts'),
-    'utf8',
-  )
-  const missing = Object.values(PARALLEL_WORK_CARD_TONE_CLASS)
-    .flatMap((tone) => tone.split(' '))
-    .filter((className) => !source.includes(className))
-  expect(missing).toEqual([])
 })

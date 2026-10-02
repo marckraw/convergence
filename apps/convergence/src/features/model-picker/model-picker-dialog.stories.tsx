@@ -135,17 +135,6 @@ function HeldDialog(
   )
 }
 
-const knownNestedFavorite = {
-  a11y: {
-    config: {
-      rules: [
-        // a11y-known: each model option holds its own favorite button, an interactive control nested in an option — fixed by the sweep (DS4)
-        { id: 'nested-interactive', enabled: false },
-      ],
-    },
-  },
-}
-
 /** The dialog, once it has finished opening. */
 const openedDialog = async () => {
   const dialog = await screen.findByRole('dialog', { name: 'Select model' })
@@ -208,7 +197,6 @@ export const Default: Story = {
 
 /** Open: search, filter by provider, star a model, and pick one. */
 export const Open: Story = {
-  parameters: knownNestedFavorite,
   args: { open: true },
   play: async ({ args, userEvent }) => {
     const dialog = await openedDialog()
@@ -222,6 +210,10 @@ export const Open: Story = {
     await userEvent.click(openai)
     await expect(args.onProviderFilterChange).toHaveBeenCalledWith('codex')
     await expect(openai).toHaveAttribute('aria-pressed', 'true')
+    // The keyboard's star is the active row's, beside the field.
+    await userEvent.hover(
+      within(dialog).getByRole('option', { name: /GPT-5\.4/ }),
+    )
     await userEvent.click(
       within(dialog).getByRole('button', { name: 'Add GPT-5.4 to favorites' }),
     )
@@ -252,7 +244,6 @@ export const Empty: Story = {
  * (the field names it), and Enter picks it.
  */
 export const Keyboard: Story = {
-  parameters: knownNestedFavorite,
   args: { open: true },
   play: async ({ args, userEvent }) => {
     const dialog = await openedDialog()
@@ -279,7 +270,6 @@ export const Keyboard: Story = {
 
 /** Many models: the list scrolls under a fixed search and filter. */
 export const Long: Story = {
-  parameters: knownNestedFavorite,
   args: {
     open: true,
     totalModelCount: 30,

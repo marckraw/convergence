@@ -1,5 +1,5 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { Button } from '@convergence/ui'
+import { Button, FormError } from '@convergence/ui'
 import {
   compactionLabel,
   hiddenPluginSentence,
@@ -291,9 +291,9 @@ export function HarnessFactsSections({
                 <p>{`… and ${status.omitted} more (${status.omittedAlerts} failed or needing auth)`}</p>
               )}
               {mcpError && (
-                <p role="alert" className="text-destructive">
-                  Reconnect {mcpError.server} failed: {mcpError.message}
-                </p>
+                <FormError>
+                  Couldn't reconnect {mcpError.server}: {mcpError.message}
+                </FormError>
               )}
             </div>
           ) : (

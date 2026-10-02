@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import { cn, Tooltip } from '@convergence/ui'
 import type { ConversationItemTiming } from './transcript-entry.pure'
 
 interface ConversationItemTimestampProps {
@@ -7,38 +8,39 @@ interface ConversationItemTimestampProps {
   className?: string
 }
 
+/**
+ * When a transcript item happened, and how long it and its turn took. The
+ * full date and what each figure means are our Tooltip, never a native title
+ * (R2, CONV-5).
+ */
 export const ConversationItemTimestamp: FC<ConversationItemTimestampProps> = ({
   createdAt,
   timing,
   className,
 }) => (
   <span
-    className={[
-      'inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-normal text-muted-foreground/75',
+    className={cn(
+      'inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs font-normal text-ink-muted/75',
       className,
-    ]
-      .filter(Boolean)
-      .join(' ')}
+    )}
     data-testid="conversation-item-timestamp"
   >
-    <time dateTime={createdAt} title={timing.startedAtTitle}>
-      {timing.startedAtLabel}
-    </time>
+    <Tooltip label={timing.startedAtTitle ?? undefined}>
+      <time dateTime={createdAt}>{timing.startedAtLabel}</time>
+    </Tooltip>
     {timing.turnElapsedLabel && (
-      <span
-        title="Elapsed since this turn started"
-        data-testid="conversation-item-turn-elapsed"
-      >
-        {timing.turnElapsedLabel}
-      </span>
+      <Tooltip label="Elapsed since this turn started">
+        <span data-testid="conversation-item-turn-elapsed">
+          {timing.turnElapsedLabel}
+        </span>
+      </Tooltip>
     )}
     {timing.activeDurationLabel && (
-      <span
-        title="Conversation item duration"
-        data-testid="conversation-item-active-duration"
-      >
-        {timing.activeDurationLabel}
-      </span>
+      <Tooltip label="Conversation item duration">
+        <span data-testid="conversation-item-active-duration">
+          {timing.activeDurationLabel}
+        </span>
+      </Tooltip>
     )}
   </span>
 )

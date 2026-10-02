@@ -9,7 +9,7 @@ import {
   type SpaceSource,
 } from '@/entities/space'
 import type { InteractionResponse, SessionSummary } from '@/entities/session'
-import { AttentionIndicator, useSessionStore } from '@/entities/session'
+import { useSessionStore } from '@/entities/session'
 import {
   resolveSessionActivityLabel,
   useContextDrillStore,
@@ -19,14 +19,25 @@ import { ComposerContainer } from '@/features/composer'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
   ConversationHeader,
+  DraftStart,
+  HeaderStatus,
   ConversationViewMenu,
   headerFocusTarget,
+  leadingStatusSlots,
   parallelWorkInRow,
   SessionConversationSurface,
   ParallelWork,
   useParallelWork,
 } from '@/widgets/session-view'
-import { Button, Checkbox, IconButton, useConfirm } from '@convergence/ui'
+import {
+  Card,
+  Checkbox,
+  CodeBlock,
+  IconButton,
+  ScreenHeader,
+  SectionLabel,
+  useConfirm,
+} from '@convergence/ui'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
   SpaceHome,
@@ -524,42 +535,23 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   if (draftSpaceId && draftSpace && !session) {
     return (
       <div className="flex h-full flex-col">
-        <div
-          className="h-12 shrink-0 border-b border-border"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        />
+        <ScreenHeader />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
-          <p
-            className="mb-1 max-w-full truncate text-lg font-medium"
+          <DraftStart
             title={draftSpace.title}
-          >
-            {draftSpace.title}
-          </p>
-          <p className="mb-3 text-sm text-muted-foreground">
-            What would you like to work on?
-          </p>
-          <div className="mb-5 flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-            <Folder className="h-3 w-3" />
-            <span>
-              Starting in Space:{' '}
-              <span className="font-medium text-foreground">
-                {draftSpace.title}
-              </span>
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onCancelSpaceAttempt}
-              className="ml-1 h-auto px-2"
-            >
-              Open Space
-            </Button>
-          </div>
-          <div className="mb-3 w-full max-w-2xl rounded-lg border border-border/70 bg-card/30 px-3 py-3">
-            <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
-              <CheckSquare className="h-3.5 w-3.5" />
+            icon={<Folder />}
+            place="Starting in Space"
+            placeName={draftSpace.title}
+            action={{
+              label: 'Open Space',
+              onClick: () => onCancelSpaceAttempt?.(),
+            }}
+          />
+          <Card className="mb-3 w-full max-w-conversation">
+            <SectionLabel as="h2" className="mb-3 flex items-center gap-2">
+              <CheckSquare aria-hidden className="size-3.5" />
               <span>Context for this chat</span>
-            </div>
+            </SectionLabel>
             <div className="space-y-2 text-sm">
               <label className="flex items-center gap-2">
                 <Checkbox
@@ -586,10 +578,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                 <span>Space memory/instructions</span>
               </label>
               {activeSpaceSources.length > 0 ? (
-                <div className="space-y-1 border-t border-border/60 pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    Selected sources
-                  </div>
+                <div className="space-y-1 border-t border-line-soft pt-2">
+                  <div className="text-xs text-ink-muted">Selected sources</div>
                   {activeSpaceSources.map((source) => (
                     <label
                       key={source.id}
@@ -615,10 +605,15 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                 </div>
               ) : null}
             </div>
-            <pre className="app-scrollbar mt-3 max-h-28 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/70 p-2 text-xs text-muted-foreground">
+            <CodeBlock
+              label="Space context preview"
+              maxHeight="sm"
+              wrap
+              className="mt-3"
+            >
               {contextPreview ?? 'No Space context selected.'}
-            </pre>
-          </div>
+            </CodeBlock>
+          </Card>
           <ComposerContainer
             context={{ kind: 'global', activeSessionId: null }}
             onGlobalSessionCreated={handleGlobalSessionCreated}
@@ -666,17 +661,14 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   if (!session) {
     return (
       <div className="flex h-full flex-col">
-        <div
-          className="flex h-12 shrink-0 items-center border-b border-border px-4"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <MessageSquareText className="h-4 w-4 text-muted-foreground" />
-            Chat
-          </div>
-        </div>
+        <ScreenHeader
+          start={
+            <MessageSquareText aria-hidden className="size-4 text-ink-muted" />
+          }
+          title="Chat"
+        />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
-          <p className="mb-5 text-sm text-muted-foreground">
+          <p className="mb-5 text-sm text-ink-muted">
             Start a project-free agent conversation.
           </p>
           <ComposerContainer
@@ -723,53 +715,17 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         slots={[
           // In the row only while it matters (MAR-3429 CH4 R2); its history
           // is in View.
-          ...(parallelLabel
-            ? [
-                {
-                  id: 'parallel-work',
-                  side: 'left' as const,
-                  group: 'status' as const,
-                  node: (
-                    <Button
-                      ref={parallelButton}
-                      variant="ghost"
-                      aria-expanded={parallelOpen}
-                      onClick={toggleParallel}
-                      size="sm"
-                    >
-                      {parallelLabel}
-                    </Button>
-                  ),
-                },
-              ]
-            : []),
-          {
-            id: 'attention',
-            side: 'left',
-            group: 'status',
-            node: (
-              <AttentionIndicator
-                parallelWork={session.parallelWork}
-                attention={session.attention}
-                status={session.status}
-                activity={session.activity}
-              />
-            ),
-          },
-          ...(session.archivedAt
-            ? [
-                {
-                  id: 'archived',
-                  side: 'left' as const,
-                  group: 'status' as const,
-                  node: (
-                    <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                      Archived
-                    </span>
-                  ),
-                },
-              ]
-            : []),
+          ...leadingStatusSlots({
+            session,
+            parallel: parallelLabel
+              ? {
+                  label: parallelLabel,
+                  expanded: parallelOpen,
+                  onToggle: toggleParallel,
+                  ref: parallelButton,
+                }
+              : null,
+          }),
           ...(activityLabel
             ? [
                 {
@@ -777,13 +733,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                   side: 'left' as const,
                   group: 'status' as const,
                   node: (
-                    <span
-                      className="max-w-[12rem] truncate rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-                      title={activityLabel}
-                      data-testid="chat-session-activity-indicator"
-                    >
-                      {activityLabel}
-                    </span>
+                    <HeaderStatus
+                      kind="activity"
+                      label={activityLabel}
+                      testId="chat-session-activity-indicator"
+                    />
                   ),
                 },
               ]

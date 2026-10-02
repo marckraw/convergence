@@ -3,6 +3,7 @@ import type { ResponseAnnotation } from '@/entities/response-annotation'
 import { IconButton, Input } from '@convergence/ui'
 import { Check, Pencil, X } from 'lucide-react'
 import { toChipExcerpt } from './annotation-selection.pure'
+import { annotationChipFrame, annotationQuote } from './annotation.styles'
 
 /**
  * One pending annotation, waiting to be sent. Same visual family as the
@@ -51,11 +52,9 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
           event.stopPropagation()
           onCancelEdit()
         }}
-        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-1"
+        className={annotationChipFrame}
       >
-        <span className="min-w-0 max-w-[16rem] truncate text-xs italic text-muted-foreground">
-          {excerpt}
-        </span>
+        <span className={annotationQuote}>{excerpt}</span>
         <Input
           size="xs"
           autoFocus
@@ -69,35 +68,29 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
           type="submit"
           variant="quiet"
           size="xs"
-          className="rounded-full"
         >
-          <Check className="h-3 w-3" />
+          <Check aria-hidden className="size-3" />
         </IconButton>
       </form>
     )
   }
 
   return (
-    <span
-      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-xs text-foreground"
-      data-testid="annotation-chip"
-    >
-      <span className="min-w-0 max-w-[16rem] truncate italic text-muted-foreground">
-        {excerpt}
-      </span>
-      <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+    <span className={annotationChipFrame} data-testid="annotation-chip">
+      <span className={annotationQuote}>{excerpt}</span>
+      <span aria-hidden="true" className="shrink-0 text-ink-muted">
         →
       </span>
-      <span className="min-w-0 max-w-[12rem] truncate">{annotation.body}</span>
+      <span className="min-w-0 max-w-48 truncate">{annotation.body}</span>
       <IconButton
         label={`Edit response to “${excerpt}”`}
         type="button"
         variant="quiet"
         onClick={onStartEdit}
         size="xs"
-        className="shrink-0 rounded-full"
+        className="shrink-0"
       >
-        <Pencil className="h-3 w-3" />
+        <Pencil aria-hidden className="size-3" />
       </IconButton>
       <IconButton
         label={`Remove response to “${excerpt}”`}
@@ -105,9 +98,9 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
         variant="quiet"
         onClick={onRemove}
         size="xs"
-        className="shrink-0 rounded-full"
+        className="shrink-0"
       >
-        <X className="h-3 w-3" />
+        <X aria-hidden className="size-3" />
       </IconButton>
     </span>
   )

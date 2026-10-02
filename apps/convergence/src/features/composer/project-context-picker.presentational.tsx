@@ -1,12 +1,14 @@
 import type { FC } from 'react'
 import type { ProjectContextItem } from '@/entities/project-context'
 import {
+  Badge,
   Button,
   cn,
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@convergence/ui'
+import { pickPopover, pickRowClass, pickRowDetail } from './pick-row.styles'
 import { Check, FileText, Repeat } from 'lucide-react'
 
 interface ProjectContextPickerProps {
@@ -28,7 +30,7 @@ function itemLabel(item: ProjectContextItem): string {
 function bodyPreview(body: string): string {
   const trimmed = body.trim()
   if (trimmed.length <= BODY_PREVIEW_LIMIT) return trimmed
-  return `${trimmed.slice(0, BODY_PREVIEW_LIMIT)}...`
+  return `${trimmed.slice(0, BODY_PREVIEW_LIMIT)}…`
 }
 
 export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
@@ -54,9 +56,7 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
           <FileText className="h-3.5 w-3.5" />
           Context
           {selectedIds.length > 0 ? (
-            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-              {selectedIds.length}
-            </span>
+            <Badge shape="count">{selectedIds.length}</Badge>
           ) : null}
         </Button>
       }
@@ -64,11 +64,11 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
     <PopoverContent
       aria-label="Project context"
       align="start"
-      className="w-[min(420px,calc(100vw-2rem))] p-0"
+      className={cn('w-105', pickPopover)}
     >
-      <div className="border-b border-border/70 p-3">
+      <div className="border-b border-line-soft p-3">
         <p className="text-sm font-semibold">Project context</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-muted">
           Attach reusable project notes to the next session.
         </p>
       </div>
@@ -82,14 +82,10 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
                 key={item.id}
                 type="button"
                 variant="ghost"
+                aria-pressed={selected}
                 onClick={() => onToggleItem(item.id)}
                 size="lg"
-                className={cn(
-                  'h-auto w-full justify-start rounded-lg border border-transparent px-3 text-left',
-                  selected
-                    ? 'border-primary/30 bg-primary/10 text-foreground'
-                    : 'hover:border-border/70 hover:bg-muted/40',
-                )}
+                className={pickRowClass(selected)}
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2">
@@ -97,18 +93,21 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
                       {itemLabel(item)}
                     </span>
                     {selected ? (
-                      <Check className="h-3.5 w-3.5 text-primary" />
+                      <Check aria-hidden className="size-3.5" />
                     ) : null}
                     {item.reinjectMode === 'every-turn' ? (
-                      <Repeat className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+                      <Repeat
+                        aria-hidden
+                        className="size-3.5 shrink-0 text-warning-ink"
+                      />
                     ) : null}
                   </span>
-                  <span className="mt-1 line-clamp-2 block whitespace-normal text-xs font-normal leading-5 text-muted-foreground">
+                  <span className={pickRowDetail}>
                     {bodyPreview(item.body)}
                   </span>
-                  <span className="mt-2 inline-flex rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+                  <Badge className="mt-2 uppercase">
                     {item.reinjectMode === 'every-turn' ? 'Every turn' : 'Boot'}
-                  </span>
+                  </Badge>
                 </span>
               </Button>
             )

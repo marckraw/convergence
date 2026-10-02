@@ -10,14 +10,8 @@ import {
   Virtualizer,
   WorkerPoolContextProvider,
 } from '@pierre/diffs/react'
-import {
-  ChevronDown,
-  ChevronUp,
-  ChevronsUpDown,
-  Loader2,
-  RotateCcw,
-} from 'lucide-react'
-import { IconButton } from '@convergence/ui'
+import { ChevronDown, ChevronUp, ChevronsUpDown, RotateCcw } from 'lucide-react'
+import { EmptyState, IconButton } from '@convergence/ui'
 import {
   DEFAULT_DIFF_CONTEXT_LINES,
   foldUnifiedDiffContext,
@@ -132,10 +126,14 @@ export const PierreDiffViewerView = <TAnnotation,>({
           loading,
         })}
         <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
-          <div className="flex h-full min-h-32 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span>Loading diff...</span>
-          </div>
+          <EmptyState
+            state="loading"
+            variant="plain"
+            size="compact"
+            layout="centred"
+            title="Loading diff…"
+            className="min-h-32"
+          />
         </div>
       </div>
     )
@@ -175,7 +173,7 @@ export const PierreDiffViewerView = <TAnnotation,>({
       })
     : null
   const fallbackDiffContent = (
-    <div className="p-3 font-mono text-[11px] text-muted-foreground">
+    <div className="p-3 font-mono text-2xs text-muted-foreground">
       {diff.trim() || '(no diff available)'}
     </div>
   )
@@ -259,63 +257,48 @@ function renderDiffContextControls(input: {
       <IconButton
         label="Show more context above changes"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={!input.canExpandBefore || !input.onExpandBefore}
         onClick={input.onExpandBefore}
-        className={diffContextButtonClassName(input.canExpandBefore)}
       >
         <ChevronUp className="h-3.5 w-3.5" />
       </IconButton>
       <IconButton
         label="Show more context above and below changes"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={
           (!input.canExpandBefore && !input.canExpandAfter) ||
           !input.onExpandBoth
         }
         onClick={input.onExpandBoth}
-        className={diffContextButtonClassName(
-          input.canExpandBefore || input.canExpandAfter,
-        )}
       >
         <ChevronsUpDown className="h-3.5 w-3.5" />
       </IconButton>
       <IconButton
         label="Show more context below changes"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={!input.canExpandAfter || !input.onExpandAfter}
         onClick={input.onExpandAfter}
-        className={diffContextButtonClassName(input.canExpandAfter)}
       >
         <ChevronDown className="h-3.5 w-3.5" />
       </IconButton>
       <IconButton
         label="Reset visible diff context"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={!input.expandedFromDefault || !input.onReset}
         onClick={input.onReset}
-        className={diffContextButtonClassName(input.expandedFromDefault)}
       >
         <RotateCcw className="h-3.5 w-3.5" />
       </IconButton>
     </div>
   )
-}
-
-function diffContextButtonClassName(enabled: boolean): string {
-  return [
-    'rounded border border-border text-muted-foreground',
-    enabled
-      ? 'hover:bg-muted hover:text-foreground'
-      : 'cursor-not-allowed opacity-40',
-  ].join(' ')
 }
 
 function renderPierreDiffPerformanceShell({

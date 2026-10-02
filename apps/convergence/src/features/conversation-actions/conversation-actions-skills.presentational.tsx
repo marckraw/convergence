@@ -5,6 +5,7 @@ import {
   Listbox,
   ListboxOption,
   listboxOptionId,
+  FormError,
 } from '@convergence/ui'
 import {
   SKILLS_EMPTY_LABEL,
@@ -98,9 +99,10 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
         </p>
       ) : null}
       {state.kind === 'failed' ? (
-        <p className={styles.status} role="alert">
+        // A failure reads as one (CONV-7): the danger ink, as in the Add popover.
+        <FormError className="px-2 py-1.5">
           {skillsFailedLabel(state.message)}
-        </p>
+        </FormError>
       ) : null}
       {state.kind === 'empty' ? (
         <>

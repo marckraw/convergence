@@ -1,4 +1,4 @@
-import type { FC, FormEvent } from 'react'
+import type { FC } from 'react'
 import { Paperclip } from 'lucide-react'
 import {
   AttachmentsRow,
@@ -10,7 +10,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
-import { Button, cn, Textarea } from '@convergence/ui'
+import { Badge, Button, cn, Textarea } from '@convergence/ui'
 import { ModelSelectorRow } from './model-selector-row.presentational'
 
 interface ForkComposerProps {
@@ -59,12 +59,6 @@ export const ForkComposer: FC<ForkComposerProps> = ({
     removeOne,
   } = attachmentDraft
 
-  const handleInput = (e: FormEvent<HTMLTextAreaElement>) => {
-    const target = e.currentTarget
-    target.style.height = 'auto'
-    target.style.height = `${Math.min(target.scrollHeight, 200)}px`
-  }
-
   return (
     <div
       className={cn(
@@ -87,8 +81,10 @@ export const ForkComposer: FC<ForkComposerProps> = ({
         id={textareaId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onInput={handleInput}
         onPaste={onPaste}
+        // It grows with what's typed, to about 200 px, then scrolls (CONV-17).
+        autoGrow
+        maxRows={8}
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
@@ -106,9 +102,7 @@ export const ForkComposer: FC<ForkComposerProps> = ({
           <Paperclip className="h-3.5 w-3.5" />
           Attach
           {attachments.length > 0 ? (
-            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-              {attachments.length}
-            </span>
+            <Badge shape="count">{attachments.length}</Badge>
           ) : null}
         </Button>
         <ModelSelectorRow

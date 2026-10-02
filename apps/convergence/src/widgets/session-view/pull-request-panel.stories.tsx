@@ -24,7 +24,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="flex h-[30rem] justify-end bg-background">
+      <div className="flex h-120 justify-end bg-canvas">
         <Story />
       </div>
     ),
@@ -69,7 +69,7 @@ export const Empty: Story = {
   args: { pullRequest: null, branchName: null },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByText('no branch recorded for this session'),
+      canvas.getByText('No branch recorded for this session'),
     ).toBeVisible()
   },
 }
@@ -86,16 +86,6 @@ export const Busy: Story = {
 
 /** The lookup failed. */
 export const Failed: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the error text is destructive on a 10% destructive tint, 4.28:1 in light — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     pullRequest: null,
     error: 'gh: authentication required. Run `gh auth login` and refresh.',

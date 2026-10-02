@@ -1,18 +1,32 @@
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
-import type { FC, ReactElement } from 'react'
+import type { FC, ReactElement, ReactNode } from 'react'
 import type {
   ProviderRuntimeInfo,
   ProviderStatusInfo,
 } from '@/entities/session'
 import {
+  Badge,
   Button,
+  Card,
+  cn,
+  CodeBlock,
+  DescriptionItem,
+  DescriptionList,
   Dialog,
+  DialogBody,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  EmptyState,
+  focusRingInset,
+  Notice,
+  SectionLabel,
+  sectionLabel,
+  type Tone,
 } from '@convergence/ui'
 import {
   Bot,
@@ -46,30 +60,36 @@ interface ProviderStatusDialogProps {
   onUpdateProvider: (providerId: string) => void
 }
 
+/** The badges' print: today's uppercase small caps, on Badge's box. */
+const badgeWords = 'font-medium uppercase tracking-eyebrow'
+
+/** A term in the provider's facts: the eyebrow look, over its value. */
+const renderTerm = (children: ReactNode) => (
+  <span className={sectionLabel}>{children}</span>
+)
+
 function renderStatusBadge(provider: ProviderStatusInfo) {
   // An available provider that still carries a reason is degraded (needs
   // login, too old to report completion) — it should not read as all-clear.
-  const className =
+  const tone: Tone =
     provider.availability === 'available' && !provider.reason
-      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-      : 'border-warning/20 bg-warning/10 text-warning-foreground'
+      ? 'success'
+      : 'warning'
 
   return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${className}`}
-    >
+    <Badge tone={tone} className={badgeWords}>
       {provider.statusLabel}
-    </span>
+    </Badge>
   )
 }
 
 function renderUpdateBadge(provider: ProviderStatusInfo) {
-  const className =
+  const tone: Tone =
     provider.update.status === 'current'
-      ? 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+      ? 'info'
       : provider.update.status === 'outdated'
-        ? 'border-warning/20 bg-warning/10 text-warning-foreground'
-        : 'border-border bg-muted/40 text-muted-foreground'
+        ? 'warning'
+        : 'neutral'
 
   const label =
     provider.update.status === 'current'
@@ -81,24 +101,22 @@ function renderUpdateBadge(provider: ProviderStatusInfo) {
           : 'Latest unknown'
 
   return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${className}`}
-    >
+    <Badge tone={tone} className={badgeWords}>
       {label}
-    </span>
+    </Badge>
   )
 }
 
 function renderCommand(label: string, command: string) {
   return (
     <div className="space-y-1">
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-        <Terminal className="h-3.5 w-3.5" />
+      <SectionLabel className="flex items-center gap-1.5">
+        <Terminal aria-hidden className="size-3.5" />
         {label}
-      </p>
-      <code className="block overflow-x-auto rounded border border-border/40 bg-background/70 px-2 py-1.5 text-[11px] text-foreground/80">
+      </SectionLabel>
+      <CodeBlock label={label} maxHeight="none">
         {command}
-      </code>
+      </CodeBlock>
     </div>
   )
 }
@@ -107,49 +125,34 @@ function renderRuntimeInfo(runtimeInfo: ProviderRuntimeInfo | null) {
   if (!runtimeInfo) return null
 
   return (
-    <div className="rounded-lg border border-border/70 bg-card/50 px-3 py-3">
+    <Card>
       <div className="flex items-center gap-2">
-        <Bot className="h-4 w-4 text-muted-foreground" />
+        <Bot aria-hidden className="size-4 text-ink-muted" />
         <p className="text-sm font-semibold">Convergence runtime</p>
       </div>
-      <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-            App version
-          </p>
-          <p className="text-foreground/80">{runtimeInfo.appVersion}</p>
-        </div>
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-            Embedded app Node
-          </p>
-          <p className="text-foreground/80">
-            {runtimeInfo.appNodeVersion} via Electron
-          </p>
-        </div>
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-            Electron
-          </p>
-          <p className="text-foreground/80">
-            {runtimeInfo.electronVersion ?? 'Unknown'}
-          </p>
-        </div>
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-            Build
-          </p>
-          <p className="text-foreground/80">
-            {runtimeInfo.isPackaged ? 'Packaged' : 'Development'} ·{' '}
-            {runtimeInfo.platform}/{runtimeInfo.arch}
-          </p>
-        </div>
-      </div>
-      <p className="mt-3 text-xs text-muted-foreground">
+      <DescriptionList
+        density="compact"
+        className="mt-2 grid gap-2 sm:grid-cols-2"
+      >
+        <DescriptionItem term={renderTerm('App version')}>
+          {runtimeInfo.appVersion}
+        </DescriptionItem>
+        <DescriptionItem term={renderTerm('Embedded app Node')}>
+          {runtimeInfo.appNodeVersion} via Electron
+        </DescriptionItem>
+        <DescriptionItem term={renderTerm('Electron')}>
+          {runtimeInfo.electronVersion ?? 'Unknown'}
+        </DescriptionItem>
+        <DescriptionItem term={renderTerm('Build')}>
+          {runtimeInfo.isPackaged ? 'Packaged' : 'Development'} ·{' '}
+          {runtimeInfo.platform}/{runtimeInfo.arch}
+        </DescriptionItem>
+      </DescriptionList>
+      <p className="mt-3 text-xs text-ink-muted">
         Provider CLIs run outside Electron with the Node/npm prefix that owns
         the detected binary below.
       </p>
-    </div>
+    </Card>
   )
 }
 
@@ -170,15 +173,12 @@ function renderProviderRow(
     provider.update.manualUpdateCommand
 
   return (
-    <div
-      key={provider.id}
-      className="rounded-lg border border-border/60 bg-card/40 px-3 py-3"
-    >
+    <Card key={provider.id}>
       <div className="flex items-center gap-2">
         {provider.availability === 'available' ? (
-          <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <CircleCheck aria-hidden className="size-4 text-success-ink" />
         ) : (
-          <CircleAlert className="h-4 w-4 text-warning-foreground" />
+          <CircleAlert aria-hidden className="size-4 text-warning-ink" />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -188,7 +188,7 @@ function renderProviderRow(
               name={provider.name}
             />
             <p className="truncate text-sm font-semibold">{provider.name}</p>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-ink-muted">
               {provider.vendorLabel}
             </span>
           </div>
@@ -199,110 +199,86 @@ function renderProviderRow(
         </div>
       </div>
 
-      <div className="mt-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-xs text-muted-foreground">
+      <div className="mt-2 rounded-md border border-line-soft bg-canvas/40 px-2.5 py-2 text-xs text-ink-muted">
         {provider.binaryPath ? (
           <div className="space-y-2">
             {provider.reason && (
-              <p className="text-warning-foreground">{provider.reason}</p>
+              <p className="text-warning-ink">{provider.reason}</p>
             )}
-            {provider.version && (
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                  Version
-                </p>
-                <p className="text-foreground/80">{provider.version}</p>
-              </div>
-            )}
-            <div className="space-y-1">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                Latest
-              </p>
-              <p className="text-foreground/80">
+            <DescriptionList density="compact" className="gap-2">
+              {provider.version && (
+                <DescriptionItem term={renderTerm('Version')}>
+                  {provider.version}
+                </DescriptionItem>
+              )}
+              <DescriptionItem term={renderTerm('Latest')}>
                 {provider.update.latestVersion ??
                   (provider.update.checkError
                     ? `Unable to check: ${provider.update.checkError}`
                     : 'Unknown')}
-              </p>
-            </div>
+              </DescriptionItem>
+            </DescriptionList>
             {showUpdateCommand && (
               <div className="space-y-2">
                 {renderCommand('Update command', updateCommand)}
                 {canSelfUpdate ? (
                   <Button
-                    type="button"
                     variant="secondary"
                     onClick={() => onUpdateProvider(provider.id)}
                     disabled={isAnyProviderUpdating}
+                    pending={isUpdating}
+                    pendingLabel="Updating…"
                   >
-                    <RefreshCw
-                      className={`h-4 w-4 ${isUpdating ? 'animate-spin' : ''}`}
-                    />
-                    {isUpdating ? 'Updating' : 'Update'}
+                    <RefreshCw aria-hidden />
+                    Update
                   </Button>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-ink-muted">
                     Automatic update is unavailable for this install. Run the
                     command above in a terminal.
                   </p>
                 )}
               </div>
             )}
-            <div className="space-y-1">
-              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                <Wrench className="h-3.5 w-3.5" />
-                CLI binary path
-              </p>
-              <p className="break-all text-foreground/80">
+            <DescriptionList density="compact" className="gap-2">
+              <DescriptionItem
+                term={renderTerm(
+                  <span className="inline-flex items-center gap-1.5">
+                    <Wrench aria-hidden className="size-3.5" />
+                    CLI binary path
+                  </span>,
+                )}
+              >
                 {provider.binaryPath}
-              </p>
-            </div>
-            {provider.install && (
-              <div className="space-y-2">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    Install manager
-                  </p>
-                  <p className="text-foreground/80">
+              </DescriptionItem>
+              {provider.install && (
+                <>
+                  <DescriptionItem term={renderTerm('Install manager')}>
                     {formatInstallManager(provider.install.manager)}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    CLI Node
-                  </p>
-                  <p className="break-all text-foreground/80">
+                  </DescriptionItem>
+                  <DescriptionItem term={renderTerm('CLI Node')}>
                     {provider.install.nodeVersion ?? 'Unknown'} ·{' '}
                     {provider.install.nodePath ?? 'Node path unknown'}
-                  </p>
-                </div>
-                {provider.install.manager === 'npm' &&
-                  provider.install.prefixDirectory && (
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                        Global npm prefix
-                      </p>
-                      <p className="break-all text-foreground/80">
+                  </DescriptionItem>
+                  {provider.install.manager === 'npm' &&
+                    provider.install.prefixDirectory && (
+                      <DescriptionItem term={renderTerm('Global npm prefix')}>
                         {provider.install.prefixDirectory}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Updates run in this prefix. To move a provider to
-                        another Node version, make that Node your default and
-                        reinstall the CLI there.
-                      </p>
-                    </div>
-                  )}
-                {provider.install.manager === 'homebrew' && (
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                      Homebrew prefix
-                    </p>
-                    <p className="break-all text-foreground/80">
+                        <span className="mt-1 block text-2xs text-ink-muted">
+                          Updates run in this prefix. To move a provider to
+                          another Node version, make that Node your default and
+                          reinstall the CLI there.
+                        </span>
+                      </DescriptionItem>
+                    )}
+                  {provider.install.manager === 'homebrew' && (
+                    <DescriptionItem term={renderTerm('Homebrew prefix')}>
                       {provider.install.brewPrefix ?? 'Unknown'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+                    </DescriptionItem>
+                  )}
+                </>
+              )}
+            </DescriptionList>
           </div>
         ) : (
           <div className="space-y-2">
@@ -315,7 +291,7 @@ function renderProviderRow(
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -349,24 +325,25 @@ function renderProviderAccounts(
   if (accounts.length === 0 && !summary.hasSettingsOverride) return null
 
   return (
-    <div className="space-y-2 rounded-xl border border-border/70 bg-card/50 px-4 py-3">
+    <Card padding="md" className="space-y-2 py-3">
       <div className="flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-muted-foreground" />
+        <KeyRound aria-hidden className="size-4 text-ink-muted" />
         <p className="text-sm font-medium">
           {accounts.length} Claude account{accounts.length === 1 ? '' : 's'}
         </p>
         {health?.checkedAt && (
-          <span className="text-[11px] text-muted-foreground/80">
+          <span className="text-2xs text-ink-muted">
             checked {new Date(health.checkedAt).toLocaleString()}
           </span>
         )}
       </div>
 
       {summary.hasSettingsOverride && (
-        <p className="rounded-lg border border-warning/20 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-          Shared settings.json supplies a credential to every Claude process, so
-          account selection has no effect until it is removed.
-        </p>
+        <Notice
+          tone="warning"
+          className="text-xs"
+          title="Shared settings.json supplies a credential to every Claude process, so account selection has no effect until it is removed."
+        />
       )}
 
       {accounts.map((account) => {
@@ -378,41 +355,29 @@ function renderProviderAccounts(
         return (
           <div
             key={account.id}
-            className="flex flex-col gap-1 border-t border-border/50 pt-2 first-of-type:border-t-0 first-of-type:pt-0"
+            className="flex flex-col gap-1 border-t border-line-soft pt-2 first-of-type:border-t-0 first-of-type:pt-0"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-sm">
                 {account.email ?? account.label}
                 {account.isDefault && (
-                  <span className="ml-2 text-[11px] text-muted-foreground">
-                    default
-                  </span>
+                  <span className="ml-2 text-2xs text-ink-muted">default</span>
                 )}
               </span>
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${
-                  status.tone === 'ok'
-                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                    : status.tone === 'warning'
-                      ? 'border-warning/20 bg-warning/10 text-warning-foreground'
-                      : 'border-destructive/20 bg-destructive/10 text-destructive'
-                }`}
-              >
+              <Badge tone={ACCOUNT_TONES[status.tone]} className={badgeWords}>
                 {status.label}
-              </span>
+              </Badge>
             </div>
             {account.orgId && (
-              <span className="truncate text-[11px] text-muted-foreground">
+              <span className="truncate text-2xs text-ink-muted">
                 org {account.orgId}
               </span>
             )}
             {detail?.detail && (
-              <span className="text-[11px] text-destructive">
-                {detail.detail}
-              </span>
+              <span className="text-2xs text-danger-ink">{detail.detail}</span>
             )}
             {detail && detail.unknownEntries.length > 0 && (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-2xs text-ink-muted">
                 Unrecognised entries in the account directory:{' '}
                 {detail.unknownEntries.join(', ')}
               </span>
@@ -420,8 +385,15 @@ function renderProviderAccounts(
           </div>
         )
       })}
-    </div>
+    </Card>
   )
+}
+
+/** An account's status in R1's tones: connected, needs sign-in, disabled. */
+const ACCOUNT_TONES: Record<'ok' | 'warning' | 'danger', Tone> = {
+  ok: 'success',
+  warning: 'warning',
+  danger: 'danger',
 }
 
 export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
@@ -447,7 +419,19 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogTrigger render={trigger} />
       <DialogContent>
-        <DialogHeader>
+        <DialogHeader
+          actions={
+            <Button
+              variant="secondary"
+              onClick={onRefresh}
+              disabled={isLoading}
+              pending={isLoading}
+            >
+              <RefreshCw aria-hidden />
+              Refresh
+            </Button>
+          }
+        >
           <DialogTitle>Providers</DialogTitle>
           <DialogDescription>
             Availability and update status for local AI CLIs. Convergence uses
@@ -456,34 +440,36 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        {/* The body takes the focus, so a keyboard can scroll it with nothing in it to reach. */}
+        <DialogBody
+          tabIndex={0}
+          className={cn('app-scrollbar', focusRingInset)}
+        >
           {error ? (
-            <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <Notice tone="danger" title="Couldn't check the providers">
               {error}
-            </div>
+            </Notice>
           ) : isLoading && statuses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Checking installed providers…
-            </p>
+            <EmptyState
+              state="loading"
+              variant="plain"
+              title="Checking installed providers…"
+            />
           ) : (
             <div className="space-y-4">
-              {message && (
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-                  {message}
-                </div>
-              )}
+              {message && <Notice tone="success" title={message} />}
 
               {renderRuntimeInfo(runtimeInfo)}
 
-              <div className="rounded-xl border border-border/70 bg-card/50 px-4 py-3">
+              <Card padding="md" className="py-3">
                 <div className="flex items-center gap-2">
-                  <Bot className="h-4 w-4 text-muted-foreground" />
+                  <Bot aria-hidden className="size-4 text-ink-muted" />
                   <p className="text-sm font-medium">
                     {availableCount} of {statuses.length} provider
                     {statuses.length === 1 ? '' : 's'} available
                   </p>
                 </div>
-              </div>
+              </Card>
 
               {renderProviderAccounts(providerAccounts, providerAccountHealth)}
 
@@ -498,20 +484,12 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
               </div>
             </div>
           )}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onRefresh}
-            disabled={isLoading}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
-            />
-            Refresh
-          </Button>
+          <DialogClose render={<Button variant="secondary" />}>
+            Done
+          </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>

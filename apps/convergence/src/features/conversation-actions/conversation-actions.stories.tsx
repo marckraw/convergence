@@ -55,7 +55,7 @@ function WithRefs(props: ComponentProps<typeof ConversationActionsView>) {
   )
 }
 
-// a11y-known: a Routines menu also holds its status and alert lines and its hints, which are not menu items — fixed by the sweep (DS4)
+// a11y-known: a Routines menu holds its routines' live lines (a beat, a refusal) beside their items, which ARIA's menu does not allow; moving them out of the menu splits each routine from its line (kept on purpose, MAR-3617)
 const menuHoldsNonItems = { id: 'aria-required-children', enabled: false }
 
 const meta = {
@@ -134,7 +134,7 @@ const meta = {
   // Room above the button, where the fan and the lists open.
   decorators: [
     (Story) => (
-      <div className="flex h-[34rem] flex-col justify-end bg-background p-6">
+      <div className="flex h-136 flex-col justify-end bg-background p-6">
         <Story />
       </div>
     ),
@@ -286,17 +286,7 @@ export const Routines: Story = {
 
 /** The drill running: its beat, and Cancel. */
 export const RoutinesBusy: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          menuHoldsNonItems,
-          // a11y-known: a routine's running beat is sky-300 text, under 4.5:1 on the light panel — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
+  parameters: { a11y: { config: { rules: [menuHoldsNonItems] } } },
   name: 'Routines, busy',
   args: {
     level: 'routines',
@@ -334,17 +324,7 @@ export const RoutinesBusy: Story = {
 
 /** Routines that failed: each failure said beside its routine. */
 export const RoutinesFailed: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          menuHoldsNonItems,
-          // a11y-known: a routine's running beat is sky-300 text, under 4.5:1 on the light panel — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
+  parameters: { a11y: { config: { rules: [menuHoldsNonItems] } } },
   name: 'Routines, failed',
   args: {
     level: 'routines',

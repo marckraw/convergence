@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { SkillCatalogEntry } from '@/entities/skill'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, waitFor } from 'storybook/test'
 import { ComposerSkillInjectionPicker } from './composer-skill-injection-picker.presentational'
 
 const skill = (
@@ -70,7 +70,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="relative mt-72 w-[36rem] max-w-full rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
+      <div className="relative mt-72 w-144 max-w-full rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
         <Story />
         ::skill::
       </div>
@@ -116,7 +116,8 @@ export const Remote: Story = {
 export const Busy: Story = {
   args: { items: [], isLoading: true },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Loading skills...')).toBeVisible()
+    const words = await canvas.findByText('Loading skills…')
+    await waitFor(() => expect(words).toBeVisible())
   },
 }
 
@@ -132,21 +133,11 @@ export const Failed: Story = {
 export const Empty: Story = {
   args: { items: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No matching skills.')).toBeVisible()
+    await expect(canvas.getByText('No matching skills')).toBeVisible()
   },
 }
 
 export const Dark: Story = {
   ...Default,
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: in dark, a selected skill's description (muted on the primary tint) is 4.16:1 — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   globals: { theme: 'dark' },
 }

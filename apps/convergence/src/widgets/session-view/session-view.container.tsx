@@ -2,6 +2,11 @@ import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
 import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
+import { DraftStart } from './draft-start.presentational'
+import {
+  HeaderStatus,
+  leadingStatusSlots,
+} from './header-status.presentational'
 import { HarnessFactsSections } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
 import { SIDE_PANEL_WIDTH } from './parallel-work-dock.pure'
@@ -12,7 +17,6 @@ import type { FC } from 'react'
 import { flushSync } from 'react-dom'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
-  AttentionIndicator,
   useSessionStore,
   type InteractionResponse,
   type SessionContextWindow,
@@ -39,7 +43,15 @@ import {
 } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
-import { Button, IconButton, MenuCheckboxItem, MenuItem } from '@convergence/ui'
+import {
+  Button,
+  cn,
+  focusRingInset,
+  IconButton,
+  MenuCheckboxItem,
+  MenuItem,
+  ScreenHeader,
+} from '@convergence/ui'
 import {
   Archive,
   ArrowLeftRight,
@@ -461,59 +473,45 @@ export const SessionView: FC = () => {
     const title = activeProject?.name ?? 'Convergence'
     return (
       <div className="relative flex h-full flex-col overflow-hidden">
-        <div
-          className="flex h-12 shrink-0 items-center justify-end gap-1 border-b border-border px-4"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <div
-            className="flex items-center gap-1"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            {activeProject && (
-              <ProjectActionsMenu
-                project={activeProject}
-                runtimeCwd={draftOpenPath}
-              />
-            )}
-            <ProjectOpenMenuContainer targetPath={draftOpenPath} />
-          </div>
-        </div>
+        <ScreenHeader
+          end={
+            <>
+              {activeProject && (
+                <ProjectActionsMenu
+                  project={activeProject}
+                  runtimeCwd={draftOpenPath}
+                />
+              )}
+              <ProjectOpenMenuContainer targetPath={draftOpenPath} />
+            </>
+          }
+        />
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-4">
-            <p
-              className="mb-1 max-w-full truncate text-lg font-medium"
+            <DraftStart
               title={title}
-            >
-              {title}
-            </p>
-            <p className="mb-3 text-sm text-muted-foreground">
-              What would you like to work on?
-            </p>
-            {activeProject && (
-              <div className="mb-5 flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-                <GitBranch className="h-3 w-3" />
-                {draftWorkspace ? (
-                  <>
-                    <span>
-                      Starting in worktree:{' '}
-                      <span className="font-medium text-foreground">
-                        {draftWorkspace.branchName}
-                      </span>
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => beginSessionDraft(null)}
-                      className="ml-1 h-auto px-2"
-                    >
-                      Use main repo
-                    </Button>
-                  </>
-                ) : (
-                  <span>Starting in main repo</span>
-                )}
-              </div>
-            )}
+              icon={<GitBranch />}
+              place={
+                activeProject
+                  ? draftWorkspace
+                    ? 'Starting in worktree'
+                    : 'Starting in main repo'
+                  : undefined
+              }
+              placeName={
+                activeProject && draftWorkspace
+                  ? draftWorkspace.branchName
+                  : undefined
+              }
+              action={
+                activeProject && draftWorkspace
+                  ? {
+                      label: 'Use main repo',
+                      onClick: () => beginSessionDraft(null),
+                    }
+                  : undefined
+              }
+            />
             {draftComposerContext && (
               <ComposerContainer context={draftComposerContext} />
             )}
@@ -600,55 +598,24 @@ export const SessionView: FC = () => {
           slots={[
             // Parallel work holds a place in the row only while it matters,
             // and then it is live status (CH4 R2). Its history is in View.
-            ...(parallelLabel
-              ? [
-                  {
-                    id: 'parallel-work',
-                    side: 'left' as const,
-                    group: 'status' as const,
-                    node: (
-                      <Button
-                        ref={parallelButton}
-                        variant="ghost"
-                        aria-expanded={parallelOpen}
-                        onClick={toggleParallel}
-                        size="sm"
-                      >
-                        {parallelLabel}
-                      </Button>
-                    ),
-                  },
-                ]
-              : []),
-            {
-              id: 'attention',
-              side: 'left',
-              group: 'status',
-              node: (
-                <AttentionIndicator
-                  parallelWork={session.parallelWork}
-                  attention={session.attention}
-                  status={session.status}
-                  activity={session.activity}
-                />
-              ),
-            },
+            ...leadingStatusSlots({
+              session,
+              parallel: parallelLabel
+                ? {
+                    label: parallelLabel,
+                    expanded: parallelOpen,
+                    onToggle: toggleParallel,
+                    ref: parallelButton,
+                  }
+                : null,
+            }),
             ...(remote
               ? [
                   {
                     id: 'remote',
                     side: 'left' as const,
                     group: 'status' as const,
-                    node: (
-                      <span
-                        className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-600 dark:text-sky-300"
-                        title="This session runs on the remote execution host"
-                        data-testid="session-remote-indicator"
-                      >
-                        <Cloud className="h-3 w-3" />
-                        Remote
-                      </span>
-                    ),
+                    node: <HeaderStatus kind="remote" />,
                   },
                 ]
               : []),
@@ -659,13 +626,11 @@ export const SessionView: FC = () => {
                     side: 'left' as const,
                     group: 'status' as const,
                     node: (
-                      <span
-                        className="max-w-[12rem] truncate rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-                        title={activityLabel}
-                        data-testid="session-activity-indicator"
-                      >
-                        {activityLabel}
-                      </span>
+                      <HeaderStatus
+                        kind="activity"
+                        label={activityLabel}
+                        testId="session-activity-indicator"
+                      />
                     ),
                   },
                 ]
@@ -676,11 +641,7 @@ export const SessionView: FC = () => {
                     id: 'worktree-removed',
                     side: 'left' as const,
                     group: 'status' as const,
-                    node: (
-                      <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] text-warning-foreground">
-                        Worktree removed
-                      </span>
-                    ),
+                    node: <HeaderStatus kind="worktree-removed" />,
                   },
                 ]
               : []),
@@ -852,7 +813,10 @@ export const SessionView: FC = () => {
                     <section
                       aria-label="Harness history"
                       tabIndex={-1}
-                      className="mt-2 rounded-sm border-t border-border/70 px-2 pt-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className={cn(
+                        'mt-2 rounded-sm border-t border-line-soft px-2 pt-2',
+                        focusRingInset,
+                      )}
                       {...{ [DETAILS_SECTION]: 'harness' }}
                     >
                       <HarnessFactsSections

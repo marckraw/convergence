@@ -321,6 +321,8 @@ export {
 } from './components/status-dot/status-dot'
 export {
   StatusPill,
+  StatusPillButton,
+  type StatusPillButtonProps,
   type StatusPillProps,
 } from './components/status-pill/status-pill'
 export { TextLink, type TextLinkProps } from './components/text-link/text-link'
