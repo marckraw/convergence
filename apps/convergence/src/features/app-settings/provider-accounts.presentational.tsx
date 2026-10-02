@@ -10,7 +10,21 @@ import type {
   ProviderAccountSettingsRow,
   ProviderAccountSettingsWarning,
 } from '@/entities/provider-account'
-import { Button, Checkbox, cn, Input } from '@convergence/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  cn,
+  ConfirmDialog,
+  EmptyState,
+  FormError,
+  Input,
+  Notice,
+  SegmentedControl,
+  SegmentedControlItem,
+  type Tone,
+} from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import {
   CONFIGURED_SERVERS_SENTENCE,
@@ -49,19 +63,33 @@ const CLAUDE_LINEAR_HOMES_SENTENCE =
 function OneSignInPerAppNote(props: { name: string; needsSignIn: boolean }) {
   const note = oneSignInPerAppNote(props)
   return note ? (
-    <p className="text-pretty text-xs text-muted-foreground">{note}</p>
+    <p className="text-xs text-pretty text-ink-muted">{note}</p>
   ) : null
 }
 
-const STATUS_TONE: Record<
-  ProviderAccountSettingsRow['status']['tone'],
-  string
-> = {
-  ok: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  warning:
-    'border-amber-400/35 bg-amber-500/12 text-amber-700 dark:text-amber-200',
-  danger:
-    'border-destructive/40 bg-destructive/10 text-destructive dark:text-destructive',
+/** What an account's state says (R1): fine, needs a look, or failed. */
+const STATUS_TONE: Record<ProviderAccountSettingsRow['status']['tone'], Tone> =
+  {
+    ok: 'success',
+    warning: 'warning',
+    danger: 'danger',
+  }
+
+/**
+ * What removing an account does to its files, in the words of the question
+ * that asks first (R5).
+ */
+function removalDescription(
+  isCodex: boolean,
+  layout: ClaudeAccountLayout | null,
+): string {
+  if (isCodex)
+    return 'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.'
+  if (layout?.privateEntries.length)
+    return `This account contains private history or data in ${layout.privateEntries.join(', ')}. Removing it will permanently delete those copies. Convergence messages remain. Cancel to keep the account and its files.`
+  if (layout?.fullyShared)
+    return 'This signs the account out of Claude Code and deletes its account directories. Native conversations stay in the verified shared location. Convergence messages remain.'
+  return 'This signs the account out of Claude Code and deletes its account directories. Conversation sharing is not fully verified. Linked destinations and Convergence messages remain.'
 }
 
 export interface ProviderAccountsFieldsProps {
@@ -196,31 +224,37 @@ export function ProviderAccountsFields({
   const agentName = isCodex ? 'Codex' : 'Claude Code'
   const actionPending =
     isEnrolling || busyAccountId !== null || authorizingServerName !== null
+  const deletesPrivateHistory =
+    !isCodex && Boolean(removalLayout?.privateEntries.length)
 
   return (
     <div className="space-y-4 [&_button]:min-h-10">
-      <div role="group" aria-label="Account provider" className="flex gap-2">
+      {/* Two providers, one at a time (R9): a SegmentedControl. */}
+      <SegmentedControl
+        aria-label="Account provider"
+        value={providerId}
+        disabled={actionPending || isLoadingConnectors}
+        onValueChange={(next: ProviderAccountEnrollmentProvider) =>
+          onProviderChange(next)
+        }
+        className="flex w-full"
+      >
         {(
           [
             { id: 'claude-code', label: 'Anthropic' },
             { id: 'codex', label: 'OpenAI' },
           ] as const
         ).map((provider) => (
-          <Button
+          <SegmentedControlItem
             key={provider.id}
-            type="button"
-            variant={providerId === provider.id ? 'tonal' : 'ghost'}
-            aria-pressed={providerId === provider.id}
-            disabled={actionPending || isLoadingConnectors}
-            onClick={() => onProviderChange(provider.id)}
-            size="lg"
-            className="min-h-10 flex-1"
+            value={provider.id}
+            className="flex-1"
           >
             <ProviderIcon providerId={provider.id} title="" />
             {provider.label}
-          </Button>
+          </SegmentedControlItem>
         ))}
-      </div>
+      </SegmentedControl>
 
       {loginAttempt ? (
         <ProviderAccountLoginProgress
@@ -233,33 +267,28 @@ export function ProviderAccountsFields({
       ) : null}
 
       {settingsWarnings.length > 0 ? (
-        <div
-          role="alert"
-          className="space-y-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3"
+        <Notice
+          tone="warning"
+          title="Shared settings outrank account selection"
         >
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-            Shared settings outrank account selection
-          </p>
           {settingsWarnings.map((warning) => (
             <p
               key={`${warning.kind}-${warning.key}`}
-              className="text-sm leading-relaxed text-amber-800/90 dark:text-amber-200/90"
+              className="leading-relaxed"
             >
               {warning.message}
             </p>
           ))}
-        </div>
+        </Notice>
       ) : null}
 
       {isLoading ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-          Loading accounts...
-        </p>
+        <EmptyState state="loading" title="Loading accounts…" />
       ) : rows.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-5 text-sm leading-relaxed text-muted-foreground">
-          No {providerName} accounts enrolled. Convergence uses the {agentName}{' '}
-          login already on this Mac. Connect an account below to manage it here.
-        </p>
+        <EmptyState
+          title={`No ${providerName} accounts enrolled`}
+          detail={`Convergence uses the ${agentName} login already on this Mac. Connect an account below to manage it here.`}
+        />
       ) : (
         <div className="space-y-3">
           {rows.map((row) => {
@@ -269,9 +298,11 @@ export function ProviderAccountsFields({
             const showsConnectors = expandedConnectorsAccountId === row.id
 
             return (
-              <section
+              <Card
                 key={row.id}
-                className="space-y-3 rounded-xl border border-border bg-card/45 px-4 py-4"
+                render={<section />}
+                padding="md"
+                className="space-y-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
@@ -281,20 +312,19 @@ export function ProviderAccountsFields({
                         {row.identity}
                       </h4>
                       {row.isDefault ? (
-                        <span className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-3xs font-semibold uppercase leading-none text-muted-foreground">
+                        <Badge shape="label" className="uppercase">
                           default
-                        </span>
+                        </Badge>
                       ) : null}
-                      <span
-                        className={cn(
-                          'rounded border px-1.5 py-0.5 text-3xs font-semibold uppercase leading-none',
-                          STATUS_TONE[row.status.tone],
-                        )}
+                      <Badge
+                        shape="label"
+                        tone={STATUS_TONE[row.status.tone]}
+                        className="uppercase"
                       >
                         {row.status.label}
-                      </span>
+                      </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-ink-muted">
                       {row.showsLabel ? `${row.label} · ` : ''}
                       {row.organization
                         ? `${isCodex ? 'Workspace' : 'Organization'} ${row.organization}`
@@ -310,7 +340,7 @@ export function ProviderAccountsFields({
                       disabled={isBusy || isRenaming}
                       onClick={() => onStartRename(row.id, row.label)}
                     >
-                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      <Pencil className="size-3.5" />
                       Rename
                     </Button>
                     <Button
@@ -319,7 +349,7 @@ export function ProviderAccountsFields({
                       disabled={isBusy || !row.canSetDefault}
                       onClick={() => onSetDefault(row.id)}
                     >
-                      <Star className="mr-1.5 h-3.5 w-3.5" />
+                      <Star className="size-3.5" />
                       Set default
                     </Button>
                     <Button
@@ -329,7 +359,7 @@ export function ProviderAccountsFields({
                       disabled={isBusy || isLoadingConnectors}
                       onClick={() => onToggleConnectors(row.id)}
                     >
-                      <Plug className="mr-1.5 h-3.5 w-3.5" />
+                      <Plug className="size-3.5" />
                       Connectors
                     </Button>
                     <Button
@@ -338,86 +368,71 @@ export function ProviderAccountsFields({
                       disabled={isBusy}
                       onClick={() => onReconnect(row.id)}
                     >
-                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                      <RefreshCw className="size-3.5" />
                       Reconnect
                     </Button>
-                    {isConfirmingRemoval ? (
-                      <>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          disabled={isBusy}
-                          onClick={onCancelRemove}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="danger"
-                          disabled={
-                            isBusy ||
-                            (!isCodex &&
-                              !!removalLayout?.privateEntries.length &&
-                              !privateDeletionAcknowledged)
-                          }
-                          onClick={() =>
-                            onConfirmRemove(
-                              row.id,
-                              !isCodex &&
-                                !!removalLayout?.privateEntries.length &&
-                                privateDeletionAcknowledged,
-                            )
-                          }
-                        >
-                          {!isCodex && removalLayout?.privateEntries.length
-                            ? 'Sign out and delete private history'
-                            : 'Sign out and remove'}
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        disabled={isBusy}
-                        onClick={() => onRequestRemove(row.id)}
-                      >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                        Remove
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={isBusy}
+                      onClick={() => onRequestRemove(row.id)}
+                    >
+                      <Trash2 className="size-3.5" />
+                      Remove
+                    </Button>
                   </div>
                 </div>
 
-                {isConfirmingRemoval ? (
-                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm leading-relaxed text-destructive">
-                    <p>
-                      {isCodex
-                        ? 'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.'
-                        : removalLayout?.privateEntries.length
-                          ? `This account contains private history or data in ${removalLayout.privateEntries.join(', ')}. Removing it will permanently delete those copies. Convergence messages remain. Cancel to keep the account and its files.`
-                          : removalLayout?.fullyShared
-                            ? 'This signs the account out of Claude Code and deletes its account directories. Native conversations stay in the verified shared location. Convergence messages remain.'
-                            : 'This signs the account out of Claude Code and deletes its account directories. Conversation sharing is not fully verified. Linked destinations and Convergence messages remain.'}
-                    </p>
-                    {!isCodex && !!removalLayout?.privateEntries.length ? (
-                      <label className="mt-2 flex cursor-pointer items-start gap-2">
-                        <Checkbox
-                          checked={privateDeletionAcknowledged}
-                          disabled={isBusy}
-                          onCheckedChange={(checked) =>
-                            onPrivateDeletionAcknowledged(checked)
-                          }
-                          className="mt-0.5"
-                        />
-                        <span>
-                          Delete the private files in{' '}
-                          {removalLayout.privateEntries.join(', ')} — this
-                          cannot be undone.
-                        </span>
-                      </label>
-                    ) : null}
-                  </div>
-                ) : null}
+                {/*
+                  Removing asks first, in the app's own dialog (R5); with
+                  private history it also waits for the box that names it.
+                */}
+                <ConfirmDialog
+                  open={isConfirmingRemoval}
+                  onOpenChange={(open) => {
+                    if (!open) onCancelRemove()
+                  }}
+                  title={`Remove “${row.identity}”?`}
+                  description={removalDescription(isCodex, removalLayout)}
+                  confirmLabel={
+                    deletesPrivateHistory
+                      ? 'Sign out and delete private history'
+                      : 'Sign out and remove'
+                  }
+                  pendingLabel="Signing out…"
+                  variant="danger"
+                  pending={isConfirmingRemoval && busyAccountId === row.id}
+                  error={isConfirmingRemoval ? error : null}
+                  confirmDisabledReason={
+                    deletesPrivateHistory && !privateDeletionAcknowledged
+                      ? 'Tick the box to delete the private files first.'
+                      : undefined
+                  }
+                  onConfirm={() =>
+                    onConfirmRemove(
+                      row.id,
+                      deletesPrivateHistory && privateDeletionAcknowledged,
+                    )
+                  }
+                >
+                  {deletesPrivateHistory && removalLayout ? (
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <Checkbox
+                        checked={privateDeletionAcknowledged}
+                        disabled={isBusy}
+                        onCheckedChange={(checked) =>
+                          onPrivateDeletionAcknowledged(checked)
+                        }
+                        className="mt-0.5"
+                      />
+                      <span>
+                        Delete the private files in{' '}
+                        {removalLayout.privateEntries.join(', ')} — this cannot
+                        be undone.
+                      </span>
+                    </label>
+                  ) : null}
+                </ConfirmDialog>
 
                 {isRenaming ? (
                   <div className="flex flex-wrap items-center gap-2">
@@ -450,7 +465,7 @@ export function ProviderAccountsFields({
                 ) : null}
 
                 {showsConnectors ? (
-                  <div className="space-y-2 rounded-lg border border-border/70 bg-card/40 px-3 py-3">
+                  <Card className="space-y-2">
                     {isCodex ? (
                       <section
                         aria-label="From ChatGPT"
@@ -463,13 +478,12 @@ export function ProviderAccountsFields({
                             variant="secondary"
                             disabled={isLoadingChatGptApps}
                             onClick={onRefreshChatGptApps}
-                            className="min-h-10"
                           >
-                            <RefreshCw className="mr-2 size-3.5" />
+                            <RefreshCw className="size-3.5" />
                             Refresh
                           </Button>
                         </div>
-                        <p className="text-pretty text-xs leading-relaxed text-muted-foreground">
+                        <p className="text-xs leading-relaxed text-pretty text-ink-muted">
                           Opening this panel checks each app that has a "who am
                           I" call by using it once through Codex. If an app
                           needs signing in again, reconnect it on ChatGPT;
@@ -478,30 +492,20 @@ export function ProviderAccountsFields({
                         {describeChatGptSignInsCheckedAt(
                           chatGptSignIns?.checkedAt ?? null,
                         ) ? (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-ink-muted">
                             {describeChatGptSignInsCheckedAt(
                               chatGptSignIns?.checkedAt ?? null,
                             )}
                           </p>
                         ) : null}
-                        {chatGptSignIns?.error ? (
-                          <p
-                            role="alert"
-                            className="text-sm text-muted-foreground"
-                          >
-                            {chatGptSignIns.error}
-                          </p>
-                        ) : null}
+                        <FormError>{chatGptSignIns?.error}</FormError>
                         {isLoadingChatGptApps ? (
-                          <p
-                            role="status"
-                            className="text-sm text-muted-foreground"
-                          >
+                          <p role="status" className="text-sm text-ink-muted">
                             Reading ChatGPT apps…
                           </p>
                         ) : null}
                         {chatGptApps?.requiresChatGpt ? (
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-ink-muted">
                             ChatGPT apps need a ChatGPT sign-in
                           </p>
                         ) : null}
@@ -520,10 +524,10 @@ export function ProviderAccountsFields({
                               className="flex flex-wrap items-center justify-between gap-2"
                             >
                               <div className="min-w-0">
-                                <p className="break-words text-sm font-medium">
+                                <p className="text-sm font-medium wrap-break-word">
                                   {app.name}
                                 </p>
-                                <p className="text-pretty text-xs text-muted-foreground">
+                                <p className="text-xs text-pretty text-ink-muted">
                                   {app.state === 'available'
                                     ? 'Tools available'
                                     : app.state === 'off'
@@ -533,7 +537,7 @@ export function ProviderAccountsFields({
                                 {line ? (
                                   <p
                                     className={cn(
-                                      'text-pretty break-words text-xs',
+                                      'text-xs text-pretty wrap-break-word',
                                       CHATGPT_SIGN_IN_TONE[line.tone],
                                     )}
                                   >
@@ -562,34 +566,22 @@ export function ProviderAccountsFields({
                         !chatGptApps.error &&
                         !chatGptApps.requiresChatGpt &&
                         chatGptApps.apps.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-ink-muted">
                             No ChatGPT apps are available for this account.
                           </p>
                         ) : null}
-                        {chatGptApps?.error && !isLoadingChatGptApps ? (
-                          <p
-                            role="alert"
-                            className="text-sm text-muted-foreground"
-                          >
-                            {chatGptApps.error}
-                          </p>
+                        {!isLoadingChatGptApps ? (
+                          <FormError>{chatGptApps?.error}</FormError>
                         ) : null}
                         {chatGptLinkCopied ? (
                           <p
                             role="status"
-                            className="text-pretty text-sm text-muted-foreground"
+                            className="text-sm text-pretty text-ink-muted"
                           >
                             {chatGptLinkCopiedMessage(row.identity)}
                           </p>
                         ) : null}
-                        {chatGptLinkError ? (
-                          <p
-                            role="alert"
-                            className="text-sm text-muted-foreground"
-                          >
-                            {chatGptLinkError}
-                          </p>
-                        ) : null}
+                        <FormError>{chatGptLinkError}</FormError>
                         <ChatGptLinkMenu
                           label="Browse apps on ChatGPT"
                           onChoose={(action) =>
@@ -603,16 +595,16 @@ export function ProviderAccountsFields({
                         Configured on this Mac
                       </h4>
                     ) : null}
-                    <p className="text-xs leading-relaxed text-muted-foreground">
+                    <p className="text-xs leading-relaxed text-ink-muted">
                       {CONFIGURED_SERVERS_SENTENCE}
                     </p>
                     {isLoadingConnectors ? (
-                      <p className="text-sm text-muted-foreground">
-                        Asking this account what it can reach...
+                      <p className="text-sm text-ink-muted">
+                        Asking this account what it can reach…
                       </p>
                     ) : connectors?.connectors.length === 0 &&
                       !connectors.error ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-ink-muted">
                         No MCP servers are configured.
                       </p>
                     ) : (
@@ -649,14 +641,14 @@ export function ProviderAccountsFields({
                               {live ? (
                                 <p
                                   className={cn(
-                                    'text-pretty break-words text-xs',
+                                    'text-xs text-pretty wrap-break-word',
                                     CHATGPT_SIGN_IN_TONE[live.tone],
                                   )}
                                 >
                                   {live.text}
                                 </p>
                               ) : (
-                                <p className="truncate text-xs text-muted-foreground">
+                                <p className="truncate text-xs text-ink-muted">
                                   {connector.statusLabel}
                                 </p>
                               )}
@@ -677,13 +669,15 @@ export function ProviderAccountsFields({
                                     : 'secondary'
                                 }
                                 disabled={authorizingServerName !== null}
+                                pending={
+                                  authorizingServerName === connector.name
+                                }
+                                pendingLabel="Waiting for browser…"
                                 onClick={() =>
                                   onAuthorizeConnector(row.id, connector.name)
                                 }
                               >
-                                {authorizingServerName === connector.name
-                                  ? 'Waiting for browser...'
-                                  : action.label}
+                                {action.label}
                               </Button>
                             ) : null}
                           </div>
@@ -696,7 +690,7 @@ export function ProviderAccountsFields({
                     ) ? (
                       <p
                         role="status"
-                        className="text-pretty text-xs text-muted-foreground"
+                        className="text-xs text-pretty text-ink-muted"
                       >
                         {clearedNeedsAuthNotesMessage(
                           connectors?.clearedNeedsAuthNotes,
@@ -704,7 +698,7 @@ export function ProviderAccountsFields({
                       </p>
                     ) : null}
                     {!isLoadingConnectors && connectors?.error ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-ink-muted">
                         {connectors.error}
                       </p>
                     ) : null}
@@ -716,28 +710,28 @@ export function ProviderAccountsFields({
                       <Button
                         type="button"
                         disabled={actionPending}
+                        pending={authorizingServerName === 'linear'}
+                        pendingLabel="Waiting for browser…"
                         onClick={() => onConnectLinear(row.id)}
                       >
-                        {authorizingServerName === 'linear'
-                          ? 'Waiting for browser...'
-                          : 'Connect Linear'}
+                        Connect Linear
                       </Button>
                     ) : null}
                     {!isCodex ? (
-                      <p className="text-xs leading-relaxed text-muted-foreground">
+                      <p className="text-xs leading-relaxed text-ink-muted">
                         {CLAUDE_CONNECTORS_VIEW_SENTENCE}
                       </p>
                     ) : null}
                     {!isCodex ? (
-                      <p className="text-xs leading-relaxed text-muted-foreground">
+                      <p className="text-xs leading-relaxed text-ink-muted">
                         {CLAUDE_LINEAR_HOMES_SENTENCE}
                       </p>
                     ) : null}
-                  </div>
+                  </Card>
                 ) : null}
 
                 {row.statusDetail ? (
-                  <p className="text-sm leading-relaxed text-muted-foreground">
+                  <p className="text-sm leading-relaxed text-ink-muted">
                     {row.statusDetail}
                   </p>
                 ) : null}
@@ -745,23 +739,23 @@ export function ProviderAccountsFields({
                 {row.notes.map((note) => (
                   <p
                     key={note}
-                    className="rounded-lg border border-dashed border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+                    className="rounded-lg border border-dashed border-line px-3 py-2 text-xs leading-relaxed text-ink-muted"
                   >
                     {note}
                   </p>
                 ))}
-              </section>
+              </Card>
             )
           })}
         </div>
       )}
 
-      <section className="space-y-3 rounded-xl border border-border bg-card/45 px-4 py-4">
+      <Card render={<section />} padding="md" className="space-y-3">
         <div className="space-y-1">
           <h4 className="text-sm font-semibold">
             Connect an {providerName} account
           </h4>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-sm leading-relaxed text-ink-muted">
             {isCodex
               ? 'Codex opens a browser. Choose the OpenAI account and workspace you want to use; its signed-in identity and plan appear here after login.'
               : 'Claude Code opens a browser to sign in. The email prefills the login page so you can identify the account you are authorising.'}
@@ -792,19 +786,24 @@ export function ProviderAccountsFields({
           />
           <Button
             type="button"
-            disabled={
-              actionPending || (!isCodex && enrolEmail.trim().length === 0)
+            disabled={actionPending}
+            disabledReason={
+              !actionPending && !isCodex && enrolEmail.trim().length === 0
+                ? 'Enter the account’s email first.'
+                : undefined
             }
+            pending={isEnrolling}
+            pendingLabel="Sign-in in progress…"
             onClick={onEnrol}
             size="lg"
           >
-            {isEnrolling ? 'Sign-in in progress...' : `Connect ${providerName}`}
+            Connect {providerName}
           </Button>
         </div>
-      </section>
+      </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-muted">
           Identity checked: {formatCheckedAt(lastCheckedAt)}
           {claudeVersion ? ` · Claude Code ${claudeVersion}` : ''}
         </p>
@@ -814,23 +813,15 @@ export function ProviderAccountsFields({
           disabled={isLoading || actionPending}
           onClick={onCheckHealth}
         >
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="size-3.5" />
           Check now
         </Button>
       </div>
 
-      {message ? (
-        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-          {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p
-          className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
+      {message ? <Notice tone="success" title={message} /> : null}
+      {/* While the removal question is open, its error is said there. */}
+      {error && confirmingRemovalAccountId === null ? (
+        <Notice tone="danger" title={error} />
       ) : null}
     </div>
   )

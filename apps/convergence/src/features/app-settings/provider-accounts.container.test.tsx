@@ -164,7 +164,7 @@ describe('ProviderAccountsContainer', () => {
     await screen.findByText('a@example.com')
     expect(screen.queryByText('openai@example.com')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
     expect(screen.getByText('openai@example.com')).toBeInTheDocument()
     expect(screen.getByText(/Workspace org-a · team/)).toBeInTheDocument()
     expect(screen.queryByText('a@example.com')).not.toBeInTheDocument()
@@ -172,12 +172,9 @@ describe('ProviderAccountsContainer', () => {
       screen.queryByRole('button', { name: 'Connectors' }),
     ).toBeInTheDocument()
     expect(screen.queryByLabelText('Account email')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'OpenAI' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByRole('radio', { name: 'OpenAI' })).toBeChecked()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Anthropic' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Anthropic' }))
     expect(
       screen.getByRole('button', { name: 'Connectors' }),
     ).toBeInTheDocument()
@@ -197,7 +194,7 @@ describe('ProviderAccountsContainer', () => {
     fireEvent.change(screen.getByLabelText('Account email'), {
       target: { value: 'claude@example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
     fireEvent.change(screen.getByLabelText('Account label (optional)'), {
       target: { value: ' Work ' },
     })
@@ -227,18 +224,23 @@ describe('ProviderAccountsContainer', () => {
     ])
     render(<ProviderAccountsContainer />)
     await screen.findByText(/No Anthropic accounts enrolled/)
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
     fireEvent.click(screen.getByRole('button', { name: 'Connect OpenAI' }))
 
     expect(
-      screen.getByRole('button', { name: 'Sign-in in progress...' }),
+      screen.getByRole('button', { name: 'Sign-in in progress…' }),
     ).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Anthropic' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Anthropic' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
     finishLogin({ account: account({ providerId: 'codex' }), warnings: [] })
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Anthropic' })).toBeEnabled(),
+      expect(
+        screen.getByRole('radio', { name: 'Anthropic' }),
+      ).not.toHaveAttribute('aria-disabled', 'true'),
     )
   })
 
@@ -256,7 +258,7 @@ describe('ProviderAccountsContainer', () => {
     )
     render(<ProviderAccountsContainer />)
     await screen.findByText(/Shared settings export ANTHROPIC_API_KEY/)
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
     expect(
       screen.queryByText(/Shared settings export ANTHROPIC_API_KEY/),
     ).not.toBeInTheDocument()
@@ -269,10 +271,11 @@ describe('ProviderAccountsContainer', () => {
     )
     render(<ProviderAccountsContainer />)
     await screen.findByText('a@example.com')
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
+    expect(screen.getByText('No OpenAI accounts enrolled')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'No OpenAI accounts enrolled. Convergence uses the Codex login already on this Mac. Connect an account below to manage it here.',
+        'Convergence uses the Codex login already on this Mac. Connect an account below to manage it here.',
       ),
     ).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Account label (optional)'), {
@@ -294,7 +297,7 @@ describe('ProviderAccountsContainer', () => {
     providerAccounts.list.mockResolvedValue([account({ providerId: 'codex' })])
     render(<ProviderAccountsContainer />)
     await screen.findByText(/No Anthropic accounts enrolled/)
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     expect(
       screen.getByText(
@@ -420,7 +423,7 @@ describe('ProviderAccountsContainer', () => {
       screen.getByRole('button', {
         name: 'Sign out and delete private history',
       }),
-    ).toBeDisabled()
+    ).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(
       screen.getByRole('button', {
         name: 'Sign out and delete private history',
@@ -440,7 +443,7 @@ describe('ProviderAccountsContainer', () => {
       screen.getByRole('button', {
         name: 'Sign out and delete private history',
       }),
-    ).toBeDisabled()
+    ).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(
       screen.getByRole('checkbox', { name: /Delete the private files/ }),
     )
@@ -493,10 +496,10 @@ describe('ProviderAccountsContainer', () => {
     const first = render(<ProviderAccountsContainer />)
     await screen.findByLabelText('Authorization code')
     expect(
-      screen.getByRole('button', { name: 'Sign-in in progress...' }),
+      screen.getByRole('button', { name: 'Sign-in in progress…' }),
     ).toBeDisabled()
     expect(
-      screen.getByRole('link', { name: 'Open sign-in page' }),
+      screen.getByRole('link', { name: /^Open sign-in page/ }),
     ).toHaveAttribute('href', attempt.authorizationUrl)
     first.unmount()
     expect(unsubscribe).toHaveBeenCalled()
@@ -522,7 +525,7 @@ describe('ProviderAccountsContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel sign-in' }))
     await screen.findByText('Stopping sign-in…')
     expect(
-      screen.queryByRole('link', { name: 'Open sign-in page' }),
+      screen.queryByRole('link', { name: /^Open sign-in page/ }),
     ).not.toBeInTheDocument()
     expect(providerAccounts.enrol).not.toHaveBeenCalled()
   })
@@ -559,7 +562,7 @@ describe('ProviderAccountsContainer', () => {
     })
     expect(screen.getByText('Complete the OpenAI sign-in.')).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Sign-in in progress...' }),
+      screen.getByRole('button', { name: 'Sign-in in progress…' }),
     ).toBeDisabled()
   })
 
@@ -648,7 +651,7 @@ describe('ProviderAccountsContainer', () => {
 
       render(<ProviderAccountsContainer />)
       await screen.findByText(/No Anthropic accounts enrolled/)
-      fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
       expect(screen.getByText('Connected')).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
 
@@ -743,7 +746,7 @@ describe('ProviderAccountsContainer', () => {
       })
       render(<ProviderAccountsContainer />)
       await screen.findByText(/No Anthropic accounts enrolled/)
-      fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
       fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
       await waitFor(() =>
         expect(providerAccounts.listConnectors).toHaveBeenCalledWith('acct-a'),
@@ -1159,7 +1162,7 @@ it('MAR-3213 R3 the Connectors list says it is the CLI\u2019s view for a Claude 
 
   // The Codex account's does not: its list is already per-account server
   // state, not a terminal's one-shot view.
-  fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+  fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
   await screen.findByText('openai@example.com')
   fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
   expect(screen.queryByText(CLAUDE_CONNECTORS_SENTENCE)).not.toBeInTheDocument()
@@ -1214,7 +1217,7 @@ describe('MAR-3458 ChatGPT apps', () => {
   })
   async function open() {
     render(<ProviderAccountsContainer />)
-    fireEvent.click(await screen.findByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(await screen.findByRole('radio', { name: 'OpenAI' }))
     await screen.findByText('a@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
     return screen.findByRole('region', { name: 'From ChatGPT' })
@@ -1572,8 +1575,8 @@ describe('MAR-3458 ChatGPT apps', () => {
         apps: [{ id: 'b', name: 'Account B app', state: 'available' }],
       })
     render(<ProviderAccountsContainer />)
-    await screen.findByRole('button', { name: 'OpenAI' })
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    await screen.findByRole('radio', { name: 'OpenAI' })
+    fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
     await screen.findByText('b@example.com')
     fireEvent.click(screen.getAllByRole('button', { name: 'Connectors' })[0])
     await waitFor(() =>
@@ -1782,7 +1785,7 @@ describe('MAR-3458 ChatGPT apps', () => {
     })
     it('the five-minute memory outlives the panel', async () => {
       const first = render(<ProviderAccountsContainer />)
-      fireEvent.click(await screen.findByRole('button', { name: 'OpenAI' }))
+      fireEvent.click(await screen.findByRole('radio', { name: 'OpenAI' }))
       await screen.findByText('a@example.com')
       fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
       await screen.findByText('Signed in as Marcin (m@icloud.com)')
@@ -1865,7 +1868,7 @@ describe('MAR-3458 ChatGPT apps', () => {
           ),
       )
       render(<ProviderAccountsContainer />)
-      fireEvent.click(await screen.findByRole('button', { name: 'OpenAI' }))
+      fireEvent.click(await screen.findByRole('radio', { name: 'OpenAI' }))
       await screen.findByText('b@example.com')
       fireEvent.click(screen.getAllByRole('button', { name: 'Connectors' })[0])
       let group = await screen.findByRole('region', { name: 'From ChatGPT' })
