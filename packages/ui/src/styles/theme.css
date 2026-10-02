@@ -423,6 +423,46 @@
 }
 
 /*
+ * A hand on everything you click (DS-35, MAR-3618), set here once, as accent.'s theme does, so no
+ * part or feature writes cursor-pointer: buttons (Button, IconButton, a Select's trigger, a
+ * Toggle, anything with the role), links, the toggles (Checkbox, RadioGroup, Switch, a tab), a
+ * label around a toggle or a file input, a <summary>, a native select, a slider. What's disabled
+ * keeps the arrow. Menu items and a list's options keep it too, as a native menu does, and so does
+ * a label for a text field: clicking it only focuses the field. A class still wins (cursor-default,
+ * cursor-col-resize, cursor-not-allowed): this is the base layer, and :where() weighs nothing.
+ */
+@layer base {
+  :where(
+    button,
+    [role='button'],
+    [role='checkbox'],
+    [role='radio'],
+    [role='switch'],
+    [role='tab'],
+    a[href],
+    summary,
+    select,
+    input:is(
+      [type='checkbox'],
+      [type='radio'],
+      [type='file'],
+      [type='submit'],
+      [type='button'],
+      [type='reset']
+    ),
+    label:has(
+      input:is([type='checkbox'], [type='radio'], [type='file']),
+      [role='checkbox'],
+      [role='radio'],
+      [role='switch']
+    ),
+    [role='slider']
+  ):not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    cursor: pointer;
+  }
+}
+
+/*
  * VENDOR BRIDGE -------------------------------------------------------------------------------
  *
  * Streamdown's bundle (scanned by global.css's @source) writes shadcn names and a few palette

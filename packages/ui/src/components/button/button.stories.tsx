@@ -85,9 +85,12 @@ export const Default: Story = {
     await expect(ring.outlineStyle).toBe('solid')
     await expect(ring.outlineWidth).toBe('1px')
     await expect(ring.outlineColor).toBe(tokenColor('--focus'))
-    // Never a native title (R2).
-    for (const button of canvas.getAllByRole('button'))
+    // Never a native title (R2). A hand over each, from the theme's base layer
+    // (DS-35): no button writes cursor-pointer.
+    for (const button of canvas.getAllByRole('button')) {
       await expect(button).not.toHaveAttribute('title')
+      await expect(getComputedStyle(button).cursor).toBe('pointer')
+    }
   },
 }
 
@@ -192,6 +195,12 @@ export const Disabled: Story = {
       name: 'New conversation',
     })
     await expect(unavailable).toHaveAttribute('aria-disabled', 'true')
+    // What can't be used keeps the arrow, disabled either way (DS-35).
+    await expect(getComputedStyle(send).cursor).toBe('default')
+    await expect(getComputedStyle(unavailable).cursor).toBe('default')
+    await expect(
+      getComputedStyle(canvas.getByRole('button', { name: 'Delete' })).cursor,
+    ).toBe('pointer')
     await expect(unavailable).toHaveAccessibleDescription(
       'Open a project first',
     )

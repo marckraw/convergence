@@ -89,9 +89,7 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
       open={disclosure === 'open'}
       className="flex flex-col"
     >
-      <summary className={`${WAVE_SECTION_TITLE_CLASS} cursor-pointer`}>
-        {heading}
-      </summary>
+      <summary className={WAVE_SECTION_TITLE_CLASS}>{heading}</summary>
       {hintLine}
       {content}
     </details>

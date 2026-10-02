@@ -90,7 +90,7 @@ export function HarnessFactsSections({
               {hook.fieldBounds && <p>Hook text truncated</p>}
               {hook.output !== null && (
                 <details>
-                  <summary className="cursor-pointer">
+                  <summary>
                     Output
                     {typeof hook.output === 'object' ? ' · truncated' : ''}
                   </summary>
