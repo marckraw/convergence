@@ -3,6 +3,7 @@ import { Button, cn } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomMastermindVerdictLine,
+  loomSeatCardIds,
   type LoomMastermind,
 } from './loom-horses.pure'
 import {
@@ -11,6 +12,7 @@ import {
   LOOM_HORSE_META_CLASS,
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TINT_CLASS,
+  LOOM_SEAT_CARD_DOOR_CLASS,
 } from './wave-panel.styles'
 
 export interface LoomMastermindCardProps {
@@ -28,7 +30,7 @@ export function LoomMastermindCard({
   onOpenSeat,
 }: LoomMastermindCardProps) {
   const openable = mastermind.openable && onOpenSeat !== undefined
-  const ids = `loom-mastermind-${mastermind.key.replace(/[^A-Za-z0-9_-]/g, '_')}`
+  const ids = loomSeatCardIds('mastermind', mastermind.key)
   return (
     <div className="px-3 py-0.5" data-loom-mastermind={mastermind.key}>
       <div
@@ -54,7 +56,7 @@ export function LoomMastermindCard({
               .join(' ')}
             onClick={() => onOpenSeat?.(mastermind.sessionId!)}
             size="lg"
-            className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
+            className={LOOM_SEAT_CARD_DOOR_CLASS}
           />
         ) : null}
         <span className={LOOM_CARD_HEAD_CLASS}>

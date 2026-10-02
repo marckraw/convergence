@@ -4,6 +4,7 @@ import { Button, cn, Spinner } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomHorseTicketLine,
+  loomSeatCardIds,
   type LoomHorse,
   type LoomHorseRuntime,
 } from './loom-horses.pure'
@@ -14,6 +15,7 @@ import {
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TICKET_DOOR_CLASS,
   LOOM_HORSE_TINT_CLASS,
+  LOOM_SEAT_CARD_DOOR_CLASS,
 } from './wave-panel.styles'
 
 const RUNTIME_ICON: Readonly<Record<LoomHorseRuntime, typeof Circle>> = {
@@ -38,11 +40,6 @@ export interface LoomHorseCardProps {
    * line and `Details` -- and neither sits inside the card's own button.
    */
   onShowDetail?: () => void
-}
-
-/** An id base from a horse key: keys carry `:` and names may carry more. */
-function idBaseFor(key: string): string {
-  return `loom-horse-${key.replace(/[^A-Za-z0-9_-]/g, '_')}`
 }
 
 /**
@@ -90,7 +87,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
   ]
     .filter((part): part is string => part !== null && part !== '')
     .join(' · ')
-  const ids = idBaseFor(horse.key)
+  const ids = loomSeatCardIds('horse', horse.key)
   const doorLabel = horse.runtime === 'failed' ? 'View run error →' : 'Open →'
 
   return (
@@ -118,7 +115,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
               .join(' ')}
             onClick={() => onOpenSeat?.(horse.sessionId!)}
             size="lg"
-            className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
+            className={LOOM_SEAT_CARD_DOOR_CLASS}
           />
         ) : null}
         <span className={LOOM_CARD_HEAD_CLASS}>
