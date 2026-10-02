@@ -66,7 +66,8 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
           <Badge
             tone="warning"
             shape="label"
-            className="shrink-0 uppercase leading-none font-semibold"
+            caps
+            className="shrink-0 leading-none font-semibold"
           >
             {provider.badge.label}
           </Badge>

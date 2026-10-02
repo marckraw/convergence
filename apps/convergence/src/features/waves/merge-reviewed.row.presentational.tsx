@@ -14,7 +14,7 @@ export function MergeReviewedRow({
 }) {
   const mergeable = row.verdict === 'mergeable'
   return (
-    <label className="flex min-h-10 items-start gap-3 rounded-lg bg-ink/5 p-3 text-sm">
+    <label className="flex min-h-10 items-start gap-3 rounded-lg bg-fill-quiet p-3 text-sm">
       <Checkbox
         className="mt-1"
         checked={mergeable && selected}

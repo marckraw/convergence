@@ -34,7 +34,7 @@ const historyOf = (
 
 const openDialog = async () => {
   const dialog = await screen.findByRole('dialog', {
-    name: 'About Convergence',
+    name: 'Release notes',
   })
   await waitFor(() =>
     expect(dialog).toContainElement(document.activeElement as HTMLElement),

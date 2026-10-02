@@ -1,5 +1,4 @@
-import { Toaster } from 'sonner'
-import { useAppliedTheme } from '@convergence/ui'
+import { Toaster } from '@convergence/ui'
 import { FLOATING_CORNER_CLEAR_BOTTOM } from '@/shared/ui/floating-corner.pure'
 
 /**
@@ -9,14 +8,10 @@ import { FLOATING_CORNER_CLEAR_BOTTOM } from '@/shared/ui/floating-corner.pure'
 const TOAST_OFFSET = { bottom: FLOATING_CORNER_CLEAR_BOTTOM }
 
 /**
- * The app's one toast stack, drawn in the theme on screen.
- *
- * sonner draws its toasts light unless told otherwise, so in the dark app
- * every toast was a white card (audit DS-8). It reads the applied theme here,
- * in a container of its own, so a theme change re-renders the toaster alone
- * and never the app around it.
+ * The app's one toast stack: the design system's Toaster, which draws each
+ * toast on the popup surface in the theme's tokens (DS-8, NAV-7), placed
+ * clear of the feedback button's corner, which only the app knows about.
  */
 export function ThemedToasterContainer() {
-  const theme = useAppliedTheme()
-  return <Toaster position="bottom-right" theme={theme} offset={TOAST_OFFSET} />
+  return <Toaster offset={TOAST_OFFSET} />
 }

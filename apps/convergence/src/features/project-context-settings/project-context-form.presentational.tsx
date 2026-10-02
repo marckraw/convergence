@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react'
 import type { ProjectContextReinjectMode } from '@/entities/project-context'
 import {
   Button,
+  Card,
   ChoiceField,
   Field,
   FieldDescription,
@@ -49,9 +50,10 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-4 rounded-lg border border-line-soft bg-surface/30 p-4"
+    <Card
+      render={<form onSubmit={handleSubmit} />}
+      padding="md"
+      className="space-y-4"
       data-testid="project-context-form"
     >
       <Field disabled={isSaving}>
@@ -129,6 +131,6 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
           {mode === 'create' ? 'Add context item' : 'Save changes'}
         </Button>
       </div>
-    </form>
+    </Card>
   )
 }

@@ -1,7 +1,6 @@
 import type { FC, ReactNode } from 'react'
-import { cn } from '@convergence/ui'
+import { cn, StatusDot } from '@convergence/ui'
 import type { WaveHeader } from './wave-sections.pure'
-import { WAVE_OUTAGE_DOT_CLASS } from './wave-panel.styles'
 
 /**
  * The tracker's own voice in Loom's header (MAR-3097 R3), where a person is
@@ -25,7 +24,7 @@ export const LoomStatusView: FC<{
         )}
       >
         {header.kind === 'outage' ? (
-          <span className={WAVE_OUTAGE_DOT_CLASS} />
+          <StatusDot tone="warning" size="sm" />
         ) : null}
         {header.text}
       </span>

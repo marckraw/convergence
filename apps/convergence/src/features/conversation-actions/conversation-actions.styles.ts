@@ -52,11 +52,20 @@ export const conversationActionsStyles = {
   fanClose: `absolute bottom-0 right-0 ${PILL} w-24 px-0 ${FOCUS_RING} ${POP}`,
   panel: `absolute z-40 flex flex-col overflow-hidden rounded-2xl border border-line bg-raised text-ink shadow-floating ${FOCUS_RING} ${POP}`,
   panelScroll: 'min-h-0 flex-1 overflow-y-auto overscroll-contain p-3',
-  back: `-ml-1 mb-1 h-auto gap-1 px-1 py-0.5 text-base font-medium text-ink ${FOCUS_RING}`,
+  /**
+   * The panel's way back, its title beside it: on the 28 px (sm) Button,
+   * which its title's line and 2 px above and below fill exactly.
+   */
+  back: `-ml-1 mb-1 gap-1 px-1 text-base font-medium text-ink ${FOCUS_RING}`,
   search: `mb-1 border-0 px-2 py-1.5 shadow-none ${FOCUS_RING}`,
   notice: 'mb-1 px-2 text-xs leading-relaxed text-ink-muted',
   list: 'flex flex-col',
-  item: `h-auto w-full justify-start whitespace-normal rounded-md px-2 py-1.5 text-left text-sm font-normal text-ink ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-ink-muted aria-disabled:hover:bg-transparent`,
+  /**
+   * One command of the menu, on the 32 px (md) Button: a line of words and
+   * 6 px above and below, which its height holds exactly. Its words are a
+   * routine's or a group's name, short enough for one line.
+   */
+  item: `w-full justify-start rounded-md px-2 text-left text-sm font-normal text-ink ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-ink-muted aria-disabled:hover:bg-transparent`,
   /** Close menu, under a running routine: a quieter, smaller row (a row, so its words are the row's, not a Button size). */
   closeItem: 'mt-1 text-xs text-ink-muted',
   reason: 'px-2 pb-1.5 text-xs leading-relaxed text-ink-muted',

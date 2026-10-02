@@ -83,7 +83,7 @@ export const ComposerPromptInjectionPicker: FC<
             >
               <span className={inlinePickerRowLine}>
                 <span className="truncate font-medium">{prompt.title}</span>
-                <Badge shape="label" className="ml-auto uppercase">
+                <Badge shape="label" caps className="ml-auto">
                   {prompt.sourceLabel}
                 </Badge>
               </span>

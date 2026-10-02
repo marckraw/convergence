@@ -1,5 +1,5 @@
 import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
 import { DraftStart } from './draft-start.presentational'
@@ -486,8 +486,11 @@ export const SessionView: FC = () => {
     }
   }
   const togglePin = () =>
-    void setPinned(session.id, !session.pinnedAt).catch((error) =>
-      toast.error(error instanceof Error ? error.message : String(error)),
+    void setPinned(session.id, !session.pinnedAt).catch((error: unknown) =>
+      notify.failure(
+        session.pinnedAt ? 'unpin the conversation' : 'pin the conversation',
+        error,
+      ),
     )
   const parallelLabel = parallelWorkInRow(session.parallelWork)
   const harnessAlert = supportsHarnessFacts ? harnessPill(harness.facts) : null
@@ -647,7 +650,8 @@ export const SessionView: FC = () => {
                             session.parentSessionId &&
                             setActiveSession(session.parentSessionId)
                           }
-                          className="h-auto justify-start px-2 py-1.5"
+                          size="sm"
+                          className="justify-start gap-2"
                         >
                           <GitFork className="h-3.5 w-3.5" />
                           Forked from:{' '}

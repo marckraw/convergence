@@ -1,12 +1,17 @@
 import { AlertCircle, KeyRound, LoaderCircle } from 'lucide-react'
 import { describeAccountHandoffRefusal } from '@/entities/provider-account'
 import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
-import { Button } from '@convergence/ui'
+import { Button, Notice } from '@convergence/ui'
 
 export type ComposerAccountNoticeState =
   | { kind: 'pending' | 'staged' }
   | { kind: 'refused'; refusal: AccountHandoffRefusal }
 
+/**
+ * What the composer says about the account the next turn uses (CONV-7): a
+ * Notice in its tone. A refused switch is a failure, danger and an alert; a
+ * switch under way and one staged for the next turn are info, a polite status.
+ */
 export function ComposerAccountNotice({
   notice,
   onManageAccounts,
@@ -14,54 +19,46 @@ export function ComposerAccountNotice({
   notice: ComposerAccountNoticeState
   onManageAccounts?: () => void
 }) {
-  const refusal = notice.kind === 'refused' ? notice.refusal : null
-  const Icon = refusal
-    ? AlertCircle
-    : notice.kind === 'pending'
-      ? LoaderCircle
-      : KeyRound
-
-  return (
-    <div
-      role={refusal ? 'alert' : 'status'}
-      data-stage={refusal?.stage}
-      className="flex min-w-0 items-start gap-2 text-xs leading-relaxed"
+  if (notice.kind === 'refused') {
+    const { refusal } = notice
+    return (
+      <Notice
+        tone="danger"
+        icon={<AlertCircle />}
+        title={`Not sent · ${describeAccountHandoffRefusal(refusal.stage)}`}
+        data-stage={refusal.stage}
+        actions={
+          onManageAccounts &&
+          (refusal.stage === 'layout' || refusal.stage === 'missing-thread') ? (
+            <Button type="button" variant="link" onClick={onManageAccounts}>
+              Manage accounts
+            </Button>
+          ) : undefined
+        }
+        className="text-xs"
+      >
+        {refusal.message}
+      </Notice>
+    )
+  }
+  return notice.kind === 'pending' ? (
+    <Notice
+      tone="info"
+      icon={<LoaderCircle />}
+      title="Switching accounts…"
+      className="text-xs"
     >
-      <Icon
-        aria-hidden="true"
-        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${refusal ? 'text-danger-ink' : 'text-ink-muted'}`}
-      />
-      <div className="min-w-0 space-y-1 break-words text-ink-muted">
-        {refusal ? (
-          <>
-            <p className="font-medium text-danger-ink">
-              Not sent · {describeAccountHandoffRefusal(refusal.stage)}
-            </p>
-            <p>{refusal.message}</p>
-            {onManageAccounts &&
-            (refusal.stage === 'layout' ||
-              refusal.stage === 'missing-thread') ? (
-              <Button
-                type="button"
-                variant="link"
-                onClick={onManageAccounts}
-                size="lg"
-                className="text-xs"
-              >
-                Manage accounts
-              </Button>
-            ) : null}
-          </>
-        ) : notice.kind === 'pending' ? (
-          <p>Switching accounts… Your message has not been accepted yet.</p>
-        ) : (
-          <p>
-            Your next turn will use the selected account. Switching accounts
-            restarts idle servers. Running work elsewhere on either account can
-            block a switch. Your conversation is preserved.
-          </p>
-        )}
-      </div>
-    </div>
+      Your message has not been accepted yet.
+    </Notice>
+  ) : (
+    <Notice
+      tone="info"
+      icon={<KeyRound />}
+      title="Your next turn will use the selected account."
+      className="text-xs"
+    >
+      Switching accounts restarts idle servers. Running work elsewhere on either
+      account can block a switch. Your conversation is preserved.
+    </Notice>
   )
 }

@@ -50,3 +50,31 @@ export const Long: Story = {
     await expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth)
   },
 }
+
+/**
+ * Small: the 10 px step, for a dense panel's eyebrow (Loom's sections, Mission
+ * Control's inspector); the same print, one step down.
+ */
+export const Small: Story = {
+  render: () => (
+    <section className="flex w-72 flex-col gap-1.5 rounded-md bg-canvas p-4">
+      <SectionLabel as="h3" size="sm">
+        Seat
+      </SectionLabel>
+      <p className="text-sm text-ink">Night shift · 2 open</p>
+    </section>
+  ),
+  play: async ({ canvas }) => {
+    const label = canvas.getByRole('heading', { level: 3, name: 'Seat' })
+    const style = getComputedStyle(label)
+    await expect(style.fontSize).toBe('10px')
+    await expect(style.fontWeight).toBe('500')
+    await expect(style.textTransform).toBe('uppercase')
+    await expect(style.color).toBe(tokenColor('--ink-muted'))
+  },
+}
+
+export const SmallDark: Story = {
+  ...Small,
+  globals: { theme: 'dark' },
+}

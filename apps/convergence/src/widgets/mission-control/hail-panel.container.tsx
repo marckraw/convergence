@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import { Radio, X } from 'lucide-react'
 import { ComposerContainer } from '@/features/composer'
 import type { SessionCard } from '@/features/mission-control'
-import { IconButton } from '@convergence/ui'
+import { Card, IconButton } from '@convergence/ui'
 import { buildHailComposerContext } from './hail-composer-context.pure'
 
 interface HailPanelProps {
@@ -29,7 +29,7 @@ export const HailPanel: FC<HailPanelProps> = ({ card, onClose }) => {
   )
 
   return (
-    <div className="col-span-full rounded-lg border border-hairline-strong bg-surface/60">
+    <Card padding="none" className="col-span-full">
       <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Radio className="size-4 shrink-0" />
@@ -58,6 +58,6 @@ export const HailPanel: FC<HailPanelProps> = ({ card, onClose }) => {
       <div className="px-4 py-3">
         <ComposerContainer context={context} />
       </div>
-    </div>
+    </Card>
   )
 }

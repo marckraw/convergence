@@ -1,14 +1,19 @@
 import type { FC, FormEvent } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
-import { IconButton, Input } from '@convergence/ui'
+import { cn, IconButton, Input } from '@convergence/ui'
 import { Check, Pencil, X } from 'lucide-react'
 import { toChipExcerpt } from './annotation-selection.pure'
-import { annotationChipFrame, annotationQuote } from './annotation.styles'
+import {
+  annotationBody,
+  annotationChipFrame,
+  annotationQuote,
+} from './annotation.styles'
 
 /**
- * One pending annotation, waiting to be sent. Same visual family as the
- * skill-selection chips — this is the same idea (something attached to the
- * next message), so it should not look like a different mechanism.
+ * One pending annotation, waiting to be sent: something attached to the next
+ * message, so it wears Chip's frame (`chipFrame`, CONV-15), as an attachment
+ * or a skill does, around what a Chip can't hold: the quote, the response and
+ * two actions.
  */
 
 interface AnnotationChipProps {
@@ -81,7 +86,7 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
       <span aria-hidden="true" className="shrink-0 text-ink-muted">
         →
       </span>
-      <span className="min-w-0 max-w-48 truncate">{annotation.body}</span>
+      <span className={cn(annotationBody, 'max-w-48')}>{annotation.body}</span>
       <IconButton
         label={`Edit response to “${excerpt}”`}
         type="button"

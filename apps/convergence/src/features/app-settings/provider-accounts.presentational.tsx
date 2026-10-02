@@ -318,14 +318,14 @@ export function ProviderAccountsFields({
                         {row.identity}
                       </h4>
                       {row.isDefault ? (
-                        <Badge shape="label" className="uppercase">
+                        <Badge shape="label" caps>
                           default
                         </Badge>
                       ) : null}
                       <Badge
                         shape="label"
                         tone={STATUS_TONE[row.status.tone]}
-                        className="uppercase"
+                        caps
                       >
                         {row.status.label}
                       </Badge>

@@ -15,10 +15,7 @@ export const ToolVisibilityBadge: FC<ToolVisibilityBadgeProps> = ({
 
   return (
     <Tooltip label={title ?? undefined}>
-      <Badge
-        className="font-medium tracking-eyebrow uppercase"
-        data-testid="tool-visibility-badge"
-      >
+      <Badge caps className="font-medium" data-testid="tool-visibility-badge">
         {label}
       </Badge>
     </Tooltip>

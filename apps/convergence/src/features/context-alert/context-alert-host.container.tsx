@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { contextDrillApi, useContextDrillStore } from '@/entities/context-drill'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
@@ -77,7 +77,7 @@ export function ContextAlertHostContainer({
           offered = false
         }
 
-        toast(`Context at ${usedPercentage} % — ${session.name}`, {
+        notify.message(`Context at ${usedPercentage} % — ${session.name}`, {
           description: `${describeLimit(by, contextAlert)} · time to seal and compact`,
           ...(onFocusSession
             ? {
@@ -89,7 +89,7 @@ export function ContextAlertHostContainer({
             : {}),
           ...(offered
             ? {
-                cancel: {
+                secondaryAction: {
                   label: 'Run the drill',
                   onClick: () => {
                     void useContextDrillStore.getState().run(session.id)

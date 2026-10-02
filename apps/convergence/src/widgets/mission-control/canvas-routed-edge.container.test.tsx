@@ -69,7 +69,11 @@ describe('F1 fallback', () => {
           } as EdgeProps)}
         />,
       )
-      expect(getByText('Shared label')).toHaveStyle({
+      // The label is the kit's Badge on the canvas (MC-6): its box carries
+      // the placement, its words sit inside it.
+      expect(
+        getByText('Shared label').closest('[data-canvas-edge-label]'),
+      ).toHaveStyle({
         transform:
           axis === 'horizontal'
             ? `translate(-50%, ${reverse ? '0%' : '-100%'}) translate(275px, ${reverse ? 249 : 243}px)`

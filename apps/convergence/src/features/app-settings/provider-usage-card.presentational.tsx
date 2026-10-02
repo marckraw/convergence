@@ -3,7 +3,7 @@ import type {
   ProviderQuotaSnapshot,
   ProviderQuotaWindow,
 } from '@/entities/provider-quota'
-import { buttonVariants } from '@convergence/ui'
+import { buttonVariants, Card } from '@convergence/ui'
 import { ProviderUsageWindowRow } from './provider-usage-window-row.presentational'
 
 interface ProviderUsageCardProps {
@@ -87,7 +87,7 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
   const usageLinks = getUsageLinks(snapshot)
 
   return (
-    <section className="space-y-3 rounded-lg border border-line-soft bg-surface/25 px-4 py-4">
+    <Card render={<section />} padding="md" className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-medium text-ink">
@@ -143,14 +143,14 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
           )}
 
           {snapshot.credits ? (
-            <div className="rounded-lg border border-line-soft bg-surface/40 px-4 py-3">
+            <Card padding="none" className="px-4 py-3">
               <p className="text-sm font-medium text-ink">Credits remaining</p>
               <p className="mt-1 text-sm text-ink-muted">
                 {snapshot.credits.unlimited
                   ? 'Unlimited'
                   : (snapshot.credits.balance ?? '0')}
               </p>
-            </div>
+            </Card>
           ) : null}
         </>
       ) : (
@@ -163,6 +163,6 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
           </p>
         </div>
       )}
-    </section>
+    </Card>
   )
 }

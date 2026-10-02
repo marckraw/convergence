@@ -210,6 +210,7 @@ export const SidebarConversations = memo(function SidebarConversations({
             sessions={ungroupedGlobalChatSessions}
             nameSearchQuery={search.query}
             activeSessionId={activeGlobalSessionId}
+            pulsingSessionIds={pulsingSessionIds}
             selectedSpaceId={selectedSpaceId}
             expandedSpaceIds={expandedSpaceIds}
             archivedSpacesExpanded={archivedSpacesExpanded}

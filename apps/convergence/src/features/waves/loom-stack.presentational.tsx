@@ -40,7 +40,7 @@ export function LoomStackView({
               // Paper: the muted surface lifted by the sheet's own shadow, the
               // open one on the full surface lifted further (R11: the
               // handoff's shadows are the --elevation-sheet tokens).
-              'relative flex min-h-0 min-w-0 flex-col rounded-xl border border-ink/10 bg-surface-muted shadow-sheet transition-layout duration-panel ease-out motion-reduce:transition-none',
+              'relative flex min-h-0 min-w-0 flex-col rounded-xl border border-hairline bg-surface-muted shadow-sheet transition-layout duration-panel ease-out motion-reduce:transition-none',
               wide && 'rounded-2xl',
               open && 'bg-surface shadow-sheet-open',
             )}

@@ -2,6 +2,8 @@ import type { FC } from 'react'
 import { Users } from 'lucide-react'
 import {
   Button,
+  Card,
+  CardAction,
   cn,
   Combobox,
   SearchField,
@@ -9,6 +11,7 @@ import {
 } from '@convergence/ui'
 import { InspectorHeader } from './inspector-header.presentational'
 import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
+import { ROW_CARD_DOOR_CLASS, ROW_CARD_PICKED_CLASS } from './row-card.styles'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import { SeatRefusal } from './seat-refusal.presentational'
 
@@ -130,30 +133,35 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
           const selected = selectedIds.includes(entry.sessionId)
           return (
             <li key={entry.sessionId}>
-              <Button
-                type="button"
-                variant="ghost"
-                aria-pressed={selected}
-                disabled={busy}
-                onClick={() => onToggle(entry.sessionId)}
-                size="lg"
+              <Card
+                interactive
+                padding="none"
                 className={cn(
-                  'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 text-left font-normal',
+                  'has-disabled:opacity-50',
                   // R7: a picked row wears the selected fill, as History's do.
                   selected
-                    ? 'border-hairline-strong bg-fill-selected'
+                    ? ['border-hairline-strong', ROW_CARD_PICKED_CLASS]
                     : 'border-hairline hover:border-hairline-strong',
                 )}
               >
-                <span className="text-xs">{entry.name}</span>
-                {entry.inCrew ? (
-                  <span className="flex items-center gap-1 text-3xs text-warning-ink">
-                    <Users aria-hidden className="size-3" />
-                    In crew “{entry.inCrew}”
+                <CardAction
+                  aria-pressed={selected}
+                  disabled={busy}
+                  onClick={() => onToggle(entry.sessionId)}
+                  className={ROW_CARD_DOOR_CLASS}
+                >
+                  <span className="text-xs">{entry.name}</span>
+                  {entry.inCrew ? (
+                    <span className="flex items-center gap-1 text-3xs text-warning-ink">
+                      <Users aria-hidden className="size-3" />
+                      In crew “{entry.inCrew}”
+                    </span>
+                  ) : null}
+                  <span className="text-3xs text-ink-muted">
+                    {entry.detail}
                   </span>
-                ) : null}
-                <span className="text-3xs text-ink-muted">{entry.detail}</span>
-              </Button>
+                </CardAction>
+              </Card>
             </li>
           )
         })}

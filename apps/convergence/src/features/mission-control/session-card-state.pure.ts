@@ -1,3 +1,4 @@
+import { readSessionAttentionSignal } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { SessionCard } from './mission-control.types'
 
@@ -75,14 +76,14 @@ export function countSessionCardStates(
  */
 export function classifySessionCardState(card: SessionCard): SessionCardState {
   const { status, attention, activity } = card.session
+  // The entity's two facts, as the Needs-you card reads them (MC-2).
+  const signal = readSessionAttentionSignal(card.session)
   // A viewer that cannot reach its host has lost sight of a run, not ended
   // one: the room gives it its own state, never "Failed" -- "Failed" about a
   // remote agent that is still committing is the lie MAR-3051 was filed for.
-  if (attention === 'host-unreachable') return 'host-unreachable'
+  if (signal.hostUnreachable) return 'host-unreachable'
 
-  if (attention === 'needs-approval' || attention === 'needs-input') {
-    return 'needs-you'
-  }
+  if (signal.waitingOnYou) return 'needs-you'
   // The approval prompt is live even in the beat before attention catches up.
   if (activity === 'waiting-approval') return 'needs-you'
 

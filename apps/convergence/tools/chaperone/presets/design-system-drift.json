@@ -202,6 +202,47 @@
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
       },
       {
+        "id": "use-notify",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "restrictions": [
+          {
+            "source": "^sonner(/|$)",
+            "allowedIn": [],
+            "message": "sonner is the design system's toast engine, not the app's: raise a toast with notify from @convergence/ui (notify.failure(\"update Codex\", error) writes R10's \"Couldn’t update Codex.\" with the reason under it), or toast from @convergence/ui for what notify doesn't cover; the Toaster part draws it on the popup surface in R1's tones (ruling 2; MAR-3608; DS-8, DLG-31)."
+          }
+        ],
+        "includeTypeImports": true
+      },
+      {
+        "id": "use-section-label",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)([\"'\\`])(?=(?:(?!\\1)[^\\n])*?(?<![\\w-])uppercase\\b)(?=(?:(?!\\1)[^\\n])*?(?<![\\w-])tracking-)(?:(?!\\1)[^\\n])*\\1",
+        "message": "An eyebrow typed by hand (uppercase with tracking-… in one class string): use SectionLabel from @convergence/ui (size=\"sm\" for the 10 px step, as=\"h3\" when it names a section), or sectionLabel / sectionLabelVariants({ size }) where the element can't be a SectionLabel. Copies drifted into three trackings and four weights (R0, R4; DS-20; MAR-3608)."
+      },
+      {
+        "id": "use-badge-caps",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.tsx",
+        "exclude": ["**/*.test.tsx"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<Badge\\b(?:[^>]|=>|/>\\})*?\\bclassName=(?:[^>]|=>|/>\\})*?(?<![\\w-])uppercase\\b",
+        "message": "A Badge put in capitals by className: give it caps, Badge's own prop, so every badge in capitals is one look (the third copy is a part; MAR-3608)."
+      },
+      {
+        "id": "no-buttons-as-rows",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])h-auto\\b",
+        "message": "A Button or IconButton stretched into a row or a card (h-auto in its className, which undoes its height so more lines fit): a row is a ListRow (render a button or a link), a box that opens something is a Card with a CardAction over it, an option that needs a sentence is a ChoiceCard, and something that opens and closes in place is Collapsible's trigger. Words that act are a link Button, which has no box to undo (MAR-3608; DS-21; docs/checks/design-system-drift.md)."
+      },
+      {
         "id": "no-native-title",
         "type": "regex",
         "severity": "error",

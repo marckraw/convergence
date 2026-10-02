@@ -124,10 +124,6 @@ export const stripLabelClass = 'text-2xs font-medium text-ink-muted'
  */
 export const stripSelectClass = 'text-ink-muted hover:text-ink'
 
-/** The machine, once the session is live and the choice is no longer one. */
-export const stripFactClass =
-  'rounded-md border border-line-soft px-1.5 py-0.5 text-2xs font-medium text-ink'
-
 /** A live session whose machine is gone. */
 export const stripWarningClass =
   'flex min-w-0 items-center gap-1 text-2xs text-warning-ink'

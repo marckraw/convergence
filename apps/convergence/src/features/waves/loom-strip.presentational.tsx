@@ -5,6 +5,7 @@ import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
 import { LOOM_SHEET_ICONS, LOOM_SHEET_ICON_CLASS } from './loom-sheet.styles'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
+import { StatusDot } from '@convergence/ui'
 import {
   LOOM_SHEETS,
   LOOM_SHEET_NAMES,
@@ -15,7 +16,6 @@ import {
   LOOM_STRIP_BUTTON_CLASS,
   LOOM_STRIP_COUNT_CLASS,
   LOOM_STRIP_SHEET_CLASS,
-  WAVE_OUTAGE_DOT_CLASS,
   WAVE_RAIL_CLASS,
 } from './wave-panel.styles'
 
@@ -145,11 +145,9 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
     </IconButton>
 
     {outage ? (
-      <span
-        role="status"
-        aria-label="Tracker not answering"
-        className={WAVE_OUTAGE_DOT_CLASS}
-      />
+      <span role="status" aria-label="Tracker not answering" className="flex">
+        <StatusDot tone="warning" size="sm" />
+      </span>
     ) : null}
     {LOOM_SHEETS.map((sheet) => {
       // The stack's own glyph and colour (MC-24): folding the column changes

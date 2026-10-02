@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import type { DialogKind, DialogPayload } from '@/entities/dialog'
+import { RELEASE_NOTES_TITLE } from '@/entities/updates'
 import {
   Menu,
   MenuContent,
@@ -115,7 +116,7 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
         <MenuSeparator />
         <MenuItem onClick={() => openDialog('release-notes')}>
           <Info className="h-3.5 w-3.5" />
-          <span>What&apos;s New</span>
+          <span>{RELEASE_NOTES_TITLE}</span>
         </MenuItem>
       </MenuContent>
     </Menu>
