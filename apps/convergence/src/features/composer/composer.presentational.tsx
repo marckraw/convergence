@@ -45,6 +45,7 @@ import {
   IconButton,
   listboxOptionId,
   listboxStep,
+  MetaLine,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -678,8 +679,11 @@ export const Composer: FC<ComposerProps> = ({
                   className="font-medium"
                   data-testid="every-turn-context-badge"
                 >
-                  Every-turn context active · {everyTurnContextCount} item
-                  {everyTurnContextCount === 1 ? '' : 's'}
+                  {/* Its facts on a MetaLine (CONV-23). */}
+                  <MetaLine>
+                    Every-turn context active
+                    {`${everyTurnContextCount} item${everyTurnContextCount === 1 ? '' : 's'}`}
+                  </MetaLine>
                 </StatusPill>
               </Tooltip>
             </div>

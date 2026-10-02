@@ -6,6 +6,7 @@ import {
   DescriptionItem,
   DescriptionList,
   IconButton,
+  MetaLine,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -147,8 +148,11 @@ export function ContextWindowPopover({
             <div className={usageSection}>
               <DescriptionList layout="inline" className="gap-1.5">
                 <DescriptionItem term="Used">
-                  {contextWindow.usedPercentage}% ·{' '}
-                  {formatFullTokens(contextWindow.usedTokens)} tokens
+                  {/* Its facts on a MetaLine (CONV-23). */}
+                  <MetaLine>
+                    {`${contextWindow.usedPercentage}%`}
+                    {`${formatFullTokens(contextWindow.usedTokens)} tokens`}
+                  </MetaLine>
                 </DescriptionItem>
                 <DescriptionItem term="Window">
                   {formatFullTokens(contextWindow.windowTokens)} tokens

@@ -1,4 +1,4 @@
-import type { FC, Ref } from 'react'
+import type { FC, ReactNode, Ref } from 'react'
 import { GitPullRequest, TerminalSquare } from 'lucide-react'
 import type { Project } from '@/entities/project'
 import {
@@ -25,7 +25,8 @@ interface ConversationProjectMenuProps {
   runtimeCwd: string | null
   /** What Open in… opens: the conversation's workspace. */
   openPath: string | null
-  pullRequestLabel: string
+  /** The pull request's reading: words, or its facts on a MetaLine. */
+  pullRequestLabel: ReactNode
   pullRequestOpen: boolean
   onTogglePullRequest: () => void
   hasTerminal: boolean

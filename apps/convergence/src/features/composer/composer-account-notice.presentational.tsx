@@ -1,7 +1,7 @@
 import { AlertCircle, KeyRound, LoaderCircle } from 'lucide-react'
 import { describeAccountHandoffRefusal } from '@/entities/provider-account'
 import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
-import { Button, Notice } from '@convergence/ui'
+import { Button, MetaLine, Notice } from '@convergence/ui'
 
 export type ComposerAccountNoticeState =
   | { kind: 'pending' | 'staged' }
@@ -25,7 +25,13 @@ export function ComposerAccountNotice({
       <Notice
         tone="danger"
         icon={<AlertCircle />}
-        title={`Not sent · ${describeAccountHandoffRefusal(refusal.stage)}`}
+        title={
+          // Its facts on a MetaLine (CONV-23).
+          <MetaLine wrap>
+            Not sent
+            {describeAccountHandoffRefusal(refusal.stage)}
+          </MetaLine>
+        }
         data-stage={refusal.stage}
         actions={
           onManageAccounts &&
