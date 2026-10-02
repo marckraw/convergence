@@ -232,6 +232,15 @@
         "exclude": ["**/*.test.tsx"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<Badge\\b(?:[^>]|=>|/>\\})*?\\bclassName=(?:[^>]|=>|/>\\})*?(?<![\\w-])uppercase\\b",
         "message": "A Badge put in capitals by className: give it caps, Badge's own prop, so every badge in capitals is one look (the third copy is a part; MAR-3608)."
+      },
+      {
+        "id": "no-buttons-as-rows",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])h-auto\\b",
+        "message": "A Button or IconButton stretched into a row or a card (h-auto in its className, which undoes its height so more lines fit): a row is a ListRow (render a button or a link), a box that opens something is a Card with a CardAction over it, an option that needs a sentence is a ChoiceCard, and something that opens and closes in place is Collapsible's trigger. Words that act are a link Button, which has no box to undo (MAR-3608; DS-21; docs/checks/design-system-drift.md)."
       }
     ]
   }

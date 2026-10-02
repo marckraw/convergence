@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Card } from '@convergence/ui'
+import { Card, cn } from '@convergence/ui'
+import { copyButtonRoom } from './conversation-item.styles'
 
 /**
  * A card where the agent waits on you (CONV-8): an approval, a plan, a form,
@@ -37,7 +38,12 @@ export function RequestCard({
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-x-2 gap-y-1',
+              copyButtonRoom,
+            )}
+          >
             <p className="text-sm font-medium">{title}</p>
             {timestamp}
           </div>

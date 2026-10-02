@@ -5,6 +5,28 @@ import {
   isSessionCompacting,
 } from './session-compacting.pure'
 
+/**
+ * The two facts every card reads first about a session's attention (MC-2):
+ * the room has lost sight of the host it runs on, or it waits on you, for an
+ * approval or an answer. The Needs-you card and Mission Control's card both
+ * start from here, so the two features can't disagree about either.
+ */
+export interface SessionAttentionSignal {
+  hostUnreachable: boolean
+  waitingOnYou: boolean
+}
+
+export function readSessionAttentionSignal(
+  session: Pick<SessionSummary, 'attention'>,
+): SessionAttentionSignal {
+  return {
+    hostUnreachable: session.attention === 'host-unreachable',
+    waitingOnYou:
+      session.attention === 'needs-approval' ||
+      session.attention === 'needs-input',
+  }
+}
+
 export function formatSessionAttentionLabel(session: SessionSummary): string {
   if (session.attention === 'needs-approval') {
     return 'Approval needed'

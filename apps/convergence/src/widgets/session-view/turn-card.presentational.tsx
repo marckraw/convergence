@@ -1,6 +1,13 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Badge, Button, cn, StatusDot } from '@convergence/ui'
+import {
+  Badge,
+  cn,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+  StatusDot,
+} from '@convergence/ui'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { ChangedFilesTree } from './changed-files-tree.container'
 import {
@@ -50,14 +57,16 @@ export const TurnCard: FC<TurnCardProps> = ({
       : `${fileChanges.length} file${fileChanges.length === 1 ? '' : 's'}`
 
   return (
-    <div className="border-b border-line last:border-b-0">
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        size="lg"
-        className="h-auto w-full justify-start rounded-none px-3 text-left font-normal"
+    // The kit's Collapsible, held open from outside (DS-21): its trigger says
+    // aria-expanded and names the panel that holds the turn's files.
+    <Collapsible
+      open={expanded}
+      onOpenChange={() => onToggle()}
+      className="border-b border-line last:border-b-0"
+    >
+      <CollapsibleTrigger
+        chevron="none"
+        className="w-full gap-2 rounded-none px-3 py-2 text-sm hover:bg-highlight hover:text-on-highlight"
       >
         <ChevronRight
           aria-hidden
@@ -102,23 +111,25 @@ export const TurnCard: FC<TurnCardProps> = ({
             )}
           </span>
         </span>
-      </Button>
-      {expanded && fileChanges.length > 0 && (
-        <div className="h-44 pb-2 pl-4 pr-1">
-          <ChangedFilesTree
-            files={fileRows.map((row) => ({
-              status: row.status,
-              file: row.treePath,
-            }))}
-            selectedFile={selectedTreePath}
-            search={false}
-            onSelectFile={(treePath) =>
-              onSelectFile(findTurnFileChangeRow(fileRows, treePath))
-            }
-            className="h-full"
-          />
-        </div>
-      )}
-    </div>
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        {fileChanges.length > 0 ? (
+          <div className="h-44 pb-2 pl-4 pr-1">
+            <ChangedFilesTree
+              files={fileRows.map((row) => ({
+                status: row.status,
+                file: row.treePath,
+              }))}
+              selectedFile={selectedTreePath}
+              search={false}
+              onSelectFile={(treePath) =>
+                onSelectFile(findTurnFileChangeRow(fileRows, treePath))
+              }
+              className="h-full"
+            />
+          </div>
+        ) : null}
+      </CollapsiblePanel>
+    </Collapsible>
   )
 }

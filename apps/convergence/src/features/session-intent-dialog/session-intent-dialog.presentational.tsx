@@ -1,7 +1,8 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { MessageSquare, TerminalSquare } from 'lucide-react'
 import {
-  Button,
+  Card,
+  CardAction,
   Dialog,
   DialogBody,
   DialogContent,
@@ -16,6 +17,41 @@ export interface SessionIntentDialogProps {
   onSelectConversation: () => void
   onSelectTerminal: () => void
 }
+
+/**
+ * One way to run the session, as a door: picking it is the dialog's ending
+ * (R6), so it is a Card whose CardAction covers it, not a radio that would
+ * act as the arrow keys move.
+ */
+const renderIntentCard = ({
+  testId,
+  icon,
+  title,
+  description,
+  onSelect,
+}: {
+  testId: string
+  icon: ReactNode
+  title: string
+  description: string
+  onSelect: () => void
+}) => (
+  <Card surface="raised" interactive padding="md">
+    <CardAction
+      onClick={onSelect}
+      data-testid={testId}
+      className="flex w-full min-w-0 flex-col items-start gap-2"
+    >
+      <span className="flex items-center gap-2 text-sm font-medium text-ink">
+        {icon}
+        {title}
+      </span>
+      <span className="w-full whitespace-normal break-words text-xs leading-snug text-ink-muted">
+        {description}
+      </span>
+    </CardAction>
+  </Card>
+)
 
 export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
   open,
@@ -36,38 +72,20 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
         className="grid gap-3 sm:grid-cols-2"
         data-testid="session-intent-options"
       >
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onSelectConversation}
-          data-testid="session-intent-conversation"
-          size="lg"
-          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-xl p-5 text-left"
-        >
-          <span className="flex items-center gap-2 text-sm font-medium text-ink">
-            <MessageSquare className="size-4" />
-            Conversation
-          </span>
-          <span className="w-full whitespace-normal break-words text-xs leading-snug text-ink-muted">
-            Talk to an AI agent in this workspace.
-          </span>
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onSelectTerminal}
-          data-testid="session-intent-terminal"
-          size="lg"
-          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-xl p-5 text-left"
-        >
-          <span className="flex items-center gap-2 text-sm font-medium text-ink">
-            <TerminalSquare className="size-4" />
-            Terminal
-          </span>
-          <span className="w-full whitespace-normal break-words text-xs leading-snug text-ink-muted">
-            Open a shell-only session with no agent attached.
-          </span>
-        </Button>
+        {renderIntentCard({
+          testId: 'session-intent-conversation',
+          icon: <MessageSquare className="size-4" />,
+          title: 'Conversation',
+          description: 'Talk to an AI agent in this workspace.',
+          onSelect: onSelectConversation,
+        })}
+        {renderIntentCard({
+          testId: 'session-intent-terminal',
+          icon: <TerminalSquare className="size-4" />,
+          title: 'Terminal',
+          description: 'Open a shell-only session with no agent attached.',
+          onSelect: onSelectTerminal,
+        })}
       </DialogBody>
     </DialogContent>
   </Dialog>

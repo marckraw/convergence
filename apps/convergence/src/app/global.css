@@ -74,7 +74,11 @@
       );
   }
 
-  /* The sidebar's panel; its width moves on the motion tokens when it folds or peeks. */
+  /*
+   * The sidebar's panel; its width moves on the motion tokens when it folds or peeks. Its right
+   * edge is the aside's own hairline (border-r border-hairline), drawn once: an inset line here
+   * drew a second, white one beside it in light (NAV-10).
+   */
   .app-sidebar-panel {
     position: relative;
     background: linear-gradient(
@@ -82,9 +86,7 @@
       var(--chrome-sidebar),
       color-mix(in srgb, var(--chrome-sidebar) 84%, var(--canvas) 16%)
     );
-    box-shadow:
-      inset -1px 0 0 var(--chrome-edge),
-      24px 0 48px -34px var(--chrome-shadow);
+    box-shadow: 24px 0 48px -34px var(--chrome-shadow);
     transition: width var(--motion-fast) var(--motion-ease-move);
   }
 

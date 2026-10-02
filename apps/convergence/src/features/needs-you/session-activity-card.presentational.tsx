@@ -8,7 +8,7 @@ import {
   Server,
 } from 'lucide-react'
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { Button, cn, Spinner, Tooltip } from '@convergence/ui'
+import { Card, CardAction, cn, Spinner, Tooltip } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
@@ -31,7 +31,13 @@ interface SessionActivityCardProps {
   onRename?: () => void
 }
 
-/** Shared card presentation; the owning surface supplies its existing actions. */
+/**
+ * Shared card presentation; the owning surface supplies its existing actions.
+ * It is the kit's Card, its door a CardAction stretched over the whole card
+ * (MC-2, MC-12): one tab stop, the kit's focus ring round the card, and the
+ * card's other controls raised above the door. Its surface stays its own:
+ * the provider's wash and its hover (needs-you-card.css), and its ring.
+ */
 export function SessionActivityCard({
   card,
   active,
@@ -50,7 +56,13 @@ export function SessionActivityCard({
   const KindIcon = card.kind === 'resident' ? InfinityIcon : ClipboardList
 
   return (
-    <article
+    <Card
+      render={<article />}
+      interactive
+      // The open conversation: aria-current on the door. Its look is the
+      // ring below, not the selected fill, which the wash keeps out (R0).
+      selected={active}
+      padding="none"
       data-pulse={pulsing ? 'true' : undefined}
       data-density={compact ? 'compact' : 'expanded'}
       style={
@@ -61,7 +73,7 @@ export function SessionActivityCard({
         } as CSSProperties
       }
       className={cn(
-        'needs-you-card relative flex min-w-0 flex-wrap items-start rounded-lg shadow-control ring-1 ring-line-soft transition-colors',
+        'needs-you-card flex min-w-0 flex-wrap items-start border-0 bg-(--needs-you-card-surface) shadow-control ring-1 ring-line-soft hover:bg-(--needs-you-card-hover)',
         active && 'ring-ink/25',
       )}
     >
@@ -76,9 +88,7 @@ export function SessionActivityCard({
             .filter(Boolean)
             .join('\n')}
         >
-          <Button
-            type="button"
-            variant="ghost"
+          <CardAction
             onClick={() => onSelect(session.id)}
             onDoubleClick={onRename}
             aria-label={
@@ -87,12 +97,7 @@ export function SessionActivityCard({
                 .filter(Boolean)
                 .join(', ')
             }
-            aria-current={active ? 'true' : undefined}
-            size="lg"
-            className={cn(
-              'static h-auto min-w-0 w-full items-start justify-start whitespace-normal rounded-lg p-0 text-left after:absolute after:inset-0 after:rounded-lg hover:bg-transparent hover:text-ink',
-              compact && 'flex',
-            )}
+            className="flex w-full min-w-0 items-start font-medium"
           >
             <span className="block min-w-0 w-full space-y-1">
               <span className="flex items-start gap-1 text-xs font-medium">
@@ -109,7 +114,8 @@ export function SessionActivityCard({
                 {session.pinnedAt && (
                   <Pin
                     aria-label="Pinned"
-                    className={compact ? 'size-3 shrink-0' : 'h-3 w-3 shrink-0'}
+                    // 16 px open, as the button it sat in drew it (R0).
+                    className={compact ? 'size-3 shrink-0' : 'size-4 shrink-0'}
                   />
                 )}
                 {regeneratingName && (
@@ -131,7 +137,7 @@ export function SessionActivityCard({
                 </span>
               )}
             </span>
-          </Button>
+          </CardAction>
         </Tooltip>
         {compact && (
           <div className="mt-1 flex min-w-0 items-center gap-1 text-3xs font-normal leading-3 text-ink-muted">
@@ -219,6 +225,6 @@ export function SessionActivityCard({
         )}
       </div>
       {footer && <div className="relative z-10 w-full">{footer}</div>}
-    </article>
+    </Card>
   )
 }

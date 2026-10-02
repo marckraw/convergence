@@ -37,6 +37,7 @@ import {
   type Attachment,
 } from '@/entities/attachment'
 import { ConversationItemShell } from './conversation-item-shell.presentational'
+import { copyButtonRoom } from './conversation-item.styles'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
 import { ToolVisibilityBadge } from './tool-visibility-badge.presentational'
@@ -162,7 +163,12 @@ function renderToolEntry({
             />
           </div>
           <Collapsible className="min-w-0">
-            <CollapsibleTrigger className="flex w-full gap-2 rounded-md border border-line-soft bg-surface-muted/20 px-2 py-1.5 pr-10 text-ink-muted hover:bg-fill-hover">
+            <CollapsibleTrigger
+              className={cn(
+                'flex w-full gap-2 rounded-md border border-line-soft bg-surface-muted/20 px-2 py-1.5 text-ink-muted hover:bg-fill-hover',
+                copyButtonRoom,
+              )}
+            >
               <span className="min-w-0 flex-1 truncate font-mono text-xs">
                 {viewModel.toolPreview}
               </span>
