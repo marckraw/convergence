@@ -1,20 +1,14 @@
 import type { FC } from 'react'
 import {
-  Badge,
-  Card,
   cn,
   Collapsible,
   CollapsiblePanel,
   CollapsibleTrigger,
-  focusRing,
-  Tooltip,
 } from '@convergence/ui'
 import { LOOM_OUTSIDE_NAME, type LoomOutsideView } from './loom-outside.pure'
+import { LoomIssueCard } from './loom-issue-card.presentational'
 import {
-  LOOM_ROW_CARD_CLASS,
   LOOM_SHEET_NOTE_CLASS,
-  WAVE_ROW_CLASS,
-  WAVE_ROW_OPENABLE_CLASS,
   WAVE_SECTION_TITLE_CLASS,
 } from './wave-panel.styles'
 
@@ -66,42 +60,19 @@ export const LoomOutsideGroupView: FC<{
     {view.foldable ? (
       <CollapsiblePanel id={LIST_ID} className="flex flex-col">
         {view.rows.map((issue) => (
-          // The whole card is the link to Linear: a Card drawn as an <a>
-          // (its `render`), in Loom's own card look with its own chips
-          // (MC-35), so an outside row cannot drift from an inside one.
-          <Card
+          // The whole card is the link to Linear, in the one card an issue
+          // in the loop wears too (MC-35), so an outside row cannot drift
+          // from an inside one.
+          <LoomIssueCard
             key={issue.id}
-            interactive
-            padding="none"
             data-loom-outside-row={issue.identifier}
-            render={<a href={issue.url} target="_blank" rel="noreferrer" />}
-            className={cn(
-              WAVE_ROW_CLASS,
-              WAVE_ROW_OPENABLE_CLASS,
-              'mb-2',
-              LOOM_ROW_CARD_CLASS,
-              focusRing,
-            )}
-          >
-            <span className="flex w-full flex-wrap items-baseline gap-1.5">
-              <span className="shrink-0 whitespace-nowrap font-mono text-2xs text-ink-muted">
-                {issue.identifier}
-              </span>
-              <Tooltip label={issue.title} when="truncated">
-                <span className="line-clamp-2 w-full min-w-0 text-xs font-medium leading-relaxed">
-                  {issue.title}
-                </span>
-              </Tooltip>
-            </span>
-            <span className="flex max-w-full flex-wrap gap-1.5">
-              <Badge outline>Linear: {issue.status || 'not seen'}</Badge>
-              {issue.labels.map((label) => (
-                <Badge key={label} outline>
-                  {label}
-                </Badge>
-              ))}
-            </span>
-          </Card>
+            className="mb-2"
+            identifier={issue.identifier}
+            title={issue.title}
+            trackerStatus={issue.status}
+            labels={issue.labels}
+            door={{ kind: 'link', href: issue.url }}
+          />
         ))}
         {view.moreLine ? (
           <p className={LOOM_SHEET_NOTE_CLASS}>{view.moreLine}</p>
