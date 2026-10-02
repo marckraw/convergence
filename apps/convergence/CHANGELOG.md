@@ -1,5 +1,33 @@
 # convergence
 
+## 0.98.1
+
+### Patch Changes
+
+- 0be6cf1: Checkboxes, native selects and other built-in controls now follow the theme, so they draw dark in dark mode; with Reduce motion on, spinners and pulsing dots stand still (MAR-3615).
+- 9e6bcb8: Icon-only buttons now show their label as a tooltip and announce it, and every button shares one size scale (MAR-3616).
+- 86ed89c: Deleting a conversation, and other actions that can't be undone, now ask first in Convergence's own dialog, and menus, popovers, selects and dialogs share one look (MAR-3616).
+- 17eb3af: Checkboxes, switches and fields share one look and label their errors (MAR-3616).
+- 80bf66d: The command palette and the pickers keep their behaviour and now announce their options to screen readers (MAR-3616).
+- 4cb652e: The conversation reads well in light mode: its statuses, request cards, usage pills, routines and side panels now use one set of status colours, and the header's statuses share one size (MAR-3617).
+  Space home's sections are tabs, the fork dialog's choices are radio cards, and unavailable controls say why in a tooltip you can reach with the keyboard.
+- 4ca20f0: Settings saves as you go and closes with one Done, so edits on other tabs are no longer lost; Project settings, Session Space, the Spaces board, Tunnels and the Prompt library close with Done too, and removing an account, endpoint or context item asks first.
+  Dialogs, Settings, Insights and Usage now share one look and read correctly in light mode (MAR-3617).
+- 6bd1f04: A conversation's state reads the same everywhere: in the header's pill and beside each conversation in the sidebar, waiting on you (an approval or an answer) is amber, finished green and failed red, in shades that stay readable in light mode. Attachment chips, the header's pills and links in answers now share the app's one look, and their explanations appear in the app's own tooltip instead of the system's.
+- b943a03: Mission Control, Loom and the Needs-you cards read properly in light mode, and a session's state wears one colour everywhere (working is blue, waiting on you amber, finished green, failed red); the canvas's wire details, the discard-draft question and the Add menu now take the keyboard focus and close on Escape (MAR-3617).
+- 33be582: The sidebar, status bar and window chrome read right in light mode, and the shell shows a session's state in one colour: waiting on you is amber, running is blue, failed is red. The selected sidebar row now looks different from a hovered one, the welcome and loading screens drag the window, and toasts sit clear of the feedback button (MAR-3617).
+- b2d2a8a: The design system is locked behind its own colours, sizes and shadows, so nothing should look different (MAR-3618). Buttons, links, tabs, toggles and other things you can click now show the pointing hand, everywhere; disabled ones keep the arrow.
+- 5ee6488: Buttons and toggles sit on one size scale, show "on" as the raised chip, keep keyboard focus visible, and say why they're unavailable; the browser's own hover hints are replaced by Convergence's tooltips.
+- 12642f8: Deleting a crew or clearing a relay trail now asks first in Convergence's own dialog, and every Delete or Remove that asks is quiet red and ends in "…". Mission Control's top strip lines up with the sidebar's, the terminal dock's resize line works from the keyboard, a terminal tab has one close instead of two, and the sidebar remembers its width and fold between launches (MAR-3608).
+- e128151: Forms and pickers are one family: every field's caption names its control and its error describes it, a seat's WIP limit is a stepper with a focus ring, an agent's single-answer question is a set of radio cards, and Fork picks its provider and effort from a list (MAR-3608).
+- 10a6e42: A host the app can't reach shows its own warning glyph in the sidebar and the header instead of a spinner, and running conversations spin in the working blue everywhere; small labels, tags, counts and status dots across the conversation, the Activity feed, Loom and Mission Control are drawn one way (MAR-3608).
+- 285e9ca: Toasts look like the app's other popups, their kind in its status colour, and a failed action reads "Couldn't …" with the reason under it. The release notes have one name, and the conversation's errors and notices are drawn one way, each with one Retry (MAR-3608).
+- a2b1753: Cards and rows come from the design system: the sidebar's ⋯ menus stay in sight while open, chat rows pulse on a notification, the sidebar has one right edge, and hand-built cards and stretched buttons are Cards and rows.
+- c165f0a: Shortcuts now show where you use them (⌘↵ on Create, Save and Send, ⌘. on Actions, ⌘K in the sidebar's tools, the terminal's keys), every time reads the same way with the whole moment on hover, and loading, empty and folded states look alike across the app (MAR-3608).
+- 3fdb99d: One name for the attention queue, "Needs you" ("3 need you", "1 needs you"), and one way to make a Space: every "Create Space…" opens the New Space dialog, starting from where you clicked. Labels use "…" and sentence case, the header's pill says "Approval needed" like its card, Mission Control's filters end in one "Clear filters", "Open in" lists read alike, the collapsed sidebar's project button opens the sidebar, a peeked sidebar keeps your keyboard place and closes when you leave it, and tunnels ask before switching away from unsaved edits (MAR-3608).
+- 7fbbc34: The three skill lists (the composer's Add popover, the `::` picker and Actions) say loading, failed and empty in the same words and look, and Actions' search is the same search field; the composer's message field shrinks back to one line after a send (MAR-3608).
+- aa7e946: Toasts follow the theme: in dark mode they are dark, not white cards.
+
 ## 0.98.0
 
 ### Minor Changes
