@@ -34,17 +34,27 @@ export const CARD_TONE_FRAME: Record<Tone, string> = {
 
 /**
  * A canvas node's attention frame. The node stays opaque over the canvas, so
- * the tint is laid over its surface as an image rather than replacing it.
+ * the tint is laid over an opaque colour as an image rather than replacing it.
+ *
+ * That colour is the canvas, not the node's own surface. A tone's tint over
+ * the surface leaves the node's muted words at 4.4:1 in dark (warning: waiting
+ * on you, an unreachable host), under the 4.5:1 text needs; over the canvas
+ * they clear it in every tone and both themes (pinned in
+ * app/theme-contrast.pure.test.ts). An image hides the colour from the
+ * accessibility check, so the pin is the test, not the story. A tinted node
+ * also drops the open card's selected fill, as a tinted grid card does: the
+ * open mark is its ring.
  */
 export const CARD_TONE_WASH: Record<Tone, string> = {
   neutral:
-    'border-neutral-line bg-linear-to-b from-neutral-soft to-neutral-soft',
-  info: 'border-info-line bg-linear-to-b from-info-soft to-info-soft',
+    'border-neutral-line bg-canvas bg-linear-to-b from-neutral-soft to-neutral-soft',
+  info: 'border-info-line bg-canvas bg-linear-to-b from-info-soft to-info-soft',
   success:
-    'border-success-line bg-linear-to-b from-success-soft to-success-soft',
+    'border-success-line bg-canvas bg-linear-to-b from-success-soft to-success-soft',
   warning:
-    'border-warning-line bg-linear-to-b from-warning-soft to-warning-soft',
-  danger: 'border-danger-line bg-linear-to-b from-danger-soft to-danger-soft',
+    'border-warning-line bg-canvas bg-linear-to-b from-warning-soft to-warning-soft',
+  danger:
+    'border-danger-line bg-canvas bg-linear-to-b from-danger-soft to-danger-soft',
 }
 
 /**
