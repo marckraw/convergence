@@ -16,8 +16,9 @@ which `.chaperone.json` extends, so they run in `npm run chaperone -- check`,
 `npm run agent:pre-push` and CI. Each has a canary under `canaries/chaperone/`, a fixture that
 breaks it on purpose, so a check that stops firing fails `npm run canaries` (MAR-3612).
 
-Every rule is a **warning** today. DS4's sweep fixes what they find, area by area, and DS5 makes
-each one an error once its count is zero ([below](#from-warning-to-error)).
+Every rule is an **error** (DS5, MAR-3618): DS4's sweep brought each one to zero, area by area,
+and then it turned red ([below](#severity-and-exceptions)). `npm run chaperone -- check` fails on
+any of them, and so do `npm run agent:pre-push` and CI.
 
 There are five kinds:
 
@@ -176,7 +177,15 @@ under `canaries/guards/`:
   not. Make the copy one shared part, or keep it on purpose in `scripts/guards/copied-code.json`
   with a reason.
 
-Both are warnings until the sweep has fixed today's copies, like the rules above.
+Both are errors. When they turned red (DS5), `repeated-classes` had 13 strings past their second
+copy. Three hid a part and now use one: `textStack` (exported from `@convergence/ui`), the flush
+dialog's `dialogSplit` and `dialogRail`, and Mission Control's `INSPECTOR_CHOICE_CLASS`. The other
+ten are layout sentences, not components (a glyph and words that may be cut short, a trailing
+cluster, a wrapping row, a full-height column…), each allowlisted with that reason. `copied-code`
+had one pasted block, the Parallel work panel's wiring in the session view and the chat surface,
+which became one hook (`useParallelWorkPanel`, with `useAnswerInput` in the session entity). Its
+allowlist keeps one entry: the two workspaces' jsdom test setups, which may not import each other.
+An allowlist entry that stops matching is reported, so the lists stay true.
 
 ## Rules not ported, and why
 
@@ -207,23 +216,61 @@ Both are warnings until the sweep has fixed today's copies, like the rules above
 - **`repeated-classes` or `copied-code`:** a part or a shared constant; an allowlist entry with a
   reason when the likeness is a coincidence.
 
-## From warning to error
+## Severity and exceptions
 
-A rule becomes an error only when it has nothing left to report, so that the day it turns red is
-the day it can't be wrong:
+A rule became an error only when it had nothing left to report, so that the day it turned red was
+the day it couldn't be wrong: DS4 swept each area to zero against the baseline below, and DS5
+(MAR-3618) re-measured with `npm run chaperone -- check --format json` and changed every
+`"severity"` to `"error"`. Each canary still proves its rule fires (`npm run canaries`).
 
-1. The sweep (DS4) fixes an area's warnings and lands it; the baseline below is its checklist.
-2. When `npm run chaperone -- check --format json` reports zero results for a rule, DS5 changes
-   its `"severity"` to `"error"` in `design-system-drift.json` and drops "A warning until DS4…"
-   from its message. Rules already at zero (see the table) can turn red in DS5's first change.
-3. Its canary keeps proving it fires; nothing else changes.
+| Rule                         | Where it's set                  | Severity |
+| ---------------------------- | ------------------------------- | -------- |
+| `no-magic-values`            | `design-system-drift.json`      | error    |
+| `no-raw-colors`              | `design-system-drift.json`      | error    |
+| `no-palette-colors`          | `design-system-drift.json`      | error    |
+| `no-dark-variant`            | `design-system-drift.json`      | error    |
+| `no-white-overlays`          | `design-system-drift.json`      | error    |
+| `motion-from-tokens`         | `design-system-drift.json`      | error    |
+| `use-focus-ring`             | `design-system-drift.json`      | error    |
+| `no-invisible-focus-ring`    | `design-system-drift.json`      | error    |
+| `use-spinner`                | `design-system-drift.json`      | error    |
+| `use-form-error`             | `design-system-drift.json`      | error    |
+| `no-title-on-buttons`        | `design-system-drift.json`      | error    |
+| `use-button-sizes`           | `design-system-drift.json`      | error    |
+| `no-native-confirm`          | `design-system-drift.json`      | error    |
+| `raw-elements-need-a-reason` | `design-system-drift.json`      | error    |
+| `ui-components-have-stories` | `design-system-drift.json`      | error    |
+| `app-parts-have-stories`     | `design-system-drift.json`      | error    |
+| `stories-titled-by-group`    | `design-system-drift.json`      | error    |
+| `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
+| `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
+| `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
 
-A rule is never relaxed to reach zero. An exclusion is a file the rule cannot be right about, with
-its reason written here (as `no-raw-colors`' two stories are), not a file nobody has fixed yet.
+A rule is never relaxed to reach zero, and never turned back into a warning to let a change
+through. When one fires, fix what it found ([When one fires](#when-one-fires)). When it can't be
+right about something, propose an exception in the same pull request, in the narrowest form there
+is, with its reason where the next reader will look:
+
+- **One raw element:** `// raw-element: <reason>` (or `{/* raw-element: <reason> */}`) on the line
+  above it.
+- **An axe rule a story can't meet:** that one rule switched off in the stories'
+  `parameters.a11y.config.rules`, with an `a11y-known: <reason>` comment above it (as the Pierre
+  diff viewer's stories do); never `a11y.test` turned down, and never in the preview.
+- **A sub-part with no stories of its own:** a line in `app-parts-have-stories`' `exclude`, for a
+  part the bigger part's stories show ([section 4](#4-every-part-has-stories)).
+- **A class string or a pasted block that is a coincidence:** an entry in
+  `scripts/guards/repeated-classes.json` (`{ classes, reason }`) or
+  `scripts/guards/copied-code.json` (`{ files: [a, b], reason }`). A stale entry is reported.
+- **A file a token rule cannot be right about:** a line in the rule's `exclude` in
+  `design-system-drift.json`, and its reason written in this document (as `no-raw-colors`' two
+  stories are). Never a file nobody has fixed yet.
+
+The reviewer weighs the reason; an exception without one doesn't merge.
 
 ## The baseline
 
-Drift warnings on master `cefbb5eb` (2 Oct 2026, after DS3c), by rule and by the audit's areas:
+What DS4 swept, kept as the record: drift warnings on master `cefbb5eb` (2 Oct 2026, after DS3c),
+by rule and by the audit's areas. Every count is zero today.
 
 - **DS:** `packages/ui` and the app's `shared/`.
 - **CONV:** session-view, chat-surface, composer, response-annotations, conversation-actions,

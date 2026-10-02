@@ -20,7 +20,7 @@ import {
   type FeedView,
   type buildFeedView,
 } from '@/features/needs-you'
-import { Button, cn, EmptyState } from '@convergence/ui'
+import { Button, cn, EmptyState, textStack } from '@convergence/ui'
 import {
   noConversationMatchesLine,
   normalizeNameQuery,
@@ -106,7 +106,7 @@ export function NeedsYouControls({
           aria-hidden="true"
           className="size-3.5 text-ink-muted"
         />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className={textStack}>
           <span className="font-medium">{summary.activity}</span>
           <span className="break-words text-ink-muted">{summary.scope}</span>
           <span className="break-words text-ink-muted">

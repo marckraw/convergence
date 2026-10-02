@@ -14,7 +14,8 @@ const packageDir = dirname(fileURLToPath(import.meta.url))
  * - `storybook` (MAR-3611): every story is a test, rendered in headless
  *   Chromium with the Storybook config in `.storybook/`, play function and
  *   all, then checked by axe (`a11y.test: 'error'` in preview.tsx), so an
- *   accessibility violation fails it.
+ *   accessibility violation fails it. Before the check the pointer leaves
+ *   the page (`movePointerAway`), so a :hover never reaches axe by chance.
  */
 export default defineConfig({
   test: {
@@ -33,11 +34,25 @@ export default defineConfig({
         plugins: [storybookTest({ configDir: join(packageDir, '.storybook') })],
         test: {
           name: 'storybook',
+          // Hands the pointer command to the stories' afterEach
+          // (.storybook/pointer-testing.ts).
+          setupFiles: ['./.storybook/vitest.setup.ts'],
           browser: {
             enabled: true,
             headless: true,
             provider: playwright(),
             instances: [{ browser: 'chromium' }],
+            commands: {
+              /**
+               * Moves Playwright's pointer off the page, so nothing is under
+               * it when axe looks: on Linux Chromium may otherwise apply
+               * :hover to what it rests on (MAR-3618). The same spot
+               * Storybook resets it to before each test.
+               */
+              async movePointerAway({ page }) {
+                await page.mouse.move(-1000, -1000)
+              },
+            },
           },
         },
       },

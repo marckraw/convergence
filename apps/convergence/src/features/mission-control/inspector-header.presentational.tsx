@@ -1,6 +1,6 @@
 import type { ComponentProps, FC, ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { cn, IconButton, SectionLabel } from '@convergence/ui'
+import { cn, IconButton, SectionLabel, textStack } from '@convergence/ui'
 
 type InspectorHeaderProps = Omit<
   ComponentProps<'header'>,
@@ -39,7 +39,7 @@ export const InspectorHeader: FC<InspectorHeaderProps> = ({
 }) => (
   <header className="flex items-start gap-2" {...props}>
     {leading}
-    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+    <div className={textStack}>
       {eyebrow == null ? null : <SectionLabel>{eyebrow}</SectionLabel>}
       <h3 className={cn('text-sm font-medium', titleClassName)}>{title}</h3>
       {subtitle == null ? null : (

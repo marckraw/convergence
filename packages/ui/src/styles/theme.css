@@ -83,6 +83,7 @@
   /* Text, strong, highlight */
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
+  --color-ink-muted-on-tint: var(--ink-muted-on-tint);
   --color-strong: var(--strong);
   --color-on-strong: var(--on-strong);
   --color-highlight: var(--highlight);

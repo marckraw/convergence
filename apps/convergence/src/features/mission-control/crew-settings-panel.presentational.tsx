@@ -34,7 +34,11 @@ import {
 import { flowRunCeilingNote } from './crew-loop.pure'
 import { CrewMark } from './crew-mark.presentational'
 import { InspectorHeader } from './inspector-header.presentational'
-import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
+import {
+  INSPECTOR_CHOICE_CLASS,
+  INSPECTOR_NOTE_CLASS,
+  INSPECTOR_SHELL_CLASS,
+} from './inspector.styles'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 import {
@@ -587,7 +591,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             className="flex flex-col gap-2 border-t border-hairline pt-2"
           >
             <SectionLabel as="h4">Recipe</SectionLabel>
-            <label className="flex items-center gap-2 text-xs text-ink-muted">
+            <label className={INSPECTOR_CHOICE_CLASS}>
               <Checkbox
                 checked={includePositions}
                 disabled={exporting}

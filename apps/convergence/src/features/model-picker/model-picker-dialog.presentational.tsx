@@ -9,6 +9,8 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
+  dialogRail,
+  dialogSplit,
   EmptyState,
   IconButton,
   Listbox,
@@ -185,8 +187,8 @@ export const ModelPickerDialogPresentational: FC<
           </IconButton>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <aside className="min-w-0 shrink-0 border-b border-line-soft p-2 sm:w-44 sm:border-r sm:border-b-0">
+        <div className={dialogSplit}>
+          <aside className={cn(dialogRail, 'min-w-0 p-2 sm:w-44')}>
             <div className="app-scrollbar flex gap-1 overflow-x-auto sm:block sm:max-h-full sm:space-y-1 sm:overflow-y-auto">
               <ModelPickerProviderFilterButton
                 id="all"

@@ -89,6 +89,14 @@ const PAIRS: ReadonlyArray<readonly [string, Backdrop, number]> = [
   ),
   ['ink-muted', { layer: 'info-soft', over: 'surface' }, TEXT],
   ['ink-muted', { layer: 'danger-soft', over: 'surface' }, TEXT],
+  // Muted words on any tone's tint, wherever the tint lies (MAR-3618): what
+  // --ink-muted can't hold there, --ink-muted-on-tint does, in both themes.
+  ...(['neutral', ...TONES] as const).flatMap((tone) =>
+    (['canvas', 'surface', 'surface-muted'] as const).map(
+      (over) =>
+        ['ink-muted-on-tint', { layer: `${tone}-soft`, over }, TEXT] as const,
+    ),
+  ),
   // A Needs-you card: its provider's hue at 6% over the surface, and the
   // hover fill (R7) over that under the pointer (needs-you-card.css).
   ...PROVIDERS.flatMap((provider) => {
@@ -176,8 +184,8 @@ function colourTokens(): string[] {
 }
 
 describe('MAR-3460: theme color roles are readable in both themes', () => {
-  it('holds 102 pairs in each theme', () => {
-    expect(PAIRS).toHaveLength(102)
+  it('holds 117 pairs in each theme', () => {
+    expect(PAIRS).toHaveLength(117)
   })
 
   describe.each(['light', 'dark'] as const)('%s', (theme) => {
@@ -194,13 +202,16 @@ describe('MAR-3460: theme color roles are readable in both themes', () => {
       ).toBeGreaterThanOrEqual(min)
     })
 
-    it('secondary text stays visibly quieter than body text', () => {
-      const ratio = contrastRatio(
-        resolveThemeColor(THEMES[theme], 'ink'),
-        resolveThemeColor(THEMES[theme], 'ink-muted'),
-      )
-      expect(ratio).toBeGreaterThanOrEqual(1.5)
-    })
+    it.each(['ink-muted', 'ink-muted-on-tint'])(
+      'secondary text (--%s) stays visibly quieter than body text',
+      (muted) => {
+        const ratio = contrastRatio(
+          resolveThemeColor(THEMES[theme], 'ink'),
+          resolveThemeColor(THEMES[theme], muted),
+        )
+        expect(ratio).toBeGreaterThanOrEqual(1.5)
+      },
+    )
   })
 })
 

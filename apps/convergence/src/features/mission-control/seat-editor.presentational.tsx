@@ -28,6 +28,7 @@ import {
   Switch,
   Textarea,
 } from '@convergence/ui'
+import { INSPECTOR_CHOICE_CLASS } from './inspector.styles'
 import {
   LOCAL_HOST_ID,
   ROLE_CARD_LIMIT,
@@ -449,7 +450,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             </div>
           </div>
           {refusalFor('wipLimit')}
-          <label className="flex min-h-10 items-center gap-2 text-xs text-ink-muted">
+          <label className={cn(INSPECTOR_CHOICE_CLASS, 'min-h-10')}>
             <Switch
               checked={member.paused}
               disabled={busy}
@@ -460,7 +461,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           {refusalFor('paused')}
           {member.role === 'mastermind' && (
             <>
-              <label className="flex items-center gap-2 text-xs text-ink-muted">
+              <label className={INSPECTOR_CHOICE_CLASS}>
                 <Checkbox
                   checked={member.drillAuto}
                   disabled={busy}
