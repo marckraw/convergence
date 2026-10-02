@@ -3,7 +3,15 @@ import type {
   InteractionFormField,
   InteractionResponse,
 } from '@/entities/session'
-import { Button, Checkbox, Input, Textarea } from '@convergence/ui'
+import {
+  Button,
+  Checkbox,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  Textarea,
+} from '@convergence/ui'
 import { submitterValue } from './request-card.pure'
 
 interface FormRequestFormProps {
@@ -44,15 +52,15 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
     }}
   >
     {fields.map((field) => (
-      <label key={field.id} className="block min-w-0 space-y-1.5">
-        <span className="break-words text-xs font-medium text-ink">
+      <Field key={field.id} className="min-w-0">
+        <FieldLabel className="break-words text-xs text-ink">
           {field.label}
           {field.required ? <span aria-hidden="true"> *</span> : null}
-        </span>
+        </FieldLabel>
         {field.description ? (
-          <span className="block text-xs leading-relaxed text-ink-muted">
+          <FieldDescription className="leading-relaxed">
             {field.description}
-          </span>
+          </FieldDescription>
         ) : null}
         {field.type === 'boolean' ? (
           <Checkbox
@@ -83,7 +91,7 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
             type={field.type === 'number' ? 'number' : 'text'}
           />
         )}
-      </label>
+      </Field>
     ))}
     <div className="flex flex-wrap gap-2">
       <Button type="submit" name="decision" value="accept">

@@ -137,8 +137,8 @@
         "type": "regex",
         "severity": "error",
         "files": "apps/convergence/src/**/*.presentational.tsx",
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!(?://|/\\*)[ \\t]*raw-element:[ \\t]*(?!\\*/)\\S[^\\n]*\\n(?:[ \\t]*(?://|\\{?/\\*)[ \\t]*eslint-disable-next-line[^\\n]*\\n)?[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a|input|textarea|select)\\b(?!(?:[^>]|=>)*?\\bbuttonVariants\\()",
-        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; MAR-3617; DS-27)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!(?://|/\\*)[ \\t]*raw-element:[ \\t]*(?!\\*/)\\S[^\\n]*\\n(?:[ \\t]*(?://|\\{?/\\*)[ \\t]*eslint-disable-next-line[^\\n]*\\n)?[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a|input|textarea|select|label)\\b(?!(?:[^>]|=>)*?\\bbuttonVariants\\()",
+        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; MAR-3617; DS-27). A raw <label>: FieldLabel in a Field, which wires the label, the hint and the error to the control, or ChoiceField around a Switch or a Checkbox (DS-13, DS-14)."
       },
       {
         "id": "ui-components-have-stories",

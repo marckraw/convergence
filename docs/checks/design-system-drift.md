@@ -143,6 +143,13 @@ Containers keep theirs, `no-raw-button-outside-shared` and `no-raw-input-outside
 take no reason: a container wires state, and a control it draws belongs in a presentational part
 or the design system.
 
+A raw `<label` counts too (DS6, DS-13 and DS-14): a label typed by hand ties nothing to its
+control, so a hint or an error under it is never read out with it. The part is `FieldLabel` in a
+`Field` (with `FieldDescription` and `FieldError`), or `ChoiceField` around a Switch or a
+Checkbox. A `FieldLabel` needs its `Field`, so a label for a control a Field can't wrap stays
+raw, with its reason above it: the fork dialog's instruction, whose composer below also holds the
+model pickers, which a Field around it would name the same.
+
 ## 4. Every part has stories
 
 Storybook is where the design system and the app's parts are seen, in both themes, and every story

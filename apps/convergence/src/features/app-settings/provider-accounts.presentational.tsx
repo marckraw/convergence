@@ -15,6 +15,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ChoiceField,
   cn,
   ConfirmDialog,
   EmptyState,
@@ -23,6 +24,7 @@ import {
   Notice,
   SegmentedControl,
   SegmentedControlItem,
+  settingsHeading,
   type Tone,
 } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
@@ -314,7 +316,7 @@ export function ProviderAccountsFields({
                   <div className="min-w-0 space-y-1">
                     <div className={wrapRow}>
                       <ProviderIcon providerId={providerId} />
-                      <h4 className="break-all text-sm font-semibold">
+                      <h4 className={cn(settingsHeading, 'break-all')}>
                         {row.identity}
                       </h4>
                       {row.isDefault ? (
@@ -422,21 +424,17 @@ export function ProviderAccountsFields({
                   }
                 >
                   {deletesPrivateHistory && removalLayout ? (
-                    <label className="flex items-start gap-2">
+                    <ChoiceField
+                      disabled={isBusy}
+                      label={`Delete the private files in ${removalLayout.privateEntries.join(', ')} — this cannot be undone.`}
+                    >
                       <Checkbox
                         checked={privateDeletionAcknowledged}
-                        disabled={isBusy}
                         onCheckedChange={(checked) =>
                           onPrivateDeletionAcknowledged(checked)
                         }
-                        className="mt-0.5"
                       />
-                      <span>
-                        Delete the private files in{' '}
-                        {removalLayout.privateEntries.join(', ')} — this cannot
-                        be undone.
-                      </span>
-                    </label>
+                    </ChoiceField>
                   ) : null}
                 </ConfirmDialog>
 
@@ -478,7 +476,7 @@ export function ProviderAccountsFields({
                         className="space-y-3 pb-3"
                       >
                         <div className={spreadRow}>
-                          <h4 className="text-sm font-medium">From ChatGPT</h4>
+                          <h4 className={settingsHeading}>From ChatGPT</h4>
                           <Button
                             type="button"
                             variant="secondary"
@@ -594,7 +592,7 @@ export function ProviderAccountsFields({
                       </section>
                     ) : null}
                     {isCodex ? (
-                      <h4 className="text-sm font-medium">
+                      <h4 className={settingsHeading}>
                         Configured on this Mac
                       </h4>
                     ) : null}
@@ -752,9 +750,7 @@ export function ProviderAccountsFields({
 
       <Card render={<section />} padding="md" className="space-y-3">
         <div className="space-y-1">
-          <h4 className="text-sm font-semibold">
-            Connect an {providerName} account
-          </h4>
+          <h4 className={settingsHeading}>Connect an {providerName} account</h4>
           <p className="text-sm leading-relaxed text-ink-muted">
             {isCodex
               ? 'Codex opens a browser. Choose the OpenAI account and workspace you want to use; its signed-in identity and plan appear here after login.'

@@ -717,14 +717,14 @@ describe('ChatSurface', () => {
     expect(screen.getByText('Existing doc')).toBeInTheDocument()
     expect(screen.getByText('From Planning chat')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Artifact label'), {
+    fireEvent.change(screen.getByLabelText('Label'), {
       target: { value: 'Decision record' },
     })
-    fireEvent.change(screen.getByLabelText('Artifact value or path'), {
+    fireEvent.change(screen.getByLabelText('Value or path'), {
       target: { value: 'Use manual promotion first.' },
     })
-    selectOption('Artifact kind', 'Spec')
-    selectOption('Artifact source attempt', 'Planning chat')
+    selectOption('Kind', 'Spec')
+    selectOption('Source attempt', 'Planning chat')
     fireEvent.click(screen.getByRole('button', { name: /^add artifact$/i }))
 
     expect(addArtifact).toHaveBeenCalledWith({
@@ -739,7 +739,7 @@ describe('ChatSurface', () => {
     fireEvent.click(
       screen.getByRole('button', { name: /edit artifact existing doc/i }),
     )
-    fireEvent.change(screen.getByLabelText('Artifact value or path'), {
+    fireEvent.change(screen.getByLabelText('Value or path'), {
       target: { value: '/tmp/updated.md' },
     })
     fireEvent.click(screen.getByRole('button', { name: /save artifact/i }))

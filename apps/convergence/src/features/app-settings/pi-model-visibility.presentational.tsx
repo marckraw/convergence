@@ -1,6 +1,13 @@
 import type { FC } from 'react'
 import type { ProviderModelOption } from '@/entities/session'
-import { Button, Checkbox, EmptyState, SearchField } from '@convergence/ui'
+import {
+  Button,
+  Checkbox,
+  ChoiceField,
+  EmptyState,
+  SearchField,
+  settingsHeading,
+} from '@convergence/ui'
 
 interface PiModelVisibilityFieldsProps {
   providerExists: boolean
@@ -35,7 +42,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
       <section className="space-y-2">
         <div className={listHead}>
           <div>
-            <h4 className="text-sm font-medium">models.json</h4>
+            <h4 className={settingsHeading}>models.json</h4>
             <p className="text-xs text-ink-muted">
               These models are always visible in Pi model pickers.
             </p>
@@ -65,7 +72,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
       <section className="space-y-3">
         <div className={listHead}>
           <div>
-            <h4 className="text-sm font-medium">Additional Pi models</h4>
+            <h4 className={settingsHeading}>Additional Pi models</h4>
             <p className="text-xs text-ink-muted">
               Selected models are added alongside models.json entries.
             </p>
@@ -111,22 +118,22 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
                 const checked = selectedModelIdsSet.has(model.id)
                 return (
                   <li key={model.id}>
-                    <label className="flex min-h-14 items-center gap-3 px-3 py-2">
+                    <ChoiceField
+                      className="min-h-14 px-3 py-2"
+                      label={
+                        <span className="block truncate font-medium">
+                          {model.label}
+                        </span>
+                      }
+                      hint={<span className="block truncate">{model.id}</span>}
+                    >
                       <Checkbox
                         checked={checked}
                         onCheckedChange={(next) =>
                           onToggleModel(model.id, next)
                         }
                       />
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">
-                          {model.label}
-                        </span>
-                        <span className="block truncate text-xs text-ink-muted">
-                          {model.id}
-                        </span>
-                      </span>
-                    </label>
+                    </ChoiceField>
                   </li>
                 )
               })}
