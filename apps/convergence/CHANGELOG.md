@@ -1,5 +1,16 @@
 # convergence
 
+## 0.98.2
+
+### Patch Changes
+
+- d9d1cc2: The composer's card and the fork's show a focus ring while you type in them, and the composer's pickers are announced by what they pick. The provider and reasoning effort open a short list instead of a search, Speed no longer turns grey when it isn't Standard, the Codex quota and context pills and the new conversation's "Starting in …" pill wear the status pill's look, and the fork's field grows to nine lines like the composer's (MAR-3608).
+- 0a52e63: Removing an Artifact or a Space source and forgetting the Linear key now ask first, from a quiet red button. Project settings asks before it drops a context item you're still editing. Tooltips now show under a card's whole-card button (a Loom horse's access line and meter, a Needs-you card's lines), on Loom titles clamped to two lines and on long badges that are cut short. A terminal tab's ✕ shows ⌘W, and a terminal session's conversation dock says ⌘J hides it. The wire popover no longer shows a "Show the message carried" button that does nothing (MAR-3608).
+- 23e8900: Mission Control marks the conversation on screen with the selected fill instead of a ring, an open Hail with a quiet edge instead of the focus colour, a crew a card is in, a narrowing project filter and a picked crew chip with the raised chip, and History's picked run as the current one; a crew's emoji and colour are radio choices with a "none" of their own. A session on a host out of reach shows its own glyph, Loom's working horse spins in the working blue, History and "Last moved" times show the whole moment on hover, Loom's empty sheets say so in the empty-state look, and Mission Control's header line now meets the sidebar's (MAR-3608).
+- 69c7cd6: Parallel work's times read like every other time ("3 minutes ago", the whole moment on hover) and its branches fold with one control, chat's archived chats fold like the code tree's archive, the model picker's providers are a list with the chosen one selected, the resize lines show their hairline under the pointer and the focus colour for the keyboard, and the last hand-drawn boxes and empty lines in Settings, the tunnel editor and the debug log use the shared parts (MAR-3608).
+- 2a063f4: Sizes are one scale everywhere: Loom's sheet titles and folded strip sit on a 44 px button, compact notices and fields keep their small print without hand-set sizes, Settings', the fork's and Generate profile's model pickers look like the fields beside them, and the status bar's chips, the project actions panel, the Actions menu and the composer's pick lists use the app's own rows and pills.
+- a0a8289: "N need you" counts the same thing everywhere, on the collapsed sidebar, the status bar and Mission Control: conversations waiting on you for an approval or an answer, or whose run failed, and no longer finished work waiting for review. A failed run wears its red there. The feed's section of those is "Waiting on you", so "Needs you" names the feed. Words follow the house style: "attempt" in lower case, "Artifact" and "Mission Control" capitalised, "…" on every button that opens a dialog, one name for "Fork…", "Couldn’t …" failures with the reason on the line under them (Fork's included), and unavailable buttons say why (MAR-3608).
+
 ## 0.98.1
 
 ### Patch Changes
