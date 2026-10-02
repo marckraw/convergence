@@ -14,6 +14,8 @@ import type { Space, SpaceAttempt, SpaceArtifact } from '@/entities/space'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { UiProvider } from '@convergence/ui'
+import { answerConfirm } from '@/shared/testing/confirm'
 import { SpaceWorkboardDialogContainer } from './space-workboard.container'
 
 /** The sidebar's menus open it through the dialog store; it has no trigger of its own (NAV-34). */
@@ -312,15 +314,19 @@ describe('SpaceWorkboardDialogContainer', () => {
     })
   })
 
-  it('updates and removes manual Artifacts', async () => {
+  it('updates and removes manual Artifacts, asking first', async () => {
     mockElectronAPI.space.listArtifacts.mockResolvedValue([artifact])
-    render(<SpaceWorkboardDialogContainer />)
+    render(
+      <UiProvider>
+        <SpaceWorkboardDialogContainer />
+      </UiProvider>,
+    )
 
     openSpaces()
     await screen.findByDisplayValue('Public PR')
     selectOption(/status for public pr/i, 'Ready')
     fireEvent.click(
-      screen.getByRole('button', { name: /remove artifact public pr/i }),
+      screen.getByRole('button', { name: 'Remove Artifact Public PR…' }),
     )
 
     await waitFor(() => {
@@ -328,7 +334,30 @@ describe('SpaceWorkboardDialogContainer', () => {
         status: 'ready',
       })
     })
+    // R5 (DLG-1): it can't be undone, so nothing goes until the answer.
+    // Mutation: delete without asking -> deleteArtifact is called here, red.
+    expect(mockElectronAPI.space.deleteArtifact).not.toHaveBeenCalled()
+    await answerConfirm('Remove Artifact')
     expect(mockElectronAPI.space.deleteArtifact).toHaveBeenCalledWith('o1')
+  })
+
+  it('keeps an Artifact when its removal is cancelled', async () => {
+    mockElectronAPI.space.listArtifacts.mockResolvedValue([artifact])
+    render(
+      <UiProvider>
+        <SpaceWorkboardDialogContainer />
+      </UiProvider>,
+    )
+
+    openSpaces()
+    await screen.findByDisplayValue('Public PR')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Artifact Public PR…' }),
+    )
+    await answerConfirm('Cancel')
+
+    expect(mockElectronAPI.space.deleteArtifact).not.toHaveBeenCalled()
+    expect(screen.getByDisplayValue('Public PR')).toBeInTheDocument()
   })
 
   it('discovers and accepts branch Artifact suggestions', async () => {

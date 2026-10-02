@@ -9,6 +9,7 @@ import {
 import { UiProvider } from '@convergence/ui'
 import type { ComponentProps } from 'react'
 import { selectOption } from '@/shared/testing/select-option'
+import { answerConfirm } from '@/shared/testing/confirm'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { useContextDrillStore } from '@/entities/context-drill'
 import type {
@@ -583,7 +584,11 @@ describe('ChatSurface', () => {
       deleteSource,
     })
 
-    render(<ChatSurface selectedSpaceId="space-1" />)
+    render(
+      <UiProvider>
+        <ChatSurface selectedSpaceId="space-1" />
+      </UiProvider>,
+    )
     fireEvent.click(screen.getByRole('tab', { name: /sources/i }))
 
     expect(screen.getByText('brief.md')).toBeInTheDocument()
@@ -596,9 +601,17 @@ describe('ChatSurface', () => {
       ])
     })
 
+    // A source's copy can't be brought back, so removing it asks (R5,
+    // DLG-1). Mutation: delete without asking -> called before the answer.
     fireEvent.click(
-      screen.getByRole('button', { name: /remove source brief.md/i }),
+      screen.getByRole('button', { name: 'Remove source brief.md…' }),
     )
+    await answerConfirm('Cancel')
+    expect(deleteSource).not.toHaveBeenCalled()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove source brief.md…' }),
+    )
+    await answerConfirm('Remove source')
     expect(deleteSource).toHaveBeenCalledWith('source-1', 'space-1')
   })
 
@@ -711,7 +724,11 @@ describe('ChatSurface', () => {
       globalChatSessions: [globalSession],
     })
 
-    render(<ChatSurface selectedSpaceId="space-1" />)
+    render(
+      <UiProvider>
+        <ChatSurface selectedSpaceId="space-1" />
+      </UiProvider>,
+    )
     fireEvent.click(screen.getByRole('tab', { name: /artifacts/i }))
 
     expect(screen.getByText('Existing doc')).toBeInTheDocument()
@@ -752,9 +769,17 @@ describe('ChatSurface', () => {
       status: 'ready',
     })
 
+    // R5 (DLG-1): the Artifact (and a file copied with it) can't be brought
+    // back. Mutation: delete without asking -> called before the answer.
     fireEvent.click(
-      screen.getByRole('button', { name: /remove artifact existing doc/i }),
+      screen.getByRole('button', { name: 'Remove Artifact Existing doc…' }),
     )
+    await answerConfirm('Cancel')
+    expect(deleteArtifact).not.toHaveBeenCalled()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Artifact Existing doc…' }),
+    )
+    await answerConfirm('Remove Artifact')
     expect(deleteArtifact).toHaveBeenCalledWith('artifact-1', 'space-1')
 
     fireEvent.click(screen.getByRole('button', { name: /add file/i }))

@@ -33,6 +33,7 @@ import {
   type SpaceArtifactSuggestion,
 } from './space-artifact-suggestions.pure'
 import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
+import { useConfirm } from '@convergence/ui'
 
 const emptyDraft: SpaceDraft = {
   title: '',
@@ -139,6 +140,8 @@ export const SpaceWorkboardDialogContainer: FC<{
   const addArtifact = useSpaceStore((s) => s.addArtifact)
   const updateArtifact = useSpaceStore((s) => s.updateArtifact)
   const deleteArtifact = useSpaceStore((s) => s.deleteArtifact)
+  // Removing an Artifact can't be undone, so it asks first (R5, DLG-1).
+  const confirm = useConfirm()
   const synthesize = useSpaceStore((s) => s.synthesize)
   const clearError = useSpaceStore((s) => s.clearError)
   const projects = useProjectStore((s) => s.projects)
@@ -445,9 +448,18 @@ export const SpaceWorkboardDialogContainer: FC<{
   const handleDeleteArtifact = useCallback(
     async (artifactId: string) => {
       if (!selectedSpace) return
+      const artifact = selectedArtifacts.find((item) => item.id === artifactId)
+      const confirmed = await confirm({
+        title: `Remove the Artifact “${artifact?.label ?? 'Untitled'}”?`,
+        description:
+          'It leaves this Space for good, and a file copied into the Space goes with it.',
+        confirmLabel: 'Remove Artifact',
+        variant: 'danger',
+      })
+      if (!confirmed) return
       await deleteArtifact(artifactId, selectedSpace.id)
     },
-    [deleteArtifact, selectedSpace],
+    [confirm, deleteArtifact, selectedArtifacts, selectedSpace],
   )
 
   const handleDiscoverArtifacts = useCallback(async () => {

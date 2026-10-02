@@ -313,12 +313,22 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     await addSourcesFromPaths(selectedSpaceId, paths)
   }, [addSourcesFromPaths, selectedSpaceId])
 
+  // Removing a source or an Artifact can't be undone: each asks first (R5).
   const handleDeleteSource = useCallback(
     async (sourceId: string) => {
       if (!selectedSpaceId) return
+      const source = selectedSpaceSources.find((item) => item.id === sourceId)
+      const confirmed = await confirm({
+        title: `Remove the source “${source?.filename ?? 'Untitled'}”?`,
+        description:
+          'Its copy in this Space is deleted for good. The file it came from isn’t touched.',
+        confirmLabel: 'Remove source',
+        variant: 'danger',
+      })
+      if (!confirmed) return
       await deleteSource(sourceId, selectedSpaceId)
     },
-    [deleteSource, selectedSpaceId],
+    [confirm, deleteSource, selectedSpaceId, selectedSpaceSources],
   )
 
   const handleSubmitArtifact = useCallback(async () => {
@@ -367,13 +377,30 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const handleDeleteArtifact = useCallback(
     async (artifactId: string) => {
       if (!selectedSpaceId) return
+      const artifact = selectedSpaceArtifacts.find(
+        (item) => item.id === artifactId,
+      )
+      const confirmed = await confirm({
+        title: `Remove the Artifact “${artifact?.label ?? 'Untitled'}”?`,
+        description:
+          'It leaves this Space for good, and a file copied into the Space goes with it.',
+        confirmLabel: 'Remove Artifact',
+        variant: 'danger',
+      })
+      if (!confirmed) return
       await deleteArtifact(artifactId, selectedSpaceId)
       if (editingArtifactId === artifactId) {
         setArtifactDraft(DEFAULT_ARTIFACT_DRAFT)
         setEditingArtifactId(null)
       }
     },
-    [deleteArtifact, editingArtifactId, selectedSpaceId],
+    [
+      confirm,
+      deleteArtifact,
+      editingArtifactId,
+      selectedSpaceArtifacts,
+      selectedSpaceId,
+    ],
   )
 
   const handleAddArtifactFiles = useCallback(async () => {

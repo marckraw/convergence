@@ -223,7 +223,7 @@ export const Default: Story = {
       'https://github.com/marckraw/convergence/pull/915',
     )
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Remove Artifact PR #915' }),
+      within(dialog).getByRole('button', { name: 'Remove Artifact PR #915…' }),
     )
     await expect(args.onDeleteArtifact).toHaveBeenCalledWith('artifact-pr')
     await expect(
