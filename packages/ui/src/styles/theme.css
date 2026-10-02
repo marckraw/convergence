@@ -255,8 +255,8 @@
 
   /*
    * Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog(-sm|-md|-xl|-2xl),
-   * max-w-picker, max-h-picker. max-h-dialog is a dialog's greatest height: 720 px, or 80% of
-   * the window when that is less.
+   * max-w-picker, max-h-picker, h-dialog-tall. max-h-dialog is a dialog's greatest height: 720 px,
+   * or 80% of the window when that is less.
    */
   --container-conversation: var(--layout-conversation);
   --container-dialog: var(--layout-dialog);
@@ -269,6 +269,8 @@
   --width-work-panel: var(--layout-work-panel);
   --max-height-dialog: min(80vh, var(--layout-dialog-height));
   --max-height-picker: var(--layout-picker);
+  /* h-dialog-tall and max-h-dialog-tall: a tall dialog's one height */
+  --height-dialog-tall: var(--layout-dialog-tall);
 
   /* Blur: backdrop-blur-glass (tooltips, R8), backdrop-blur-scrim (behind dialogs) */
   --blur-glass: var(--glass-blur);

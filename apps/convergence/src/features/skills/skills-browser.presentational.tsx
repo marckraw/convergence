@@ -1,13 +1,10 @@
 import { useRef, type FC, type ReactElement, type ReactNode } from 'react'
 import {
-  BookOpen,
   LayoutDashboard,
   LayoutGrid,
   Library,
   List as ListIcon,
-  Loader2,
   RefreshCw,
-  Search,
 } from 'lucide-react'
 import type {
   ProjectSkillCatalog,
@@ -17,16 +14,19 @@ import type {
 } from '@/entities/skill'
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import {
-  Button,
   cn,
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Input,
+  EmptyState,
+  IconButton,
+  SearchField,
+  sectionLabel,
+  SegmentedControl,
+  SegmentedControlItem,
   Select,
   SelectContent,
   SelectItem,
@@ -34,6 +34,7 @@ import {
   SelectValue,
   Sheet,
   SheetContent,
+  Spinner,
 } from '@convergence/ui'
 import type {
   SkillBrowserFilters,
@@ -100,6 +101,9 @@ const VIEW_MODES: Array<{
   { id: 'list', label: 'List', icon: ListIcon },
 ]
 
+/** A pane's own scroll, inside the dialog's body. */
+const paneScroll = 'app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5'
+
 const GROUP_BY_OPTIONS: Array<{ value: SkillGroupBy; label: string }> = [
   { value: 'provider', label: 'Provider' },
   { value: 'scope', label: 'Scope' },
@@ -112,31 +116,22 @@ function renderViewSwitcher(
   onChange: (mode: SkillsViewMode) => void,
 ) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-0.5">
+    <SegmentedControl
+      aria-label="View"
+      size="sm"
+      value={value}
+      onValueChange={(next: SkillsViewMode) => onChange(next)}
+    >
       {VIEW_MODES.map((mode) => {
         const Icon = mode.icon
-        const active = mode.id === value
         return (
-          <Button
-            key={mode.id}
-            type="button"
-            variant="ghost"
-            onClick={() => onChange(mode.id)}
-            aria-pressed={active}
-            size="lg"
-            className={cn(
-              'h-auto gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium',
-              active
-                ? 'bg-background text-foreground shadow-sm hover:bg-background'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
+          <SegmentedControlItem key={mode.id} value={mode.id}>
+            <Icon aria-hidden />
             {mode.label}
-          </Button>
+          </SegmentedControlItem>
         )
       })}
-    </div>
+    </SegmentedControl>
   )
 }
 
@@ -162,7 +157,7 @@ function renderFilterSelect({
       <SelectTrigger
         size="md"
         aria-label={label}
-        className={cn('w-[150px] normal-case tracking-normal', className)}
+        className={cn('w-37.5', className)}
       >
         <SelectValue />
       </SelectTrigger>
@@ -194,19 +189,19 @@ function renderFilterToolbar({
   | 'onFiltersChange'
 >) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 px-6 py-3">
-      <div className="relative min-w-[200px] flex-1">
-        <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          size="lg"
-          value={filters.query}
-          onChange={(event) =>
-            onFiltersChange({ query: event.currentTarget.value })
-          }
-          placeholder="Search skills"
-          className="pl-8"
-        />
-      </div>
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line-soft px-6 py-3">
+      <SearchField
+        size="lg"
+        value={filters.query}
+        onChange={(event) =>
+          onFiltersChange({ query: event.currentTarget.value })
+        }
+        onClear={() => onFiltersChange({ query: '' })}
+        clearLabel="Clear the skill search"
+        placeholder="Search skills"
+        aria-label="Search skills"
+        className="min-w-50 flex-1"
+      />
 
       {renderFilterSelect({
         label: 'Origin',
@@ -282,7 +277,7 @@ function renderFilterToolbar({
 
       {viewMode === 'grid' ? (
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          <span aria-hidden className={sectionLabel}>
             Group by
           </span>
           {renderFilterSelect({
@@ -290,7 +285,7 @@ function renderFilterToolbar({
             value: groupBy,
             onChange: (value) => onGroupByChange(value as SkillGroupBy),
             options: GROUP_BY_OPTIONS,
-            className: 'w-[130px]',
+            className: 'w-32.5',
           })}
         </div>
       ) : null}
@@ -303,38 +298,40 @@ function renderCatalogPlaceholder({
   catalog,
   catalogError,
   isCatalogLoading,
+  onRefresh,
 }: Pick<
   SkillsBrowserDialogProps,
-  'projectName' | 'catalog' | 'catalogError' | 'isCatalogLoading'
+  'projectName' | 'catalog' | 'catalogError' | 'isCatalogLoading' | 'onRefresh'
 >): ReactNode | null {
   const hasCatalog = Boolean(catalog)
   if (!projectName) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Open a project to browse skills.
-      </p>
+      <EmptyState
+        title="No project open"
+        detail="Open a project to browse skills."
+      />
     )
   }
   if (catalogError && !hasCatalog) {
     return (
-      <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {catalogError}
-      </div>
+      <EmptyState
+        state="failed"
+        title="Couldn't read the skills"
+        detail={catalogError}
+        onRetry={onRefresh}
+        retrying={isCatalogLoading}
+      />
     )
   }
   if (isCatalogLoading && !hasCatalog) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading skills...
-      </div>
-    )
+    return <EmptyState state="loading" title="Loading skills…" />
   }
   if (hasCatalog && catalog?.providers.length === 0 && !isCatalogLoading) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No skill-capable providers are currently available.
-      </p>
+      <EmptyState
+        title="No skill-capable providers"
+        detail="None of the installed providers lists skills."
+      />
     )
   }
   return null
@@ -385,6 +382,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
     catalog,
     catalogError,
     isCatalogLoading,
+    onRefresh,
   })
 
   const showToolbar = viewMode !== 'overview' && !placeholder
@@ -392,36 +390,56 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="h-[min(92vh,1120px)] max-h-[min(92vh,1120px)] w-[min(1680px,calc(100vw-3rem))]">
-        <DialogHeader className="border-b border-border/70 px-6 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <Library className="h-5 w-5 text-muted-foreground" />
-                <DialogTitle>Skills</DialogTitle>
-              </div>
-              <DialogDescription className="mt-1">
-                {projectName ? (
-                  <>
-                    <span className="tabular-nums">{filteredSkillCount}</span>/
-                    <span className="tabular-nums">{totalSkillCount}</span>{' '}
-                    skills in {projectName}.
-                  </>
-                ) : (
-                  'Select a project to browse provider skills.'
-                )}
-              </DialogDescription>
-              {loadingProviderNames.length > 0 ? (
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span className="truncate">
-                    Loading {loadingProviderNames.join(', ')}…
-                  </span>
-                </div>
-              ) : null}
-            </div>
-            {renderViewSwitcher(viewMode, onViewModeChange)}
-          </div>
+      {/*
+        A catalogue you look at and leave (R6): its view and Refresh in the
+        header, no footer.
+      */}
+      <DialogContent size="full" height="tall">
+        <DialogHeader
+          actions={
+            <>
+              {renderViewSwitcher(viewMode, onViewModeChange)}
+              <IconButton
+                label="Refresh"
+                size="sm"
+                variant="ghost"
+                onClick={onRefresh}
+                pending={isCatalogLoading}
+                disabledReason={
+                  projectName ? undefined : 'Open a project first.'
+                }
+              >
+                <RefreshCw />
+              </IconButton>
+            </>
+          }
+        >
+          <DialogTitle className="flex items-center gap-2">
+            <Library aria-hidden className="size-5 text-ink-muted" />
+            Skills
+          </DialogTitle>
+          <DialogDescription>
+            {projectName ? (
+              <>
+                <span className="tabular-nums">{filteredSkillCount}</span>/
+                <span className="tabular-nums">{totalSkillCount}</span> skills
+                in {projectName}.
+              </>
+            ) : (
+              'Select a project to browse provider skills.'
+            )}
+          </DialogDescription>
+          {loadingProviderNames.length > 0 ? (
+            <p
+              role="status"
+              className="flex items-center gap-1.5 text-xs text-ink-muted"
+            >
+              <Spinner size="xs" />
+              <span className="truncate">
+                Loading {loadingProviderNames.join(', ')}…
+              </span>
+            </p>
+          ) : null}
         </DialogHeader>
 
         {showToolbar ? renderFilterToolbar(props) : null}
@@ -430,7 +448,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
           {placeholder ? (
             <div className="p-6">{placeholder}</div>
           ) : viewMode === 'overview' ? (
-            <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+            <div className={paneScroll}>
               <SkillsOverviewView
                 overview={overview}
                 onJumpToGrid={onJumpToGrid}
@@ -438,7 +456,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
             </div>
           ) : viewMode === 'grid' ? (
             <>
-              <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+              <div className={paneScroll}>
                 <SkillsGrid
                   groups={gridGroups}
                   selectedSkillId={selectedSkillId}
@@ -465,7 +483,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
                   }
                   container={detailArea}
                   showClose={false}
-                  className="w-[min(760px,88%)] border-border/70 bg-background"
+                  className="w-7/8 max-w-190 border-line-soft bg-canvas"
                 >
                   {selectedSkill ? (
                     <SkillDetailPane
@@ -490,8 +508,8 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
               </Sheet>
             </>
           ) : (
-            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)]">
-              <div className="app-scrollbar h-full min-h-0 overflow-y-auto border-b border-border/70 p-4 lg:border-r lg:border-b-0">
+            <div className="flex h-full min-h-0 flex-col lg:flex-row">
+              <div className="app-scrollbar min-h-0 overflow-y-auto border-b border-line-soft p-4 lg:w-95 lg:shrink-0 lg:border-r lg:border-b-0">
                 <SkillsListPane
                   groups={groups}
                   selectedSkillId={selectedSkillId}
@@ -517,26 +535,6 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
             </div>
           )}
         </div>
-
-        <DialogFooter className="items-center border-t border-border/70 px-6 py-3">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onRefresh}
-            disabled={!projectName || isCatalogLoading}
-          >
-            <RefreshCw
-              className={cn('h-4 w-4', isCatalogLoading && 'animate-spin')}
-            />
-            Refresh
-          </Button>
-          {selectedSkill?.path ? (
-            <div className="mr-auto hidden min-w-0 items-center gap-2 text-xs text-muted-foreground sm:flex">
-              <BookOpen className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{selectedSkill.path}</span>
-            </div>
-          ) : null}
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

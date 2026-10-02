@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { chartTokens } from './chart.tokens'
 import { crewTokens } from './crew.tokens'
 import { layoutPx } from './layout.tokens'
 import { terminalTokens } from './terminal.tokens'
@@ -80,6 +81,35 @@ describe('terminal.tokens.ts mirrors the --terminal-* tokens', () => {
     for (const [, name, value] of terminal) {
       expect(value, `--${name}`).not.toMatch(/light-dark\(/)
     }
+  })
+})
+
+describe('chart.tokens.ts mirrors the --chart-* tokens', () => {
+  /** The colour a light-dark() token gives in both themes; it must be one. */
+  const both = (name: string): string => {
+    const value = token(name)
+    const pair = value.match(/^light-dark\((.+), (.+)\)$/)
+    if (pair === null) return value
+    expect(pair[1], `--${name} is one colour in both themes`).toBe(pair[2])
+    return pair[1]
+  }
+
+  /** rgb(148 163 184 / 0.22) and rgba(148, 163, 184, 0.22) are one colour. */
+  const channels = (colour: string): string =>
+    colour
+      .replace(/^rgba?\(|\)$/g, '')
+      .split(/[\s,/]+/)
+      .join(' ')
+
+  it.each(chartTokens.series.map((colour, index) => [index + 1, colour]))(
+    'the series colour %i is its --chart- token',
+    (index, colour) => {
+      expect(colour).toBe(both(`chart-${index}`))
+    },
+  )
+
+  it('the grid is --chart-grid', () => {
+    expect(channels(chartTokens.grid)).toBe(channels(both('chart-grid')))
   })
 })
 

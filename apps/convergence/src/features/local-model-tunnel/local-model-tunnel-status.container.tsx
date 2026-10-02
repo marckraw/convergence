@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import {
-  formatLocalModelTunnelEndpoint,
   localModelTunnelApi,
   selectLocalModelTunnelAggregate,
   selectPreferredLocalModelTunnelProfileId,
@@ -11,23 +10,21 @@ import {
 } from '@/entities/local-model-tunnel'
 import {
   Button,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  EmptyState,
+  FormDialog,
+  FormError,
   IconButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  SectionLabel,
   Tooltip,
   useConfirm,
 } from '@convergence/ui'
 import { Pencil, Plus } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
 import { TunnelPopoverRow } from './tunnel-popover-row.presentational'
+import { TunnelProfileList } from './tunnel-profile-list.presentational'
 import { TunnelProfileEditor } from './tunnel-profile-editor.presentational'
 
 const NEW_PROFILE_INPUT: LocalModelTunnelProfileInput = {
@@ -75,7 +72,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
     return localModelTunnelApi.onChanged(ingest)
   }, [load, ingest])
 
-  const profiles = snapshot?.profiles ?? []
+  const profiles = useMemo(() => snapshot?.profiles ?? [], [snapshot])
   const aggregate = useMemo(
     () => selectLocalModelTunnelAggregate(snapshot),
     [snapshot],
@@ -128,6 +125,32 @@ export const LocalModelTunnelStatusContainer: FC = () => {
     if (created) setSelectedProfileId(created.profile.id)
   }
 
+  /**
+   * Tunnels save as you go, each profile with its own Save: Done with that
+   * profile's changes unsaved asks before dropping them (DLG-10, R5).
+   */
+  const handleManageOpenChange = async (next: boolean) => {
+    if (next) {
+      setManageOpen(true)
+      return
+    }
+    const unsaved =
+      selected !== undefined &&
+      draft !== null &&
+      JSON.stringify(draft) !== JSON.stringify(profileToInput(selected.profile))
+    if (unsaved) {
+      const discard = await confirm({
+        title: `Discard your changes to “${selected.profile.name}”?`,
+        description: 'They haven’t been saved to the profile.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        variant: 'danger',
+      })
+      if (!discard) return
+    }
+    setManageOpen(false)
+  }
+
   const handleSaveProfile = async () => {
     if (!selected || !draft) return
     await updateProfile(selected.profile.id, draft)
@@ -160,13 +183,13 @@ export const LocalModelTunnelStatusContainer: FC = () => {
                 type="button"
                 variant="ghost"
                 data-testid="local-model-tunnel-pill"
-                className="h-auto max-w-[280px] rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium shadow-none hover:bg-accent"
+                className="h-auto max-w-70 rounded-full border border-line-soft bg-canvas/50 px-2 py-0.5 text-2xs font-medium shadow-none hover:bg-fill-hover"
               >
                 <StatusDot state={aggregate.state} />
-                <span className="min-w-0 truncate text-foreground">
+                <span className="min-w-0 truncate text-ink">
                   {aggregate.label}
                 </span>
-                <span className="truncate text-muted-foreground/85">
+                <span className="truncate text-ink-muted">
                   {aggregate.detail}
                 </span>
               </Button>
@@ -177,15 +200,15 @@ export const LocalModelTunnelStatusContainer: FC = () => {
           aria-label="Local model tunnels"
           align="start"
           side="top"
-          className="w-[min(420px,calc(100vw-2rem))] p-0"
+          className="w-105 max-w-(--available-width) p-0"
         >
-          <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-3">
+          <div className="flex items-start justify-between gap-3 border-b border-line-soft px-4 py-3">
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-sm font-semibold">
                 <StatusDot state={aggregate.state} />
                 <span>{aggregate.label}</span>
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-xs text-ink-muted">
                 {aggregate.detail}
               </p>
             </div>
@@ -194,7 +217,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
               variant="secondary"
               onClick={() => handleOpenManage()}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="size-3.5" />
               Edit
             </Button>
           </div>
@@ -213,101 +236,71 @@ export const LocalModelTunnelStatusContainer: FC = () => {
             ))}
           </div>
           {error ? (
-            <p className="border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+            <FormError className="border-t border-line-soft px-4 py-2">
               {error}
-            </p>
+            </FormError>
           ) : null}
         </PopoverContent>
       </Popover>
 
-      <Dialog open={manageOpen} onOpenChange={(open) => setManageOpen(open)}>
-        <DialogContent className="h-[min(88vh,780px)] w-[min(980px,calc(100vw-2rem))] max-h-[min(88vh,780px)]">
-          <DialogHeader>
-            <DialogTitle>Local model tunnels</DialogTitle>
-            <DialogDescription>
-              Manage SSH forwards for local or remote model runtimes.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="p-0">
-            <div className="flex min-h-full flex-col sm:flex-row">
-              <aside className="shrink-0 border-b border-border/70 bg-card/30 p-3 sm:w-64 sm:border-r sm:border-b-0">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Profiles
-                  </p>
-                  <IconButton
-                    label="Add local model tunnel profile"
-                    type="button"
-                    variant="ghost"
-                    onClick={() => void handleAddProfile()}
-                    size="sm"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </IconButton>
-                </div>
-                <div className="flex gap-2 overflow-x-auto sm:flex-col sm:overflow-visible">
-                  {profiles.map((item) => (
-                    <Button
-                      key={item.profile.id}
-                      type="button"
-                      variant={
-                        item.profile.id === selectedProfileId
-                          ? 'tonal'
-                          : 'ghost'
-                      }
-                      onClick={() => setSelectedProfileId(item.profile.id)}
-                      className="h-auto min-w-48 justify-start rounded-lg py-3 text-left sm:min-w-0"
-                    >
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-2">
-                          <StatusDot state={item.status.state} />
-                          <span className="truncate font-medium">
-                            {item.profile.name}
-                          </span>
-                        </span>
-                        <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-                          {formatLocalModelTunnelEndpoint(item)}
-                        </span>
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              </aside>
-
-              <div className="min-w-0 flex-1 p-6">
-                {selected && draft ? (
-                  <TunnelProfileEditor
-                    item={selected}
-                    draft={draft}
-                    error={error}
-                    isMutating={isMutatingProfileId === selected.profile.id}
-                    onDraftChange={setDraft}
-                    onStart={() => void start(selected.profile.id)}
-                    onStop={() => void stop(selected.profile.id)}
-                    onRestart={() => void restart(selected.profile.id)}
-                    onSave={() => void handleSaveProfile()}
-                    onDelete={() => void handleDeleteProfile()}
-                  />
-                ) : (
-                  <div className="rounded-lg border border-dashed border-border bg-card/30 px-4 py-8 text-center text-sm text-muted-foreground">
-                    No tunnel profile selected.
-                  </div>
-                )}
-              </div>
+      {/*
+        Each profile action is kept as it is done, so the tunnels end in Done
+        (R6); a profile's edits keep their own Save.
+      */}
+      <FormDialog
+        open={manageOpen}
+        onOpenChange={(next) => void handleManageOpenChange(next)}
+        title="Local model tunnels"
+        description="Manage SSH forwards for local or remote model runtimes."
+        size="xl"
+        height="tall"
+        flush
+        saves="as-you-go"
+      >
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <aside className="shrink-0 border-b border-line-soft bg-surface/30 p-3 sm:w-64 sm:border-r sm:border-b-0">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <SectionLabel as="h3">Profiles</SectionLabel>
+              <IconButton
+                label="Add local model tunnel profile"
+                type="button"
+                variant="ghost"
+                onClick={() => void handleAddProfile()}
+                size="sm"
+              >
+                <Plus className="size-4" />
+              </IconButton>
             </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setManageOpen(false)}
-              size="lg"
-            >
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <TunnelProfileList
+              profiles={profiles}
+              selectedProfileId={selectedProfileId}
+              onSelect={setSelectedProfileId}
+            />
+          </aside>
+
+          <div className="app-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
+            {selected && draft ? (
+              <TunnelProfileEditor
+                item={selected}
+                draft={draft}
+                error={error}
+                isMutating={isMutatingProfileId === selected.profile.id}
+                onDraftChange={setDraft}
+                onStart={() => void start(selected.profile.id)}
+                onStop={() => void stop(selected.profile.id)}
+                onRestart={() => void restart(selected.profile.id)}
+                onSave={() => void handleSaveProfile()}
+                onDelete={() => void handleDeleteProfile()}
+              />
+            ) : (
+              <EmptyState
+                title="No tunnel profile selected"
+                detail="Choose one from the list, or add one."
+              />
+            )}
+          </div>
+        </div>
+      </FormDialog>
     </>
   )
 }

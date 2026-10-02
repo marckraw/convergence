@@ -67,10 +67,10 @@ export const ReleaseNotesDialogContainer: FC<
             className="w-full justify-between px-2"
           >
             <span className="flex items-center gap-2">
-              <Info className="h-3.5 w-3.5" />
-              What&apos;s New
+              <Info className="size-3.5" />
+              What&apos;s new
             </span>
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-2xs text-ink-muted">
               v{bundle.currentVersion}
             </span>
           </Button>

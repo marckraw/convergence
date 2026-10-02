@@ -42,9 +42,10 @@ export const SpaceSessionLinkDialogContainer: FC = () => {
     [globalSessions, sessionId, sessions],
   )
 
-  const attemptsForSession = sessionId
-    ? (attemptsBySessionId[sessionId] ?? [])
-    : []
+  const attemptsForSession = useMemo(
+    () => (sessionId ? (attemptsBySessionId[sessionId] ?? []) : []),
+    [attemptsBySessionId, sessionId],
+  )
 
   const linkedSpaces = useMemo(
     () =>

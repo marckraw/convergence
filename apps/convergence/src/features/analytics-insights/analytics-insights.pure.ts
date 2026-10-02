@@ -10,6 +10,7 @@ import type {
   DailyActivityPoint,
   WeekdayHourActivityPoint,
 } from '@/entities/analytics'
+import { chartTokens } from '@convergence/ui'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -54,7 +55,13 @@ export const WEEKDAY_FULL_NAMES_MONDAY_FIRST = [
   'Sunday',
 ]
 
-const CHART_PALETTE = ['#2563eb', '#14b8a6', '#f59e0b', '#7c3aed', '#ef4444']
+/**
+ * ChartGPU draws on the GPU and can't read CSS, so the series come from the
+ * chart tokens' mirror (R1): the first two are what the legends call series
+ * 1 and 2.
+ */
+const CHART_PALETTE = [...chartTokens.series]
+const [SERIES_1, SERIES_2] = chartTokens.series
 
 function normalizeTooltipParams(
   params: TooltipParams | ReadonlyArray<TooltipParams>,
@@ -176,16 +183,23 @@ function resolveDateLabelForTimestamp(
   return timestampToDateKey(timestamp)
 }
 
-export function buildDailyActivityChartOptions(
-  points: DailyActivityPoint[],
-): ChartGPUOptions {
+/**
+ * What the two charts over days share: the palette and grid lines, a time
+ * axis over the points, a value axis from zero, and an axis tooltip titled
+ * by its day (or the chart's name when it has none).
+ */
+function buildDayChartBase(
+  points: ReadonlyArray<{ date: string }>,
+  chartName: string,
+  gridLeft: number,
+): Omit<ChartGPUOptions, 'series'> {
   const { min, max } = buildTimeAxisBounds(points)
 
   return {
     palette: CHART_PALETTE,
-    grid: { left: 40, right: 16, top: 12, bottom: 28 },
+    grid: { left: gridLeft, right: 16, top: 12, bottom: 28 },
     gridLines: {
-      color: 'rgba(148, 163, 184, 0.22)',
+      color: chartTokens.grid,
       horizontal: { count: 4 },
       vertical: false,
     },
@@ -197,17 +211,25 @@ export function buildDailyActivityChartOptions(
       trigger: 'axis',
       formatter: createTooltipFormatter((params) => {
         const [first] = params
-        if (!first) return 'Daily activity'
+        if (!first) return chartName
         const date = resolveDateLabelForTimestamp(points, first.value[0])
-        return date ? formatDateLabel(date) : 'Daily activity'
+        return date ? formatDateLabel(date) : chartName
       }),
     },
+  }
+}
+
+export function buildDailyActivityChartOptions(
+  points: DailyActivityPoint[],
+): ChartGPUOptions {
+  return {
+    ...buildDayChartBase(points, 'Daily activity', 40),
     series: [
       {
         type: 'area',
         name: 'User messages',
-        color: '#2563eb',
-        areaStyle: { opacity: 0.18, color: '#2563eb' },
+        color: SERIES_1,
+        areaStyle: { opacity: 0.18, color: SERIES_1 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.userMessages,
@@ -216,8 +238,8 @@ export function buildDailyActivityChartOptions(
       {
         type: 'line',
         name: 'Turns',
-        color: '#14b8a6',
-        lineStyle: { width: 2, color: '#14b8a6' },
+        color: SERIES_2,
+        lineStyle: { width: 2, color: SERIES_2 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.turnsCompleted,
@@ -231,35 +253,15 @@ export function buildConversationBalanceChartOptions(
   overview: AnalyticsOverview,
 ): ChartGPUOptions {
   const points: ConversationBalancePoint[] = overview.conversationBalance
-  const { min, max } = buildTimeAxisBounds(points)
 
   return {
-    palette: CHART_PALETTE,
-    grid: { left: 44, right: 16, top: 12, bottom: 28 },
-    gridLines: {
-      color: 'rgba(148, 163, 184, 0.22)',
-      horizontal: { count: 4 },
-      vertical: false,
-    },
-    xAxis: { type: 'time', min, max },
-    yAxis: { type: 'value', min: 0 },
-    legend: { show: false },
-    tooltip: {
-      show: true,
-      trigger: 'axis',
-      formatter: createTooltipFormatter((params) => {
-        const [first] = params
-        if (!first) return 'Conversation balance'
-        const date = resolveDateLabelForTimestamp(points, first.value[0])
-        return date ? formatDateLabel(date) : 'Conversation balance'
-      }),
-    },
+    ...buildDayChartBase(points, 'Conversation balance', 44),
     series: [
       {
         type: 'line',
         name: 'User words',
-        color: '#2563eb',
-        lineStyle: { width: 2, color: '#2563eb' },
+        color: SERIES_1,
+        lineStyle: { width: 2, color: SERIES_1 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.userWords,
@@ -268,8 +270,8 @@ export function buildConversationBalanceChartOptions(
       {
         type: 'area',
         name: 'Assistant words',
-        color: '#14b8a6',
-        areaStyle: { opacity: 0.16, color: '#14b8a6' },
+        color: SERIES_2,
+        areaStyle: { opacity: 0.16, color: SERIES_2 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.assistantWords,

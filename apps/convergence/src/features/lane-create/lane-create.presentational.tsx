@@ -1,16 +1,16 @@
 import type { FC } from 'react'
-import { CheckCircle2, GitBranch, Loader2 } from 'lucide-react'
+import { CheckCircle2, GitBranch } from 'lucide-react'
 import type { LaneCreateProgressPhase } from '@/entities/project'
 import { laneProgressLabel } from '@/entities/project'
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  FormDialog,
   Input,
+  Notice,
+  Spinner,
 } from '@convergence/ui'
 
 export type LaneCreateStage =
@@ -38,6 +38,13 @@ interface LaneCreateDialogProps {
   onSwitchToLane: () => void
 }
 
+/** Why Create lane waits, or nothing when it can go. */
+function missingName(laneName: string, branchName: string): string | undefined {
+  if (laneName.trim().length === 0) return 'Name the lane first.'
+  if (branchName.trim().length === 0) return 'Name the branch first.'
+  return undefined
+}
+
 export const LaneCreateDialog: FC<LaneCreateDialogProps> = ({
   open,
   onOpenChange,
@@ -53,164 +60,118 @@ export const LaneCreateDialog: FC<LaneCreateDialogProps> = ({
   onSwitchToLane,
 }) => {
   const working = stage.kind === 'working'
-  const canSubmit =
-    stage.kind === 'form' &&
-    laneName.trim().length > 0 &&
-    branchName.trim().length > 0
+  const description = `A copy of ${rootName} with its own git and its own sessions, ignored files included.`
+  // The copy is not interruptible from here; the door stays open until it
+  // has said what happened.
+  const handleOpenChange = (next: boolean) => {
+    if (working) return
+    onOpenChange(next)
+  }
+
+  if (stage.kind === 'done') {
+    // Made: nothing is left to keep, so it ends in Done (R6).
+    return (
+      <FormDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title="New lane"
+        description={description}
+        saves="as-you-go"
+      >
+        <div className="space-y-4">
+          <p className="flex items-center gap-2 text-sm">
+            <CheckCircle2 className="size-4 text-success-ink" />
+            <span>
+              Lane <span className="font-medium">{laneName}</span> is ready on{' '}
+              <span className="font-mono text-xs">{branchName}</span>.
+            </span>
+          </p>
+          <p className="font-mono text-2xs break-all text-ink-muted">
+            {stage.lanePath}
+          </p>
+          {stage.copyMethod === 'bytes' ? (
+            <Notice tone="warning" title="Copied byte by byte">
+              This volume could not clone, so the files were copied
+              byte-by-byte. The lane works the same; it just took longer and
+              uses real disk.
+            </Notice>
+          ) : null}
+          {stage.warnings.map((warning) => (
+            <Notice key={warning} tone="warning" title={warning} />
+          ))}
+          <Button type="button" onClick={onSwitchToLane}>
+            Switch to lane
+          </Button>
+        </div>
+      </FormDialog>
+    )
+  }
 
   return (
-    <Dialog
+    <FormDialog
       open={open}
-      onOpenChange={(next) => {
-        // The copy is not interruptible from here; the door stays open until
-        // it has said what happened.
-        if (working) return
-        onOpenChange(next)
-      }}
+      onOpenChange={handleOpenChange}
+      title="New lane"
+      description={description}
+      saves="on-save"
+      onSave={onSubmit}
+      saveLabel="Create lane"
+      pendingLabel="Creating…"
+      pending={working}
+      saveDisabledReason={missingName(laneName, branchName)}
+      error={error}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New lane</DialogTitle>
-          <DialogDescription>
-            A copy of {rootName} with its own git and its own sessions, ignored
-            files included.
-          </DialogDescription>
-        </DialogHeader>
+      <div className="space-y-5">
+        <Field disabled={working}>
+          <FieldLabel>Lane name</FieldLabel>
+          <Input
+            size="lg"
+            value={laneName}
+            onChange={(event) => onLaneNameChange(event.target.value)}
+            placeholder="studio"
+            autoFocus
+          />
+          <FieldDescription>
+            Lowercase letters, digits and hyphens. Shows as “{rootName} · lane:{' '}
+            {laneName.trim() || '…'}”.
+          </FieldDescription>
+        </Field>
 
-        {stage.kind === 'done' ? (
-          <div className="space-y-4 px-6 py-5">
-            <p className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-              <span>
-                Lane <span className="font-medium">{laneName}</span> is ready on{' '}
-                <span className="font-mono text-xs">{branchName}</span>.
-              </span>
-            </p>
-            <p className="break-all font-mono text-[11px] text-muted-foreground">
-              {stage.lanePath}
-            </p>
-            {stage.copyMethod === 'bytes' ? (
-              <p className="rounded-md border border-amber-400/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                This volume could not clone, so the files were copied
-                byte-by-byte. The lane works the same; it just took longer and
-                uses real disk.
-              </p>
-            ) : null}
-            {stage.warnings.map((warning) => (
-              <p
-                key={warning}
-                className="rounded-md border border-amber-400/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
-              >
-                {warning}
-              </p>
-            ))}
-          </div>
-        ) : (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (canSubmit) onSubmit()
-            }}
+        <Field disabled={working}>
+          <FieldLabel>Branch name</FieldLabel>
+          <Input
+            size="lg"
+            value={branchName}
+            onChange={(event) => onBranchNameChange(event.target.value)}
+            placeholder="feat/my-change"
+          />
+          <FieldDescription>
+            If the branch already exists on origin or in {rootName}, it is
+            checked out as-is. Otherwise it is created from the base branch. The
+            lane starts at the last commit: uncommitted changes in {rootName}{' '}
+            are not carried over; ignored files such as .env and node_modules
+            are.
+          </FieldDescription>
+        </Field>
+
+        <section className="space-y-1">
+          <span className="text-sm font-medium">Base branch</span>
+          <p className="flex items-center gap-2 text-xs text-ink-muted">
+            <GitBranch className="size-3.5 shrink-0" />
+            <span>{baseBranchLabel}</span>
+          </p>
+        </section>
+
+        {working ? (
+          <p
+            className="flex items-center gap-2 text-sm text-ink-muted"
+            role="status"
           >
-            <div className="space-y-5 overflow-y-auto px-6 py-5">
-              <section className="space-y-2">
-                <label htmlFor="lane-name" className="text-sm font-medium">
-                  Lane name
-                </label>
-                <Input
-                  size="lg"
-                  id="lane-name"
-                  value={laneName}
-                  onChange={(event) => onLaneNameChange(event.target.value)}
-                  placeholder="studio"
-                  autoFocus
-                  disabled={working}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Lowercase letters, digits and hyphens. Shows as “{rootName} ·
-                  lane: {laneName.trim() || '…'}”.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <label htmlFor="lane-branch" className="text-sm font-medium">
-                  Branch name
-                </label>
-                <Input
-                  size="lg"
-                  id="lane-branch"
-                  value={branchName}
-                  onChange={(event) => onBranchNameChange(event.target.value)}
-                  placeholder="feat/my-change"
-                  disabled={working}
-                />
-                <p className="text-xs text-muted-foreground">
-                  If the branch already exists on origin or in {rootName}, it is
-                  checked out as-is. Otherwise it is created from the base
-                  branch. The lane starts at the last commit: uncommitted
-                  changes in {rootName} are not carried over; ignored files such
-                  as .env and node_modules are.
-                </p>
-              </section>
-
-              <section className="space-y-1">
-                <span className="text-sm font-medium">Base branch</span>
-                <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                  <span>{baseBranchLabel}</span>
-                </p>
-              </section>
-
-              {working ? (
-                <p
-                  className="flex items-center gap-2 text-sm text-muted-foreground"
-                  role="status"
-                >
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>{laneProgressLabel(stage.phase)}</span>
-                </p>
-              ) : null}
-
-              {error && (
-                <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => onOpenChange(false)}
-                disabled={working}
-                size="lg"
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!canSubmit} size="lg">
-                {working ? 'Creating…' : 'Create lane'}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-
-        {stage.kind === 'done' ? (
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => onOpenChange(false)}
-              size="lg"
-            >
-              Close
-            </Button>
-            <Button type="button" onClick={onSwitchToLane} size="lg">
-              Switch to lane
-            </Button>
-          </DialogFooter>
+            <Spinner />
+            <span>{laneProgressLabel(stage.phase)}</span>
+          </p>
         ) : null}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </FormDialog>
   )
 }

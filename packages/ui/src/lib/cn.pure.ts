@@ -44,7 +44,8 @@ const twMerge = extendTailwindMerge({
         { 'grid-cols': [(value: string) => /^(?:fill|fit)-\d+$/.test(value)] },
       ],
       w: [{ w: ['side-panel', 'work-panel'] }],
-      'max-h': [{ 'max-h': ['dialog', 'picker'] }],
+      h: [{ h: ['dialog-tall'] }],
+      'max-h': [{ 'max-h': ['dialog', 'dialog-tall', 'picker'] }],
     },
   },
 })

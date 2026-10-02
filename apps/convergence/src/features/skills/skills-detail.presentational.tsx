@@ -8,7 +8,6 @@ import {
   Folder,
   FolderOpen,
   Link2,
-  Loader2,
   X,
 } from 'lucide-react'
 import type {
@@ -20,22 +19,29 @@ import type {
 } from '@/entities/skill'
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import {
+  Badge,
   Button,
+  Card,
   cn,
   CopyButton,
+  EmptyState,
+  IconButton,
   Menu,
   MenuContent,
   MenuItem,
   MenuTrigger,
-  IconButton,
+  Notice,
+  SectionLabel,
+  toneInk,
   Tooltip,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import {
   ACTIVATION_CONFIRMATION_LABELS,
   CATALOG_SOURCE_LABELS,
-  DEPENDENCY_STATE_CLASSES,
   DEPENDENCY_STATE_LABELS,
+  DEPENDENCY_STATE_TONES,
+  groupHead,
   INVOCATION_SUPPORT_LABELS,
 } from './skills-browser.styles'
 import {
@@ -83,7 +89,7 @@ function withTooltip(label: string, node: ReactNode) {
 
 function renderDependencyList(dependencies: SkillDependency[]) {
   if (dependencies.length === 0) {
-    return <p className="text-xs text-muted-foreground">No dependencies.</p>
+    return <p className="text-xs text-ink-muted">No dependencies.</p>
   }
 
   return (
@@ -91,22 +97,18 @@ function renderDependencyList(dependencies: SkillDependency[]) {
       {dependencies.map((dependency, index) => (
         <div
           key={`${dependency.kind}-${dependency.name}-${index}`}
-          className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/20 px-2 py-1.5 text-xs"
+          className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-line-soft bg-surface-muted/20 px-2 py-1.5 text-xs"
         >
-          <span className="min-w-0 truncate text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {dependency.kind}
-            </span>
-            : {dependency.name}
+          <span className="min-w-0 truncate text-ink-muted">
+            <span className="font-medium text-ink">{dependency.kind}</span>:{' '}
+            {dependency.name}
           </span>
-          <span
-            className={cn(
-              'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-              DEPENDENCY_STATE_CLASSES[dependency.state],
-            )}
+          <Badge
+            tone={DEPENDENCY_STATE_TONES[dependency.state]}
+            className="shrink-0 font-medium uppercase"
           >
             {DEPENDENCY_STATE_LABELS[dependency.state]}
-          </span>
+          </Badge>
         </div>
       ))}
     </div>
@@ -115,18 +117,19 @@ function renderDependencyList(dependencies: SkillDependency[]) {
 
 function renderWarningList(warnings: SkillWarning[]) {
   if (warnings.length === 0) {
-    return <p className="text-xs text-muted-foreground">No warnings.</p>
+    return <p className="text-xs text-ink-muted">No warnings.</p>
   }
 
   return (
     <div className="space-y-1.5">
       {warnings.map((warning) => (
-        <div
+        <Card
           key={`${warning.code}-${warning.message}`}
-          className="rounded-md border border-warning/20 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground"
+          tone="warning"
+          className={cn('rounded-md px-2 py-1.5 text-xs', toneInk.warning)}
         >
           <span className="font-medium">{warning.code}:</span> {warning.message}
-        </div>
+        </Card>
       ))}
     </div>
   )
@@ -151,17 +154,23 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
 }) => {
   if (!projectName) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Open a project to inspect skills.
-      </div>
+      <EmptyState
+        variant="plain"
+        layout="centred"
+        title="No project open"
+        detail="Open a project to inspect skills."
+      />
     )
   }
 
   if (!selectedSkill) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        No skill selected.
-      </div>
+      <EmptyState
+        variant="plain"
+        layout="centred"
+        title="No skill selected"
+        detail="Choose one from the list."
+      />
     )
   }
 
@@ -180,9 +189,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
       <div className="mb-4 min-w-0">
         <div className="mb-3 flex items-end justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {selectedSkill.providerName}
-            </span>
+            <Badge className="uppercase">{selectedSkill.providerName}</Badge>
             {renderScopeChip(selectedSkill.scope)}
             {renderStatusBadge(selectedSkill.enabled)}
             {renderWarningBadge(selectedSkill.warnings.length)}
@@ -200,51 +207,45 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                       size="sm"
                       className="gap-1"
                     >
-                      <Copy className="h-3.5 w-3.5" />
+                      <Copy className="size-3.5" />
                       Copy
-                      <ChevronDown className="h-3 w-3" />
+                      <ChevronDown className="size-3" />
                     </Button>
                   }
                 />
                 <MenuContent align="end" className="min-w-44">
                   <MenuItem onClick={() => copy(selectedSkill.name)}>
-                    <Copy className="h-3.5 w-3.5" />
+                    <Copy className="size-3.5" />
                     Copy name
                   </MenuItem>
                   {selectedSkill.path ? (
                     <MenuItem onClick={() => copy(selectedSkill.path ?? '')}>
-                      <FileText className="h-3.5 w-3.5" />
+                      <FileText className="size-3.5" />
                       Copy SKILL.md path
                     </MenuItem>
                   ) : null}
                   {nativeInvocation ? (
                     <MenuItem onClick={() => copy(nativeInvocation)}>
-                      <Code2 className="h-3.5 w-3.5" />
+                      <Code2 className="size-3.5" />
                       Copy invocation
                     </MenuItem>
                   ) : null}
                 </MenuContent>
               </Menu>,
             )}
-            {selectedSkill.path && onReveal
-              ? withTooltip(
-                  'Reveal in Finder',
-                  <IconButton
-                    label="Reveal in Finder"
-                    type="button"
-                    variant="ghost"
-                    onClick={onReveal}
-                    disabled={isRevealing}
-                    size="sm"
-                  >
-                    {isRevealing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FolderOpen className="h-4 w-4" />
-                    )}
-                  </IconButton>,
-                )
-              : null}
+            {selectedSkill.path && onReveal ? (
+              <IconButton
+                label="Reveal in Finder"
+                type="button"
+                variant="ghost"
+                onClick={onReveal}
+                pending={isRevealing}
+                disabled={isRevealing}
+                size="sm"
+              >
+                <FolderOpen className="size-4" />
+              </IconButton>
+            ) : null}
             {selectedSkill.path && onOpenInEditor
               ? withTooltip(
                   'Open the skill folder in an editor',
@@ -258,15 +259,15 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                           size="sm"
                           className="gap-1"
                         >
-                          <Code2 className="h-3.5 w-3.5" />
+                          <Code2 className="size-3.5" />
                           Open
-                          <ChevronDown className="h-3 w-3" />
+                          <ChevronDown className="size-3" />
                         </Button>
                       }
                     />
                     <MenuContent align="end" className="min-w-40">
                       {editorAppsLoading ? (
-                        <MenuItem disabled>Detecting apps...</MenuItem>
+                        <MenuItem disabled>Detecting apps…</MenuItem>
                       ) : (editorApps?.length ?? 0) === 0 ? (
                         <MenuItem disabled>No editors found</MenuItem>
                       ) : (
@@ -278,7 +279,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                               key={app.id}
                               onClick={() => onOpenInEditor(app.id)}
                             >
-                              <Icon className="h-3.5 w-3.5" />
+                              <Icon className="size-3.5" />
                               {app.label}
                             </MenuItem>
                           )
@@ -288,65 +289,56 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                   </Menu>,
                 )
               : null}
-            {selectedSkill.path && onOpenFile
-              ? withTooltip(
-                  'Open SKILL.md',
-                  <IconButton
-                    label="Open SKILL.md"
-                    type="button"
-                    variant="ghost"
-                    onClick={onOpenFile}
-                    disabled={isOpeningFile}
-                    size="sm"
-                  >
-                    {isOpeningFile ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ExternalLink className="h-4 w-4" />
-                    )}
-                  </IconButton>,
-                )
-              : null}
-            {onClose
-              ? withTooltip(
-                  'Close',
-                  <IconButton
-                    label="Close details"
-                    type="button"
-                    variant="ghost"
-                    onClick={onClose}
-                    size="sm"
-                  >
-                    <X className="h-4 w-4" />
-                  </IconButton>,
-                )
-              : null}
+            {selectedSkill.path && onOpenFile ? (
+              <IconButton
+                label="Open SKILL.md"
+                type="button"
+                variant="ghost"
+                onClick={onOpenFile}
+                pending={isOpeningFile}
+                disabled={isOpeningFile}
+                size="sm"
+              >
+                <ExternalLink className="size-4" />
+              </IconButton>
+            ) : null}
+            {onClose ? (
+              <IconButton
+                label="Close details"
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                size="sm"
+              >
+                <X className="size-4" />
+              </IconButton>
+            ) : null}
           </div>
         </div>
         <h3 className="text-lg font-semibold break-words text-balance">
           {selectedSkill.displayName}
         </h3>
-        <p className="mt-1 text-sm text-pretty text-muted-foreground">
+        <p className="mt-1 text-sm text-pretty text-ink-muted">
           {selectedSkill.description || 'No description.'}
         </p>
       </div>
 
       <div className="space-y-4">
         {selectedProvider ? (
-          <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <Card render={<section />}>
+            <SectionLabel as="h4" className="mb-2">
               Provider
-            </p>
-            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+            </SectionLabel>
+            <div className="grid gap-2 text-xs text-ink-muted sm:grid-cols-3">
               <span>
                 Catalog:{' '}
-                <span className="text-foreground">
+                <span className="text-ink">
                   {CATALOG_SOURCE_LABELS[selectedProvider.catalogSource]}
                 </span>
               </span>
               <span>
                 Invocation:{' '}
-                <span className="text-foreground">
+                <span className="text-ink">
                   {
                     INVOCATION_SUPPORT_LABELS[
                       selectedProvider.invocationSupport
@@ -356,7 +348,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
               </span>
               <span>
                 Confirmation:{' '}
-                <span className="text-foreground">
+                <span className="text-ink">
                   {
                     ACTIVATION_CONFIRMATION_LABELS[
                       selectedProvider.activationConfirmation
@@ -366,11 +358,9 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
               </span>
             </div>
             {nativeInvocation ? (
-              <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background/60 px-2 py-1.5">
-                <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Native
-                </span>
-                <code className="min-w-0 flex-1 truncate text-xs text-foreground">
+              <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-line-soft bg-canvas/60 px-2 py-1.5">
+                <SectionLabel className="shrink-0">Native</SectionLabel>
+                <code className="min-w-0 flex-1 truncate text-xs text-ink">
                   {nativeInvocation}
                 </code>
                 <CopyButton
@@ -379,14 +369,12 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                 />
               </div>
             ) : null}
-          </section>
+          </Card>
         ) : null}
 
-        <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
+        <Card render={<section />}>
           <div className="mb-1 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Path
-            </p>
+            <SectionLabel as="h4">Path</SectionLabel>
             {selectedSkill.path ? (
               <CopyButton
                 text={selectedSkill.path}
@@ -394,19 +382,14 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
               />
             ) : null}
           </div>
-          <p
-            className="break-all font-mono text-xs text-muted-foreground"
-            title={selectedSkill.path ?? undefined}
-          >
+          <p className="font-mono text-xs break-all text-ink-muted">
             {selectedSkill.path ?? 'No path reported.'}
           </p>
-        </section>
+        </Card>
 
-        <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Dependencies
-            </p>
+        <Card render={<section />}>
+          <div className={groupHead}>
+            <SectionLabel as="h4">Dependencies</SectionLabel>
             {selectedSkillHasMcpDependencies ? (
               <Button
                 type="button"
@@ -414,68 +397,56 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                 onClick={onOpenMcpServers}
                 size="sm"
               >
-                <Link2 className="h-3.5 w-3.5" />
-                MCP Servers
+                <Link2 className="size-3.5" />
+                MCP servers
               </Button>
             ) : null}
           </div>
           {renderDependencyList(selectedSkill.dependencies)}
-        </section>
+        </Card>
 
-        <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <Card render={<section />}>
+          <SectionLabel as="h4" className="mb-2">
             Warnings
-          </p>
+          </SectionLabel>
           {renderWarningList(selectedSkill.warnings)}
-        </section>
+        </Card>
 
         {isDetailsLoading ? (
-          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading skill details...
-          </div>
+          <EmptyState state="loading" title="Loading the skill’s details…" />
         ) : null}
 
-        {detailsError ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {detailsError}
-          </div>
-        ) : null}
+        {detailsError ? <Notice tone="danger" title={detailsError} /> : null}
 
         {selectedDetails ? (
           <>
-            <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <Card render={<section />}>
+              <SectionLabel as="h4" className="mb-2">
                 Resources
-              </p>
+              </SectionLabel>
               {selectedDetails.resources.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {selectedDetails.resources.map((resource) => (
-                    <span
-                      key={`${resource.kind}-${resource.relativePath}`}
-                      className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground"
-                    >
+                    <Badge key={`${resource.kind}-${resource.relativePath}`}>
                       {resource.kind}: {resource.relativePath}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  No resource folders.
-                </p>
+                <p className="text-xs text-ink-muted">No resource folders.</p>
               )}
-            </section>
+            </Card>
 
-            <section className="rounded-lg border border-border/70 bg-background/60 p-4">
-              <div className="mb-3 flex items-center gap-2 border-b border-border/60 pb-3">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm font-medium">SKILL.md</p>
-                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+            <Card render={<section />} padding="md" surface="raised">
+              <div className="mb-3 flex items-center gap-2 border-b border-line-soft pb-3">
+                <FileText className="size-4 text-ink-muted" />
+                <h4 className="text-sm font-medium">SKILL.md</h4>
+                <span className="ml-auto text-xs text-ink-muted tabular-nums">
                   {selectedDetails.sizeBytes} bytes
                 </span>
               </div>
               <Markdown content={selectedDetails.markdown} size="sm" />
-            </section>
+            </Card>
           </>
         ) : null}
       </div>

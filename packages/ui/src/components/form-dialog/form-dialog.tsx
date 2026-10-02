@@ -1,5 +1,5 @@
 import type { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
-import type { FormEvent, ReactNode } from 'react'
+import type { FormEvent, ReactElement, ReactNode } from 'react'
 import { useDelayedLoading } from '../../motion/delayed-loading/useDelayedLoading'
 import { Button } from '../button/button'
 import {
@@ -11,8 +11,10 @@ import {
   DialogError,
   DialogFooter,
   DialogHeader,
+  type DialogHeight,
   type DialogSize,
   DialogTitle,
+  DialogTrigger,
 } from '../dialog/dialog'
 
 type FormDialogSaves = 'as-you-go' | 'on-save'
@@ -26,6 +28,18 @@ type FormDialogProps = {
   description?: ReactNode
   /** How wide: `lg` (720 px) unless told otherwise. */
   size?: DialogSize
+  /**
+   * How tall: `fit` unless told otherwise; `tall` keeps one height, for a
+   * dialog with tabs or panes that shouldn't jump as they change.
+   */
+  height?: DialogHeight
+  /** What opens it, when something on the page does: an existing Button. */
+  trigger?: ReactElement
+  /**
+   * The body without its padding and its own scrolling, for a dialog whose
+   * content lays out its own panes: a side list beside a scrolling page.
+   */
+  flush?: boolean
   /** Header actions, before the ✕: Refresh, say (R6). */
   headerActions?: ReactNode
   /**
@@ -68,6 +82,9 @@ function FormDialog({
   title,
   description,
   size,
+  height,
+  trigger,
+  flush = false,
   headerActions,
   saves,
   onSave,
@@ -86,45 +103,66 @@ function FormDialog({
     if (saves !== 'on-save' || pending || saveDisabledReason) return
     onSave?.()
   }
+  const parts = (
+    <>
+      <DialogHeader actions={headerActions}>
+        <DialogTitle>{title}</DialogTitle>
+        {description ? (
+          <DialogDescription>{description}</DialogDescription>
+        ) : null}
+      </DialogHeader>
+      <DialogBody
+        className={
+          flush ? 'flex flex-col overflow-hidden px-0 py-0' : undefined
+        }
+      >
+        {children}
+      </DialogBody>
+      <DialogError className="pt-3">{error}</DialogError>
+    </>
+  )
   return (
     <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
+      {trigger ? <DialogTrigger render={trigger} /> : null}
       <DialogContent
         size={size}
+        height={height}
         data-saves={saves}
         initialFocus={initialFocus}
         finalFocus={finalFocus}
       >
-        <form className="flex min-h-0 grow flex-col" onSubmit={submit}>
-          <DialogHeader actions={headerActions}>
-            <DialogTitle>{title}</DialogTitle>
-            {description ? (
-              <DialogDescription>{description}</DialogDescription>
-            ) : null}
-          </DialogHeader>
-          <DialogBody>{children}</DialogBody>
-          <DialogError className="pt-3">{error}</DialogError>
-          <DialogFooter>
-            {saves === 'as-you-go' ? (
+        {/*
+          A dialog that keeps each change as it is made has nothing to submit,
+          so it is no form: a form it holds (a row's own editor) stays valid
+          HTML, and Enter in a field does what that field says.
+        */}
+        {saves === 'on-save' ? (
+          <form className="flex min-h-0 grow flex-col" onSubmit={submit}>
+            {parts}
+            <DialogFooter>
+              <DialogClose render={<Button variant="secondary" />}>
+                Cancel
+              </DialogClose>
+              <Button
+                type="submit"
+                pending={busy}
+                pendingLabel={pendingLabel}
+                disabledReason={saveDisabledReason}
+              >
+                {saveLabel}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <div className="flex min-h-0 grow flex-col">
+            {parts}
+            <DialogFooter>
               <DialogClose render={<Button variant="secondary" />}>
                 Done
               </DialogClose>
-            ) : (
-              <>
-                <DialogClose render={<Button variant="secondary" />}>
-                  Cancel
-                </DialogClose>
-                <Button
-                  type="submit"
-                  pending={busy}
-                  pendingLabel={pendingLabel}
-                  disabledReason={saveDisabledReason}
-                >
-                  {saveLabel}
-                </Button>
-              </>
-            )}
-          </DialogFooter>
-        </form>
+            </DialogFooter>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import { arrived } from '../../../.storybook/motion-testing'
 import { Button } from '../button/button'
+import { Checkbox } from '../checkbox/checkbox'
 import { ConfirmDialog, type ConfirmVariant } from './confirm-dialog'
 import { useConfirm } from './confirm-host'
 
@@ -165,6 +166,71 @@ export const Long: Story = {
 export const Dark: Story = {
   ...Danger,
   globals: { theme: 'dark' },
+}
+
+/** Removing an account whose files only it holds: the box must be ticked first. */
+function RemoveAccount({ onConfirm }: { onConfirm: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [ticked, setTicked] = useState(false)
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
+        Remove…
+      </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Remove “work@example.com”?"
+        description="Its private history in projects is deleted with it."
+        confirmLabel="Sign out and delete private history"
+        variant="danger"
+        confirmDisabledReason={
+          ticked ? undefined : 'Tick the box to delete the private files first.'
+        }
+        onConfirm={onConfirm}
+      >
+        <label className="flex items-start gap-2">
+          <Checkbox
+            checked={ticked}
+            onCheckedChange={(checked) => setTicked(checked)}
+          />
+          Delete the private files in projects
+        </label>
+      </ConfirmDialog>
+    </>
+  )
+}
+
+/**
+ * Gated (R2): what it asks for first is inside it; until then the action is
+ * unavailable, says why, and pressing it does nothing.
+ */
+export const Gated: Story = {
+  render: (args) => <RemoveAccount onConfirm={args.onConfirm} />,
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove…' }))
+    const dialog = await screen.findByRole('alertdialog', {
+      name: 'Remove “work@example.com”?',
+    })
+    const confirm = within(dialog).getByRole('button', {
+      name: 'Sign out and delete private history',
+    })
+    await expect(confirm).toHaveAttribute('aria-disabled', 'true')
+    await expect(confirm).toHaveAccessibleDescription(
+      'Tick the box to delete the private files first.',
+    )
+    await userEvent.click(confirm)
+    await expect(args.onConfirm).not.toHaveBeenCalled()
+    await userEvent.click(
+      within(dialog).getByRole('checkbox', {
+        name: /Delete the private files/,
+      }),
+    )
+    await expect(confirm).not.toHaveAttribute('aria-disabled')
+    await userEvent.click(confirm)
+    await expect(args.onConfirm).toHaveBeenCalledOnce()
+    await arrived(dialog)
+  },
 }
 
 const deleted = fn()

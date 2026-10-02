@@ -124,7 +124,7 @@ export const WorkspaceCreateDialogContainer: FC = () => {
       )
       const storeError = useWorkspaceStore.getState().error
       if (storeError || !created) {
-        setError(storeError ?? 'Failed to create workspace')
+        setError(storeError ?? 'Couldn’t create the workspace.')
         return
       }
       beginSessionDraft(created.id)
@@ -136,7 +136,7 @@ export const WorkspaceCreateDialogContainer: FC = () => {
       setError(
         nextError instanceof Error
           ? nextError.message
-          : 'Failed to create workspace',
+          : 'Couldn’t create the workspace.',
       )
     } finally {
       setIsSubmitting(false)

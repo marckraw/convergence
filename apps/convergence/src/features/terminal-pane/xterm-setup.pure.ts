@@ -1,3 +1,5 @@
+import { terminalTokens } from '@convergence/ui'
+
 export interface XtermThemeOptions {
   background: string
   foreground: string
@@ -33,37 +35,41 @@ export interface XtermOptions {
   rightClickSelectsWord: boolean
 }
 
+/**
+ * The terminal's palette (R12): dark in both themes, read from the design
+ * system's `terminalTokens`, which a test keeps equal to the `--terminal-*`
+ * tokens, since xterm can't read CSS.
+ */
 export const DEFAULT_THEME: XtermThemeOptions = {
-  background: '#0b0b0f',
-  foreground: '#e6e6e6',
-  cursor: '#e6e6e6',
-  selectionBackground: '#2d3340',
-  black: '#1a1a1f',
-  red: '#ef5350',
-  green: '#9ccc65',
-  yellow: '#ffca28',
-  blue: '#42a5f5',
-  magenta: '#ab47bc',
-  cyan: '#26c6da',
-  white: '#e6e6e6',
-  brightBlack: '#4f4f5a',
-  brightRed: '#ff6e6e',
-  brightGreen: '#b9f27c',
-  brightYellow: '#ffe082',
-  brightBlue: '#64b5f6',
-  brightMagenta: '#ce93d8',
-  brightCyan: '#4dd0e1',
-  brightWhite: '#ffffff',
+  background: terminalTokens.bg,
+  foreground: terminalTokens.ink,
+  cursor: terminalTokens.cursor,
+  selectionBackground: terminalTokens.selection,
+  black: terminalTokens.ansi.black,
+  red: terminalTokens.ansi.red,
+  green: terminalTokens.ansi.green,
+  yellow: terminalTokens.ansi.yellow,
+  blue: terminalTokens.ansi.blue,
+  magenta: terminalTokens.ansi.magenta,
+  cyan: terminalTokens.ansi.cyan,
+  white: terminalTokens.ansi.white,
+  brightBlack: terminalTokens.ansiBright.black,
+  brightRed: terminalTokens.ansiBright.red,
+  brightGreen: terminalTokens.ansiBright.green,
+  brightYellow: terminalTokens.ansiBright.yellow,
+  brightBlue: terminalTokens.ansiBright.blue,
+  brightMagenta: terminalTokens.ansiBright.magenta,
+  brightCyan: terminalTokens.ansiBright.cyan,
+  brightWhite: terminalTokens.ansiBright.white,
 }
 
 export function buildXtermOptions(
   overrides: Partial<XtermOptions> = {},
 ): XtermOptions {
   return {
-    fontFamily:
-      'JetBrainsMono, "JetBrains Mono", Menlo, "SF Mono", Consolas, monospace',
-    fontSize: 13,
-    lineHeight: 1.2,
+    fontFamily: terminalTokens.font,
+    fontSize: terminalTokens.fontSize,
+    lineHeight: terminalTokens.lineHeight,
     cursorBlink: true,
     allowProposedApi: true,
     scrollback: 10_000,

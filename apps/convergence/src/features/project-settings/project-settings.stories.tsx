@@ -5,7 +5,7 @@ import { ProjectSettingsDialog } from './project-settings.presentational'
 
 const openDialog = async () => {
   const dialog = await screen.findByRole('dialog', {
-    name: 'Project Settings',
+    name: 'Project settings',
   })
   await waitFor(() =>
     expect(dialog).toContainElement(document.activeElement as HTMLElement),
@@ -31,14 +31,12 @@ const meta = {
     envCopyEnabled: true,
     envOverwrite: false,
     envPatternsText: '.env, .env.*',
-    isSaving: false,
     error: null,
     onStrategyChange: fn(),
     onBaseBranchNameChange: fn(),
     onEnvCopyEnabledChange: fn(),
     onEnvOverwriteChange: fn(),
     onEnvPatternsTextChange: fn(),
-    onSave: fn(),
     trigger: <Button variant="ghost">Project settings</Button>,
   },
 } satisfies Meta<typeof ProjectSettingsDialog>
@@ -48,8 +46,8 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 /**
- * Where new workspaces start, and which env files follow them. Save and
- * Cancel end it.
+ * Where new workspaces start, and which env files follow them. Each change is
+ * kept as it is made, so one Done ends it (R6).
  */
 export const Default: Story = {
   play: async ({ args, userEvent }) => {
@@ -57,8 +55,11 @@ export const Default: Story = {
     await expect(dialog).toHaveAccessibleDescription(
       'Configure how new workspaces branch for convergence.',
     )
+    await expect(
+      within(dialog).getByRole('radiogroup', { name: 'Workspace start point' }),
+    ).toBeVisible()
     await userEvent.click(
-      within(dialog).getByRole('button', { name: /Current HEAD/ }),
+      within(dialog).getByRole('radio', { name: 'Current HEAD' }),
     )
     await expect(args.onStrategyChange).toHaveBeenCalledWith('current-head')
     const base = within(dialog).getByLabelText('Base branch name')
@@ -79,11 +80,10 @@ export const Default: Story = {
     await expect(args.onEnvPatternsTextChange).toHaveBeenCalledWith(
       '.env, .env.*,',
     )
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    await expect(args.onSave).toHaveBeenCalledOnce()
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Cancel' }),
-    )
+    await expect(
+      within(dialog).queryByRole('button', { name: 'Save' }),
+    ).toBeNull()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
     await expect(args.onOpenChange).toHaveBeenCalledWith(false)
   },
 }
@@ -111,38 +111,16 @@ export const Disabled: Story = {
   },
 }
 
-/** Busy: saving locks every field and both buttons. */
-export const Busy: Story = {
-  args: { isSaving: true },
-  play: async () => {
-    const dialog = await screen.findByRole('dialog', {
-      name: 'Project Settings',
-    })
-    await expect(
-      within(dialog).getByRole('button', { name: 'Saving...' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Cancel' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByLabelText('Base branch name'),
-    ).toBeDisabled()
-  },
-}
-
-/** Failed: the save's error sits under the fields. */
+/** Failed: the last save's error is announced over Done. */
 export const Failed: Story = {
   args: {
-    error: 'Could not save the project settings: the database is locked.',
+    error: "Couldn't save the project settings. The database is locked.",
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByText(/the database is locked/),
-    ).toBeVisible()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Save' }),
-    ).toBeEnabled()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /the database is locked/i,
+    )
   },
 }
 
@@ -153,7 +131,7 @@ export const WithContextSection: Story = {
     contextSection: (
       <div>
         <h3 className="text-sm font-medium">Context items</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs text-ink-muted">
           Reusable text blocks that can be attached to sessions in this project.
         </p>
       </div>

@@ -38,7 +38,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-[560px]">
+      <div className="w-140">
         <Story />
       </div>
     ),
@@ -65,12 +65,15 @@ export const Default: Story = {
       'openrouter/deepseek/deepseek-v4',
       true,
     )
+    // The search is named, not only placeheld (DLG-7, DLG-20).
     await userEvent.type(
-      canvas.getByPlaceholderText('Search available Pi models...'),
+      canvas.getByRole('searchbox', { name: 'Search available Pi models' }),
       'g',
     )
     await expect(args.onQueryChange).toHaveBeenCalledWith('g')
-    await userEvent.click(canvas.getByRole('button', { name: 'Clear' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Clear selection' }),
+    )
     await expect(args.onToggleModel).toHaveBeenLastCalledWith(
       'openrouter/google/gemini-3-pro',
       false,
@@ -92,7 +95,9 @@ export const Empty: Story = {
       canvas.getByText('No Pi models were found in models.json.'),
     ).toBeVisible()
     await expect(canvas.getByText('No matching Pi models.')).toBeVisible()
-    await expect(canvas.queryByRole('button', { name: 'Clear' })).toBeNull()
+    await expect(
+      canvas.queryByRole('button', { name: 'Clear selection' }),
+    ).toBeNull()
   },
 }
 

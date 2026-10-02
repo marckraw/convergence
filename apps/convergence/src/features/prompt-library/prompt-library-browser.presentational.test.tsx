@@ -96,7 +96,9 @@ describe('PromptLibraryBrowserDialog', () => {
   it('renders prompt rows and selected prompt details', () => {
     renderDialog()
 
-    expect(screen.getByText('Prompt Library')).toBeInTheDocument()
+    expect(
+      screen.getByRole('dialog', { name: 'Prompt library' }),
+    ).toBeInTheDocument()
     expect(screen.getAllByText('Review PR')).not.toHaveLength(0)
     expect(screen.getByText('Review pull requests.')).toBeInTheDocument()
     expect(screen.getAllByText('Project')).not.toHaveLength(0)

@@ -348,7 +348,7 @@
   --provider-cursor: light-dark(#a5b3c7, #a5b3c7);
   --provider-google: light-dark(#83a4e2, #83a4e2);
 
-  /* Chart series, in order (analytics-insights.pure.ts CHART_PALETTE) */
+  /* Chart series, in order; chart.tokens.ts mirrors them for ChartGPU, which can't read CSS */
   --chart-1: light-dark(#2563eb, #2563eb);
   --chart-2: light-dark(#14b8a6, #14b8a6);
   --chart-3: light-dark(#f59e0b, #f59e0b);
@@ -598,6 +598,13 @@
   /* A dialog's default width and greatest height (w-[min(720px,…)], max-h-[min(80vh,720px)]) */
   --layout-dialog: 45rem;
   --layout-dialog-height: 45rem;
+  /*
+   * A tall dialog keeps one height whatever it shows, so it doesn't jump between tabs or as a
+   * list streams in: Settings (min(92vh, 960px)), and Skills, Tunnels, Prompt library and the
+   * debug log, whose 1120, 780, 820 and 640 px fold into it (R11, DS4). A height, not a width:
+   * layout.tokens.ts has no use for it.
+   */
+  --layout-dialog-tall: min(92vh, 60rem);
   /*
    * Dialog and Sheet's other widths (their size prop): 420, 560, 960 and 1280 px; lg is
    * --layout-dialog. A sheet slides in at the first three, so the scale is one (R11)

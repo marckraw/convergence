@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
 } from 'react'
@@ -72,13 +73,33 @@ export const PromptLibraryBrowserDialogContainer: FC<
     null,
   )
   const [formError, setFormError] = useState<string | null>(null)
+  // The editor's draft as it opened: Done asks before dropping changes to it.
+  const formOrigin = useRef<PromptLibraryFormDraft | null>(null)
 
   const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (next) openDialog('prompt-library')
-      else closeDialog()
+    async (next: boolean) => {
+      if (next) {
+        openDialog('prompt-library')
+        return
+      }
+      const editing =
+        formDraft !== null &&
+        JSON.stringify(formDraft) !== JSON.stringify(formOrigin.current)
+      if (editing) {
+        // The library saves as you go, but the editor keeps its draft until
+        // Save: closing would drop it, so it asks first (R5, DLG-10).
+        const discard = await confirm({
+          title: 'Discard the prompt you’re editing?',
+          description: 'Your changes to it haven’t been saved.',
+          confirmLabel: 'Discard',
+          cancelLabel: 'Keep editing',
+          variant: 'danger',
+        })
+        if (!discard) return
+      }
+      closeDialog()
     },
-    [openDialog, closeDialog],
+    [openDialog, closeDialog, confirm, formDraft],
   )
 
   const load = useCallback(
@@ -166,7 +187,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
 
   const handleStartCreate = useCallback(() => {
     setFormError(null)
-    setFormDraft({
+    const draft: PromptLibraryFormDraft = {
       mode: 'create',
       scope: 'project',
       kind: 'markdown',
@@ -175,7 +196,9 @@ export const PromptLibraryBrowserDialogContainer: FC<
       tagsText: '',
       filename: '',
       promptText: '',
-    })
+    }
+    formOrigin.current = draft
+    setFormDraft(draft)
   }, [])
 
   const handleStartEdit = useCallback(
@@ -185,7 +208,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
       }
 
       setFormError(null)
-      setFormDraft({
+      const draft: PromptLibraryFormDraft = {
         mode: 'edit',
         scope: prompt.scope,
         kind: prompt.kind,
@@ -194,7 +217,9 @@ export const PromptLibraryBrowserDialogContainer: FC<
         tagsText: prompt.tags.join(', '),
         filename: prompt.relativePath,
         promptText: selectedDetails.promptText,
-      })
+      }
+      formOrigin.current = draft
+      setFormDraft(draft)
     },
     [selectedDetails],
   )
@@ -303,7 +328,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
   return (
     <PromptLibraryBrowserDialog
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={(next) => void handleOpenChange(next)}
       projectName={projectName}
       catalog={catalog}
       prompts={prompts}
@@ -347,7 +372,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
               <BookOpenText className="h-3.5 w-3.5" />
               Prompts
             </span>
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-2xs text-muted-foreground/80">
               {catalog ? totalPromptCount : 'View'}
             </span>
           </Button>

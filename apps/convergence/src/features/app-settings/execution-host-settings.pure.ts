@@ -6,6 +6,7 @@ import type {
 import {
   executionHostEndpointDisplayName,
   type ExecutionHostEndpoint,
+  type ExecutionHostEndpointInput,
 } from '@/entities/execution-host'
 
 /** One Endpoint as the settings form is currently holding it. */
@@ -104,6 +105,35 @@ export function nextExecutionHostEndpointId(
   return minted
 }
 
+/**
+ * What Settings keeps of the endpoint rows, now that it saves as you go
+ * (DS4, R6): each row that has a valid address as typed; a stored row whose
+ * address is mid-edit (not valid yet) as it is stored, so a half-typed URL
+ * never removes a machine sessions name; and a new row with no valid
+ * address not at all, until it has one. The list stays the whole fact
+ * (MAR-2642): a stored row is only ever dropped by Remove.
+ */
+export function persistableExecutionHostEndpoints(
+  drafts: readonly ExecutionHostEndpointDraft[],
+  saved: readonly ExecutionHostEndpoint[],
+): ExecutionHostEndpointInput[] {
+  return drafts.flatMap((draft) => {
+    if (getExecutionHostEndpointBaseUrlError(draft.baseUrl) === null) {
+      return [
+        {
+          id: draft.id,
+          label: draft.label.trim(),
+          baseUrl: draft.baseUrl.trim(),
+        },
+      ]
+    }
+    const stored = saved.find((endpoint) => endpoint.id === draft.id)
+    return stored
+      ? [{ id: stored.id, label: stored.label, baseUrl: stored.baseUrl }]
+      : []
+  })
+}
+
 /** Seeds the form from what is stored, ids included, so no row is reissued. */
 export function executionHostEndpointDrafts(
   endpoints: readonly ExecutionHostEndpoint[],
@@ -123,7 +153,7 @@ export interface ExecutionHostEndpointActionBlocks {
 }
 
 const UNSAVED_ENDPOINT_BLOCK =
-  'Save settings first — this endpoint does not exist yet.'
+  'Enter a valid URL first — this endpoint is saved once its address is.'
 
 /**
  * Why a row's daemon actions would act on something other than what it shows
@@ -151,7 +181,7 @@ export function describeExecutionHostEndpointActionBlocks(input: {
     return {
       token: null,
       connection:
-        'Save to test the URL you typed — this endpoint still points at ' +
+        'Finish the URL to test it — this endpoint still points at ' +
         `${input.saved.baseUrl}.`,
     }
   }

@@ -40,7 +40,7 @@ async function readCodexPaths(
       checkedAt: null,
       signIns: [],
       servers: [],
-      error: 'Could not check sign-ins. Try Refresh.',
+      error: 'Couldn’t check sign-ins. Try Refresh.',
     }
   }
   signInsStore.settle(accountId, check, signIns)

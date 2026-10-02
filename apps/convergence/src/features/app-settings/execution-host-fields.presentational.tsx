@@ -4,7 +4,15 @@ import type {
   ExecutionHostDaemonCredentialStatus,
   RemoteExecutionHostConnectionResult,
 } from '@/entities/app-settings'
-import { Button, cn, IconButton, Input } from '@convergence/ui'
+import {
+  Button,
+  Field,
+  FieldError,
+  FieldLabel,
+  IconButton,
+  Input,
+  Notice,
+} from '@convergence/ui'
 import type { ExecutionHostEndpointActionBlocks } from './execution-host-settings.pure'
 
 interface ExecutionHostFieldsProps {
@@ -24,8 +32,6 @@ interface ExecutionHostFieldsProps {
   credentialMessage: string | null
   credentialError: string | null
   connectionResult: RemoteExecutionHostConnectionResult | null
-  removalWarning: string | null
-  isRemovalPending: boolean
   onLabelChange: (value: string) => void
   onRemoteBaseUrlChange: (value: string) => void
   onDaemonTokenChange: (value: string) => void
@@ -33,9 +39,8 @@ interface ExecutionHostFieldsProps {
   onSaveDaemonToken: () => void
   onDeleteDaemonToken: () => void
   onTestDaemonConnection: () => void
+  /** Remove: it asks first when the endpoint is stored (R5). */
   onRequestRemove: () => void
-  onConfirmRemove: () => void
-  onCancelRemove: () => void
 }
 
 function credentialStatusText(
@@ -43,7 +48,7 @@ function credentialStatusText(
   tokenBlock: string | null,
 ): string {
   if (tokenBlock) return tokenBlock
-  if (!status) return 'Checking...'
+  if (!status) return 'Checking…'
   if (status.error) return status.error
   if (!status.configured) return 'Not configured'
   if (status.source === 'environment') return 'Configured from environment'
@@ -92,9 +97,12 @@ function connectionProvidersText(
     .join(', ')
 }
 
+/** A block's head: its name and status at the start, its actions at the end. */
+const blockHead = 'flex items-start justify-between gap-4'
+
 /**
  * One Endpoint: its name, its address, its own token and its own connection
- * test (MAR-2642). Every control is scoped by `endpointId` so nothing on this
+ * test (MAR-2642). Every control is named for its endpoint so nothing on this
  * card can reach another machine's token by accident.
  */
 export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
@@ -113,8 +121,6 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
   credentialMessage,
   credentialError,
   connectionResult,
-  removalWarning,
-  isRemovalPending,
   onLabelChange,
   onRemoteBaseUrlChange,
   onDaemonTokenChange,
@@ -123,103 +129,51 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
   onDeleteDaemonToken,
   onTestDaemonConnection,
   onRequestRemove,
-  onConfirmRemove,
-  onCancelRemove,
 }) => (
-  <section className="space-y-4 rounded-2xl border border-border bg-card/45 p-4">
-    <div className="flex items-start justify-between gap-4">
-      <div className="min-w-0 flex-1 space-y-2">
-        <label
-          htmlFor={`execution-host-label-${endpointId}`}
-          className="text-xs font-medium text-muted-foreground"
-        >
-          Endpoint name
-        </label>
+  <section
+    data-endpoint-id={endpointId}
+    className="space-y-4 rounded-2xl border border-border bg-card/45 p-4"
+  >
+    <div className={blockHead}>
+      <Field className="min-w-0 flex-1">
+        <FieldLabel>Endpoint name</FieldLabel>
         <Input
           size="lg"
-          id={`execution-host-label-${endpointId}`}
           value={labelDraft}
           placeholder="kuba-vps"
           onChange={(event) => onLabelChange(event.target.value)}
         />
-      </div>
+      </Field>
       <Button
         type="button"
         variant="ghost"
         aria-label={`Remove endpoint ${displayName}`}
         onClick={onRequestRemove}
-        disabled={isRemovalPending}
         disabledReason={removalBlock ?? undefined}
         className="mt-6 shrink-0"
       >
-        <Trash2 className="mr-2 h-4 w-4" />
+        <Trash2 className="size-4" />
         Remove
       </Button>
     </div>
 
-    {isRemovalPending && (
-      <div
-        className={cn(
-          'space-y-3 rounded-xl border border-destructive/40',
-          'bg-destructive/10 px-4 py-3 text-sm text-destructive',
-        )}
-        role="alert"
-      >
-        <p>{removalWarning}</p>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="danger"
-            aria-label={`Confirm removing endpoint ${displayName}`}
-            onClick={onConfirmRemove}
-          >
-            Remove anyway
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            aria-label={`Keep endpoint ${displayName}`}
-            onClick={onCancelRemove}
-          >
-            Keep it
-          </Button>
-        </div>
-      </div>
-    )}
-
-    <div className="space-y-2">
-      <label
-        htmlFor={`execution-host-daemon-base-url-${endpointId}`}
-        className="text-xs font-medium text-muted-foreground"
-      >
-        Execution host URL
-      </label>
+    <Field invalid={!!remoteBaseUrlError}>
+      <FieldLabel>Execution host URL</FieldLabel>
       <Input
         size="lg"
-        id={`execution-host-daemon-base-url-${endpointId}`}
         value={remoteBaseUrlDraft}
         placeholder="https://daemon.example.com"
         onChange={(event) => onRemoteBaseUrlChange(event.target.value)}
-        aria-invalid={!!remoteBaseUrlError}
-        aria-describedby={
-          remoteBaseUrlError
-            ? `execution-host-daemon-base-url-error-${endpointId}`
-            : undefined
-        }
       />
-      {remoteBaseUrlError && (
-        <p
-          id={`execution-host-daemon-base-url-error-${endpointId}`}
-          className="text-xs text-destructive"
-          role="alert"
-        >
+      {remoteBaseUrlError ? (
+        <FieldError match reserve={false}>
           {remoteBaseUrlError}
-        </p>
-      )}
-    </div>
+        </FieldError>
+      ) : null}
+    </Field>
 
     <div className="rounded-xl border border-border bg-background/40 p-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className={blockHead}>
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <KeyRound className="h-4 w-4 text-muted-foreground" />
@@ -237,9 +191,11 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
             onClick={onTestDaemonConnection}
             disabled={isCredentialSaving || isConnectionTesting}
             disabledReason={actionBlocks.connection ?? undefined}
+            pending={isConnectionTesting}
+            pendingLabel="Testing…"
           >
-            <Wifi className="mr-2 h-4 w-4" />
-            {isConnectionTesting ? 'Testing...' : 'Test connection'}
+            <Wifi className="size-4" />
+            Test connection
           </Button>
           <Button
             type="button"
@@ -252,8 +208,8 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
               !credentialStatus?.configured
             }
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Remove token
+            <Trash2 className="size-4" />
+            Remove token…
           </Button>
         </div>
       </div>
@@ -264,18 +220,12 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
         </p>
       )}
 
-      <div className="mt-4 space-y-2">
-        <label
-          htmlFor={`execution-host-daemon-token-${endpointId}`}
-          className="text-xs font-medium text-muted-foreground"
-        >
-          Execution host token
-        </label>
+      <Field className="mt-4">
+        <FieldLabel>Execution host token</FieldLabel>
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
             <Input
               size="lg"
-              id={`execution-host-daemon-token-${endpointId}`}
               type={showDaemonToken ? 'text' : 'password'}
               autoComplete="off"
               value={daemonTokenDraft}
@@ -299,15 +249,12 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
               onClick={onToggleDaemonTokenVisibility}
               disabled={isCredentialSaving}
               size="lg"
-              className={cn(
-                'absolute right-0 top-0',
-                "before:absolute before:-inset-0.5 before:content-['']",
-              )}
+              className="absolute top-0 right-0"
             >
               {showDaemonToken ? (
-                <EyeOff className="h-4 w-4" />
+                <EyeOff className="size-4" />
               ) : (
-                <Eye className="h-4 w-4" />
+                <Eye className="size-4" />
               )}
             </IconButton>
           </div>
@@ -325,35 +272,20 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
             {credentialStatus?.configured ? 'Replace token' : 'Save token'}
           </Button>
         </div>
-      </div>
+      </Field>
 
       {credentialMessage && (
-        <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-          {credentialMessage}
-        </p>
+        <Notice tone="success" title={credentialMessage} className="mt-4" />
       )}
       {credentialError && (
-        <p
-          className={cn(
-            'mt-4 rounded-xl border border-destructive/40 bg-destructive/10',
-            'px-4 py-3 text-sm text-destructive',
-          )}
-          role="alert"
-        >
-          {credentialError}
-        </p>
+        <Notice tone="danger" title={credentialError} className="mt-4" />
       )}
       {connectionResult && (
-        <div
-          className={cn(
-            'mt-4 rounded-xl border px-4 py-3 text-sm',
-            connectionResult.ok
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-              : 'border-destructive/40 bg-destructive/10 text-destructive',
-          )}
-          role={connectionResult.ok ? 'status' : 'alert'}
+        <Notice
+          tone={connectionResult.ok ? 'success' : 'danger'}
+          title={connectionResult.message}
+          className="mt-4"
         >
-          <p>{connectionResult.message}</p>
           {connectionDaemonText(connectionResult) && (
             <p className="mt-1 text-xs opacity-80">
               {connectionDaemonText(connectionResult)}
@@ -365,11 +297,11 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
             </p>
           )}
           {connectionCapabilitiesText(connectionResult) && (
-            <p className="mt-1 break-words text-xs opacity-80">
+            <p className="mt-1 text-xs wrap-break-word opacity-80">
               {connectionCapabilitiesText(connectionResult)}
             </p>
           )}
-        </div>
+        </Notice>
       )}
     </div>
   </section>

@@ -5,15 +5,16 @@ import type {
   ReleaseNotesEntry,
 } from './release-notes.types'
 import {
+  Badge,
   Button,
   Dialog,
-  DialogClose,
+  DialogBody,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  SectionLabel,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 
@@ -49,6 +50,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogTrigger render={trigger} />
+      {/* A dialog you read and leave: no footer, its ✕ the way out (R6). */}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>About Convergence</DialogTitle>
@@ -60,17 +62,26 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        {/*
+          The notes scroll, so the keyboard can reach them too: the region
+          takes the focus and the arrow keys scroll it.
+        */}
+        <DialogBody
+          tabIndex={0}
+          role="region"
+          aria-label="Release notes"
+          className="app-scrollbar"
+        >
           {latest ? (
             <section className="mb-8">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Current Release
-              </p>
-              <div className="rounded-xl border border-border/70 bg-card/70 p-4">
+              <SectionLabel as="h3" className="mb-2">
+                Current release
+              </SectionLabel>
+              <div className="rounded-xl border border-line-soft bg-surface/70 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold">v{latest.version}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-ink-muted">
                       {latest.date ?? 'Development build'}
                     </p>
                   </div>
@@ -82,11 +93,9 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
 
           <section>
             <div className="mb-2 flex items-baseline justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Release History
-              </p>
+              <SectionLabel as="h3">Release history</SectionLabel>
               {showPagination ? (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-ink-muted">
                   Page {historyPage} of {historyTotalPages} •{' '}
                   {bundle.releases.length} releases
                 </p>
@@ -96,83 +105,59 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
               {historyItems.map(({ release, absoluteIndex }) => (
                 <article
                   key={`${release.version}-${release.date ?? 'undated'}`}
-                  className="rounded-xl border border-border/70 bg-card/50 p-4"
+                  className="rounded-xl border border-line-soft bg-surface/50 p-4"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold">
                         v{release.version}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-ink-muted">
                         {release.date ?? 'Development build'}
                       </p>
                     </div>
-                    {absoluteIndex === 0 ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                        Current
-                      </span>
-                    ) : null}
+                    {absoluteIndex === 0 ? <Badge>Current</Badge> : null}
                   </div>
                   <Markdown content={release.notes} size="sm" />
                 </article>
               ))}
             </div>
+            {showPagination ? (
+              <nav
+                aria-label="Release history pagination"
+                className="mt-4 flex items-center justify-between gap-3"
+              >
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    onHistoryPageChange(Math.max(1, historyPage - 1))
+                  }
+                  disabled={historyPage === 1}
+                >
+                  <ChevronLeft className="size-3.5" />
+                  Previous
+                </Button>
+                <span className="text-xs text-ink-muted" aria-live="polite">
+                  {historyPage} / {historyTotalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    onHistoryPageChange(
+                      Math.min(historyTotalPages, historyPage + 1),
+                    )
+                  }
+                  disabled={historyPage === historyTotalPages}
+                >
+                  Next
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </nav>
+            ) : null}
           </section>
-        </div>
-
-        <DialogFooter className="flex-col items-stretch justify-between gap-3 border-t border-border/70 px-6 py-4 sm:flex-row sm:items-center">
-          {showPagination ? (
-            <nav
-              aria-label="Release history pagination"
-              className="flex items-center justify-between gap-3 sm:min-w-64 sm:justify-start"
-            >
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  onHistoryPageChange(Math.max(1, historyPage - 1))
-                }
-                disabled={historyPage === 1}
-              >
-                <ChevronLeft className="mr-1 h-3.5 w-3.5" />
-                Previous
-              </Button>
-              <span
-                className="text-xs text-muted-foreground"
-                aria-live="polite"
-              >
-                {historyPage} / {historyTotalPages}
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  onHistoryPageChange(
-                    Math.min(historyTotalPages, historyPage + 1),
-                  )
-                }
-                disabled={historyPage === historyTotalPages}
-              >
-                Next
-                <ChevronRight className="ml-1 h-3.5 w-3.5" />
-              </Button>
-            </nav>
-          ) : (
-            <span aria-hidden />
-          )}
-          <DialogClose
-            render={
-              <Button
-                type="button"
-                variant="secondary"
-                size="lg"
-                className="sm:w-auto"
-              >
-                Close
-              </Button>
-            }
-          />
-        </DialogFooter>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )

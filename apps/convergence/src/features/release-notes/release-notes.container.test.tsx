@@ -18,40 +18,28 @@ describe('ReleaseNotesDialogContainer', () => {
     expect(screen.getAllByText(/development build/i).length).toBeGreaterThan(0)
   })
 
-  it('closes the dialog from the footer button', () => {
+  // A dialog you read and leave has no footer (R6, DS4): its ✕ closes it.
+  it('closes the dialog from its close button, with no footer', () => {
     render(<ReleaseNotesDialogContainer />)
 
     fireEvent.click(screen.getByRole('button', { name: /what's new/i }))
-    const footer = document.querySelector('[data-slot="dialog-footer"]')
-    expect(footer).not.toBeNull()
-    fireEvent.click(
-      within(footer as HTMLElement).getByRole('button', { name: 'Close' }),
-    )
+    expect(document.querySelector('[data-slot="dialog-footer"]')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
     expect(screen.queryByText('About Convergence')).not.toBeInTheDocument()
   })
 
-  it('keeps release history pagination in the dialog footer', () => {
+  it('pages the release history under the history it pages', () => {
     render(<ReleaseNotesDialogContainer />)
 
     fireEvent.click(screen.getByRole('button', { name: /what's new/i }))
 
-    const footer = document.querySelector('[data-slot="dialog-footer"]')
-    expect(footer).not.toBeNull()
-
-    const footerScope = within(footer as HTMLElement)
+    const notes = within(screen.getByRole('region', { name: 'Release notes' }))
     expect(
-      footerScope.getByLabelText('Release history pagination'),
+      notes.getByLabelText('Release history pagination'),
     ).toBeInTheDocument()
-    expect(
-      footerScope.getByRole('button', { name: /previous/i }),
-    ).toBeDisabled()
-    expect(
-      footerScope.getByRole('button', { name: /next/i }),
-    ).toBeInTheDocument()
-    expect(
-      footerScope.getByRole('button', { name: 'Close' }),
-    ).toBeInTheDocument()
+    expect(notes.getByRole('button', { name: /previous/i })).toBeDisabled()
+    expect(notes.getByRole('button', { name: /next/i })).toBeInTheDocument()
   })
 
   it('opens when useDialogStore.open() is called with the release-notes kind', () => {

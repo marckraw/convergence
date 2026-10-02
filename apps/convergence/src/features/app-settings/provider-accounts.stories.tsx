@@ -136,7 +136,7 @@ const meta = {
   args: base,
   decorators: [
     (Story) => (
-      <div className="w-[720px]">
+      <div className="w-180">
         <Story />
       </div>
     ),
@@ -153,12 +153,14 @@ type Story = StoryObj<typeof meta>
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    const providers = canvas.getByRole('group', { name: 'Account provider' })
+    const providers = canvas.getByRole('radiogroup', {
+      name: 'Account provider',
+    })
     await expect(
-      within(providers).getByRole('button', { name: 'Anthropic' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+      within(providers).getByRole('radio', { name: 'Anthropic' }),
+    ).toBeChecked()
     await userEvent.click(
-      within(providers).getByRole('button', { name: 'OpenAI' }),
+      within(providers).getByRole('radio', { name: 'OpenAI' }),
     )
     await expect(args.onProviderChange).toHaveBeenCalledWith('codex')
 
@@ -183,9 +185,10 @@ export const Default: Story = {
     await userEvent.click(work.getByRole('button', { name: 'Connectors' }))
     await expect(args.onToggleConnectors).toHaveBeenCalledWith('acct-work')
 
+    // No email yet: Connect says why it waits (R2).
     await expect(
       canvas.getByRole('button', { name: 'Connect Anthropic' }),
-    ).toBeDisabled()
+    ).toHaveAccessibleDescription('Enter the account’s email first.')
     await userEvent.type(canvas.getByLabelText('Account email'), 'm')
     await expect(args.onEnrolEmailChange).toHaveBeenCalledWith('m')
     await userEvent.click(canvas.getByRole('button', { name: 'Check now' }))
@@ -233,10 +236,10 @@ export const Busy: Story = {
       'Finish signing in in your browser.',
     )
     await expect(
-      within(signIn).getByRole('link', { name: 'Open sign-in page' }),
+      within(signIn).getByRole('link', { name: /^Open sign-in page/ }),
     ).toHaveAttribute('href', 'https://claude.ai/oauth/authorize?state=story')
     await expect(
-      canvas.getByRole('button', { name: 'Sign-in in progress...' }),
+      canvas.getByRole('button', { name: 'Sign-in in progress…' }),
     ).toBeDisabled()
     await expect(
       within(cardOf('marcin@example.com')).getByRole('button', {
@@ -296,8 +299,9 @@ export const Rename: Story = {
 }
 
 /**
- * Removing an account that holds private history: the deletion waits until
- * the box that names the files is ticked.
+ * Removing an account that holds private history: it asks in the app's own
+ * dialog (R5), and the deletion waits, saying why, until the box that names
+ * the files is ticked.
  */
 export const ConfirmRemoval: Story = {
   name: 'Confirm removal',
@@ -310,17 +314,23 @@ export const ConfirmRemoval: Story = {
       unreadableEntries: [],
     },
   },
-  play: async ({ args, canvas, userEvent }) => {
-    const remove = canvas.getByRole('button', {
+  play: async ({ args, userEvent }) => {
+    const dialog = within(
+      await screen.findByRole('alertdialog', {
+        name: 'Remove “marcin@work.example.com”?',
+      }),
+    )
+    const remove = dialog.getByRole('button', {
       name: 'Sign out and delete private history',
     })
-    await expect(remove).toBeDisabled()
+    await expect(remove).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(remove)
+    await expect(args.onConfirmRemove).not.toHaveBeenCalled()
     await userEvent.click(
-      canvas.getByRole('checkbox', { name: /Delete the private files/ }),
+      dialog.getByRole('checkbox', { name: /Delete the private files/ }),
     )
     await expect(args.onPrivateDeletionAcknowledged).toHaveBeenCalledWith(true)
-    const work = within(cardOf('marcin@work.example.com'))
-    await userEvent.click(work.getByRole('button', { name: 'Cancel' }))
+    await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }))
     await expect(args.onCancelRemove).toHaveBeenCalledOnce()
   },
 }
@@ -332,9 +342,10 @@ export const ConfirmRemovalAcknowledged: Story = {
     ...ConfirmRemoval.args,
     privateDeletionAcknowledged: true,
   },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, userEvent }) => {
+    const dialog = within(await screen.findByRole('alertdialog'))
     await userEvent.click(
-      canvas.getByRole('button', {
+      dialog.getByRole('button', {
         name: 'Sign out and delete private history',
       }),
     )
@@ -383,7 +394,7 @@ export const Authorizing: Story = {
   play: async ({ canvas }) => {
     await expect(
       within(cardOf('marcin@example.com')).getByRole('button', {
-        name: 'Waiting for browser...',
+        name: 'Waiting for browser…',
       }),
     ).toBeDisabled()
     await expect(
@@ -503,7 +514,10 @@ export const Loading: Story = {
   name: 'Busy, loading',
   args: { isLoading: true },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Loading accounts...')).toBeVisible()
+    // The kit's loading state: it says so once the read has taken 300 ms.
+    await waitFor(() =>
+      expect(canvas.getByText('Loading accounts…')).toBeVisible(),
+    )
     await expect(
       canvas.getByRole('button', { name: 'Check now' }),
     ).toBeDisabled()

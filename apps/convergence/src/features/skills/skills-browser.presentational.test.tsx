@@ -208,7 +208,7 @@ describe('SkillsBrowserDialog', () => {
     renderDialog({ onFiltersChange, onOpenMcpServers })
 
     selectOption(/Dependency/i, 'Declared')
-    fireEvent.click(screen.getByRole('button', { name: /MCP Servers/i }))
+    fireEvent.click(screen.getByRole('button', { name: /MCP servers/i }))
 
     expect(onFiltersChange).toHaveBeenCalledWith({
       dependencyState: 'declared',
@@ -220,7 +220,7 @@ describe('SkillsBrowserDialog', () => {
     const onViewModeChange = vi.fn()
     renderDialog({ onViewModeChange })
 
-    fireEvent.click(screen.getByRole('button', { name: /Grid/i }))
+    fireEvent.click(screen.getByRole('radio', { name: /Grid/i }))
     expect(onViewModeChange).toHaveBeenCalledWith('grid')
   })
 

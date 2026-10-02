@@ -1,6 +1,13 @@
 import type { FC } from 'react'
 import type { ContextAlertSettings } from '@/entities/app-settings'
-import { ChoiceField, Input, Switch } from '@convergence/ui'
+import {
+  ChoiceField,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  Switch,
+} from '@convergence/ui'
 
 interface ContextAlertFieldsProps {
   alert: ContextAlertSettings
@@ -41,10 +48,8 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
     </ChoiceField>
 
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className="space-y-1.5 text-sm">
-        <span className="block text-muted-foreground">
-          Alert at % of the window
-        </span>
+      <Field>
+        <FieldLabel>Alert at % of the window</FieldLabel>
         <Input
           size="lg"
           type="number"
@@ -53,19 +58,16 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
           step={1}
           value={alert.percent}
           disabled={isSaving || !alert.enabled}
-          aria-label="Alert at % of the window"
           onChange={(event) => {
             const percent = clampPercent(event.target.value)
             if (percent === null) return
             onChange({ ...alert, percent })
           }}
         />
-      </label>
+      </Field>
 
-      <label className="space-y-1.5 text-sm">
-        <span className="block text-muted-foreground">
-          …or at this many tokens
-        </span>
+      <Field>
+        <FieldLabel>…or at this many tokens</FieldLabel>
         <Input
           size="lg"
           type="number"
@@ -73,17 +75,16 @@ export const ContextAlertFields: FC<ContextAlertFieldsProps> = ({
           step={1000}
           value={alert.tokens ?? ''}
           disabled={isSaving || !alert.enabled}
-          aria-label="…or at this many tokens"
           onChange={(event) =>
             onChange({ ...alert, tokens: clampTokens(event.target.value) })
           }
         />
-      </label>
+        <FieldDescription>
+          Empty = no token cap. Whichever limit is reached first raises the
+          alert.
+        </FieldDescription>
+      </Field>
     </div>
-
-    <p className="text-xs leading-relaxed text-muted-foreground">
-      Empty = no token cap. Whichever limit is reached first raises the alert.
-    </p>
   </div>
 )
 

@@ -3,6 +3,7 @@ import type { ProviderDebugEntry } from '@/entities/provider-debug'
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -55,8 +56,35 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
 }) => {
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogContent size="xl">
-        <DialogHeader>
+      {/*
+        A log you watch and leave (R6): its actions in the header, no footer.
+        Tall, so it doesn't grow as events stream in; the body is the one
+        scrolling region, and the keyboard can scroll it.
+      */}
+      <DialogContent size="xl" height="tall">
+        <DialogHeader
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onCopyAll}
+                disabled={entries.length === 0}
+              >
+                Copy all
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onOpenLogFolder}
+              >
+                Open log folder
+              </Button>
+            </>
+          }
+        >
           <DialogTitle>Provider debug log</DialogTitle>
           <DialogDescription>
             Live view of every provider event captured for this session.
@@ -65,61 +93,43 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col px-6 py-4">
-          <div className={drawerStyles.shell}>
-            <div className={drawerStyles.header}>
-              <span className="font-mono text-xs text-muted-foreground">
-                {entries.length} entries · session {sessionId.slice(0, 8)}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={onCopyAll}
-                  disabled={entries.length === 0}
-                >
-                  Copy all
-                </Button>
-                <Button type="button" variant="ghost" onClick={onOpenLogFolder}>
-                  Open log folder
-                </Button>
-              </div>
-            </div>
-
-            {entries.length === 0 ? (
-              <div className={drawerStyles.empty}>No events captured yet.</div>
-            ) : (
-              <ul className={`${drawerStyles.list} space-y-1`}>
-                {entries.map((entry, index) => {
-                  const payload = describePayload(entry)
-                  return (
-                    <li
-                      key={`${entry.at}-${index}`}
-                      className={drawerStyles.row}
-                    >
-                      <div className={drawerStyles.rowHeader}>
-                        <span>{formatTime(entry.at)}</span>
-                        <span className={drawerStyles.channel}>
-                          {entry.channel}
-                        </span>
-                        <span>{entry.providerId}</span>
-                        <span>{entry.direction}</span>
-                        {entry.method ? (
-                          <span className="text-foreground/80">
-                            {entry.method}
-                          </span>
-                        ) : null}
-                      </div>
-                      {payload ? (
-                        <pre className={drawerStyles.payload}>{payload}</pre>
+        <DialogBody
+          tabIndex={0}
+          role="region"
+          aria-label="Provider events"
+          className="app-scrollbar"
+        >
+          <p className={drawerStyles.count}>
+            {entries.length} entries · session {sessionId.slice(0, 8)}
+          </p>
+          {entries.length === 0 ? (
+            <div className={drawerStyles.empty}>No events captured yet.</div>
+          ) : (
+            <ul className={drawerStyles.list}>
+              {entries.map((entry, index) => {
+                const payload = describePayload(entry)
+                return (
+                  <li key={`${entry.at}-${index}`} className={drawerStyles.row}>
+                    <div className={drawerStyles.rowHeader}>
+                      <span>{formatTime(entry.at)}</span>
+                      <span className={drawerStyles.channel}>
+                        {entry.channel}
+                      </span>
+                      <span>{entry.providerId}</span>
+                      <span>{entry.direction}</span>
+                      {entry.method ? (
+                        <span className="text-ink/80">{entry.method}</span>
                       ) : null}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-        </div>
+                    </div>
+                    {payload ? (
+                      <pre className={drawerStyles.payload}>{payload}</pre>
+                    ) : null}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )

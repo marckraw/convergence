@@ -43,8 +43,8 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 /**
- * A local folder: one button opens the system's folder picker. Cancel is the
- * only ending; the picker ends it otherwise.
+ * A local folder: the footer's action opens the system's folder picker, and
+ * where the project comes from is a segmented choice (R9).
  */
 export const Default: Story = {
   play: async ({ args, userEvent }) => {
@@ -53,11 +53,14 @@ export const Default: Story = {
       'Select a local repository or clone one from Git.',
     )
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Browse folders' }),
+      within(dialog).getByRole('button', { name: 'Browse folders…' }),
     )
     await expect(args.onOpenLocalProject).toHaveBeenCalledOnce()
+    await expect(
+      within(dialog).getByRole('radio', { name: 'Local folder' }),
+    ).toBeChecked()
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Clone URL' }),
+      within(dialog).getByRole('radio', { name: 'Clone URL' }),
     )
     await expect(args.onModeChange).toHaveBeenCalledWith('clone')
     await expect(
@@ -110,7 +113,10 @@ export const Disabled: Story = {
     const dialog = await openDialog()
     await expect(within(dialog).getByLabelText('Repository URL')).toHaveFocus()
     const clone = within(dialog).getByRole('button', { name: 'Clone project' })
-    await expect(clone).toBeDisabled()
+    await expect(clone).toHaveAttribute('aria-disabled', 'true')
+    await expect(clone).toHaveAccessibleDescription(
+      'Choose where to clone it first.',
+    )
     await userEvent.type(
       within(dialog).getByLabelText('Repository URL'),
       '{Enter}',
@@ -130,13 +136,12 @@ export const Busy: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Cloning...' }),
-    ).toBeDisabled()
+    const clone = within(dialog).getByRole('button', { name: 'Clone project' })
+    await waitFor(() => expect(clone).toHaveAttribute('aria-busy', 'true'), {
+      timeout: 1_000,
+    })
+    await expect(clone).toHaveTextContent('Cloning…')
     await expect(within(dialog).getByLabelText('Repository URL')).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Cancel' }),
-    ).toBeDisabled()
   },
 }
 
@@ -146,13 +151,17 @@ export const BusyLocal: Story = {
   args: { isOpeningLocal: true },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: 'Open a project' })
-    await expect(
-      within(dialog).getByRole('button', { name: 'Opening...' }),
-    ).toBeDisabled()
+    const browse = within(dialog).getByRole('button', {
+      name: 'Browse folders…',
+    })
+    await waitFor(() => expect(browse).toHaveAttribute('aria-busy', 'true'), {
+      timeout: 1_000,
+    })
+    await expect(browse).toHaveTextContent('Opening…')
   },
 }
 
-/** Failed: the clone's error sits above the footer. */
+/** Failed: the clone's error is announced above the footer. */
 export const Failed: Story = {
   args: {
     mode: 'clone',
@@ -164,7 +173,9 @@ export const Failed: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText(/Repository not found/)).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /Repository not found/,
+    )
     await expect(
       within(dialog).getByRole('button', { name: 'Clone project' }),
     ).toBeEnabled()

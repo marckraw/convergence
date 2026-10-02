@@ -7,7 +7,8 @@ interface UpdatesFieldsProps {
   currentVersion: string | null
   prefs: UpdatePrefs
   isDev: boolean
-  isSaving: boolean
+  /** Locks the controls while something else saves. */
+  isSaving?: boolean
   now: Date
   onToggleBackground: (next: boolean) => void
   onCheckNow: () => void
@@ -21,7 +22,7 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
   currentVersion,
   prefs,
   isDev,
-  isSaving,
+  isSaving = false,
   now,
   onToggleBackground,
   onCheckNow,

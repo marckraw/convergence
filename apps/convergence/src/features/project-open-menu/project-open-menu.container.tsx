@@ -29,13 +29,12 @@ export function ProjectOpenMenuContainer({
               disabledReason={disabledReason ?? undefined}
               aria-label="Open project"
               size="sm"
-              className="gap-2"
             />
           }
         >
-          <Code2 className="h-3.5 w-3.5" />
+          <Code2 className="size-3.5" />
           Open
-          <ChevronDown className="h-3 w-3" />
+          <ChevronDown className="size-3" />
         </MenuTrigger>
       </Tooltip>
       <MenuContent align="end" className="min-w-40">
@@ -46,7 +45,7 @@ export function ProjectOpenMenuContainer({
             const Icon = app.kind === 'file-manager' ? Folder : Code2
             return (
               <MenuItem key={app.id} onClick={() => openIn(app)}>
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className="size-3.5" />
                 {app.label}
               </MenuItem>
             )

@@ -124,6 +124,8 @@ describe('cn with the Convergence theme', () => {
     expect(cn('w-80', 'w-side-panel')).toBe('w-side-panel')
     expect(cn('w-side-panel', 'w-work-panel')).toBe('w-work-panel')
     expect(cn('max-h-[80vh]', 'max-h-dialog')).toBe('max-h-dialog')
+    expect(cn('max-h-dialog', 'max-h-dialog-tall')).toBe('max-h-dialog-tall')
+    expect(cn('h-full', 'h-dialog-tall')).toBe('h-dialog-tall')
     expect(cn('max-w-dialog', 'max-w-dialog-sm')).toBe('max-w-dialog-sm')
     expect(cn('max-w-dialog-2xl', 'max-w-none')).toBe('max-w-none')
     expect(cn('max-w-sm', 'max-w-picker')).toBe('max-w-picker')

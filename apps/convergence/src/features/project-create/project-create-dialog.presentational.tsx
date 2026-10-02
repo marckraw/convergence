@@ -1,15 +1,13 @@
 import type { FC } from 'react'
-import { FolderOpen, GitBranch, Search } from 'lucide-react'
+import { FolderOpen, GitBranch } from 'lucide-react'
 import {
   Button,
-  cn,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Field,
+  FieldLabel,
+  FormDialog,
   Input,
+  SegmentedControl,
+  SegmentedControlItem,
 } from '@convergence/ui'
 
 type ProjectOpenMode = 'local' | 'clone'
@@ -32,6 +30,24 @@ interface ProjectCreateDialogProps {
   onCloneProject: () => void
 }
 
+/** Why Clone project waits, or nothing when it can go. */
+function cloneBlock(
+  remoteUrl: string,
+  parentDirectory: string,
+  directoryName: string,
+): string | undefined {
+  if (remoteUrl.trim().length === 0) return 'Paste the repository URL first.'
+  if (parentDirectory.trim().length === 0)
+    return 'Choose where to clone it first.'
+  if (directoryName.trim().length === 0) return 'Name the folder first.'
+  return undefined
+}
+
+/**
+ * Opening a project (R6): Cancel, then the action, whichever way it comes.
+ * A local folder's action is the system's folder picker; a clone's is the
+ * clone, once its three fields are filled.
+ */
 export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
   open,
   mode,
@@ -49,174 +65,94 @@ export const ProjectCreateDialog: FC<ProjectCreateDialogProps> = ({
   onOpenLocalProject,
   onCloneProject,
 }) => {
-  const canClone =
-    remoteUrl.trim().length > 0 &&
-    parentDirectory.trim().length > 0 &&
-    directoryName.trim().length > 0 &&
-    !isCloning
-
+  const local = mode === 'local'
   return (
-    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Open a project</DialogTitle>
-          <DialogDescription>
-            Select a local repository or clone one from Git.
-          </DialogDescription>
-        </DialogHeader>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Open a project"
+      description="Select a local repository or clone one from Git."
+      saves="on-save"
+      onSave={local ? onOpenLocalProject : onCloneProject}
+      saveLabel={local ? 'Browse folders…' : 'Clone project'}
+      pendingLabel={local ? 'Opening…' : 'Cloning…'}
+      pending={local ? isOpeningLocal : isCloning}
+      saveDisabledReason={
+        local
+          ? undefined
+          : cloneBlock(remoteUrl, parentDirectory, directoryName)
+      }
+      error={error}
+    >
+      <div className="space-y-5">
+        <SegmentedControl
+          aria-label="Where the project comes from"
+          size="md"
+          className="grid w-full grid-cols-2"
+          value={mode}
+          onValueChange={(next: ProjectOpenMode) => onModeChange(next)}
+        >
+          <SegmentedControlItem value="local">
+            <FolderOpen aria-hidden />
+            Local folder
+          </SegmentedControlItem>
+          <SegmentedControlItem value="clone">
+            <GitBranch aria-hidden />
+            Clone URL
+          </SegmentedControlItem>
+        </SegmentedControl>
 
-        <div className="space-y-5 px-6 py-5">
-          <div className="grid grid-cols-2 rounded-md border border-border bg-muted/30 p-1">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onModeChange('local')}
-              size="lg"
-              className={cn(
-                'rounded-sm shadow-none',
-                mode === 'local'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <FolderOpen className="h-4 w-4" />
-              Local folder
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onModeChange('clone')}
-              size="lg"
-              className={cn(
-                'rounded-sm shadow-none',
-                mode === 'clone'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <GitBranch className="h-4 w-4" />
-              Clone URL
-            </Button>
-          </div>
-
-          {mode === 'local' ? (
-            <div className="rounded-md border border-border/70 bg-muted/20 p-4">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={onOpenLocalProject}
-                disabled={isOpeningLocal}
+        {local ? (
+          <p className="text-sm text-ink-muted">
+            Choose a folder that holds a git repository. It opens as a project
+            right away.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            <Field disabled={isCloning}>
+              <FieldLabel>Repository URL</FieldLabel>
+              <Input
                 size="lg"
-              >
-                <Search className="h-4 w-4" />
-                {isOpeningLocal ? 'Opening...' : 'Browse folders'}
-              </Button>
-            </div>
-          ) : (
-            <form
-              id="project-clone-form"
-              className="space-y-5"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (canClone) onCloneProject()
-              }}
-            >
-              <section className="space-y-2">
-                <label
-                  htmlFor="project-clone-url"
-                  className="text-sm font-medium"
-                >
-                  Repository URL
-                </label>
+                value={remoteUrl}
+                onChange={(event) => onRemoteUrlChange(event.target.value)}
+                placeholder="https://github.com/org/repo.git"
+                autoFocus
+              />
+            </Field>
+
+            <Field disabled={isCloning}>
+              <FieldLabel>Destination</FieldLabel>
+              <div className="flex gap-2">
                 <Input
                   size="lg"
-                  id="project-clone-url"
-                  value={remoteUrl}
-                  onChange={(event) => onRemoteUrlChange(event.target.value)}
-                  placeholder="https://github.com/org/repo.git"
-                  autoFocus
-                  disabled={isCloning}
+                  value={parentDirectory}
+                  placeholder="Select a folder"
+                  readOnly
                 />
-              </section>
-
-              <section className="space-y-2">
-                <label
-                  htmlFor="project-clone-destination"
-                  className="text-sm font-medium"
-                >
-                  Destination
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    size="lg"
-                    id="project-clone-destination"
-                    value={parentDirectory}
-                    placeholder="Select a folder"
-                    readOnly
-                    disabled={isCloning}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={onSelectParentDirectory}
-                    disabled={isCloning}
-                    size="lg"
-                  >
-                    Browse
-                  </Button>
-                </div>
-              </section>
-
-              <section className="space-y-2">
-                <label
-                  htmlFor="project-clone-folder"
-                  className="text-sm font-medium"
-                >
-                  Folder name
-                </label>
-                <Input
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onSelectParentDirectory}
+                  disabled={isCloning}
                   size="lg"
-                  id="project-clone-folder"
-                  value={directoryName}
-                  onChange={(event) =>
-                    onDirectoryNameChange(event.target.value)
-                  }
-                  placeholder="repo"
-                  disabled={isCloning}
-                />
-              </section>
-            </form>
-          )}
+                >
+                  Browse
+                </Button>
+              </div>
+            </Field>
 
-          {error ? (
-            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-        </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => onOpenChange(false)}
-            disabled={isOpeningLocal || isCloning}
-            size="lg"
-          >
-            Cancel
-          </Button>
-          {mode === 'clone' ? (
-            <Button
-              type="submit"
-              form="project-clone-form"
-              disabled={!canClone}
-              size="lg"
-            >
-              {isCloning ? 'Cloning...' : 'Clone project'}
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <Field disabled={isCloning}>
+              <FieldLabel>Folder name</FieldLabel>
+              <Input
+                size="lg"
+                value={directoryName}
+                onChange={(event) => onDirectoryNameChange(event.target.value)}
+                placeholder="repo"
+              />
+            </Field>
+          </div>
+        )}
+      </div>
+    </FormDialog>
   )
 }

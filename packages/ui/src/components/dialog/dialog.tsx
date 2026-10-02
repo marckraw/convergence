@@ -68,6 +68,19 @@ const DIALOG_SIZES = {
 
 type DialogSize = keyof typeof DIALOG_SIZES
 
+/**
+ * How tall: `fit` grows with what it holds, up to 80% of the window (or
+ * 720 px); `tall` keeps one height, `--layout-dialog-tall` (92% of the
+ * window, at most 960 px), so a dialog with tabs, panes or a list that
+ * streams in doesn't jump as they change (DS4).
+ */
+const DIALOG_HEIGHTS = {
+  fit: '',
+  tall: 'h-dialog-tall max-h-dialog-tall',
+} as const
+
+type DialogHeight = keyof typeof DIALOG_HEIGHTS
+
 /** The scrim behind a dialog: black at 55% over a light blur, in both themes. */
 const dialogBackdrop = cn(
   'fixed inset-0 z-50 bg-scrim backdrop-blur-scrim app-no-drag',
@@ -78,6 +91,8 @@ type DialogContentProps = Omit<DialogPrimitive.Popup.Props, 'className'> & {
   className?: string
   /** How wide: `lg` (720 px) unless told otherwise. */
   size?: DialogSize
+  /** How tall: `fit` (its content, up to 80% of the window) unless told otherwise. */
+  height?: DialogHeight
   /**
    * The ✕ in the corner, there unless told otherwise: one way out that looks
    * the same in every dialog. Leave it out only where the dialog brings its
@@ -100,6 +115,7 @@ function DialogContent({
   className,
   children,
   size = 'lg',
+  height = 'fit',
   showClose = true,
   ...props
 }: DialogContentProps) {
@@ -116,10 +132,12 @@ function DialogContent({
         <DialogPrimitive.Popup
           data-slot="dialog-content"
           data-size={size}
+          data-height={height}
           className={cn(
             'relative flex max-h-dialog min-h-0 flex-col overflow-hidden',
             'rounded-xl border border-line bg-sheet text-ink shadow-overlay outline-none app-no-drag',
             DIALOG_SIZES[size],
+            DIALOG_HEIGHTS[height],
             growMotion,
             className,
           )}
@@ -312,6 +330,7 @@ export {
   type DialogFooterProps,
   DialogHeader,
   type DialogHeaderProps,
+  type DialogHeight,
   type DialogProps,
   type DialogSize,
   DialogTitle,

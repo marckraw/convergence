@@ -54,7 +54,7 @@ export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
         setError(
           nextError instanceof Error
             ? nextError.message
-            : 'Failed to load MCP servers',
+            : 'Couldn’t load the MCP servers.',
         )
       } finally {
         setIsLoading(false)
@@ -72,7 +72,7 @@ export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
       setError(
         nextError instanceof Error
           ? nextError.message
-          : 'Failed to load MCP servers',
+          : 'Couldn’t load the MCP servers.',
       )
     } finally {
       setIsLoading(false)
@@ -111,10 +111,10 @@ export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
             className="w-full justify-between px-2"
           >
             <span className="flex items-center gap-2">
-              <Cable className="h-3.5 w-3.5" />
-              MCP Servers
+              <Cable className="size-3.5" />
+              MCP servers
             </span>
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-2xs text-ink-muted">
               {snapshot
                 ? snapshot.providers.reduce(
                     (count, provider) =>

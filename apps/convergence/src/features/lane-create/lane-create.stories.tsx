@@ -70,14 +70,14 @@ export const Default: Story = {
   },
 }
 
-/** Empty: Create lane waits for both names. */
+/** Empty: Create lane waits for both names, and says which is missing (R2). */
 export const Empty: Story = {
   args: { laneName: '', branchName: '' },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create lane' }),
-    ).toBeDisabled()
+    const create = within(dialog).getByRole('button', { name: 'Create lane' })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription('Name the lane first.')
     await userEvent.type(within(dialog).getByLabelText('Lane name'), '{Enter}')
     await expect(args.onSubmit).not.toHaveBeenCalled()
   },
@@ -95,9 +95,11 @@ export const Busy: Story = {
     await expect(within(dialog).getByRole('status')).toHaveTextContent(
       'Copying the project…',
     )
-    await expect(
-      within(dialog).getByRole('button', { name: 'Creating…' }),
-    ).toBeDisabled()
+    const create = within(dialog).getByRole('button', { name: 'Create lane' })
+    await waitFor(() => expect(create).toHaveAttribute('aria-busy', 'true'), {
+      timeout: 1_000,
+    })
+    await expect(create).toHaveTextContent('Creating…')
     await expect(within(dialog).getByLabelText('Lane name')).toBeDisabled()
     await userEvent.keyboard('{Escape}')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
@@ -105,7 +107,7 @@ export const Busy: Story = {
   },
 }
 
-/** Failed: the error sits above the footer, and the form can be sent again. */
+/** Failed: the error is announced above the footer, and the form can be sent again. */
 export const Failed: Story = {
   args: {
     error:
@@ -113,16 +115,16 @@ export const Failed: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByText(/A lane named 'studio' already exists/),
-    ).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /A lane named 'studio' already exists/,
+    )
     await expect(
       within(dialog).getByRole('button', { name: 'Create lane' }),
     ).toBeEnabled()
   },
 }
 
-/** Done: where the lane is, and two endings, Close and Switch to lane. */
+/** Done: where the lane is, Switch to lane beside it, and the dialog ends in Done (R6). */
 export const Done: Story = {
   args: {
     stage: {
@@ -142,10 +144,7 @@ export const Done: Story = {
       within(dialog).getByRole('button', { name: 'Switch to lane' }),
     )
     await expect(args.onSwitchToLane).toHaveBeenCalledOnce()
-    const footerClose = within(dialog)
-      .getAllByRole('button', { name: 'Close' })
-      .find((button) => button.textContent === 'Close')
-    await userEvent.click(footerClose as HTMLElement)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
     await expect(args.onOpenChange).toHaveBeenCalledWith(false)
   },
 }

@@ -102,7 +102,7 @@ export const ProviderAccountsContainer: FC = () => {
       setAccounts(await providerAccountApi.list())
     } catch (err) {
       setAccounts([])
-      setError(describeError(err, 'Failed to load provider accounts.'))
+      setError(describeError(err, 'Couldn’t load the provider accounts.'))
     } finally {
       setIsLoading(false)
     }
@@ -255,7 +255,7 @@ export const ProviderAccountsContainer: FC = () => {
         setRenameDraft('')
       },
       'Label saved.',
-      'Failed to rename the account.',
+      'Couldn’t rename the account.',
     )
   }, [renameDraft, renamingAccountId, runForAccount])
 
@@ -267,7 +267,7 @@ export const ProviderAccountsContainer: FC = () => {
           setAccounts(await providerAccountApi.setDefault(accountId))
         },
         'Default account updated. New sessions start on it.',
-        'Failed to set the default account.',
+        'Couldn’t set the default account.',
       ),
     [runForAccount],
   )
@@ -286,7 +286,7 @@ export const ProviderAccountsContainer: FC = () => {
           }
         },
         'Reconnected.',
-        'Failed to reconnect the account.',
+        'Couldn’t reconnect the account.',
       ),
     [load, runForAccount],
   )
@@ -339,7 +339,7 @@ export const ProviderAccountsContainer: FC = () => {
           }
         },
         'Account signed out and removed.',
-        'Failed to remove the account.',
+        'Couldn’t remove the account.',
       )
     },
     [load, runForAccount, privateDeletionAcknowledged],
@@ -363,7 +363,7 @@ export const ProviderAccountsContainer: FC = () => {
           checkedAt: null,
           signIns: [],
           servers: [],
-          error: 'Could not check sign-ins. Try Refresh.',
+          error: 'Couldn’t check sign-ins. Try Refresh.',
         }
       }
       signIns.settle(accountId, check, result)
@@ -384,7 +384,7 @@ export const ProviderAccountsContainer: FC = () => {
           providerAccountId: accountId,
           apps: [],
           requiresChatGpt: false,
-          error: 'Could not read ChatGPT apps. Try Refresh.',
+          error: 'Couldn’t read ChatGPT apps. Try Refresh.',
         }
       }
       if (live && request === revision) {
@@ -449,7 +449,7 @@ export const ProviderAccountsContainer: FC = () => {
         setChatGptLinkError({
           accountId,
           message:
-            'Could not copy the ChatGPT link. Try Refresh, then Copy link again.',
+            'Couldn’t copy the ChatGPT link. Try Refresh, then Copy link again.',
         })
       }
       return
@@ -461,7 +461,7 @@ export const ProviderAccountsContainer: FC = () => {
       setChatGptLinkError({
         accountId,
         message:
-          'Could not open the ChatGPT page. Try Refresh, then Manage on ChatGPT again.',
+          'Couldn’t open the ChatGPT page. Try Refresh, then Manage on ChatGPT again.',
       })
     }
   }
@@ -484,7 +484,7 @@ export const ProviderAccountsContainer: FC = () => {
         setConnectors({
           providerAccountId: accountId,
           connectors: [],
-          error: describeError(err, 'Failed to read connectors.'),
+          error: describeError(err, 'Couldn’t read the connectors.'),
         })
       } finally {
         setIsLoadingConnectors(false)
@@ -517,7 +517,7 @@ export const ProviderAccountsContainer: FC = () => {
               : `${serverName} authorized for this account.`,
           )
       } catch (err) {
-        setError(describeError(err, `Failed to authorize ${serverName}.`))
+        setError(describeError(err, `Couldn’t authorize ${serverName}.`))
       } finally {
         setAuthorizingServerName(null)
       }
@@ -533,7 +533,7 @@ export const ProviderAccountsContainer: FC = () => {
       setHealth(await providerAccountApi.attest())
       setAccounts(await providerAccountApi.list())
     } catch (err) {
-      setError(describeError(err, 'Failed to check account health.'))
+      setError(describeError(err, 'Couldn’t check the accounts.'))
     } finally {
       setIsLoading(false)
     }

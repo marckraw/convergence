@@ -6,15 +6,22 @@ import type {
   ProviderMcpVisibility,
 } from '@/shared/types/mcp.types'
 import {
-  Button,
+  Badge,
+  Card,
+  cn,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  EmptyState,
   IconButton,
+  ListRow,
+  Notice,
+  SectionLabel,
+  toneInk,
   TooltipCard,
 } from '@convergence/ui'
 import {
@@ -26,7 +33,7 @@ import {
   RefreshCw,
   ServerCog,
 } from 'lucide-react'
-import { getMcpStatusBadgeClassName } from './mcp-servers.pure'
+import { mcpStatusTone } from './mcp-servers.pure'
 
 interface McpServersDialogProps {
   open: boolean
@@ -39,30 +46,28 @@ interface McpServersDialogProps {
   onRefresh: () => void
 }
 
+/** A status's glyph, in its tone's ink (the kit's map, R1). */
 function renderStatusIcon(status: McpServerStatus) {
+  const className = cn('size-3.5', toneInk[mcpStatusTone(status)])
   switch (status) {
     case 'ready':
-      return (
-        <CircleCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-      )
+      return <CircleCheck className={className} />
     case 'needs-auth':
-      return <KeyRound className="h-3.5 w-3.5 text-warning-foreground" />
+      return <KeyRound className={className} />
     case 'failed':
-      return <CircleAlert className="h-3.5 w-3.5 text-destructive" />
+      return <CircleAlert className={className} />
     case 'disabled':
-      return <Ban className="h-3.5 w-3.5 text-muted-foreground" />
+      return <Ban className={className} />
     default:
-      return <CircleHelp className="h-3.5 w-3.5 text-muted-foreground" />
+      return <CircleHelp className={className} />
   }
 }
 
 function renderStatusBadge(status: McpServerStatus, label: string) {
   return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${getMcpStatusBadgeClassName(status)}`}
-    >
+    <Badge tone={mcpStatusTone(status)} className="font-medium uppercase">
       {label}
-    </span>
+    </Badge>
   )
 }
 
@@ -70,7 +75,7 @@ function renderProviderHelp(ariaLabel: string, content: ReactNode) {
   return (
     <TooltipCard
       content={content}
-      className="max-w-[280px] space-y-1.5 leading-relaxed"
+      className="max-w-70 space-y-1.5 leading-relaxed"
     >
       <IconButton
         label={ariaLabel}
@@ -79,7 +84,7 @@ function renderProviderHelp(ariaLabel: string, content: ReactNode) {
         size="xs"
         className="text-muted-foreground"
       >
-        <CircleHelp className="h-3.5 w-3.5" />
+        <CircleHelp className="size-3.5" />
       </IconButton>
     </TooltipCard>
   )
@@ -90,7 +95,7 @@ function renderPiHelp() {
     'Pi MCP setup instructions',
     <>
       <p>Pi MCP requires the pi-mcp-adapter extension.</p>
-      <p className="font-mono text-[11px]">pi install npm:pi-mcp-adapter</p>
+      <p className="font-mono text-2xs">pi install npm:pi-mcp-adapter</p>
       <p>
         Then restart Pi and use /mcp, /mcp setup, or /mcp-auth &lt;server&gt;
         inside Pi.
@@ -121,30 +126,28 @@ function renderServerRow(
   server: McpServerSummary,
 ) {
   return (
-    <div
-      key={`${providerId}-${scope}-${server.name}`}
-      className="rounded-lg border border-border/60 bg-card/40 px-3 py-2"
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        {renderStatusIcon(server.status)}
-        <p className="min-w-0 truncate text-sm font-medium" title={server.name}>
-          {server.name}
-        </p>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {server.transportType.replace('_', ' ')}
+    // A server is a row of the list's own kind: its status, its name, where
+    // it's configured and what it is, with its transport and state at the end.
+    <Card key={`${providerId}-${scope}-${server.name}`} padding="none">
+      <ListRow
+        leading={renderStatusIcon(server.status)}
+        title={server.name}
+        meta={
+          <>
+            <span>{server.scopeLabel}</span>
+            <span>{server.description}</span>
+          </>
+        }
+        trailing={
+          <span className="flex items-center gap-2">
+            <Badge className="uppercase">
+              {server.transportType.replace('_', ' ')}
+            </Badge>
+            {renderStatusBadge(server.status, server.statusLabel)}
           </span>
-          {renderStatusBadge(server.status, server.statusLabel)}
-        </div>
-      </div>
-      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="shrink-0">{server.scopeLabel}</span>
-        <span className="text-muted-foreground/50">•</span>
-        <span className="min-w-0 truncate" title={server.description}>
-          {server.description}
-        </span>
-      </div>
-    </div>
+        }
+      />
+    </Card>
   )
 }
 
@@ -159,10 +162,10 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
     >
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <div className="flex items-center gap-2">
-          <ServerCog className="h-4 w-4 text-muted-foreground" />
+          <ServerCog className="size-4 text-ink-muted" />
           <div>
             <div className="flex items-center gap-1.5">
-              <p className="text-sm font-semibold">{provider.providerName}</p>
+              <h3 className="text-sm font-semibold">{provider.providerName}</h3>
               {provider.providerId === 'pi' ? renderPiHelp() : null}
               {provider.providerId === 'antigravity'
                 ? renderAntigravityHelp()
@@ -177,21 +180,15 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
 
       <div className="space-y-4 px-4 py-4">
         {provider.error ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {provider.error}
-          </div>
+          <Notice tone="danger" title={provider.error} />
         ) : null}
 
-        {provider.note ? (
-          <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-            {provider.note}
-          </div>
-        ) : null}
+        {provider.note ? <Notice title={provider.note} /> : null}
 
         <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <SectionLabel as="h4" className="mb-2">
             Project
-          </p>
+          </SectionLabel>
           {provider.projectServers.length > 0 ? (
             <div className="space-y-2">
               {provider.projectServers.map((server) =>
@@ -206,9 +203,9 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
         </div>
 
         <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <SectionLabel as="h4" className="mb-2">
             Global
-          </p>
+          </SectionLabel>
           {provider.globalServers.length > 0 ? (
             <div className="space-y-2">
               {provider.globalServers.map((server) =>
@@ -237,9 +234,23 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
       <DialogTrigger render={trigger} />
+      {/* A dialog you look at and leave: Refresh in its header, no footer (R6). */}
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>MCP Servers</DialogTitle>
+        <DialogHeader
+          actions={
+            <IconButton
+              label="Refresh"
+              size="sm"
+              variant="ghost"
+              onClick={onRefresh}
+              pending={isLoading}
+              disabledReason={projectName ? undefined : 'Open a project first.'}
+            >
+              <RefreshCw />
+            </IconButton>
+          }
+        >
+          <DialogTitle>MCP servers</DialogTitle>
           <DialogDescription>
             {projectName
               ? `Available in ${projectName}, grouped by provider and scope.`
@@ -247,19 +258,25 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <DialogBody className="app-scrollbar">
           {!projectName ? (
-            <p className="text-sm text-muted-foreground">
-              Open a project to inspect MCP server availability.
-            </p>
+            <EmptyState
+              title="No project open"
+              detail="Open a project to inspect MCP server availability."
+            />
           ) : error && !snapshot ? (
-            <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error}
-            </div>
+            <EmptyState
+              state="failed"
+              title="Couldn't read the MCP servers"
+              detail={error}
+              onRetry={onRefresh}
+              retrying={isLoading}
+            />
           ) : isLoading && !snapshot ? (
-            <p className="text-sm text-muted-foreground">
-              Checking provider MCP servers…
-            </p>
+            <EmptyState
+              state="loading"
+              title="Checking provider MCP servers…"
+            />
           ) : snapshot && snapshot.providers.length > 0 ? (
             <div className="space-y-4">
               {snapshot.providers.map((provider) =>
@@ -267,25 +284,12 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No MCP-capable providers are currently available.
-            </p>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onRefresh}
-            disabled={!projectName || isLoading}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+            <EmptyState
+              title="No MCP-capable providers"
+              detail="None of the installed providers speaks MCP."
             />
-            Refresh
-          </Button>
-        </DialogFooter>
+          )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )

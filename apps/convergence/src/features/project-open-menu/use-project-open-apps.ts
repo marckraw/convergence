@@ -48,7 +48,7 @@ export function useProjectOpenApps(targetPath: string | null) {
       })
       .catch((err) => {
         toast.error(
-          err instanceof Error ? err.message : 'Failed to open project',
+          err instanceof Error ? err.message : 'Couldn’t open the project.',
         )
       })
   }

@@ -5,10 +5,19 @@ import {
   openRouterCredentialsApi,
   type OpenRouterCredentialStatus,
 } from '@/entities/app-settings'
-import { Button, IconButton, Input, useConfirm } from '@convergence/ui'
+import {
+  Button,
+  Card,
+  Field,
+  FieldLabel,
+  IconButton,
+  Input,
+  Notice,
+  useConfirm,
+} from '@convergence/ui'
 
 function statusText(status: OpenRouterCredentialStatus | null): string {
-  if (!status) return 'Checking...'
+  if (!status) return 'Checking…'
   if (status.error) return status.error
   if (!status.configured) return 'Not configured'
   if (status.source === 'environment') return 'Configured from environment'
@@ -32,7 +41,9 @@ export const ProviderCredentialsContainer: FC = () => {
       setStatus(await openRouterCredentialsApi.getStatus())
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Failed to load credential status',
+        err instanceof Error
+          ? err.message
+          : 'Couldn’t read the credential status.',
       )
     }
   }, [])
@@ -42,6 +53,8 @@ export const ProviderCredentialsContainer: FC = () => {
   }, [loadStatus])
 
   const handleSave = useCallback(async () => {
+    // Busy, the button stays where it is; a second press waits for the first.
+    if (isSaving || token.trim().length === 0) return
     setIsSaving(true)
     setError(null)
     setMessage(null)
@@ -54,12 +67,12 @@ export const ProviderCredentialsContainer: FC = () => {
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to save OpenRouter API key',
+          : 'Couldn’t save the OpenRouter API key.',
       )
     } finally {
       setIsSaving(false)
     }
-  }, [token])
+  }, [isSaving, token])
 
   const handleRemove = useCallback(async () => {
     const confirmed = await confirm({
@@ -82,7 +95,7 @@ export const ProviderCredentialsContainer: FC = () => {
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to remove OpenRouter API key',
+          : 'Couldn’t remove the OpenRouter API key.',
       )
     } finally {
       setIsSaving(false)
@@ -91,45 +104,40 @@ export const ProviderCredentialsContainer: FC = () => {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-border bg-card/45 p-4">
+      <Card render={<section />} padding="md">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-muted-foreground" />
+              <KeyRound aria-hidden className="size-4 text-ink-muted" />
               <h4 className="text-sm font-semibold">OpenRouter</h4>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {statusText(status)}
-            </p>
+            <p className="text-sm text-ink-muted">{statusText(status)}</p>
           </div>
           <Button
             type="button"
             variant="ghost"
             onClick={handleRemove}
-            disabled={isSaving || !status?.configured}
+            disabled={isSaving}
+            disabledReason={
+              !isSaving && !status?.configured ? 'No key is saved.' : undefined
+            }
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Remove
+            <Trash2 className="size-4" />
+            Remove key…
           </Button>
         </div>
 
-        <div className="mt-4 space-y-2">
-          <label
-            htmlFor="openrouter-api-key"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            API key
-          </label>
+        <Field className="mt-4">
+          <FieldLabel>API key</FieldLabel>
           <div className="flex gap-2">
             <div className="relative min-w-0 flex-1">
               <Input
                 size="lg"
-                id="openrouter-api-key"
                 type={showToken ? 'text' : 'password'}
                 autoComplete="off"
                 value={token}
                 placeholder={
-                  status?.configured ? 'Saved key hidden' : 'sk-or-...'
+                  status?.configured ? 'Saved key hidden' : 'sk-or-…'
                 }
                 onChange={(event) => setToken(event.target.value)}
                 disabled={isSaving}
@@ -145,37 +153,32 @@ export const ProviderCredentialsContainer: FC = () => {
                 className="absolute right-0 top-0"
               >
                 {showToken ? (
-                  <EyeOff className="h-4 w-4" />
+                  <EyeOff className="size-4" />
                 ) : (
-                  <Eye className="h-4 w-4" />
+                  <Eye className="size-4" />
                 )}
               </IconButton>
             </div>
             <Button
               type="button"
               onClick={handleSave}
-              disabled={isSaving || token.trim().length === 0}
+              pending={isSaving}
+              pendingLabel="Saving…"
+              disabledReason={
+                !isSaving && token.trim().length === 0
+                  ? 'Paste a key first.'
+                  : undefined
+              }
               size="lg"
             >
               {status?.configured ? 'Replace key' : 'Save key'}
             </Button>
           </div>
-        </div>
-      </section>
+        </Field>
+      </Card>
 
-      {message && (
-        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-          {message}
-        </p>
-      )}
-      {error && (
-        <p
-          className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
+      {message ? <Notice tone="success" title={message} /> : null}
+      {error ? <Notice tone="danger" title={error} /> : null}
     </div>
   )
 }

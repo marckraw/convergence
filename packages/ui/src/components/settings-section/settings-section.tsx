@@ -20,6 +20,12 @@ type SettingsSectionProps = Omit<
   divided?: boolean
   /** Its heading's level; h4, as the settings dialog's subsections are, unless told otherwise. */
   headingLevel?: 3 | 4
+  /**
+   * Its name as a region, when its heading alone would repeat another's: a
+   * provider's row in two lists ("Session naming: Anthropic"). Its heading
+   * names it otherwise.
+   */
+  label?: string
 }
 
 /**
@@ -38,10 +44,12 @@ function SettingsSection({
   compact = false,
   divided = false,
   headingLevel = 4,
+  label,
   className,
   ...props
 }: SettingsSectionProps) {
   const titleId = useId()
+  const name = label ? { 'aria-label': label } : { 'aria-labelledby': titleId }
   const Heading = `h${headingLevel}` as const
   const glyph =
     icon == null ? null : (
@@ -58,7 +66,7 @@ function SettingsSection({
   if (compact) {
     return (
       <section
-        aria-labelledby={titleId}
+        {...name}
         data-slot="settings-section"
         data-compact=""
         className={cn(
@@ -89,7 +97,7 @@ function SettingsSection({
   }
   return (
     <section
-      aria-labelledby={titleId}
+      {...name}
       data-slot="settings-section"
       className={cn(
         'space-y-3',

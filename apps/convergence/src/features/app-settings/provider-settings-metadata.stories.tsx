@@ -78,7 +78,7 @@ const meta = {
   args: { provider: cursor },
   decorators: [
     (Story) => (
-      <div className="w-[560px]">
+      <div className="w-140">
         <Story />
       </div>
     ),
