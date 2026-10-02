@@ -8,7 +8,6 @@ import {
   GitPullRequest,
   Plus,
   RefreshCw,
-  Save,
   Star,
   Trash2,
   X,
@@ -33,19 +32,19 @@ import {
   spaceArtifactStatusOptions,
 } from '@/entities/space'
 import {
+  Badge,
   Button,
   buttonVariants,
   cn,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  EmptyState,
+  Field,
+  FieldError,
+  FieldLabel,
+  FormDialog,
   IconButton,
   Input,
+  ListRow,
+  SectionLabel,
   Select,
   SelectContent,
   SelectItem,
@@ -60,12 +59,17 @@ import {
   toSelectValue,
 } from '@/shared/lib/select-value.pure'
 import {
-  spaceAttentionOptions,
-  spaceAttentionClassNames,
+  metricCard,
+  fieldCaption,
+  noteCard,
+  rowCaption,
+  rowCard,
   spaceAttentionLabels,
-  spaceStatusClassNames,
+  spaceAttentionOptions,
   spaceStatusLabels,
   spaceStatusOptions,
+  suggestionBox,
+  suggestionRow,
 } from './space-workboard.styles'
 import type { SpaceArtifactSuggestion } from './space-artifact-suggestions.pure'
 
@@ -125,7 +129,6 @@ interface SpaceWorkboardProps {
   artifactCounts: Record<string, number>
   isLoading: boolean
   isCreating: boolean
-  isSaving: boolean
   isCreatingArtifact: boolean
   isDiscoveringArtifacts: boolean
   isSynthesizing: boolean
@@ -134,8 +137,8 @@ interface SpaceWorkboardProps {
   onCreateTitleChange: (value: string) => void
   onCreate: () => void
   onSelectSpace: (id: string) => void
+  /** A change to the Space's own fields; it is kept as it is made (R6). */
   onDraftChange: (draft: SpaceDraft) => void
-  onSave: () => void
   onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
   onArtifactDialogOpenChange: (open: boolean) => void
   onCreateArtifact: () => void
@@ -183,7 +186,6 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   artifactCounts,
   isLoading,
   isCreating,
-  isSaving,
   isCreatingArtifact,
   isDiscoveringArtifacts,
   isSynthesizing,
@@ -193,7 +195,6 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   onCreate,
   onSelectSpace,
   onDraftChange,
-  onSave,
   onArtifactDraftChange,
   onArtifactDialogOpenChange,
   onCreateArtifact,
@@ -218,677 +219,606 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   onDetachAttempt,
 }) => {
   const createDisabled = createTitle.trim().length === 0 || isCreating
-  const saveDisabled =
-    !selectedSpace || selectedDraft.title.trim().length === 0 || isSaving
-  const artifactCreateDisabled =
-    !selectedSpace ||
-    artifactDraft.label.trim().length === 0 ||
-    artifactDraft.value.trim().length === 0 ||
-    isCreatingArtifact
+  const titleMissing = selectedDraft.title.trim().length === 0
 
   return (
-    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      {trigger ? <DialogTrigger render={trigger} /> : null}
-      <DialogContent className="w-[min(1040px,calc(100vw-2rem))]">
-        <DialogHeader>
-          <DialogTitle>Spaces</DialogTitle>
-          <DialogDescription>
-            Global work tracking for agent-driven delivery.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(240px,320px)_1fr]">
-          <section className="min-h-0 border-b border-border/70 md:border-r md:border-b-0">
-            <div className="border-b border-border/70 px-4 py-4">
-              <form
-                className="flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!createDisabled) onCreate()
-                }}
+    // Every edit here is kept as it is made (R6): the Space's own fields too,
+    // so the dialog ends in Done, not in a Save that was the only way out.
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={trigger}
+      title="Spaces"
+      description="Global work tracking for agent-driven delivery."
+      size="xl"
+      height="tall"
+      flush
+      saves="as-you-go"
+      error={error}
+    >
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <section className="flex min-h-0 flex-col border-b border-line-soft md:w-80 md:shrink-0 md:border-r md:border-b-0">
+          <div className="border-b border-line-soft p-4">
+            <form
+              className="flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!createDisabled) onCreate()
+              }}
+            >
+              <Input
+                size="lg"
+                value={createTitle}
+                onChange={(event) => onCreateTitleChange(event.target.value)}
+                placeholder="New Space"
+                disabled={isCreating}
+                aria-label="New Space title"
+              />
+              <IconButton
+                label="Create Space"
+                type="submit"
+                variant="secondary"
+                disabled={createDisabled}
+                size="lg"
               >
-                <Input
-                  size="lg"
-                  value={createTitle}
-                  onChange={(event) => onCreateTitleChange(event.target.value)}
-                  placeholder="New Space"
-                  disabled={isCreating}
-                  aria-label="New Space title"
-                />
-                <IconButton
-                  label="Create Space"
-                  type="submit"
-                  variant="secondary"
-                  disabled={createDisabled}
-                  size="lg"
-                >
-                  <Plus className="h-4 w-4" />
-                </IconButton>
-              </form>
-            </div>
+                <Plus className="size-4" />
+              </IconButton>
+            </form>
+          </div>
 
-            <div className="app-scrollbar max-h-[44vh] overflow-y-auto p-2 md:max-h-none">
-              {isLoading && spaces.length === 0 ? (
-                <p className="px-3 py-4 text-sm text-muted-foreground">
-                  Loading Spaces...
-                </p>
-              ) : spaces.length === 0 ? (
-                <div className="px-3 py-8 text-sm text-muted-foreground">
-                  No Spaces yet.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {spaces.map((space) => (
-                    <Button
-                      key={space.id}
-                      type="button"
-                      variant="ghost"
-                      onClick={() => onSelectSpace(space.id)}
-                      size="lg"
-                      className={cn(
-                        'h-auto w-full justify-start rounded-lg border px-3 py-3 text-left',
-                        selectedSpace?.id === space.id
-                          ? 'border-border bg-accent/70'
-                          : 'border-transparent hover:border-border/60',
-                      )}
-                    >
-                      <span className="min-w-0 flex-1 space-y-2">
-                        <span className="block truncate text-sm font-medium">
-                          {space.title}
+          <div className="app-scrollbar max-h-64 min-h-0 overflow-y-auto p-2 md:max-h-none md:flex-1">
+            {isLoading && spaces.length === 0 ? (
+              <EmptyState
+                variant="plain"
+                state="loading"
+                title="Loading Spaces…"
+              />
+            ) : spaces.length === 0 ? (
+              <EmptyState
+                variant="plain"
+                title="No Spaces yet"
+                detail="Name one above to start."
+              />
+            ) : (
+              <div className="space-y-1">
+                {spaces.map((space) => (
+                  <ListRow
+                    key={space.id}
+                    render={
+                      <button
+                        type="button"
+                        onClick={() => onSelectSpace(space.id)}
+                      />
+                    }
+                    selected={selectedSpace?.id === space.id}
+                    title={space.title}
+                    // Its status in words: a tag hue's tint would fail its
+                    // contrast on the chosen row's fill (R7), and the board
+                    // reads the same either way.
+                    meta={
+                      <>
+                        <span>{spaceStatusLabels[space.status]}</span>
+                        {space.attention !== 'none' ? (
+                          <span>{spaceAttentionLabels[space.attention]}</span>
+                        ) : null}
+                        <span className="inline-flex items-center gap-1">
+                          <FileText aria-hidden className="size-3.5" />
+                          {attemptCounts[space.id] ?? 0}
                         </span>
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          {renderStatusBadge(space.status)}
-                          {space.attention !== 'none' ? (
-                            <span
-                              className={cn(
-                                'rounded-full border px-2 py-0.5 text-3xs font-medium',
-                                spaceAttentionClassNames[space.attention],
-                              )}
-                            >
-                              {spaceAttentionLabels[space.attention]}
-                            </span>
-                          ) : null}
+                        <span className="inline-flex items-center gap-1">
+                          <GitPullRequest aria-hidden className="size-3.5" />
+                          {artifactCounts[space.id] ?? 0}
                         </span>
-                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1">
-                            <FileText className="h-3.5 w-3.5" />
-                            {attemptCounts[space.id] ?? 0}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <GitPullRequest className="h-3.5 w-3.5" />
-                            {artifactCounts[space.id] ?? 0}
-                          </span>
-                          <span className="inline-flex min-w-0 items-center gap-1">
-                            <CalendarClock className="h-3.5 w-3.5" />
-                            <span className="truncate">
-                              {formatUpdatedAt(space.updatedAt)}
-                            </span>
-                          </span>
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarClock aria-hidden className="size-3.5" />
+                          {formatUpdatedAt(space.updatedAt)}
                         </span>
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+                      </>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
 
-          <section className="app-scrollbar min-h-0 overflow-y-auto px-6 py-5">
-            {selectedSpace ? (
-              <div className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
-                  <label className="space-y-2">
-                    <span className="text-xs font-medium uppercase text-muted-foreground">
-                      Title
-                    </span>
-                    <Input
-                      size="lg"
-                      value={selectedDraft.title}
-                      onChange={(event) =>
-                        onDraftChange({
-                          ...selectedDraft,
-                          title: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs font-medium uppercase text-muted-foreground">
-                      Status
-                    </span>
-                    <Select
-                      items={spaceStatusLabels}
-                      value={selectedDraft.status}
-                      onValueChange={(status) =>
-                        onDraftChange({
-                          ...selectedDraft,
-                          status: status as SpaceStatus,
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        size="lg"
-                        className="w-full"
-                        aria-label="Status"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {spaceStatusOptions.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {spaceStatusLabels[status]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs font-medium uppercase text-muted-foreground">
-                      Attention
-                    </span>
-                    <Select
-                      items={spaceAttentionLabels}
-                      value={selectedDraft.attention}
-                      onValueChange={(attention) =>
-                        onDraftChange({
-                          ...selectedDraft,
-                          attention: attention as SpaceAttention,
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        size="lg"
-                        className="w-full"
-                        aria-label="Attention"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {spaceAttentionOptions.map((attention) => (
-                          <SelectItem key={attention} value={attention}>
-                            {spaceAttentionLabels[attention]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-medium uppercase text-muted-foreground">
-                      Space brief
-                    </span>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={onSynthesize}
-                      disabled={isSynthesizing || selectedAttempts.length === 0}
-                      aria-label="Synthesize Space brief"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      {isSynthesizing ? 'Synthesizing...' : 'Synthesize'}
-                    </Button>
-                  </div>
-                  <Textarea
-                    value={selectedDraft.brief}
+        <section className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {selectedSpace ? (
+            <div className="space-y-5">
+              <div className="flex flex-col gap-4 md:flex-row">
+                <Field invalid={titleMissing} className="md:flex-1">
+                  <FieldLabel>Title</FieldLabel>
+                  <Input
+                    size="lg"
+                    value={selectedDraft.title}
                     onChange={(event) =>
                       onDraftChange({
                         ...selectedDraft,
-                        brief: event.target.value,
+                        title: event.target.value,
                       })
                     }
-                    className="min-h-55 resize-y"
-                    placeholder="Stable notes, decisions, constraints, and next action."
-                    aria-label="Space brief"
                   />
+                  {titleMissing ? (
+                    <FieldError match reserve={false}>
+                      A Space needs a title; nothing is saved without one.
+                    </FieldError>
+                  ) : null}
+                </Field>
+
+                <Field className="md:w-45 md:shrink-0">
+                  <FieldLabel nativeLabel={false} render={<div />}>
+                    Status
+                  </FieldLabel>
+                  <Select
+                    items={spaceStatusLabels}
+                    value={selectedDraft.status}
+                    onValueChange={(status) =>
+                      onDraftChange({
+                        ...selectedDraft,
+                        status: status as SpaceStatus,
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      size="lg"
+                      className="w-full"
+                      aria-label="Status"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {spaceStatusOptions.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {spaceStatusLabels[status]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field className="md:w-45 md:shrink-0">
+                  <FieldLabel nativeLabel={false} render={<div />}>
+                    Attention
+                  </FieldLabel>
+                  <Select
+                    items={spaceAttentionLabels}
+                    value={selectedDraft.attention}
+                    onValueChange={(attention) =>
+                      onDraftChange({
+                        ...selectedDraft,
+                        attention: attention as SpaceAttention,
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      size="lg"
+                      className="w-full"
+                      aria-label="Attention"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {spaceAttentionOptions.map((attention) => (
+                        <SelectItem key={attention} value={attention}>
+                          {spaceAttentionLabels[attention]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <SectionLabel as="h3">Space brief</SectionLabel>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={onSynthesize}
+                    disabledReason={
+                      selectedAttempts.length === 0
+                        ? 'Link an Attempt to synthesize from first.'
+                        : undefined
+                    }
+                    pending={isSynthesizing}
+                    pendingLabel="Synthesizing…"
+                    aria-label="Synthesize Space brief"
+                  >
+                    <RefreshCw className="size-4" />
+                    Synthesize
+                  </Button>
                 </div>
+                <Textarea
+                  value={selectedDraft.brief}
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...selectedDraft,
+                      brief: event.target.value,
+                    })
+                  }
+                  className="min-h-55 resize-y"
+                  placeholder="Stable notes, decisions, constraints, and next action."
+                  aria-label="Space brief"
+                />
+              </div>
 
-                {synthesisPreview ? (
-                  <section className="space-y-3 rounded-lg border border-cyan-500/25 bg-cyan-500/10 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-medium uppercase text-cyan-100">
-                          Suggested updates
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Review and accept only the parts that should become
-                          stable Space state.
-                        </div>
-                      </div>
-                      <IconButton
-                        label="Dismiss synthesis preview"
-                        type="button"
-                        variant="secondary"
-                        onClick={onDismissSynthesisPreview}
-                        className="shrink-0"
-                      >
-                        <X className="h-4 w-4" />
-                      </IconButton>
+              {synthesisPreview ? (
+                <section className={suggestionBox}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-medium text-info-ink uppercase">
+                        Suggested updates
+                      </h4>
+                      <p className="mt-1 text-xs text-ink-muted">
+                        Review and accept only the parts that should become
+                        stable Space state.
+                      </p>
                     </div>
+                    <IconButton
+                      label="Dismiss synthesis preview"
+                      type="button"
+                      variant="secondary"
+                      onClick={onDismissSynthesisPreview}
+                      className="shrink-0"
+                    >
+                      <X className="size-4" />
+                    </IconButton>
+                  </div>
 
-                    {synthesisPreview.brief ? (
-                      <div className="space-y-2">
-                        <div className="text-2xs font-medium uppercase text-muted-foreground">
-                          Proposed Space brief
-                        </div>
-                        <Textarea
-                          value={synthesisPreview.brief}
-                          onChange={(event) =>
-                            onSynthesisBriefChange(event.target.value)
-                          }
-                          className="min-h-35 resize-y"
-                          aria-label="Suggested Space brief"
-                        />
-                        <div className="flex justify-end gap-2">
+                  {synthesisPreview.brief ? (
+                    <div className="space-y-2">
+                      <SectionLabel>Proposed Space brief</SectionLabel>
+                      <Textarea
+                        value={synthesisPreview.brief}
+                        onChange={(event) =>
+                          onSynthesisBriefChange(event.target.value)
+                        }
+                        className="min-h-35 resize-y"
+                        aria-label="Suggested Space brief"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={onRejectSynthesisBrief}
+                        >
+                          Reject
+                        </Button>
+                        <Button type="button" onClick={onAcceptSynthesisBrief}>
+                          <Check className="size-4" />
+                          Accept
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {renderSynthesisNotes({
+                    preview: synthesisPreview,
+                    onAppendSynthesisNotes,
+                  })}
+
+                  {synthesisPreview.artifacts.length > 0 ? (
+                    <div className="space-y-2">
+                      <SectionLabel>Proposed Artifacts</SectionLabel>
+                      {synthesisPreview.artifacts.map((artifact) => (
+                        <div key={artifact.id} className={suggestionRow}>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {artifact.label}
+                            </div>
+                            <div className="mt-1 text-xs text-ink-muted">
+                              {spaceArtifactKindLabels[artifact.kind]} |{' '}
+                              {spaceArtifactStatusLabels[artifact.status]} |{' '}
+                              {artifact.value}
+                            </div>
+                          </div>
                           <Button
                             type="button"
                             variant="secondary"
-                            onClick={onRejectSynthesisBrief}
+                            onClick={() =>
+                              onAcceptSynthesisArtifact(artifact.id)
+                            }
                           >
-                            Reject
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={onAcceptSynthesisBrief}
-                          >
-                            <Check className="h-4 w-4" />
+                            <Check className="size-4" />
                             Accept
                           </Button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {renderSynthesisNotes({
-                      preview: synthesisPreview,
-                      onAppendSynthesisNotes,
-                    })}
-
-                    {synthesisPreview.artifacts.length > 0 ? (
-                      <div className="space-y-2">
-                        <div className="text-2xs font-medium uppercase text-muted-foreground">
-                          Proposed Artifacts
-                        </div>
-                        {synthesisPreview.artifacts.map((artifact) => (
-                          <div
-                            key={artifact.id}
-                            className="flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/60 bg-background/50 px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium">
-                                {artifact.label}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {spaceArtifactKindLabels[artifact.kind]} |{' '}
-                                {spaceArtifactStatusLabels[artifact.status]} |{' '}
-                                {artifact.value}
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={() =>
-                                onAcceptSynthesisArtifact(artifact.id)
-                              }
-                            >
-                              <Check className="h-4 w-4" />
-                              Accept
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </section>
-                ) : null}
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {renderMetric(
-                    'Attempts',
-                    attemptCounts[selectedSpace.id] ?? 0,
-                  )}
-                  {renderMetric(
-                    'Artifacts',
-                    artifactCounts[selectedSpace.id] ?? 0,
-                  )}
-                  {renderMetric(
-                    'Updated',
-                    formatUpdatedAt(selectedSpace.updatedAt),
-                  )}
-                </div>
-
-                <section className="space-y-3">
-                  <div className="text-xs font-medium uppercase text-muted-foreground">
-                    Attempts
-                  </div>
-                  {selectedAttempts.length === 0 ? (
-                    <div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
-                      No linked Attempts yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedAttempts.map((view) =>
-                        renderAttemptRow({
-                          view,
-                          onAttemptRoleChange,
-                          onSetPrimaryAttempt,
-                          onDetachAttempt,
-                        }),
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-medium uppercase text-muted-foreground">
-                      Artifacts
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={onDiscoverArtifacts}
-                        disabled={
-                          isDiscoveringArtifacts ||
-                          selectedAttempts.length === 0
-                        }
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                        {isDiscoveringArtifacts ? 'Checking...' : 'Discover'}
-                      </Button>
-                      <Dialog
-                        open={artifactDialogOpen}
-                        onOpenChange={(open) =>
-                          onArtifactDialogOpenChange(open)
-                        }
-                      >
-                        <DialogTrigger
-                          render={
-                            <Button type="button" variant="secondary">
-                              <Plus className="h-4 w-4" />
-                              Add Artifact
-                            </Button>
-                          }
-                        />
-                        <DialogContent>
-                          <form
-                            className="flex min-h-0 flex-1 flex-col"
-                            onSubmit={(event) => {
-                              event.preventDefault()
-                              if (!artifactCreateDisabled) onCreateArtifact()
-                            }}
-                          >
-                            <DialogHeader>
-                              <DialogTitle>Add Artifact</DialogTitle>
-                              <DialogDescription>
-                                Attach a concrete artifact produced by this
-                                Space.
-                              </DialogDescription>
-                            </DialogHeader>
-
-                            <DialogBody className="grid gap-4 md:grid-cols-[160px_1fr]">
-                              <label className="space-y-1.5">
-                                <span className="text-2xs font-medium uppercase text-muted-foreground">
-                                  Kind
-                                </span>
-                                <Select
-                                  items={spaceArtifactKindLabels}
-                                  value={artifactDraft.kind}
-                                  onValueChange={(kind) =>
-                                    onArtifactDraftChange({
-                                      ...artifactDraft,
-                                      kind: kind as SpaceArtifactKind,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger
-                                    size="lg"
-                                    className="w-full"
-                                    aria-label="New Artifact kind"
-                                  >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {spaceArtifactKindOptions.map((kind) => (
-                                      <SelectItem key={kind} value={kind}>
-                                        {spaceArtifactKindLabels[kind]}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </label>
-
-                              <label className="space-y-1.5">
-                                <span className="text-2xs font-medium uppercase text-muted-foreground">
-                                  Label
-                                </span>
-                                <Input
-                                  size="lg"
-                                  value={artifactDraft.label}
-                                  onChange={(event) =>
-                                    onArtifactDraftChange({
-                                      ...artifactDraft,
-                                      label: event.target.value,
-                                    })
-                                  }
-                                  placeholder="Public PR"
-                                  aria-label="New Artifact label"
-                                />
-                              </label>
-
-                              <label className="space-y-1.5">
-                                <span className="text-2xs font-medium uppercase text-muted-foreground">
-                                  Status
-                                </span>
-                                <Select
-                                  items={spaceArtifactStatusLabels}
-                                  value={artifactDraft.status}
-                                  onValueChange={(status) =>
-                                    onArtifactDraftChange({
-                                      ...artifactDraft,
-                                      status: status as SpaceArtifactStatus,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger
-                                    size="lg"
-                                    className="w-full"
-                                    aria-label="New Artifact status"
-                                  >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {spaceArtifactStatusOptions.map(
-                                      (status) => (
-                                        <SelectItem key={status} value={status}>
-                                          {spaceArtifactStatusLabels[status]}
-                                        </SelectItem>
-                                      ),
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </label>
-
-                              <label className="space-y-1.5">
-                                <span className="text-2xs font-medium uppercase text-muted-foreground">
-                                  Source
-                                </span>
-                                <Select
-                                  items={sourceSessionItems(selectedAttempts)}
-                                  value={toSelectValue(
-                                    artifactDraft.sourceSessionId,
-                                  )}
-                                  onValueChange={(sourceSessionId) =>
-                                    onArtifactDraftChange({
-                                      ...artifactDraft,
-                                      sourceSessionId:
-                                        fromSelectValue(sourceSessionId),
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger
-                                    size="lg"
-                                    className="w-full"
-                                    aria-label="New Artifact source session"
-                                  >
-                                    <SelectValue placeholder="No source Attempt" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value={SELECT_EMPTY_VALUE}>
-                                      No source Attempt
-                                    </SelectItem>
-                                    {selectedAttempts.map((view) => (
-                                      <SelectItem
-                                        key={view.attempt.sessionId}
-                                        value={view.attempt.sessionId}
-                                      >
-                                        {view.sessionName}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </label>
-
-                              <label className="space-y-1.5 md:col-span-2">
-                                <span className="text-2xs font-medium uppercase text-muted-foreground">
-                                  Value
-                                </span>
-                                <Input
-                                  size="lg"
-                                  value={artifactDraft.value}
-                                  onChange={(event) =>
-                                    onArtifactDraftChange({
-                                      ...artifactDraft,
-                                      value: event.target.value,
-                                    })
-                                  }
-                                  placeholder="URL, branch, file path, or note"
-                                  aria-label="New Artifact value"
-                                />
-                              </label>
-                            </DialogBody>
-
-                            <DialogFooter>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={() =>
-                                  onArtifactDialogOpenChange(false)
-                                }
-                                size="lg"
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                type="submit"
-                                disabled={artifactCreateDisabled}
-                                size="lg"
-                              >
-                                <Plus className="h-4 w-4" />
-                                {isCreatingArtifact
-                                  ? 'Creating...'
-                                  : 'Create Artifact'}
-                              </Button>
-                            </DialogFooter>
-                          </form>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </div>
-
-                  {artifactSuggestions.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="text-2xs font-medium uppercase text-muted-foreground">
-                        Suggestions
-                      </div>
-                      {artifactSuggestions.map((suggestion) => (
-                        <div
-                          key={suggestion.id}
-                          className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-3"
-                        >
-                          <div className="flex min-w-0 items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium">
-                                {suggestion.title}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {suggestion.description}
-                              </div>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={() =>
-                                  onAcceptArtifactSuggestion(suggestion.id)
-                                }
-                              >
-                                <Check className="h-4 w-4" />
-                                Accept
-                              </Button>
-                              <IconButton
-                                label={`Dismiss ${suggestion.title}`}
-                                type="button"
-                                variant="secondary"
-                                onClick={() =>
-                                  onDismissArtifactSuggestion(suggestion.id)
-                                }
-                              >
-                                <X className="h-4 w-4" />
-                              </IconButton>
-                            </div>
-                          </div>
                         </div>
                       ))}
                     </div>
                   ) : null}
-
-                  {selectedArtifacts.length === 0 ? (
-                    <div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
-                      No Artifacts yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedArtifacts.map((artifact) =>
-                        renderArtifactRow({
-                          artifact,
-                          attempts: selectedAttempts,
-                          onArtifactKindChange,
-                          onArtifactStatusChange,
-                          onArtifactSourceSessionChange,
-                          onArtifactLabelCommit,
-                          onArtifactValueCommit,
-                          onDeleteArtifact,
-                        }),
-                      )}
-                    </div>
-                  )}
                 </section>
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                {renderMetric('Attempts', attemptCounts[selectedSpace.id] ?? 0)}
+                {renderMetric(
+                  'Artifacts',
+                  artifactCounts[selectedSpace.id] ?? 0,
+                )}
+                {renderMetric(
+                  'Updated',
+                  formatUpdatedAt(selectedSpace.updatedAt),
+                )}
               </div>
-            ) : (
-              <div className="flex min-h-65 items-center justify-center text-sm text-muted-foreground">
-                Select or create a Space.
-              </div>
-            )}
-          </section>
+
+              <section className="space-y-3">
+                <SectionLabel as="h3">Attempts</SectionLabel>
+                {selectedAttempts.length === 0 ? (
+                  <EmptyState
+                    title="No linked Attempts yet"
+                    detail="Link a session to this Space from its header."
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {selectedAttempts.map((view) =>
+                      renderAttemptRow({
+                        view,
+                        onAttemptRoleChange,
+                        onSetPrimaryAttempt,
+                        onDetachAttempt,
+                      }),
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <SectionLabel as="h3">Artifacts</SectionLabel>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={onDiscoverArtifacts}
+                      disabledReason={
+                        selectedAttempts.length === 0
+                          ? 'Link an Attempt to discover from first.'
+                          : undefined
+                      }
+                      pending={isDiscoveringArtifacts}
+                      pendingLabel="Checking…"
+                    >
+                      <RefreshCw className="size-4" />
+                      Discover
+                    </Button>
+                    {renderAddArtifact({
+                      open: artifactDialogOpen,
+                      artifactDraft,
+                      attempts: selectedAttempts,
+                      isCreatingArtifact,
+                      onOpenChange: onArtifactDialogOpenChange,
+                      onArtifactDraftChange,
+                      onCreateArtifact,
+                    })}
+                  </div>
+                </div>
+
+                {artifactSuggestions.length > 0 ? (
+                  <div className="space-y-2">
+                    <SectionLabel>Suggestions</SectionLabel>
+                    {artifactSuggestions.map((suggestion) => (
+                      <div key={suggestion.id} className={suggestionBox}>
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {suggestion.title}
+                            </div>
+                            <div className="mt-1 text-xs text-ink-muted">
+                              {suggestion.description}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() =>
+                                onAcceptArtifactSuggestion(suggestion.id)
+                              }
+                            >
+                              <Check className="size-4" />
+                              Accept
+                            </Button>
+                            <IconButton
+                              label={`Dismiss ${suggestion.title}`}
+                              type="button"
+                              variant="secondary"
+                              onClick={() =>
+                                onDismissArtifactSuggestion(suggestion.id)
+                              }
+                            >
+                              <X className="size-4" />
+                            </IconButton>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {selectedArtifacts.length === 0 ? (
+                  <EmptyState
+                    title="No Artifacts yet"
+                    detail="Add one, or discover them from the Attempts."
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {selectedArtifacts.map((artifact) =>
+                      renderArtifactRow({
+                        artifact,
+                        attempts: selectedAttempts,
+                        onArtifactKindChange,
+                        onArtifactStatusChange,
+                        onArtifactSourceSessionChange,
+                        onArtifactLabelCommit,
+                        onArtifactValueCommit,
+                        onDeleteArtifact,
+                      }),
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+          ) : (
+            <EmptyState
+              variant="plain"
+              layout="centred"
+              title="No Space selected"
+              detail="Select or create a Space."
+            />
+          )}
+        </section>
+      </div>
+    </FormDialog>
+  )
+}
+
+/** The Add Artifact dialog: a form over the Spaces, kept on Create (R6). */
+function renderAddArtifact(input: {
+  open: boolean
+  artifactDraft: SpaceArtifactDraft
+  attempts: SpaceAttemptView[]
+  isCreatingArtifact: boolean
+  onOpenChange: (open: boolean) => void
+  onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
+  onCreateArtifact: () => void
+}) {
+  const {
+    open,
+    artifactDraft,
+    attempts,
+    isCreatingArtifact,
+    onOpenChange,
+    onArtifactDraftChange,
+    onCreateArtifact,
+  } = input
+  const missing =
+    artifactDraft.label.trim().length === 0
+      ? 'Give the Artifact a label first.'
+      : artifactDraft.value.trim().length === 0
+        ? 'Give the Artifact a value first.'
+        : undefined
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={
+        <Button type="button" variant="secondary">
+          <Plus className="size-4" />
+          Add Artifact…
+        </Button>
+      }
+      title="Add Artifact"
+      description="Attach a concrete artifact produced by this Space."
+      saves="on-save"
+      onSave={onCreateArtifact}
+      saveLabel="Add Artifact"
+      pendingLabel="Adding…"
+      pending={isCreatingArtifact}
+      saveDisabledReason={missing}
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <span className={fieldCaption}>Kind</span>
+          <Select
+            items={spaceArtifactKindLabels}
+            value={artifactDraft.kind}
+            onValueChange={(kind) =>
+              onArtifactDraftChange({
+                ...artifactDraft,
+                kind: kind as SpaceArtifactKind,
+              })
+            }
+          >
+            <SelectTrigger
+              size="lg"
+              className="w-full"
+              aria-label="New Artifact kind"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {spaceArtifactKindOptions.map((kind) => (
+                <SelectItem key={kind} value={kind}>
+                  {spaceArtifactKindLabels[kind]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {error ? (
-          <div className="border-t border-destructive/30 bg-destructive/10 px-6 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        ) : null}
+        <div className="flex flex-col gap-1.5">
+          <span className={fieldCaption}>Label</span>
+          <Input
+            size="lg"
+            value={artifactDraft.label}
+            onChange={(event) =>
+              onArtifactDraftChange({
+                ...artifactDraft,
+                label: event.target.value,
+              })
+            }
+            placeholder="Public PR"
+            aria-label="New Artifact label"
+          />
+        </div>
 
-        <DialogFooter>
-          <Button type="button" onClick={onSave} disabled={saveDisabled}>
-            <Save className="h-4 w-4" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="flex flex-col gap-1.5">
+          <span className={fieldCaption}>Status</span>
+          <Select
+            items={spaceArtifactStatusLabels}
+            value={artifactDraft.status}
+            onValueChange={(status) =>
+              onArtifactDraftChange({
+                ...artifactDraft,
+                status: status as SpaceArtifactStatus,
+              })
+            }
+          >
+            <SelectTrigger
+              size="lg"
+              className="w-full"
+              aria-label="New Artifact status"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {spaceArtifactStatusOptions.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {spaceArtifactStatusLabels[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className={fieldCaption}>Source</span>
+          {renderSourceSelect({
+            attempts,
+            value: artifactDraft.sourceSessionId,
+            onChange: (sourceSessionId) =>
+              onArtifactDraftChange({ ...artifactDraft, sourceSessionId }),
+            label: 'New Artifact source session',
+          })}
+        </div>
+
+        <div className="flex flex-col gap-1.5 md:col-span-2">
+          <span className={fieldCaption}>Value</span>
+          <Input
+            size="lg"
+            value={artifactDraft.value}
+            onChange={(event) =>
+              onArtifactDraftChange({
+                ...artifactDraft,
+                value: event.target.value,
+              })
+            }
+            placeholder="URL, branch, file path, or note"
+            aria-label="New Artifact value"
+          />
+        </div>
+      </div>
+    </FormDialog>
   )
 }
 
@@ -902,16 +832,37 @@ function sourceSessionItems(attempts: SpaceAttemptView[]) {
   }
 }
 
-function renderStatusBadge(status: SpaceStatus) {
+/** Which Attempt an Artifact came from, or none. */
+function renderSourceSelect(input: {
+  attempts: SpaceAttemptView[]
+  value: string
+  onChange: (sourceSessionId: string) => void
+  label: string
+}) {
+  const { attempts, value, onChange, label } = input
   return (
-    <span
-      className={cn(
-        'rounded-full border px-2 py-0.5 text-3xs font-medium',
-        spaceStatusClassNames[status],
-      )}
+    <Select
+      items={sourceSessionItems(attempts)}
+      value={toSelectValue(value)}
+      onValueChange={(sourceSessionId) =>
+        onChange(fromSelectValue(sourceSessionId))
+      }
     >
-      {spaceStatusLabels[status]}
-    </span>
+      <SelectTrigger size="lg" className="w-full" aria-label={label}>
+        <SelectValue placeholder="No source Attempt" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={SELECT_EMPTY_VALUE}>No source Attempt</SelectItem>
+        {attempts.map((view) => (
+          <SelectItem
+            key={view.attempt.sessionId}
+            value={view.attempt.sessionId}
+          >
+            {view.sessionName}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -939,20 +890,15 @@ function renderSynthesisNotes(input: {
           variant="secondary"
           onClick={onAppendSynthesisNotes}
         >
-          <Check className="h-4 w-4" />
+          <Check className="size-4" />
           Append to Space brief
         </Button>
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         {sections.map((section) => (
-          <div
-            key={section.label}
-            className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
-          >
-            <div className="text-2xs font-medium uppercase text-muted-foreground">
-              {section.label}
-            </div>
-            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          <div key={section.label} className={noteCard}>
+            <SectionLabel>{section.label}</SectionLabel>
+            <ul className="mt-2 space-y-1 text-xs text-ink-muted">
               {section.values.map((value) => (
                 <li key={value}>{value}</li>
               ))}
@@ -966,10 +912,8 @@ function renderSynthesisNotes(input: {
 
 function renderMetric(label: string, value: string | number) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card/30 px-3 py-2">
-      <div className="text-2xs font-medium uppercase text-muted-foreground">
-        {label}
-      </div>
+    <div className={metricCard}>
+      <SectionLabel>{label}</SectionLabel>
       <div className="mt-1 truncate text-sm">{value}</div>
     </div>
   )
@@ -986,10 +930,7 @@ function renderAttemptRow(input: {
   const { attempt } = view
 
   return (
-    <div
-      key={attempt.id}
-      className="rounded-lg border border-border/60 bg-card/30 px-3 py-3"
-    >
+    <div key={attempt.id} className={rowCard}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -997,17 +938,16 @@ function renderAttemptRow(input: {
               {view.sessionName}
             </span>
             {attempt.isPrimary ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-3xs font-medium text-warning-foreground">
-                <Star className="h-3 w-3" />
+              <Badge tone="warning" icon={<Star />}>
                 Primary
-              </span>
+              </Badge>
             ) : null}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
             <span>{view.projectName}</span>
             {view.branchName ? (
               <span className="inline-flex items-center gap-1">
-                <GitBranch className="h-3.5 w-3.5" />
+                <GitBranch className="size-3.5" />
                 {view.branchName}
               </span>
             ) : null}
@@ -1046,7 +986,7 @@ function renderAttemptRow(input: {
             onClick={() => onSetPrimaryAttempt(attempt.id)}
             disabled={attempt.isPrimary}
           >
-            <Star className="h-4 w-4" />
+            <Star className="size-4" />
             Primary
           </Button>
           <IconButton
@@ -1055,7 +995,7 @@ function renderAttemptRow(input: {
             variant="secondary"
             onClick={() => onDetachAttempt(attempt.id)}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="size-4" />
           </IconButton>
         </div>
       </div>
@@ -1095,15 +1035,10 @@ function renderArtifactRow(input: {
   const artifactUrl = parseHttpUrl(artifact.value)
 
   return (
-    <div
-      key={artifact.id}
-      className="rounded-lg border border-border/60 bg-card/30 px-3 py-3"
-    >
-      <div className="grid gap-3 md:grid-cols-[150px_1fr_160px_auto]">
-        <label className="space-y-1.5">
-          <span className="text-2xs font-medium uppercase text-muted-foreground">
-            Kind
-          </span>
+    <div key={artifact.id} className={rowCard}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end">
+        <div className="flex flex-col gap-1.5  md:w-37.5 md:shrink-0">
+          <span className={rowCaption}>Kind</span>
           <Select
             items={spaceArtifactKindLabels}
             value={artifact.kind}
@@ -1126,12 +1061,10 @@ function renderArtifactRow(input: {
               ))}
             </SelectContent>
           </Select>
-        </label>
+        </div>
 
-        <label className="space-y-1.5">
-          <span className="text-2xs font-medium uppercase text-muted-foreground">
-            Label
-          </span>
+        <div className="flex flex-col gap-1.5 md:flex-1">
+          <span className={rowCaption}>Label</span>
           <Input
             size="lg"
             defaultValue={artifact.label}
@@ -1143,12 +1076,10 @@ function renderArtifactRow(input: {
             }}
             aria-label={`Label for ${artifact.label}`}
           />
-        </label>
+        </div>
 
-        <label className="space-y-1.5">
-          <span className="text-2xs font-medium uppercase text-muted-foreground">
-            Status
-          </span>
+        <div className="flex flex-col gap-1.5  md:w-40 md:shrink-0">
+          <span className={rowCaption}>Status</span>
           <Select
             items={spaceArtifactStatusLabels}
             value={artifact.status}
@@ -1171,25 +1102,21 @@ function renderArtifactRow(input: {
               ))}
             </SelectContent>
           </Select>
-        </label>
-
-        <div className="flex items-end">
-          <IconButton
-            label={`Remove Artifact ${artifact.label}`}
-            type="button"
-            variant="secondary"
-            onClick={() => onDeleteArtifact(artifact.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </IconButton>
         </div>
+
+        <IconButton
+          label={`Remove Artifact ${artifact.label}`}
+          type="button"
+          variant="secondary"
+          onClick={() => onDeleteArtifact(artifact.id)}
+        >
+          <Trash2 className="size-4" />
+        </IconButton>
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-[1fr_190px]">
-        <label className="space-y-1.5">
-          <span className="text-2xs font-medium uppercase text-muted-foreground">
-            Value
-          </span>
+      <div className="mt-3 flex flex-col gap-3 md:flex-row">
+        <div className="flex flex-col gap-1.5 md:flex-1">
+          <span className={rowCaption}>Value</span>
           <div className="flex gap-2">
             <Input
               size="lg"
@@ -1220,52 +1147,26 @@ function renderArtifactRow(input: {
                   'shrink-0',
                 )}
               >
-                <ExternalLink className="h-4 w-4" />
+                <ExternalLink className="size-4" />
               </a>
             ) : null}
           </div>
-        </label>
+        </div>
 
-        <label className="space-y-1.5">
-          <span className="text-2xs font-medium uppercase text-muted-foreground">
-            Source
-          </span>
-          <Select
-            items={sourceSessionItems(attempts)}
-            value={toSelectValue(artifact.sourceSessionId ?? '')}
-            onValueChange={(sourceSessionId) =>
-              onArtifactSourceSessionChange(
-                artifact.id,
-                fromSelectValue(sourceSessionId),
-              )
-            }
-          >
-            <SelectTrigger
-              size="lg"
-              className="w-full"
-              aria-label={`Source for ${artifact.label}`}
-            >
-              <SelectValue placeholder="No source Attempt" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SELECT_EMPTY_VALUE}>
-                No source Attempt
-              </SelectItem>
-              {attempts.map((view) => (
-                <SelectItem
-                  key={view.attempt.sessionId}
-                  value={view.attempt.sessionId}
-                >
-                  {view.sessionName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
+        <div className="flex flex-col gap-1.5  md:w-47.5 md:shrink-0">
+          <span className={rowCaption}>Source</span>
+          {renderSourceSelect({
+            attempts,
+            value: artifact.sourceSessionId ?? '',
+            onChange: (sourceSessionId) =>
+              onArtifactSourceSessionChange(artifact.id, sourceSessionId),
+            label: `Source for ${artifact.label}`,
+          })}
+        </div>
       </div>
 
       {sourceAttempt ? (
-        <div className="mt-2 text-xs text-muted-foreground">
+        <div className="mt-2 text-xs text-ink-muted">
           Source: {sourceAttempt.sessionName}
         </div>
       ) : null}

@@ -21,24 +21,6 @@ export const spaceAttentionOptions: SpaceAttention[] = [
   'stale',
 ]
 
-export const spaceStatusClassNames: Record<SpaceStatus, string> = {
-  exploring:
-    'border-cyan-500/25 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200',
-  planned: 'border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-200',
-  implementing:
-    'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200',
-  reviewing:
-    'border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-200',
-  'ready-to-merge':
-    'border-lime-500/25 bg-lime-500/10 text-lime-700 dark:text-lime-200',
-  merged: 'border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-200',
-  released:
-    'border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-200',
-  parked: 'border-zinc-500/25 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
-  discarded:
-    'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-200',
-}
-
 export const spaceAttentionLabels: Record<SpaceAttention, string> = {
   none: 'No attention',
   'needs-you': 'Needs you',
@@ -47,11 +29,32 @@ export const spaceAttentionLabels: Record<SpaceAttention, string> = {
   stale: 'Stale',
 }
 
-export const spaceAttentionClassNames: Record<SpaceAttention, string> = {
-  none: 'border-border/60 bg-background/40 text-muted-foreground',
-  'needs-you': 'border-warning/25 bg-warning/10 text-warning-foreground',
-  'needs-decision':
-    'border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-200',
-  blocked: 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-200',
-  stale: 'border-zinc-500/25 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
-}
+/** An Attempt's or an Artifact's box on the board. */
+export const rowCard =
+  'rounded-lg border border-line-soft bg-surface/30 px-3 py-3'
+
+/** A metric's box: Attempts, Artifacts, Updated. */
+export const metricCard =
+  'rounded-lg border border-line-soft bg-surface/30 px-3 py-2'
+
+/** What synthesis or discovery suggests, on the info tint: a hint to accept or not. */
+export const suggestionBox =
+  'space-y-3 rounded-lg border border-info-line bg-info-soft p-3'
+
+/** One suggested Artifact inside a suggestion box. */
+export const suggestionRow =
+  'flex min-w-0 items-start justify-between gap-3 rounded-md border border-line-soft bg-canvas/50 px-3 py-2'
+
+/** One section of a synthesis's notes. */
+export const noteCard =
+  'rounded-md border border-line-soft bg-canvas/50 px-3 py-2'
+
+/**
+ * A caption over a control that names itself (aria-label): in a list of
+ * rows each control carries its row's name, which a Field's label would
+ * replace with the caption alone.
+ */
+export const rowCaption = 'text-2xs font-medium text-ink-muted'
+
+/** The same caption at a form's size, over a Select that names itself. */
+export const fieldCaption = 'text-sm font-medium'

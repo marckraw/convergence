@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
 } from 'react'
@@ -49,6 +50,13 @@ const emptyArtifactDraft: SpaceArtifactDraft = {
   status: 'planned',
   sourceSessionId: '',
 }
+
+/**
+ * A Space's own fields save as you go (DS4, R6): a choice at once, typing
+ * once it pauses this long, and at once when the Space or the dialog changes.
+ */
+const SAVE_NOW_MS = 0
+const SAVE_AFTER_TYPING_MS = 400
 
 function draftFromSpace(space: Space | null): SpaceDraft {
   if (!space) return emptyDraft
@@ -151,7 +159,6 @@ export const SpaceWorkboardDialogContainer: FC<{
   const [synthesisPreview, setSynthesisPreview] =
     useState<SpaceSynthesisPreview | null>(null)
   const [isCreating, setIsCreating] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [isCreatingArtifact, setIsCreatingArtifact] = useState(false)
   const [isDiscoveringArtifacts, setIsDiscoveringArtifacts] = useState(false)
   const [isSynthesizing, setIsSynthesizing] = useState(false)
@@ -164,12 +171,80 @@ export const SpaceWorkboardDialogContainer: FC<{
     [spaces, selectedId],
   )
 
+  // The Space a draft belongs to, and the draft, as of the latest render.
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const selectedSpaceRef = useRef(selectedSpace)
+  selectedSpaceRef.current = selectedSpace
+  const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saves = useRef<Promise<void>>(Promise.resolve())
+
+  /**
+   * Saves the Space's own fields now, as they stand, after any save under
+   * way. The Space and the draft are read here, not when its turn comes, so
+   * switching Spaces can't carry one Space's edit into another. A Space with
+   * no title is not saved: it keeps the last one it had.
+   */
+  const saveNow = useCallback(() => {
+    if (pendingSave.current !== null) {
+      clearTimeout(pendingSave.current)
+      pendingSave.current = null
+    }
+    const space = selectedSpaceRef.current
+    const current = draftRef.current
+    const title = current.title.trim()
+    if (!space || !title) return
+    saves.current = saves.current.then(async () => {
+      await updateSpace(space.id, {
+        title,
+        status: current.status as SpaceStatus,
+        attention: current.attention as SpaceAttention,
+        brief: current.brief,
+      })
+    })
+  }, [updateSpace])
+
+  const scheduleSave = useCallback(
+    (delayMs: number) => {
+      if (pendingSave.current !== null) clearTimeout(pendingSave.current)
+      pendingSave.current = setTimeout(saveNow, delayMs)
+    },
+    [saveNow],
+  )
+
+  /** Leaving a Space, or the dialog, with typing still waiting keeps it. */
+  const flushSave = useCallback(() => {
+    if (pendingSave.current !== null) saveNow()
+  }, [saveNow])
+
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      if (next) openDialog('space-workboard')
-      else closeDialog()
+      if (next) {
+        openDialog('space-workboard')
+        return
+      }
+      flushSave()
+      closeDialog()
     },
-    [openDialog, closeDialog],
+    [openDialog, closeDialog, flushSave],
+  )
+
+  const handleSelectSpace = useCallback(
+    (id: string) => {
+      flushSave()
+      setSelectedId(id)
+    },
+    [flushSave],
+  )
+
+  const handleDraftChange = useCallback(
+    (next: SpaceDraft) => {
+      const current = draftRef.current
+      const typed = next.title !== current.title || next.brief !== current.brief
+      setDraft(next)
+      scheduleSave(typed ? SAVE_AFTER_TYPING_MS : SAVE_NOW_MS)
+    },
+    [scheduleSave],
   )
 
   useEffect(() => {
@@ -197,17 +272,21 @@ export const SpaceWorkboardDialogContainer: FC<{
     setSelectedId(spaces[0]?.id ?? null)
   }, [open, spaces, payload, selectedId])
 
+  // A Space's draft is seeded when it is chosen, not from each save's answer:
+  // that would overwrite what is being typed.
+  const selectedSpaceId = selectedSpace?.id ?? null
   useEffect(() => {
-    setDraft(draftFromSpace(selectedSpace))
+    setDraft(draftFromSpace(selectedSpaceRef.current))
     setArtifactDraft(emptyArtifactDraft)
     setArtifactDialogOpen(false)
     setArtifactSuggestions([])
     setSynthesisPreview(null)
-  }, [selectedSpace])
+  }, [selectedSpaceId])
 
   const handleCreate = useCallback(async () => {
     const title = createTitle.trim()
     if (!title) return
+    flushSave()
     setIsCreating(true)
     const space = await createSpace({ title })
     setIsCreating(false)
@@ -215,27 +294,10 @@ export const SpaceWorkboardDialogContainer: FC<{
     setCreateTitle('')
     setSelectedId(space.id)
     setDraft(draftFromSpace(space))
-  }, [createSpace, createTitle])
+  }, [createSpace, createTitle, flushSave])
 
   // Enable cmd+Enter to submit the New Space form
   useFormSubmitShortcut(!!createTitle.trim(), handleCreate)
-
-  const handleSave = useCallback(async () => {
-    if (!selectedSpace) return
-    const title = draft.title.trim()
-    if (!title) return
-    setIsSaving(true)
-    const updated = await updateSpace(selectedSpace.id, {
-      title,
-      status: draft.status as SpaceStatus,
-      attention: draft.attention as SpaceAttention,
-      brief: draft.brief,
-    })
-    setIsSaving(false)
-    if (updated) {
-      setDraft(draftFromSpace(updated))
-    }
-  }, [draft, selectedSpace, updateSpace])
 
   useEffect(() => {
     if (open) clearError()
@@ -472,10 +534,11 @@ export const SpaceWorkboardDialogContainer: FC<{
       ...current,
       brief: synthesisPreview.brief,
     }))
+    scheduleSave(SAVE_NOW_MS)
     setSynthesisPreview((current) =>
       current ? compactSynthesisPreview({ ...current, brief: '' }) : current,
     )
-  }, [synthesisPreview])
+  }, [synthesisPreview, scheduleSave])
 
   const handleRejectSynthesisBrief = useCallback(() => {
     setSynthesisPreview((current) =>
@@ -492,6 +555,7 @@ export const SpaceWorkboardDialogContainer: FC<{
       ...current,
       brief: appendMarkdownBlock(current.brief, notes),
     }))
+    scheduleSave(SAVE_NOW_MS)
     setSynthesisPreview((current) =>
       current
         ? compactSynthesisPreview({
@@ -502,7 +566,7 @@ export const SpaceWorkboardDialogContainer: FC<{
           })
         : current,
     )
-  }, [synthesisPreview])
+  }, [synthesisPreview, scheduleSave])
 
   const handleAcceptSynthesisArtifact = useCallback(
     async (suggestionId: string) => {
@@ -572,7 +636,6 @@ export const SpaceWorkboardDialogContainer: FC<{
       artifactCounts={artifactCounts}
       isLoading={loading}
       isCreating={isCreating}
-      isSaving={isSaving}
       isCreatingArtifact={isCreatingArtifact}
       isDiscoveringArtifacts={isDiscoveringArtifacts}
       isSynthesizing={isSynthesizing}
@@ -580,9 +643,8 @@ export const SpaceWorkboardDialogContainer: FC<{
       onOpenChange={handleOpenChange}
       onCreateTitleChange={setCreateTitle}
       onCreate={handleCreate}
-      onSelectSpace={setSelectedId}
-      onDraftChange={setDraft}
-      onSave={handleSave}
+      onSelectSpace={handleSelectSpace}
+      onDraftChange={handleDraftChange}
       onArtifactDraftChange={setArtifactDraft}
       onArtifactDialogOpenChange={setArtifactDialogOpen}
       onCreateArtifact={handleCreateArtifact}

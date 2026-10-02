@@ -246,7 +246,6 @@ describe('SpaceWorkboardDialogContainer', () => {
       ),
       { target: { value: 'Stable current understanding.' } },
     )
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
       expect(mockElectronAPI.space.update).toHaveBeenCalledWith('i1', {
@@ -287,7 +286,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     fireEvent.change(screen.getByLabelText(/new artifact value/i), {
       target: { value: 'https://github.com/example/repo/pull/1' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /create artifact/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Artifact' }))
 
     await waitFor(() => {
       expect(mockElectronAPI.space.addArtifact).toHaveBeenCalledWith({
@@ -381,7 +380,6 @@ describe('SpaceWorkboardDialogContainer', () => {
       target: { value: 'Edited synthesized understanding.' },
     })
     fireEvent.click(screen.getAllByRole('button', { name: /accept/i })[0])
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
       expect(mockElectronAPI.space.update).toHaveBeenCalledWith('i1', {
@@ -416,7 +414,6 @@ describe('SpaceWorkboardDialogContainer', () => {
         name: /append to space brief/i,
       }),
     )
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
       expect(mockElectronAPI.space.update).toHaveBeenCalledWith('i1', {
