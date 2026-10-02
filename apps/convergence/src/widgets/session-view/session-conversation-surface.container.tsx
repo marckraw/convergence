@@ -1,5 +1,5 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { Button } from '@convergence/ui'
+import { Button, Notice } from '@convergence/ui'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
 import { useMemo, useRef, type FC, type ReactNode } from 'react'
 import type {
@@ -95,17 +95,20 @@ export const SessionConversationSurface: FC<
   return (
     <div ref={surfaceRef} className="relative flex min-h-0 flex-1 flex-col">
       {parallelError && (
-        <div role="alert" className="px-4 py-2 text-sm text-ink-muted">
-          Parallel work could not be read ·{' '}
-          <Button
-            type="button"
-            variant="link"
-            onClick={onParallelRetry}
-            size="lg"
-            className="text-sm"
+        // R10, in the panel's own words: what failed, why, and one Retry.
+        <div className="px-4 pt-2">
+          <Notice
+            tone="danger"
+            title="Couldn't read parallel work."
+            actions={
+              <Button type="button" variant="link" onClick={onParallelRetry}>
+                Retry
+              </Button>
+            }
+            className="mx-auto max-w-conversation"
           >
-            Retry
-          </Button>
+            {parallelError}
+          </Notice>
         </div>
       )}
       <SessionTranscript
@@ -172,9 +175,11 @@ function renderComposerArea(
 ): ReactNode {
   if (composerDisabledReason) {
     return (
-      <div className="mx-auto w-full max-w-conversation rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning-ink">
-        {composerDisabledReason}
-      </div>
+      <Notice
+        tone="warning"
+        title={composerDisabledReason}
+        className="mx-auto w-full max-w-conversation"
+      />
     )
   }
 

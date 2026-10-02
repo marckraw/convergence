@@ -133,7 +133,8 @@ import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
-import { Button, IconButton } from '@convergence/ui'
+import { Button, IconButton, Notice } from '@convergence/ui'
+import { attachmentRejectionsTitle } from './attachment-rejections.pure'
 import { X } from 'lucide-react'
 
 import type { ComposerSessionContext } from './composer.types'
@@ -2038,14 +2039,14 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     // parent's redraw fired the Profiler even when the composer bailed out,
     // so the count measured the parent, not the composer.
     <PerfProfiler id="composer">
+      {/* Something is working, so the tone is info (R1); a polite status. */}
       {waitReason ? (
-        <div
-          role="status"
-          className="mx-auto mb-2 w-full max-w-conversation rounded-md border border-line bg-surface-muted/30 px-3 py-1.5 text-xs text-ink-muted"
+        <Notice
+          tone="info"
+          title={COMPOSER_WAIT_NOTICES[waitReason]}
+          className="mx-auto mb-2 w-full max-w-conversation py-1.5 text-xs"
           data-testid="composer-wait-notice"
-        >
-          {COMPOSER_WAIT_NOTICES[waitReason]}
-        </div>
+        />
       ) : null}
       <Composer
         accountNotice={
@@ -2309,17 +2310,25 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
           </div>
         </div>
       ) : null}
+      {/* A failure, so an alert (DS-5): "Couldn't attach …", each reason under it. */}
       {rejections.length > 0 && (
-        <div
-          role="status"
-          className="mx-auto mt-2 w-full max-w-conversation rounded-md border border-danger-line bg-danger-soft p-2 text-xs text-danger-ink"
+        <Notice
+          tone="danger"
+          title={attachmentRejectionsTitle(rejections)}
+          className="mx-auto mt-2 w-full max-w-conversation text-xs"
         >
-          {rejections.map((r, i) => (
-            <div key={`${r.filename}-${i}`}>
-              <span className="font-medium">{r.filename}:</span> {r.reason}
-            </div>
-          ))}
-        </div>
+          {rejections.length === 1 ? (
+            rejections[0]?.reason
+          ) : (
+            <ul>
+              {rejections.map((r, i) => (
+                <li key={`${r.filename}-${i}`}>
+                  <span className="font-medium">{r.filename}:</span> {r.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Notice>
       )}
       <AttachmentPreviewContainer
         attachment={previewAttachment}
