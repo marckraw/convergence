@@ -65,7 +65,7 @@ function renderStatusIcon(status: McpServerStatus) {
 
 function renderStatusBadge(status: McpServerStatus, label: string) {
   return (
-    <Badge tone={mcpStatusTone(status)} className="font-medium uppercase">
+    <Badge tone={mcpStatusTone(status)} caps className="font-medium">
       {label}
     </Badge>
   )
@@ -140,9 +140,7 @@ function renderServerRow(
         }
         trailing={
           <span className="flex items-center gap-2">
-            <Badge className="uppercase">
-              {server.transportType.replace('_', ' ')}
-            </Badge>
+            <Badge caps>{server.transportType.replace('_', ' ')}</Badge>
             {renderStatusBadge(server.status, server.statusLabel)}
           </span>
         }

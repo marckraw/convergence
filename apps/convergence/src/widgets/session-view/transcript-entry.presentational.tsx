@@ -253,7 +253,8 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                     <Badge
                       tone="warning"
                       data-testid="user-message-delivery-mode"
-                      className="font-medium uppercase tracking-eyebrow"
+                      caps
+                      className="font-medium"
                     >
                       {viewModel.deliveryModeLabel}
                     </Badge>
