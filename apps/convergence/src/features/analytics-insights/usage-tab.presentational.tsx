@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import type { AnalyticsOverview } from '@/entities/analytics'
 import { Card, cn, EmptyState, SectionLabel, Tooltip } from '@convergence/ui'
-import { ChartGpuChart } from '@/shared/ui/chartgpu-chart.container'
+import { ChartGpuChart } from './chartgpu-chart.container'
 import {
   buildConversationBalanceChartOptions,
   buildDailyActivityChartOptions,

@@ -29,7 +29,7 @@ function AllProviders() {
 }
 
 const meta = {
-  title: 'Components/Shared/Provider icon',
+  title: 'Entities/Provider/Provider icon',
   component: ProviderIcon,
   args: { providerId: 'claude-code' },
 } satisfies Meta<typeof ProviderIcon>

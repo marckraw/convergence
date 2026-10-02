@@ -1,4 +1,7 @@
-import type { FeedbackPriority } from '@/entities/feedback'
+import {
+  FLOATING_CORNER_BUTTON_CLASS,
+  type FeedbackPriority,
+} from '@/entities/feedback'
 import { MessageSquarePlus } from 'lucide-react'
 import {
   cn,
@@ -13,7 +16,6 @@ import {
   SegmentedControlItem,
   Textarea,
 } from '@convergence/ui'
-import { FLOATING_CORNER_BUTTON_CLASS } from '@/shared/ui/floating-corner.pure'
 
 interface FeedbackButtonProps {
   open: boolean

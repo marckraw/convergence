@@ -3,7 +3,7 @@ import { expect, screen } from 'storybook/test'
 import { ProviderModel } from './provider-model.presentational'
 
 const meta = {
-  title: 'Components/Shared/Provider model',
+  title: 'Entities/Provider/Provider model',
   component: ProviderModel,
   args: { providerId: 'claude-code', model: 'claude-opus-4-5' },
   decorators: [

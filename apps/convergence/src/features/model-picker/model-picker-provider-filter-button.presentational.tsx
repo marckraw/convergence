@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Star } from 'lucide-react'
 import { Badge, Button, cn, Tooltip } from '@convergence/ui'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 import type { ModelPickerProviderFilter } from './model-picker-dialog.types'
 
 interface ProviderFilterButtonProps {

@@ -18,7 +18,7 @@ import {
   SectionLabel,
 } from '@convergence/ui'
 import { RELEASE_NOTES_TITLE } from '@/entities/updates'
-import { Markdown } from '@/shared/ui/markdown.container'
+import { Markdown } from '@/shared/ui'
 
 export interface ReleaseHistoryPageItem {
   release: ReleaseNotesEntry

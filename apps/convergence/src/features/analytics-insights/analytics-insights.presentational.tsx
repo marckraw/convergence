@@ -1,4 +1,4 @@
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 import { RefreshCw } from 'lucide-react'
 import type {
   AnalyticsOverview,

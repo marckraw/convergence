@@ -3,7 +3,7 @@ import { expect } from 'storybook/test'
 import { ChartFallback } from './chart-fallback.presentational'
 
 const meta = {
-  title: 'Components/Shared/Chart fallback',
+  title: 'Features/AnalyticsInsights/Chart fallback',
   component: ChartFallback,
   decorators: [
     (Story) => (

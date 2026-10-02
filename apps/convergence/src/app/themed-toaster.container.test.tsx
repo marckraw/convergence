@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ToasterProps } from '@convergence/ui'
-import { FLOATING_CORNER_CLEAR_BOTTOM } from '@/shared/ui/floating-corner.pure'
+import { FLOATING_CORNER_CLEAR_BOTTOM } from '@/entities/feedback'
 import { ThemedToasterContainer } from './themed-toaster.container'
 
 // The toasts' look and theme are the design system's, and its Toaster stories

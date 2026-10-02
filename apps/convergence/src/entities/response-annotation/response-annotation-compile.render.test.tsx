@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { render } from '@testing-library/react'
-import { Markdown } from '@/shared/ui/markdown.container'
+import { Markdown } from '@/shared/ui'
 import { compileAnnotationsIntoPrompt } from './response-annotation-compile.pure'
 import type { ResponseAnnotation } from './response-annotation.types'
 

@@ -183,6 +183,10 @@ Renderer code stays close to Divergence:
 - `src/shared`
 
 Keep slice public APIs in `index.ts` files. Avoid deep imports across slices.
+`src/shared/ui` has one too, and the public-API rule below stops imports at it
+(`@/shared/ui`). It holds only what every layer shares (Markdown); app parts
+live in their slices (ProviderIcon in `entities/provider`), kit parts in
+`@convergence/ui` (DS-31).
 
 These renderer laws bind **every app's renderer**, not only Convergence's:
 chaperone's renderer rules glob `apps/*/src`, so Backpack Studio inherits the
