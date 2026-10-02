@@ -368,8 +368,8 @@ it('holds interaction order while applying live data, removals and arrivals', ()
     {
       title: 'Working',
       cards: [
-        { ...b, lastMoved: 'live' },
-        { ...a, lastMoved: 'live' },
+        { ...b, lastMovedAt: 'live' },
+        { ...a, lastMovedAt: 'live' },
       ],
     },
   ]
@@ -378,7 +378,7 @@ it('holds interaction order while applying live data, removals and arrivals', ()
     'pin',
     'working',
   ])
-  expect(held[0]!.cards.every((card) => card.lastMoved === 'live')).toBe(true)
+  expect(held[0]!.cards.every((card) => card.lastMovedAt === 'live')).toBe(true)
   expect(feedOrderKey(held)).not.toBe(feedOrderKey(current))
   expect(holdFeedOrder(current, null)).toBe(current)
   const removed = holdFeedOrder([{ title: 'Working', cards: [b] }], previous)

@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Card, CardAction, cn, toneInk } from '@convergence/ui'
+import { Card, CardAction, cn, Timestamp, toneInk } from '@convergence/ui'
 import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
 import { ROW_CARD_DOOR_CLASS } from './row-card.styles'
 import type { HistoryEventRow } from './run-history.pure'
@@ -24,9 +24,15 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
   const content = (
     <>
       <span className="flex w-full items-baseline gap-2">
-        <span className="shrink-0 tabular-nums text-3xs text-ink-muted">
-          {event.timeLabel}
-        </span>
+        {/* To the second, as rows are scanned against their neighbours, in
+            a <time> with the whole moment in its tooltip (MC-27). */}
+        <Timestamp
+          date={event.at}
+          format="clock"
+          seconds
+          hour12={false}
+          className="shrink-0 text-3xs text-ink-muted"
+        />
         <span className="min-w-0 flex-1 whitespace-normal break-words text-xs">
           {event.title}
         </span>

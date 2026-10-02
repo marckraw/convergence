@@ -8,7 +8,14 @@ import {
   Server,
 } from 'lucide-react'
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { Card, CardAction, cn, Spinner, Tooltip } from '@convergence/ui'
+import {
+  Card,
+  CardAction,
+  cn,
+  Spinner,
+  Timestamp,
+  Tooltip,
+} from '@convergence/ui'
 import { ProviderIcon, resolveProviderIcon } from '@/entities/provider'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
 import { NeedsYouCardStatus } from './needs-you-card-status.presentational'
@@ -191,13 +198,19 @@ export function SessionActivityCard({
                 <time dateTime={session.executionHostLastEventAt ?? undefined}>
                   {card.hostLiveness}
                 </time>
-              ) : (
+              ) : card.lastMovedAt ? (
                 <>
+                  {/* Timestamp's relative words, the whole moment in its
+                      tooltip, on the feed's clock (MC-27). */}
                   Last moved{' '}
-                  <time dateTime={session.updatedAt} className="tabular-nums">
-                    {card.lastMoved}
-                  </time>
+                  <Timestamp
+                    date={card.lastMovedAt}
+                    format="relative"
+                    now={new Date(card.now)}
+                  />
                 </>
+              ) : (
+                'Time not recorded'
               )}
             </span>
           </div>

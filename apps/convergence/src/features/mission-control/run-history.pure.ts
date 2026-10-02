@@ -141,8 +141,10 @@ export function formatRunStatusLine(run: RelayRun): string {
 /** One row in the run list. */
 export interface HistoryRunRow {
   flowRunId: string
-  /** "14:32", or "Sep 5, 17:46" for anything older than today. */
-  timeLabel: string
+  /** When the run started, as recorded: the row draws it as a Timestamp (MC-27). */
+  startedAt: string
+  /** "14:32" for today, "Sep 5, 17:46" for anything older: `runTimeFormat`. */
+  timeFormat: RunTimeFormat
   lastActivityLabel: string
   debt: { name: string; since: string; live: SessionStatus | null } | null
   activityLine: string
@@ -154,25 +156,33 @@ export interface HistoryRunRow {
   needsYou: boolean
 }
 
+/** A run's moment as Timestamp writes it: the clock today, the day and the clock before. */
+export type RunTimeFormat = 'clock' | 'datetime'
+
+/**
+ * Which form a run's moment takes: the clock for today, the date and the
+ * clock for any other day (MC-27). A moment the record can't name is told
+ * with its date, so it never passes for today's.
+ */
+export function runTimeFormat(at: string, now: Date): RunTimeFormat {
+  const moment = new Date(at)
+  if (Number.isNaN(moment.getTime())) return 'datetime'
+  return calendarDaysBefore(moment, now) === 0 ? 'clock' : 'datetime'
+}
+
 /**
  * "14:32" for today, "Sep 6, 17:46" for any other day: Timestamp's clock and
- * datetime, on the 24-hour clock Mission Control and Loom read in (MC-13).
+ * datetime, on the 24-hour clock Mission Control and Loom read in (MC-13),
+ * for the sentences a time sits inside ("since 14:32"). A row's own time is
+ * a Timestamp, which writes the same.
  */
 export function formatRunTime(startedAt: string, now: Date): string {
   const at = new Date(startedAt)
   if (Number.isNaN(at.getTime())) return 'unknown time'
-  const today = calendarDaysBefore(at, now) === 0
-  return formatTimestamp(at, today ? 'clock' : 'datetime', {
+  return formatTimestamp(at, runTimeFormat(startedAt, now), {
     now,
     hour12: false,
   })
-}
-
-/** "14:32:10" — an event row is scanned against its neighbours, to the second. */
-export function formatEventTime(at: string): string {
-  const time = new Date(at)
-  if (Number.isNaN(time.getTime())) return '--:--:--'
-  return formatTimestamp(time, 'clock', { seconds: true, hour12: false })
 }
 
 /**
@@ -224,7 +234,8 @@ export function buildRunRow(
 
   return {
     flowRunId: run.flowRunId,
-    timeLabel: formatRunTime(run.startedAt, now),
+    startedAt: run.startedAt,
+    timeFormat: runTimeFormat(run.startedAt, now),
     lastActivityLabel,
     debt,
     activityLine,
@@ -324,7 +335,8 @@ export function historyPanelState(input: {
 export interface HistoryEventRow {
   id: string
   kind: 'hop' | 'hail' | 'held-group'
-  timeLabel: string
+  /** When it happened, as recorded: the row draws it as a Timestamp, to the second (MC-27). */
+  at: string
   /** "Fable → Opus", or "Sol asked for Marcin" for a call. */
   title: string
   outcome: RunHistoryOutcome
@@ -383,7 +395,7 @@ export function buildHopEventRow(
   return {
     id: hop.id,
     kind: 'hop',
-    timeLabel: formatEventTime(hop.firedAt),
+    at: hop.firedAt,
     title: hopTitle(hop, input.resolveName),
     outcome,
     outcomeLabel: historyOutcomeWord(outcome),
@@ -412,7 +424,7 @@ export function buildHailEventRow(
   return {
     id: hail.id,
     kind: 'hail',
-    timeLabel: formatEventTime(hail.raisedAt),
+    at: hail.raisedAt,
     title,
     outcome,
     outcomeLabel: historyOutcomeWord(outcome),
@@ -462,7 +474,7 @@ function foldHeldRows(
       result.push({
         id: `held:${hop.id}`,
         kind: 'held-group',
-        timeLabel: formatEventTime(hop.firedAt),
+        at: hop.firedAt,
         title: `${held.length} ${held.length === 1 ? 'wire' : 'wires'} held — the message went to ${targets.join(', ')}`,
         outcome: 'held',
         outcomeLabel: 'Held',

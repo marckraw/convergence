@@ -10,6 +10,7 @@ import {
   SectionLabel,
   SegmentedControl,
   SegmentedControlItem,
+  Timestamp,
   toneInk,
 } from '@convergence/ui'
 import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
@@ -217,7 +218,12 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
                   className={ROW_CARD_DOOR_CLASS}
                 >
                   <span className="text-xs">
-                    {run.timeLabel}
+                    {/* A <time>, the whole moment in its tooltip (MC-27). */}
+                    <Timestamp
+                      date={run.startedAt}
+                      format={run.timeFormat}
+                      hour12={false}
+                    />
                     {run.startingStation ? ` · ${run.startingStation}` : ''}
                   </span>
                   <span

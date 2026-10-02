@@ -49,11 +49,14 @@ it.each(Object.entries(cardFixtures))(
     if (session.executionHost === 'lm')
       expect(screen.getByText('host · not recorded')).toBeInTheDocument()
     else
-      // The moment is the <time>'s dateTime; no raw ISO as a native title
-      // (MC-27, R2).
+      // The moment is a Timestamp: the <time>'s dateTime, relative words on
+      // the feed's clock, the whole moment in our tooltip; no raw ISO as a
+      // native title (MC-27, R2).
       expect(
-        document.querySelector(`time[datetime="${session.updatedAt}"]`),
-      ).toHaveTextContent('5 m ago')
+        document.querySelector(
+          `time[datetime="${new Date(session.updatedAt).toISOString()}"]`,
+        ),
+      ).toHaveTextContent('5 minutes ago')
     if (session.pullRequest)
       expect(
         screen.getByRole('link', { name: /Pull request #42/ }),
