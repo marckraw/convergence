@@ -13,9 +13,12 @@
 //
 // What counts as a class string: a string literal in a class attribute (`className="…"`, or any
 // string inside `className={…}`), any string literal among the arguments of a class function
-// (`cn(…)`, `cva(…)`), and every string literal in a class file (`*.styles.ts`). Two strings are
-// the same when they hold the same utilities, in any order. Strings with fewer utilities than the
-// minimum (short ones like "flex items-center" repeat for good reason) don't count.
+// (`cn(…)`, `cva(…)`), and every string literal in a class file (`*.styles.ts`). With `constants`
+// on, also a string that a declaration or an object's key holds (`const row = '…'`,
+// `{ root: '…' }`) in any file, when every word of it reads as a utility (DS8, DLG: a class string
+// kept in a plain constant was out of the guard's sight). Two strings are the same when they hold
+// the same utilities, in any order. Strings with fewer utilities than the minimum (short ones like
+// "flex items-center" repeat for good reason) don't count.
 
 /** The characters after which a `/` starts a regular expression rather than a division. */
 // Not <, > or }: in JSX they come before the / of </tag> and />.
@@ -217,19 +220,56 @@ const lineOf = (text) => {
   }
 }
 
+/** Words that are utilities on their own, with no dash or variant to give them away. */
+const BARE_UTILITIES = new Set(
+  'flex grid block inline hidden contents table truncate relative absolute fixed sticky static isolate uppercase lowercase capitalize italic underline rounded border shadow outline ring transition grow shrink invisible visible container antialiased'.split(
+    ' ',
+  ),
+)
+
+/**
+ * Whether a string reads as a class string: every word a utility (a dash, a variant's colon or an
+ * arbitrary value's bracket in it, or one of the bare utilities), in the lower case utilities are
+ * written in. A sentence ("Couldn't save the project.") never does.
+ */
+export const looksLikeClasses = (value) => {
+  const words = value.trim().split(/\s+/)
+  return (
+    words.length > 0 &&
+    words.every(
+      (word) =>
+        /^!?-?[a-z0-9@[\]_&>*:./()%#=,+-]+$/.test(word) &&
+        (/[-:[]/.test(word) || BARE_UTILITIES.has(word)),
+    )
+  )
+}
+
 /**
  * The class strings in one file's text, each with its line: string literals in a class attribute
  * (`attributes`, such as className), among a class function's arguments (`functions`, such as cn
- * and cva), or, when `wholeFile` is set (a *.styles.ts file), every string literal in it.
+ * and cva), or, when `wholeFile` is set (a *.styles.ts file), every string literal in it. With
+ * `constants`, also a string a declaration or an object's key holds, when it reads as classes.
  * Template literals with `${…}` in them are left out: what they hold isn't known until they run.
  */
 export const classStringsOf = (
   text,
-  { attributes = [], functions = [], wholeFile = false },
+  { attributes = [], functions = [], wholeFile = false, constants = false },
 ) => {
   const { code, strings } = scanSource(text)
   const spans = []
   if (wholeFile) spans.push([0, text.length])
+  if (constants && !wholeFile)
+    for (const string of strings) {
+      if (string.value === null || !looksLikeClasses(string.value)) continue
+      // What stands before it: `name =` (a declaration's value) or `key:` (an object's).
+      const before = code.slice(Math.max(0, string.start - 120), string.start)
+      if (
+        /(?:\b(?:const|let|var)\s+[\w$]+\s*(?::[^=\n]+)?=|[{,]\s*(?:[\w$]+|['"][^'"\n]*['"])\s*:)\s*$/.test(
+          before,
+        )
+      )
+        spans.push([string.start, string.start])
+    }
   if (attributes.length > 0) {
     const attribute = new RegExp(
       `\\b(?:${attributes.map(escapeRegex).join('|')})\\s*=\\s*`,
@@ -275,6 +315,7 @@ export const repeatedClasses = ({ sources, config }) => {
   const {
     attributes,
     functions,
+    constants,
     minUtilities,
     maxOccurrences,
     allowlist = [],
@@ -285,6 +326,7 @@ export const repeatedClasses = ({ sources, config }) => {
       attributes,
       functions,
       wholeFile,
+      constants,
     })) {
       const key = classKeyOf(classes)
       if (key.split(' ').length < minUtilities) continue
@@ -339,6 +381,8 @@ export const configProblems = (config) => {
     if (config[field] !== undefined && !strings(config[field]))
       problems.push(`${field}: a list of strings`)
   }
+  if (config.constants !== undefined && typeof config.constants !== 'boolean')
+    problems.push('constants: true or false')
   for (const field of ['minUtilities', 'maxOccurrences']) {
     if (!Number.isInteger(config[field]) || config[field] < 1)
       problems.push(`${field}: a whole number, 1 or more`)

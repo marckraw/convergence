@@ -7,8 +7,8 @@
         "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:w|h|size|p[xytrbl]?|m[xytrbl]?|gap|text|bg|border|rounded|shadow|leading|tracking|duration|z|inset|top|right|bottom|left|basis|grid-cols|grid-rows|outline|ring|opacity|delay|ease|animate|transition)-\\[|(?<![\\w@-])(?:min|max)-\\[)",
-        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f], a min-[860px]: breakpoint): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)]; a breakpoint is Tailwind's (md:, lg:) or a --breakpoint-* of the theme's, since a media query can't read var() (MAR-3617; DS6, MAR-3608; docs/checks/design-system-drift.md)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:w|h|size|p[xytrbl]?|m[xytrbl]?|gap|text|bg|border|rounded|shadow|leading|tracking|duration|z|inset|top|right|bottom|left|basis|grid-cols|grid-rows|outline|ring|opacity|delay|ease|animate|transition)-\\[|(?<![\\w-])@?(?:min|max)-\\[)",
+        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f], a min-[860px]: breakpoint): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)]; a breakpoint is Tailwind's (md:, lg:) or a --breakpoint-* of the theme's, since a media query can't read var(); a container query's size is a --container-* of the theme's (@min-actions-beside:), never @min-[56rem]: (MAR-3617; DS6, DS8, MAR-3608; docs/checks/design-system-drift.md)."
       },
       {
         "id": "no-raw-colors",
@@ -305,6 +305,15 @@
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:[A-Za-z0-9)}]|[\"'\\`>])\\.\\.\\.(?!\\.)",
         "message": "Three dots typed in words (\"Loading...\", \"Search options...\", a name cut short with + '...'): R10 writes the ellipsis character, … (U+2026), on busy labels, placeholders, cut-short text and every item that opens a dialog. Code's spread (...props, [...items]) follows a bracket, a comma or a space, never a letter or a quote, and is not reported (MAR-3608; docs/checks/design-system-drift.md)."
+      },
+      {
+        "id": "use-part-sizes",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Notice|Badge|Input|Textarea|SelectTrigger|Combobox|SearchField|NumberField)\\b(?:[^>]|=>|/>\\}(?=\\s*[\\w-]+=))*?\\bclassName=(?:[^>]|=>|/>\\}(?=\\s*[\\w-]+=))*?(?<![\\w:\\]-])(?:text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xy]?-(?:\\d+(?:\\.5)?|px))(?![\\w-])",
+        "message": "A Notice, a Badge or a field (Input, Textarea, SelectTrigger, Combobox, SearchField, NumberField) resized in className: its words and its room are its size (R3, ruling 10). Notice takes size=\"sm\" (12 px) or \"xs\" (11 px); Badge size=\"md\" (11 px); a field its size (xs to lg) and density=\"compact\" for 12 px words at any height. A text size or a padding typed on top is a size the scale doesn't name, and drifts (MAR-3608; DS-4; DLG-15; docs/checks/design-system-drift.md). A size handed through a constant is the sizes-in-constants guard's."
       }
     ]
   }

@@ -195,18 +195,18 @@
       {
         "id": "no-raw-button-outside-shared",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
-        "pattern": "<button[\\s>]",
-        "message": "Use Button from @convergence/ui instead of raw <button> in a container. Presentational parts have raw-elements-need-a-reason (design-system-drift.json), which takes a reason; a container takes none. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a)\\b",
+        "message": "A raw <button> or <a> in a container: use Button, IconButton, TextLink or ListRow from @convergence/ui, or draw the control in a presentational part (where raw-elements-need-a-reason takes a reason; a container takes none). An element handed to a part's render prop is the part's. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; DS8, MAR-3608)."
       },
       {
         "id": "no-raw-input-outside-shared",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
-        "pattern": "<input[\\s>]",
-        "message": "Use Input from @convergence/ui instead of raw <input> in a container. Presentational parts have raw-elements-need-a-reason (design-system-drift.json), which takes a reason; a container takes none. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!\\brender=\\{\\s*)<(?:input|textarea|select|label|pre)\\b",
+        "message": "A raw <input>, <textarea>, <select>, <label> or <pre> in a container: use Input, Textarea, Select, a FieldLabel in a Field (or ChoiceField) or CodeBlock from @convergence/ui, or draw it in a presentational part (where raw-elements-need-a-reason takes a reason; a container takes none). An element handed to a part's render prop is the part's. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; DS8, MAR-3608)."
       }
     ]
   }

@@ -1,0 +1,10 @@
+{
+  "why": "Sizes handed to a part through a name, which no regex on the part's tag can read (MAR-3608, DS8): a Button stretched into a row by an object's member that leaves its slice through an index under another name and the @/ alias, a pick row's text size returned by a function imported by a relative path, a Notice shrunk by a constant, and a picker's trigger resized in place on a wrapper the drift rules don't know. The quiet constant and the glyph's own size inside a prop must not count. Runs with the repo's own scripts/guards/sizes-in-constants.json, whose allowlist entries are reported stale here, as they should be.",
+  "args": ["--root", "."],
+  "expect": [
+    "apps/convergence/src/widgets/invite-panel/invite-panel.presentational.tsx:18: <Button> className gets \"h-auto px-3\" from invitePeopleRowStyles.row (apps/convergence/src/features/invite-people/invite-row.styles.ts:5)",
+    "apps/convergence/src/widgets/invite-panel/invite-panel.presentational.tsx:28: <Button> className gets \"text-sm\" from invitePickClass (apps/convergence/src/features/invite-people/invite-row.styles.ts:10)",
+    "apps/convergence/src/widgets/invite-panel/invite-panel.presentational.tsx:29: <Notice> className gets \"text-2xs\" from inviteNoticeClass (apps/convergence/src/features/invite-people/invite-row.styles.ts:13)",
+    "apps/convergence/src/widgets/invite-panel/invite-panel.presentational.tsx:30: <ModelPicker> triggerClassName gets \"px-2 text-xs\" written in place (apps/convergence/src/widgets/invite-panel/invite-panel.presentational.tsx:30)"
+  ]
+}
