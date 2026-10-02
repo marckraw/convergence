@@ -105,6 +105,7 @@ mapping in its message is the DS5 codemod's table
 | `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
 | `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
+| `no-buttons-as-rows`      | `h-auto` in a `<Button>`'s or `<IconButton>`'s `className`: a button stretched so more lines fit, as a row or a card                                                                                                                       | `ListRow` for a row, `Card` with a `CardAction` for a box that opens, `ChoiceCard` for an option with a sentence, a link Button for words                                                    | DS-21       |
 
 A regex reads text, not code, so it sees only what's written where it looks: a size override kept
 in a `*.styles.ts` constant passes `use-button-sizes`, and `repeated-classes` is what catches that
@@ -113,6 +114,18 @@ the tag, past arrow functions"), so attribute order and line breaks don't matter
 a variant (`[&_svg]:size-4`, the size of the icon inside) is not the button's size, and doesn't
 count. Every regex rule skips a line that starts with a comment (`//`, `*`, `/*` or `{/*`), so a doc
 comment may name the recipe it replaced.
+
+`no-buttons-as-rows` (DS6, MAR-3608) is `use-button-sizes`' sibling, kept apart from it: `h-auto` is
+not a size but the undoing of one, and it means a Button was made to hold more than a control's
+line. Before it turned red, sixteen Buttons had it, and each became the part for what it was. Boxes
+that open something are a `Card` with a `CardAction` that holds their lines: the Needs-you card,
+History's runs, a conversation to add to a crew, the session intents, a choice request's answers,
+the parallel-work marker and the activity filters' summary. The turn card is a Collapsible, its
+files in the panel, and the work block a ListRow. The local tunnels' pill is a `StatusPillButton`. A
+picture, two section titles and "New workspace" are link Buttons, which have no box to undo, and
+"Forked from" is one line on the 28 px Button. Like `use-button-sizes`, it reads only the tag: an
+`h-auto` kept in a `*.styles.ts` constant, or handed to a component that passes it on to a Button,
+is out of its reach.
 
 ## 3. A raw element needs a reason
 
@@ -261,6 +274,7 @@ Streamdown name.
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
+| `no-buttons-as-rows`         | `design-system-drift.json`      | error    |
 
 A rule is never relaxed to reach zero, and never turned back into a warning to let a change
 through. When one fires, fix what it found ([When one fires](#when-one-fires)). When it can't be
