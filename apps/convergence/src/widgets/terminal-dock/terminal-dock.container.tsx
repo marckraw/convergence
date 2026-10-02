@@ -7,6 +7,7 @@ import {
   findAdjacentLeaf,
   matchShortcut,
   terminalApi,
+  terminalShortcutLabels,
 } from '@/entities/terminal'
 import type {
   FocusDirection,
@@ -31,6 +32,9 @@ function getPlatform(): 'mac' | 'other' {
   if (typeof navigator === 'undefined') return 'other'
   return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
+
+/** The keys the pane's buttons name in their tooltips: the ones the keymap below answers to (NAV-23). */
+const SHORTCUT_LABELS = terminalShortcutLabels(getPlatform())
 
 interface TerminalDockContainerProps {
   mode?: 'dock' | 'main'
@@ -371,6 +375,7 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
               onCloseTab={handleCloseTab}
               onFocusLeaf={handleFocusLeaf}
               onResizeSplit={handleResizeSplit}
+              shortcutLabels={SHORTCUT_LABELS}
             />
           </div>
         </div>
@@ -414,6 +419,7 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
         onCloseTab={handleCloseTab}
         onFocusLeaf={handleFocusLeaf}
         onResizeSplit={handleResizeSplit}
+        shortcutLabels={SHORTCUT_LABELS}
       />
     </div>
   )

@@ -2,6 +2,7 @@ import { useId, type FC } from 'react'
 import {
   Button,
   Input,
+  Kbd,
   Listbox,
   ListboxOption,
   listboxOptionId,
@@ -120,7 +121,9 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
           </Button>
         </>
       ) : null}
-      <p className={styles.hint}>Esc closes</p>
+      <p className={styles.hint}>
+        <Kbd>Esc</Kbd> closes
+      </p>
     </>
   )
 }

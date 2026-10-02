@@ -121,3 +121,13 @@ export const Long: Story = {
     await expect(list.getBoundingClientRect().height).toBeLessThan(40)
   },
 }
+
+/** New tab's tooltip says its key (NAV-23). */
+export const Shortcut: Story = {
+  args: { newTabShortcut: '⌘T' },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('button', { name: 'New tab' }),
+    ).toHaveAttribute('data-tooltip-shortcut', '⌘T')
+  },
+}

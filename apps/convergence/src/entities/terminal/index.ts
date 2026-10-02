@@ -23,7 +23,12 @@ export type {
   TerminalIdleNotice,
 } from './terminal.types'
 export { findLeaf, collectAllPtyIds, makeLeaf } from './pane-tree.pure'
-export { matchShortcut } from './keymap.pure'
-export type { TerminalShortcut, KeyEventLike, Platform } from './keymap.pure'
+export { matchShortcut, terminalShortcutLabels } from './keymap.pure'
+export type {
+  TerminalShortcut,
+  KeyEventLike,
+  Platform,
+  TerminalShortcutLabels,
+} from './keymap.pure'
 export { findAdjacentLeaf } from './focus-navigation.pure'
 export type { FocusDirection } from './focus-navigation.pure'

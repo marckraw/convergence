@@ -71,8 +71,8 @@ export const SpaceCreateDialogContainer: FC<
     }
   }, [brief, closeDialog, createSpace, onCreated, title])
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(open, handleSubmit)
+  // Enable cmd+Enter to submit the form; Create says so in its tooltip (DS-34)
+  const submitShortcut = useFormSubmitShortcut(open, handleSubmit)
 
   return (
     <SpaceCreateDialog
@@ -85,6 +85,7 @@ export const SpaceCreateDialogContainer: FC<
       onTitleChange={setTitle}
       onBriefChange={setBrief}
       onSubmit={() => void handleSubmit()}
+      submitShortcut={submitShortcut}
     />
   )
 }

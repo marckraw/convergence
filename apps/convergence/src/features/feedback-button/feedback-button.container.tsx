@@ -58,8 +58,8 @@ export function FeedbackButtonContainer() {
     }
   }
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(open, handleSubmit)
+  // Enable cmd+Enter to submit the form; Send says so in its tooltip (DS-34)
+  const submitShortcut = useFormSubmitShortcut(open, handleSubmit)
 
   return (
     <FeedbackButton
@@ -76,6 +76,7 @@ export function FeedbackButtonContainer() {
       onDescriptionChange={setDescription}
       onContactChange={setContact}
       onSubmit={handleSubmit}
+      submitShortcut={submitShortcut}
     />
   )
 }

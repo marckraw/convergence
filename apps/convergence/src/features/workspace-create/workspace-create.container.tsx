@@ -150,8 +150,8 @@ export const WorkspaceCreateDialogContainer: FC = () => {
     closeDialog,
   ])
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(open, handleSubmit)
+  // Enable cmd+Enter to submit the form; Create says so in its tooltip (DS-34)
+  const submitShortcut = useFormSubmitShortcut(open, handleSubmit)
 
   if (!activeProject) return null
 
@@ -170,6 +170,7 @@ export const WorkspaceCreateDialogContainer: FC = () => {
       isSubmitting={isSubmitting}
       error={error}
       onSubmit={() => void handleSubmit()}
+      submitShortcut={submitShortcut}
     />
   )
 }

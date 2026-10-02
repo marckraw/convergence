@@ -5,6 +5,7 @@ import {
   MenuContent,
   MenuItem,
   MenuSeparator,
+  MenuShortcut,
   MenuTrigger,
   IconButton,
   type TooltipSide,
@@ -13,6 +14,7 @@ import {
   BookOpenText,
   Bot,
   Cable,
+  Command,
   GitBranch,
   Info,
   Library,
@@ -28,6 +30,11 @@ interface SidebarToolsMenuProps {
   /** Where the trigger's tooltip shows: below in the header, right on the rail (NAV-17). */
   tooltipSide?: TooltipSide
   onOpenDialog: (kind: DialogKind, payload?: DialogPayload) => void
+  /**
+   * The way into the Command Center from the shell (NAV-23): its item, with
+   * the key that opens it from anywhere, already formatted ("⌘K").
+   */
+  commandCenter?: { shortcut: string; onOpen: () => void }
 }
 
 /** The sidebar's Tools: a ⋯ button whose menu opens every dialog the sidebar hosts. */
@@ -36,6 +43,7 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
   hasActiveProject,
   tooltipSide = 'bottom',
   onOpenDialog,
+  commandCenter,
 }) => {
   const openDialog = (kind: DialogKind, payload?: DialogPayload) => {
     onOpenDialog(kind, payload)
@@ -56,6 +64,16 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
         }
       />
       <MenuContent align="start" side="bottom">
+        {commandCenter ? (
+          <>
+            <MenuItem onClick={commandCenter.onOpen}>
+              <Command className="h-3.5 w-3.5" />
+              <span>Command Center…</span>
+              <MenuShortcut>{commandCenter.shortcut}</MenuShortcut>
+            </MenuItem>
+            <MenuSeparator />
+          </>
+        ) : null}
         <MenuItem onClick={() => openDialog('space-workboard')}>
           <GitBranch className="h-3.5 w-3.5" />
           <span>Spaces</span>

@@ -66,6 +66,7 @@ import { CatalogNotice } from './catalog-notice.presentational'
 import { composerAttachedRow, composerToolbarControl } from './composer.styles'
 import { ComposerSelect } from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
+import { SUBMIT_SHORTCUT_LABEL } from '@/shared/lib/use-form-submit-shortcut.pure'
 import type { ExecutionBarView } from './execution-bar.pure'
 import {
   workAddressReadyForSend,
@@ -1225,7 +1226,8 @@ export const Composer: FC<ComposerProps> = ({
         />
       </div>
       <p className="mt-1.5 text-center text-3xs text-ink-muted">
-        <Kbd>⌘ Enter</Kbd> to send
+        {/* The key the field sends on, formatted for this platform (DS-34). */}
+        <Kbd>{SUBMIT_SHORTCUT_LABEL}</Kbd> to send
       </p>
     </div>
   )
