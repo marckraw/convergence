@@ -1520,7 +1520,10 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
 
-    expect(screen.getByText('Approval needed')).toBeInTheDocument()
+    // The card's title; the header's pill says the same words (CONV-3).
+    expect(
+      screen.getByText('Approval needed', { selector: 'p' }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull()
   })
@@ -1576,7 +1579,10 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
 
-    expect(screen.getByText('Approval needed')).toBeInTheDocument()
+    // The card's title; the header's pill says the same words (CONV-3).
+    expect(
+      screen.getByText('Approval needed', { selector: 'p' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument()
   })
