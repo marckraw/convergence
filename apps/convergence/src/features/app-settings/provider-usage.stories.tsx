@@ -125,7 +125,7 @@ export const Default: Story = {
     await expect(canvas.getByText('Cursor usage unavailable')).toBeVisible()
     await expect(canvas.getByText('Unlimited')).toBeVisible()
     await expect(
-      canvas.getByText('No active rate-limit windows were reported.'),
+      canvas.getByText('No active rate-limit windows were reported'),
     ).toBeVisible()
     await expect(canvas.getByRole('button', { name: 'Credits' })).toBeVisible()
   },
