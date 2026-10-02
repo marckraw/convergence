@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Badge, type ComboboxItem } from '@convergence/ui'
-import { ComposerSelect } from './composer-select.presentational'
+import { ComposerCombobox } from './composer-combobox.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
 import { stripFactClass, WorkAddressSlot } from '@/entities/execution-host'
 import type { WorkAddressSlotView } from '@/entities/execution-host'
@@ -57,7 +57,7 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
     <div className={stripClass} data-testid="execution-bar">
       <span className={stripLabelClass}>Runs on</span>
       {view.mode === 'choosing' ? (
-        <ComposerSelect
+        <ComposerCombobox
           // Named by the words before it, so what is said and what is read
           // are one name (CONV N2).
           label="Runs on"

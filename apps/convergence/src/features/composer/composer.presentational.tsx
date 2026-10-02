@@ -68,7 +68,11 @@ import {
 } from 'lucide-react'
 import { CatalogNotice } from './catalog-notice.presentational'
 import { composerAttachedRow, composerToolbarControl } from './composer.styles'
-import { ComposerSelect } from './composer-select.presentational'
+import { ComposerCombobox } from './composer-combobox.presentational'
+import {
+  ComposerSelect,
+  type ComposerSelectItem,
+} from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
 import { SUBMIT_SHORTCUT_LABEL } from '@/shared/lib/use-form-submit-shortcut.pure'
 import type { ExecutionBarView } from './execution-bar.pure'
@@ -549,14 +553,27 @@ export const Composer: FC<ComposerProps> = ({
   // treatment the strip beneath already gives). The fork dialog lists them
   // from the same mapping (CONV-17); the mark is drawn here.
   const providerItems = providerSelectItems(providerCatalog).map(
-    ({ vendorLabel, name, ...item }) => ({
-      ...item,
-      icon: (
-        <ProviderIcon
-          providerId={item.id}
-          vendorLabel={vendorLabel}
-          name={name}
-        />
+    (item): ComposerSelectItem => ({
+      id: item.id,
+      label: item.label,
+      description: item.description,
+      disabled: item.disabled,
+      choice: (
+        <span className="flex min-w-0 items-center gap-2">
+          <ProviderIcon
+            providerId={item.id}
+            vendorLabel={item.vendorLabel}
+            name={item.name}
+          />
+          <span className="truncate">{item.label}</span>
+          {item.badge ? (
+            <Tooltip label={item.badge.title}>
+              <Badge tone="warning" shape="label">
+                {item.badge.label}
+              </Badge>
+            </Tooltip>
+          ) : null}
+        </span>
       ),
     }),
   )
@@ -879,15 +896,18 @@ export const Composer: FC<ComposerProps> = ({
                   {optionRow.notice ? (
                     <CatalogNotice notice={optionRow.notice} />
                   ) : null}
+                  {/*
+                    The provider and the effort are a few fixed choices, so
+                    Selects (R9, ruling 12), as the fork's are.
+                  */}
                   <ComposerSelect
                     label="Provider"
-                    size="sm"
                     selectedId={selection.providerId}
-                    value={selection.providerLabel || 'Select provider'}
+                    placeholder="Select provider"
+                    fallback={selection.providerLabel}
                     items={providerItems}
                     onChange={onProviderChange}
                     disabled={selectionDisabled}
-                    className={cn('gap-1.5', composerToolbarControl)}
                   />
                   <ModelPickerDialog
                     providers={modelCatalogProviders}
@@ -910,13 +930,12 @@ export const Composer: FC<ComposerProps> = ({
                   {effortItems.length > 0 && (
                     <ComposerSelect
                       label="Reasoning effort"
-                      size="sm"
                       selectedId={selection.effortId}
-                      value={selection.effort?.label ?? 'Select effort'}
+                      placeholder="Select effort"
+                      fallback={selection.effort?.label}
                       items={effortItems}
                       onChange={(id) => onEffortChange(id as ReasoningEffort)}
                       disabled={modelSelectionDisabled || !selection.model}
-                      className={composerToolbarControl}
                     />
                   )}
                   {(providerAccountPickerVisible ??
@@ -947,7 +966,7 @@ export const Composer: FC<ComposerProps> = ({
                     (MAR-3572). Its rows are the account's own offer (MAR-3574).
                   */}
                   {codexBillingControlsAvailable ? (
-                    <ComposerSelect
+                    <ComposerCombobox
                       label="Speed"
                       size="sm"
                       selectedId={codexSpeedId}
@@ -983,7 +1002,7 @@ export const Composer: FC<ComposerProps> = ({
                   */}
                   {!selectionDisabled ? (
                     <>
-                      <ComposerSelect
+                      <ComposerCombobox
                         label="Permissions"
                         size="sm"
                         selectedId={simplePermissionPreset}
@@ -1105,7 +1124,7 @@ export const Composer: FC<ComposerProps> = ({
             <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-line-soft pt-2">
               {selection.providerId === 'codex' ? (
                 <>
-                  <ComposerSelect
+                  <ComposerCombobox
                     label="Approval policy"
                     size="sm"
                     selectedId={codexConfig.approvalPolicy}
@@ -1121,7 +1140,7 @@ export const Composer: FC<ComposerProps> = ({
                     disabled={disabled}
                     className={composerToolbarControl}
                   />
-                  <ComposerSelect
+                  <ComposerCombobox
                     label="Sandbox"
                     size="sm"
                     selectedId={codexConfig.sandbox}
@@ -1139,7 +1158,7 @@ export const Composer: FC<ComposerProps> = ({
                   />
                 </>
               ) : (
-                <ComposerSelect
+                <ComposerCombobox
                   label="Permission mode"
                   size="sm"
                   selectedId={claudeCodeConfig.permissionMode}

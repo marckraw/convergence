@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
+import { pressOption } from '@/shared/testing/select-option'
 import {
   FAST_TIER,
   findPicker,
@@ -1155,8 +1156,10 @@ describe('ComposerContainer', () => {
       />,
     )
 
+    // A Select takes a press that starts on the option (pressOption).
     fireEvent.click(picker('Provider', 'Anthropic'))
-    fireEvent.click(await screen.findByText('Pi'))
+    pressOption(await screen.findByRole('option', { name: /Pi/ }))
+    await findPicker('Provider', 'Pi')
 
     fireEvent.click(picker('Runs on', /Local/))
     const row = screen.getByRole('option', { name: /kuba-vps/ })
@@ -3922,7 +3925,7 @@ describe('ComposerContainer', () => {
       renderComposer()
 
       fireEvent.click(picker('Reasoning effort', 'Medium'))
-      fireEvent.click(await screen.findByText('High'))
+      pressOption(await screen.findByRole('option', { name: 'High' }))
 
       await waitFor(() => {
         expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
@@ -4208,7 +4211,7 @@ describe('ComposerContainer', () => {
       expect(picker('Provider', 'Local')).toBeEnabled()
 
       fireEvent.click(picker('Reasoning effort', 'Medium'))
-      fireEvent.click(await screen.findByText('High'))
+      pressOption(await screen.findByRole('option', { name: 'High' }))
 
       expect(setSessionModelSelection).not.toHaveBeenCalled()
     })
@@ -4404,7 +4407,7 @@ describe('ComposerContainer', () => {
         renderComposer()
 
         fireEvent.click(picker('Reasoning effort', 'Medium'))
-        fireEvent.click(await screen.findByText('High'))
+        pressOption(await screen.findByRole('option', { name: 'High' }))
 
         await waitFor(() => {
           expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {

@@ -468,3 +468,5 @@ export {
   ComposerCard,
   type ComposerCardProps,
 } from './components/composer-card/composer-card'
+// DS8 lane composer (MAR-3608): appended, so the parallel lanes' additions merge as unions.
+export { type SelectTriggerVariant } from './components/select/select'
