@@ -105,6 +105,7 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
     ActivityStatus: actual.ActivityStatus,
     ArchivedStatus: actual.ArchivedStatus,
     ParallelWorkStatus: actual.ParallelWorkStatus,
+    leadingStatusSlots: actual.leadingStatusSlots,
     DraftPlaceName: actual.DraftPlaceName,
     DraftStart: actual.DraftStart,
     useParallelWork: () => ({ rows: [], error: null, loading: false }),

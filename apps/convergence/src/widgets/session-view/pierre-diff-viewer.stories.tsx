@@ -33,9 +33,9 @@ const knownDiffIssues = {
   a11y: {
     config: {
       rules: [
-        // a11y-known: the diff's syntax theme draws tokens (pink, purple, teal, orange) under 4.5:1 on the line backgrounds, in both themes — fixed by the sweep (DS4)
+        // a11y-known: the diff's syntax colours are Pierre Diffs' Shiki theme (pink, purple, teal, orange under 4.5:1 on its line backgrounds), drawn inside its shadow DOM where our tokens can't reach; a theme of our own is follow-up work (kept on purpose, MAR-3617)
         { id: 'color-contrast', enabled: false },
-        // a11y-known: the diff's code panes scroll sideways but neither they nor anything in them can take focus, so a keyboard cannot scroll them — fixed by the sweep (DS4)
+        // a11y-known: the diff's code panes are Pierre Diffs' own, inside its shadow DOM: they scroll sideways and can't take the focus, and nothing outside can make them (kept on purpose, MAR-3617)
         { id: 'scrollable-region-focusable', enabled: false },
       ],
     },

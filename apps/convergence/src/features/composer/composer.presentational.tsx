@@ -63,6 +63,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { CatalogNotice } from './catalog-notice.presentational'
+import { composerAttachedRow, composerToolbarControl } from './composer.styles'
 import { ComposerSelect } from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
@@ -702,7 +703,7 @@ export const Composer: FC<ComposerProps> = ({
           />
           {selectedSkills.length > 0 ? (
             <div
-              className="mb-2 flex flex-wrap gap-1.5"
+              className={composerAttachedRow}
               data-testid="selected-skills-row"
             >
               {selectedSkills.map((selection) => (
@@ -716,7 +717,7 @@ export const Composer: FC<ComposerProps> = ({
           ) : null}
           {projectContextEnabled && selectedContextItems.length > 0 ? (
             <div
-              className="mb-2 flex flex-wrap gap-1.5"
+              className={composerAttachedRow}
               data-testid="selected-project-context-row"
             >
               {selectedContextItems.map((item) => {
@@ -944,7 +945,7 @@ export const Composer: FC<ComposerProps> = ({
                     items={providerItems}
                     onChange={onProviderChange}
                     disabled={selectionDisabled}
-                    className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className={cn('gap-1.5', composerToolbarControl)}
                   />
                   <ModelPickerDialog
                     providers={modelCatalogProviders}
@@ -961,7 +962,7 @@ export const Composer: FC<ComposerProps> = ({
                     disabled={modelSelectionDisabled || !selection.provider}
                     triggerVariant="ghost"
                     triggerSize="md"
-                    triggerClassName="px-2 text-xs text-muted-foreground hover:text-foreground"
+                    triggerClassName={composerToolbarControl}
                   />
                   {effortItems.length > 0 && (
                     <ComposerSelect
@@ -970,7 +971,7 @@ export const Composer: FC<ComposerProps> = ({
                       items={effortItems}
                       onChange={(id) => onEffortChange(id as ReasoningEffort)}
                       disabled={modelSelectionDisabled || !selection.model}
-                      className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                      className={composerToolbarControl}
                     />
                   )}
                   {(providerAccountPickerVisible ??
@@ -1016,7 +1017,7 @@ export const Composer: FC<ComposerProps> = ({
                       onChange={onCodexSpeedChange}
                       disabled={disabled || modelSelectionDisabled}
                       className={cn(
-                        'px-2 text-xs text-muted-foreground hover:text-foreground',
+                        composerToolbarControl,
                         codexSpeedId !== 'default' &&
                           'bg-secondary text-foreground',
                       )}
@@ -1052,7 +1053,7 @@ export const Composer: FC<ComposerProps> = ({
                           )
                         }
                         disabled={disabled || !selection.provider}
-                        className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                        className={composerToolbarControl}
                       />
                       {canCustomizePermissions ? (
                         <IconButton
@@ -1178,7 +1179,7 @@ export const Composer: FC<ComposerProps> = ({
                       onCodexApprovalPolicyChange(id as CodexApprovalPolicy)
                     }
                     disabled={disabled}
-                    className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className={composerToolbarControl}
                   />
                   <ComposerSelect
                     selectedId={codexConfig.sandbox}
@@ -1192,7 +1193,7 @@ export const Composer: FC<ComposerProps> = ({
                       onCodexSandboxChange(id as CodexSandboxMode)
                     }
                     disabled={disabled}
-                    className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className={composerToolbarControl}
                   />
                 </>
               ) : (
@@ -1210,7 +1211,7 @@ export const Composer: FC<ComposerProps> = ({
                     )
                   }
                   disabled={disabled}
-                  className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                  className={composerToolbarControl}
                 />
               )}
             </div>

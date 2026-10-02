@@ -9,7 +9,7 @@ import {
   type SpaceSource,
 } from '@/entities/space'
 import type { InteractionResponse, SessionSummary } from '@/entities/session'
-import { AttentionIndicator, useSessionStore } from '@/entities/session'
+import { useSessionStore } from '@/entities/session'
 import {
   resolveSessionActivityLabel,
   useContextDrillStore,
@@ -19,14 +19,13 @@ import { ComposerContainer } from '@/features/composer'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
   ActivityStatus,
-  ArchivedStatus,
   ConversationHeader,
   DraftPlaceName,
   DraftStart,
   ConversationViewMenu,
   headerFocusTarget,
+  leadingStatusSlots,
   parallelWorkInRow,
-  ParallelWorkStatus,
   SessionConversationSurface,
   ParallelWork,
   useParallelWork,
@@ -721,46 +720,17 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         slots={[
           // In the row only while it matters (MAR-3429 CH4 R2); its history
           // is in View.
-          ...(parallelLabel
-            ? [
-                {
-                  id: 'parallel-work',
-                  side: 'left' as const,
-                  group: 'status' as const,
-                  node: (
-                    <ParallelWorkStatus
-                      ref={parallelButton}
-                      label={parallelLabel}
-                      expanded={parallelOpen}
-                      onToggle={toggleParallel}
-                    />
-                  ),
-                },
-              ]
-            : []),
-          {
-            id: 'attention',
-            side: 'left',
-            group: 'status',
-            node: (
-              <AttentionIndicator
-                parallelWork={session.parallelWork}
-                attention={session.attention}
-                status={session.status}
-                activity={session.activity}
-              />
-            ),
-          },
-          ...(session.archivedAt
-            ? [
-                {
-                  id: 'archived',
-                  side: 'left' as const,
-                  group: 'status' as const,
-                  node: <ArchivedStatus />,
-                },
-              ]
-            : []),
+          ...leadingStatusSlots({
+            session,
+            parallel: parallelLabel
+              ? {
+                  label: parallelLabel,
+                  expanded: parallelOpen,
+                  onToggle: toggleParallel,
+                  ref: parallelButton,
+                }
+              : null,
+          }),
           ...(activityLabel
             ? [
                 {

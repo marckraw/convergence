@@ -32,6 +32,7 @@ import {
   UsageSection,
 } from './usage-popover.presentational'
 import { contextDotHalo, usagePillTone } from './usage-pill.styles'
+import { useHoverPopover } from './use-hover-popover'
 
 interface ContextWindowDotProps {
   contextWindow: SessionContextWindow | null | undefined
@@ -65,13 +66,13 @@ export function ContextWindowDot({
   onCompact,
   hasPendingQueuedInput = false,
 }: ContextWindowDotProps) {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen, openPanel, closePanelSoon, clearCloseTimer } =
+    useHoverPopover()
   const [isCompacting, setIsCompacting] = useState(false)
   const [actionMessage, setActionMessage] = useState<{
     tone: 'success' | 'error'
     text: string
   } | null>(null)
-  const closeTimerRef = useRef<number | null>(null)
   // Read from the store rather than passed down: the store is refreshed by the
   // `appSettings:updated` broadcast, so changing the threshold recolours an
   // already-open conversation's dot without a reload.
@@ -129,26 +130,6 @@ export function ContextWindowDot({
     wasOpenRef.current = open
   }, [open, refreshDrill, session.id])
 
-  const clearCloseTimer = useCallback(() => {
-    if (closeTimerRef.current === null) return
-    window.clearTimeout(closeTimerRef.current)
-    closeTimerRef.current = null
-  }, [])
-
-  const openPanel = useCallback(() => {
-    clearCloseTimer()
-    setOpen(true)
-  }, [clearCloseTimer])
-
-  const closePanelSoon = useCallback(() => {
-    clearCloseTimer()
-    closeTimerRef.current = window.setTimeout(() => {
-      setOpen(false)
-      closeTimerRef.current = null
-    }, 120)
-  }, [clearCloseTimer])
-
-  useEffect(() => clearCloseTimer, [clearCloseTimer])
   useEffect(() => {
     setActionMessage(null)
     setCancelRefusal(null)

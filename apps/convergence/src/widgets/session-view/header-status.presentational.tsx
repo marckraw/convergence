@@ -1,6 +1,8 @@
 import type { FC, Ref } from 'react'
 import { Cloud, TriangleAlert } from 'lucide-react'
 import { StatusPill, StatusPillButton, Tooltip } from '@convergence/ui'
+import { AttentionIndicator, type SessionSummary } from '@/entities/session'
+import type { HeaderSlot } from './conversation-header.container'
 
 /**
  * The conversation header's status row (CONV-3, MAR-3617): every state in it
@@ -64,3 +66,61 @@ export const WorktreeRemovedStatus: FC = () => (
 
 /** The session is archived (neutral), the same in a chat's header and a project session's. */
 export const ArchivedStatus: FC = () => <StatusPill>Archived</StatusPill>
+
+/**
+ * The states every conversation header leads with, a project session's and a
+ * chat's alike: Parallel work while it matters (its history is in View), the
+ * attention pill, and Archived. Each header adds its own after them.
+ */
+export function leadingStatusSlots({
+  session,
+  parallel,
+}: {
+  session: Pick<
+    SessionSummary,
+    'parallelWork' | 'attention' | 'status' | 'activity' | 'archivedAt'
+  >
+  /** Parallel work's pill, while there is work to show; null otherwise. */
+  parallel: {
+    label: string
+    expanded: boolean
+    onToggle: () => void
+    ref: Ref<HTMLButtonElement>
+  } | null
+}): HeaderSlot[] {
+  return [
+    ...(parallel
+      ? [
+          {
+            id: 'parallel-work',
+            side: 'left' as const,
+            group: 'status' as const,
+            node: <ParallelWorkStatus {...parallel} />,
+          },
+        ]
+      : []),
+    {
+      id: 'attention',
+      side: 'left',
+      group: 'status',
+      node: (
+        <AttentionIndicator
+          parallelWork={session.parallelWork}
+          attention={session.attention}
+          status={session.status}
+          activity={session.activity}
+        />
+      ),
+    },
+    ...(session.archivedAt
+      ? [
+          {
+            id: 'archived',
+            side: 'left' as const,
+            group: 'status' as const,
+            node: <ArchivedStatus />,
+          },
+        ]
+      : []),
+  ]
+}

@@ -5,8 +5,7 @@ import { HarnessAlertChip } from './harness-alert-chip.presentational'
 import { DraftPlaceName, DraftStart } from './draft-start.presentational'
 import {
   ActivityStatus,
-  ArchivedStatus,
-  ParallelWorkStatus,
+  leadingStatusSlots,
   RemoteStatus,
   WorktreeRemovedStatus,
 } from './header-status.presentational'
@@ -20,7 +19,6 @@ import type { FC } from 'react'
 import { flushSync } from 'react-dom'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
-  AttentionIndicator,
   useSessionStore,
   type InteractionResponse,
   type SessionContextWindow,
@@ -604,46 +602,17 @@ export const SessionView: FC = () => {
           slots={[
             // Parallel work holds a place in the row only while it matters,
             // and then it is live status (CH4 R2). Its history is in View.
-            ...(parallelLabel
-              ? [
-                  {
-                    id: 'parallel-work',
-                    side: 'left' as const,
-                    group: 'status' as const,
-                    node: (
-                      <ParallelWorkStatus
-                        ref={parallelButton}
-                        label={parallelLabel}
-                        expanded={parallelOpen}
-                        onToggle={toggleParallel}
-                      />
-                    ),
-                  },
-                ]
-              : []),
-            {
-              id: 'attention',
-              side: 'left',
-              group: 'status',
-              node: (
-                <AttentionIndicator
-                  parallelWork={session.parallelWork}
-                  attention={session.attention}
-                  status={session.status}
-                  activity={session.activity}
-                />
-              ),
-            },
-            ...(session.archivedAt
-              ? [
-                  {
-                    id: 'archived',
-                    side: 'left' as const,
-                    group: 'status' as const,
-                    node: <ArchivedStatus />,
-                  },
-                ]
-              : []),
+            ...leadingStatusSlots({
+              session,
+              parallel: parallelLabel
+                ? {
+                    label: parallelLabel,
+                    expanded: parallelOpen,
+                    onToggle: toggleParallel,
+                    ref: parallelButton,
+                  }
+                : null,
+            }),
             ...(remote
               ? [
                   {

@@ -1,4 +1,3 @@
-import { useCallback, useRef, useState } from 'react'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
 import {
   Button,
@@ -25,6 +24,7 @@ import {
   UsageSection,
 } from './usage-popover.presentational'
 import { usagePillTone } from './usage-pill.styles'
+import { useHoverPopover } from './use-hover-popover'
 
 interface CodexUsagePillContainerProps {
   snapshot: ProviderQuotaSnapshot | null
@@ -49,8 +49,7 @@ export function CodexUsagePillContainer({
   onRefresh,
   onOpenSettings,
 }: CodexUsagePillContainerProps) {
-  const [open, setOpen] = useState(false)
-  const closeTimerRef = useRef<number | null>(null)
+  const { open, setOpen, openPanel, closePanelSoon } = useHoverPopover()
   const primary = getPrimaryCodexWindow(snapshot)
   const weekly = getCodexWindow(snapshot, 'weekly')
   const remaining = primary?.remainingPercent ?? null
@@ -59,25 +58,6 @@ export function CodexUsagePillContainer({
   const warmingUp = isCodexUsageWarmingUp(snapshot)
   const unavailableReason =
     snapshot?.status === 'unavailable' ? snapshot.reason : null
-
-  const clearCloseTimer = useCallback(() => {
-    if (closeTimerRef.current === null) return
-    window.clearTimeout(closeTimerRef.current)
-    closeTimerRef.current = null
-  }, [])
-
-  const openPanel = useCallback(() => {
-    clearCloseTimer()
-    setOpen(true)
-  }, [clearCloseTimer])
-
-  const closePanelSoon = useCallback(() => {
-    clearCloseTimer()
-    closeTimerRef.current = window.setTimeout(() => {
-      setOpen(false)
-      closeTimerRef.current = null
-    }, 120)
-  }, [clearCloseTimer])
 
   return (
     <Popover

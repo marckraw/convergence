@@ -21,6 +21,7 @@ export { parallelWorkInRow } from './conversation-header.pure'
 export {
   ActivityStatus,
   ArchivedStatus,
+  leadingStatusSlots,
   ParallelWorkStatus,
 } from './header-status.presentational'
 export { DraftPlaceName, DraftStart } from './draft-start.presentational'
