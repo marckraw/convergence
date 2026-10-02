@@ -1,4 +1,5 @@
 import { focusRing, type Tone } from '@convergence/ui'
+import { SESSION_STATE_TONE } from '@/entities/session'
 
 /** The window's last line: a hairline over it, 11 px muted words in it. */
 export const barClass =
@@ -27,12 +28,13 @@ export const recencyBadgeClass =
   'ml-auto flex items-center gap-1 rounded-md border border-line/40 bg-canvas/40 px-1.5 py-0.5 text-ink-muted transition-colors hover:bg-highlight'
 
 /**
- * R1's map for what the bar shows: a session that waits on you is warning, one
- * that runs is info, one that finished is success, one that failed is danger.
+ * R1's map for what the bar shows, read from the session's own (NAV-1): a
+ * session that waits on you is warning, one that runs is info, one that
+ * finished is success, one that failed is danger.
  */
 export const barTone = {
-  waiting: 'warning',
-  running: 'info',
-  completed: 'success',
-  failed: 'danger',
+  waiting: SESSION_STATE_TONE.waiting,
+  running: SESSION_STATE_TONE.working,
+  completed: SESSION_STATE_TONE.finished,
+  failed: SESSION_STATE_TONE.failed,
 } as const satisfies Record<string, Tone>

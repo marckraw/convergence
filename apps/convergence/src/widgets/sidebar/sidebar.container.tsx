@@ -6,6 +6,7 @@ import { usePullRequestStore } from '@/entities/pull-request'
 import { useSpaceStore } from '@/entities/space'
 import { useWorkspaceStore } from '@/entities/workspace'
 import {
+  SESSION_STATE_TONE,
   sessionApi,
   useSessionStore,
   type SessionSummary,
@@ -867,14 +868,15 @@ export const Sidebar: FC<SidebarProps> = ({
 
   if (collapsed) {
     // R1: the loudest card waiting decides the rail's tone, and its count
-    // wears the same one (no red count beside a green ring).
+    // wears the same one (no red count beside a green ring), in the
+    // session's own tones (NAV-1).
     const railTone = attentionCards.some(
       (card) => card.attentionGroup === 'Waiting on you',
     )
-      ? 'warning'
+      ? SESSION_STATE_TONE.waiting
       : attentionCards.some(({ session }) => session.attention === 'failed')
-        ? 'danger'
-        : 'success'
+        ? SESSION_STATE_TONE.failed
+        : SESSION_STATE_TONE.finished
     return (
       <div className="relative flex h-full w-14 flex-col items-center">
         {/* The rail's edge: hover, focus or a press opens the sidebar over the content (NAV-27). */}

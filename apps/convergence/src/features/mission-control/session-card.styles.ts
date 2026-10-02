@@ -1,5 +1,10 @@
-import { durationsMs, type Tone } from '@convergence/ui'
-import type { AttentionState, SessionStatus } from '@/entities/session'
+import { durationsMs, type Tone, toneInk } from '@convergence/ui'
+import {
+  ATTENTION_TONE,
+  type AttentionState,
+  SESSION_STATE_TONE,
+  type SessionStatus,
+} from '@/entities/session'
 import type { SessionCardState } from './session-card-state.pure'
 
 /**
@@ -9,14 +14,10 @@ import type { SessionCardState } from './session-card-state.pure'
  * or a question, a failure is danger, a finish is success, and a host the
  * room cannot see is warning too, with its own glyph and words, never red
  * (MAR-3051: the run is not broken, the view of it is). No attention, no
- * tone: the card's own hairline.
+ * tone: the card's own hairline. The session's own map (NAV-1).
  */
 export const CARD_ATTENTION_TONE: Record<AttentionState, Tone | undefined> = {
-  'needs-approval': 'warning',
-  'needs-input': 'warning',
-  failed: 'danger',
-  finished: 'success',
-  'host-unreachable': 'warning',
+  ...ATTENTION_TONE,
   none: undefined,
 }
 
@@ -60,24 +61,28 @@ export const CARD_TONE_WASH: Record<Tone, string> = {
 /**
  * Each state the room filters by, in R1's tone: working is info everywhere a
  * session is drawn (Mission Control, Needs you, Loom), never emerald, blue or
- * sky depending on the surface (MC-2).
+ * sky depending on the surface (MC-2); read from the session's own map
+ * (NAV-1).
  */
 export const SESSION_CARD_STATE_TONE: Record<SessionCardState, Tone> = {
-  working: 'info',
-  'needs-you': 'warning',
-  idle: 'neutral',
-  finished: 'success',
-  failed: 'danger',
-  'host-unreachable': 'warning',
+  working: SESSION_STATE_TONE.working,
+  'needs-you': SESSION_STATE_TONE.waiting,
+  idle: SESSION_STATE_TONE.idle,
+  finished: SESSION_STATE_TONE.finished,
+  failed: SESSION_STATE_TONE.failed,
+  'host-unreachable': SESSION_STATE_TONE.unreachable,
 }
 
-/** The dot a card shows when nothing needs you: what the run is doing. */
+/**
+ * The dot a card shows when nothing needs you: what the run is doing. A run
+ * that completed is at rest here, not a finish to look at: idle.
+ */
 export const STATUS_DOT_TONE: Record<SessionStatus, Tone> = {
-  running: 'info',
-  idle: 'neutral',
-  answered: 'info',
-  completed: 'neutral',
-  failed: 'danger',
+  running: SESSION_STATE_TONE.working,
+  idle: SESSION_STATE_TONE.idle,
+  answered: SESSION_STATE_TONE.working,
+  completed: SESSION_STATE_TONE.idle,
+  failed: SESSION_STATE_TONE.failed,
 }
 
 /**
@@ -104,7 +109,7 @@ export const ACTIVITY_TEXT_STYLES: Record<SessionStatus, string> = {
   idle: 'text-ink-muted',
   answered: 'text-ink-muted',
   completed: 'text-ink-muted',
-  failed: 'text-danger-ink',
+  failed: toneInk[SESSION_STATE_TONE.failed],
 }
 
 /**

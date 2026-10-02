@@ -182,3 +182,10 @@ export {
   workDisplayRows,
 } from './work-blocks.pure'
 export type { WorkBlockItem, WorkDisplayRow, WorkRow } from './work-blocks.pure'
+
+export {
+  ATTENTION_TONE,
+  attentionTone,
+  SESSION_STATE_TONE,
+} from './session-tone.pure'
+export type { LabelledAttention, SessionToneState } from './session-tone.pure'
