@@ -14,6 +14,7 @@ import {
   type WorkspaceStartStrategy,
 } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
+import { useSaveAsYouGo } from '@/shared/lib/use-save-as-you-go'
 import { ProjectSettingsDialog } from './project-settings.presentational'
 
 /**
@@ -85,17 +86,11 @@ export const ProjectSettingsDialogContainer: FC<
     envPatternsText,
   })
   drafts.current = { strategy, baseBranchName, envCopyMode, envPatternsText }
-  const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saves = useRef<Promise<void>>(Promise.resolve())
 
-  const saveNow = useCallback(() => {
-    if (pendingSave.current !== null) {
-      clearTimeout(pendingSave.current)
-      pendingSave.current = null
-    }
+  const { scheduleSave, flush } = useSaveAsYouGo(() => {
     const projectId = activeProjectId
-    if (!projectId) return
-    saves.current = saves.current.then(async () => {
+    if (!projectId) return null
+    return async () => {
       const current = drafts.current
       setError(null)
       try {
@@ -120,16 +115,8 @@ export const ProjectSettingsDialogContainer: FC<
         const reason = nextError instanceof Error ? ` ${nextError.message}` : ''
         setError(`Couldn’t save the project settings.${reason}`)
       }
-    })
-  }, [activeProjectId, updateProjectSettings])
-
-  const scheduleSave = useCallback(
-    (delayMs: number) => {
-      if (pendingSave.current !== null) clearTimeout(pendingSave.current)
-      pendingSave.current = setTimeout(saveNow, delayMs)
-    },
-    [saveNow],
-  )
+    }
+  })
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -138,10 +125,10 @@ export const ProjectSettingsDialogContainer: FC<
         return
       }
       // Leaving with a typed value still waiting keeps it.
-      if (pendingSave.current !== null) saveNow()
+      flush()
       closeDialog()
     },
-    [openDialog, closeDialog, saveNow],
+    [openDialog, closeDialog, flush],
   )
 
   useEffect(() => {

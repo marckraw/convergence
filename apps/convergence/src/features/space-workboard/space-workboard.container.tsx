@@ -33,6 +33,7 @@ import {
   type SpaceArtifactSuggestion,
 } from './space-artifact-suggestions.pure'
 import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
+import { useSaveAsYouGo } from '@/shared/lib/use-save-as-you-go'
 import { useConfirm } from '@convergence/ui'
 
 const emptyDraft: SpaceDraft = {
@@ -174,46 +175,29 @@ export const SpaceWorkboardDialogContainer: FC<{
   draftRef.current = draft
   const selectedSpaceRef = useRef(selectedSpace)
   selectedSpaceRef.current = selectedSpace
-  const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saves = useRef<Promise<void>>(Promise.resolve())
 
   /**
-   * Saves the Space's own fields now, as they stand, after any save under
-   * way. The Space and the draft are read here, not when its turn comes, so
-   * switching Spaces can't carry one Space's edit into another. A Space with
-   * no title is not saved: it keeps the last one it had.
+   * Saves the Space's own fields, as they stand, after any save under way.
+   * The Space and the draft are read when the save is asked for, not when
+   * its turn comes, so switching Spaces can't carry one Space's edit into
+   * another. A Space with no title is not saved: it keeps the last one it
+   * had. Leaving a Space, or the dialog, with typing still waiting keeps it
+   * (`flushSave`).
    */
-  const saveNow = useCallback(() => {
-    if (pendingSave.current !== null) {
-      clearTimeout(pendingSave.current)
-      pendingSave.current = null
-    }
+  const { scheduleSave, flush: flushSave } = useSaveAsYouGo(() => {
     const space = selectedSpaceRef.current
     const current = draftRef.current
     const title = current.title.trim()
-    if (!space || !title) return
-    saves.current = saves.current.then(async () => {
+    if (!space || !title) return null
+    return async () => {
       await updateSpace(space.id, {
         title,
         status: current.status as SpaceStatus,
         attention: current.attention as SpaceAttention,
         brief: current.brief,
       })
-    })
-  }, [updateSpace])
-
-  const scheduleSave = useCallback(
-    (delayMs: number) => {
-      if (pendingSave.current !== null) clearTimeout(pendingSave.current)
-      pendingSave.current = setTimeout(saveNow, delayMs)
-    },
-    [saveNow],
-  )
-
-  /** Leaving a Space, or the dialog, with typing still waiting keeps it. */
-  const flushSave = useCallback(() => {
-    if (pendingSave.current !== null) saveNow()
-  }, [saveNow])
+    }
+  })
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
