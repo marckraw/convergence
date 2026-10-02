@@ -14,7 +14,7 @@ import {
   Timestamp,
 } from '@convergence/ui'
 import {
-  compactionLabel,
+  compactionFacts,
   hiddenPluginSentence,
   hiddenPluginServers,
   isMcpAlertStatus,
@@ -194,7 +194,7 @@ export function HarnessFactsSections({
           <h3 className="font-medium">Compactions</h3>
           {facts.compactions.map((fact) => (
             <MetaLine wrap key={fact.sequence}>
-              {compactionLabel(fact)}
+              {compactionFacts(fact)}
               {fact.durationMs !== null ? `${fact.durationMs} ms` : null}
             </MetaLine>
           ))}
@@ -292,11 +292,13 @@ export function HarnessFactsSections({
           {status ? (
             <div className="mt-2" aria-label="MCP servers">
               <p>
-                {mcpStatusHeading(
-                  status,
-                  mcp ? mcp.unavailable === null : null,
-                  writeStatusTime,
-                )}
+                <MetaLine wrap>
+                  {mcpStatusHeading(
+                    status,
+                    mcp ? mcp.unavailable === null : null,
+                    writeStatusTime,
+                  )}
+                </MetaLine>
               </p>
               {hidden.map((entry) => (
                 <p
@@ -359,13 +361,22 @@ export function HarnessFactsSections({
           ) : (
             init.mcpServers !== null && (
               <div className="mt-2">
-                MCP servers · {init.mcpServers.connected} connected of{' '}
-                {init.mcpServers.total}
-                {/* Which servers the session actually loaded (MAR-3213) —
-                absent on facts recorded before the change, and then
-                nothing extra renders. */}
+                {/* Its readings as terms and values, as Tools and Skills
+                    are (CONV-24). Which servers the session actually loaded
+                    (MAR-3213) is absent on facts recorded before the change,
+                    and then nothing extra renders; a long list wraps under
+                    its term. */}
+                <DescriptionList layout="inline" density="compact">
+                  <DescriptionItem term="MCP servers">
+                    {`${init.mcpServers.connected} connected of ${init.mcpServers.total}`}
+                  </DescriptionItem>
+                </DescriptionList>
                 {!!init.mcpServers.connectedNames?.length && (
-                  <p>Connected: {init.mcpServers.connectedNames.join(', ')}</p>
+                  <DescriptionList density="compact" className="mt-1">
+                    <DescriptionItem term="Connected">
+                      {init.mcpServers.connectedNames.join(', ')}
+                    </DescriptionItem>
+                  </DescriptionList>
                 )}
                 {(init.mcpServers.connectedOmitted ?? 0) > 0 && (
                   <p>{`… and ${init.mcpServers.connectedOmitted} more connected`}</p>
@@ -391,7 +402,11 @@ export function HarnessFactsSections({
           )}
           {init.plugins !== null && (
             <div className="mt-2">
-              Plugins · {init.plugins.count}
+              <DescriptionList layout="inline" density="compact">
+                <DescriptionItem term="Plugins">
+                  {init.plugins.count}
+                </DescriptionItem>
+              </DescriptionList>
               {init.plugins.names.map((name, index) => (
                 <p key={`${index}:${name}`}>{name}</p>
               ))}

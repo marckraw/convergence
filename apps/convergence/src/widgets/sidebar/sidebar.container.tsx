@@ -201,6 +201,8 @@ export const Sidebar: FC<SidebarProps> = ({
     () => new Set(),
   )
   const [archivedSpacesExpanded, setArchivedSpacesExpanded] = useState(false)
+  // Chat's archived chats fold as the code tree's archive does (NAV-13).
+  const [archivedChatsExpanded, setArchivedChatsExpanded] = useState(false)
 
   const toggleWorkspace = useCallback((id: string) => {
     setExpandedWorkspaces((prev) => {
@@ -231,6 +233,10 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const toggleArchivedSpaces = useCallback(() => {
     setArchivedSpacesExpanded((current) => !current)
+  }, [])
+
+  const toggleArchivedChats = useCallback(() => {
+    setArchivedChatsExpanded((current) => !current)
   }, [])
 
   const handleRegenerateSessionName = useCallback(
@@ -484,6 +490,15 @@ export const Sidebar: FC<SidebarProps> = ({
       ),
     [globalChatSessions, linkedChatSessionIds],
   )
+
+  // An open archived chat unfolds the archive, so its row shows, as the code
+  // tree's does for an archived session (NAV-13).
+  const activeArchivedChatId = ungroupedGlobalChatSessions.find(
+    (session) => session.id === activeGlobalSessionId && session.archivedAt,
+  )?.id
+  useEffect(() => {
+    if (activeArchivedChatId) setArchivedChatsExpanded(true)
+  }, [activeArchivedChatId])
 
   const handleSpaceCreated = useCallback(
     (space: { id: string }) => {
@@ -1073,11 +1088,13 @@ export const Sidebar: FC<SidebarProps> = ({
           selectedSpaceId={selectedSpaceId}
           expandedSpaceIds={expandedSpaceIds}
           archivedSpacesExpanded={archivedSpacesExpanded}
+          archivedChatsExpanded={archivedChatsExpanded}
           onNewGlobalSession={handleNewGlobalSession}
           onNewSpace={handleNewSpace}
           onSelectSpace={handleSelectSpace}
           onToggleSpace={toggleSpace}
           onToggleArchivedSpaces={toggleArchivedSpaces}
+          onToggleArchivedChats={toggleArchivedChats}
           onArchiveSpace={handleArchiveSpace}
           onUnarchiveSpace={handleUnarchiveSpace}
           onSelectSpaceAttempt={handleSelectSpaceAttempt}

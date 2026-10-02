@@ -307,6 +307,15 @@
         "message": "Three dots typed in words (\"Loading...\", \"Search options...\", a name cut short with + '...'): R10 writes the ellipsis character, … (U+2026), on busy labels, placeholders, cut-short text and every item that opens a dialog. Code's spread (...props, [...items]) follows a bracket, a comma or a space, never a letter or a quote, and is not reported (MAR-3608; docs/checks/design-system-drift.md)."
       },
       {
+        "id": "no-magic-stroke",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\bstroke-\\[",
+        "message": "A glyph's stroke weight typed by hand (stroke-[2.25]): an icon keeps lucide's own stroke, so every glyph has one weight; a weight the design needs is a token in packages/ui/src/styles/tokens.css with its utility in theme.css. no-magic-values' sibling, for the stroke (NAV-6; DS8, MAR-3608; docs/checks/design-system-drift.md)."
+      },
+      {
         "id": "no-ascii-couldnt",
         "type": "regex",
         "severity": "error",

@@ -45,7 +45,7 @@ export const Long: Story = {
       '/Users/marckraw/Projects/Private/convergence/.claude/worktrees/agent-ace62d03d1b065b41',
   },
   play: async ({ args, canvas }) => {
-    const value = canvas.getByText(args.value)
+    const value = canvas.getByText(String(args.value))
     await expect(value.scrollWidth).toBeGreaterThan(value.clientWidth)
   },
 }

@@ -1,4 +1,5 @@
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest'
+import { screen, waitFor } from '@testing-library/react'
 import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useAttachmentStore } from '@/entities/attachment'
@@ -379,4 +380,35 @@ export function queuedInput(overrides: Record<string, unknown>) {
     updatedAt: '2026-09-11T22:20:25.000Z',
     ...overrides,
   }
+}
+
+/**
+ * The composer's pickers are named by what they pick, and show their value
+ * (CONV N2): "Provider" reads "Anthropic". The picker for `field`, which must
+ * be showing `value`.
+ */
+export function picker(field: string, value: string | RegExp): HTMLElement {
+  const found = screen.getByRole('combobox', { name: field })
+  expect(found).toHaveTextContent(value)
+  return found
+}
+
+/** The picker for `field` if it is there showing `value`; null otherwise. */
+export function queryPicker(
+  field: string,
+  value: string | RegExp,
+): HTMLElement | null {
+  const found = screen.queryByRole('combobox', { name: field })
+  const text = found?.textContent ?? ''
+  const shows =
+    typeof value === 'string' ? text.includes(value) : value.test(text)
+  return found && shows ? found : null
+}
+
+/** Waits for the picker for `field` to be there, showing `value`. */
+export function findPicker(
+  field: string,
+  value: string | RegExp,
+): Promise<HTMLElement> {
+  return waitFor(() => picker(field, value))
 }

@@ -19,7 +19,6 @@ interface ComposerPromptInjectionPickerProps {
   error: string | null
   onSelect: (prompt: PromptLibraryEntry) => void
   onHover: (index: number) => void
-  onDismiss: () => void
 }
 
 /**
@@ -39,7 +38,6 @@ export const ComposerPromptInjectionPicker: FC<
   error,
   onSelect,
   onHover,
-  onDismiss,
 }) => {
   if (!open) return null
 
@@ -51,8 +49,6 @@ export const ComposerPromptInjectionPicker: FC<
         title: 'Prompts',
         detail: 'Prompt library',
       }}
-      closeLabel="Close prompt injection picker"
-      onDismiss={onDismiss}
       tall
     >
       {error ? (

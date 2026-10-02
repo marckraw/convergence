@@ -20,7 +20,6 @@ const meta = {
     highlightedIndex: 0,
     onSelect: fn(),
     onHover: fn(),
-    onDismiss: fn(),
   },
   parameters: { layout: 'padded' },
   // The picker floats above the composer's field, as it does in the app.

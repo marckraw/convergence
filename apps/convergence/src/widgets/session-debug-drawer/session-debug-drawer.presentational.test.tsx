@@ -31,7 +31,7 @@ describe('SessionDebugDrawer', () => {
         onOpenLogFolder={vi.fn()}
       />,
     )
-    expect(screen.getByText('No events captured yet.')).toBeInTheDocument()
+    expect(screen.getByText('No events captured yet')).toBeInTheDocument()
   })
 
   it('renders one row per entry with channel and method', () => {

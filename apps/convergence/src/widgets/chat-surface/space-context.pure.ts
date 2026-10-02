@@ -60,3 +60,16 @@ export function applySpaceContextToMessage(
   if (!trimmedMessage) return contextBlock
   return `${contextBlock}\n\nUser request:\n${trimmedMessage}`
 }
+
+/** The selection with one source chosen or let go (CONV-30). */
+export function withSpaceContextSource(
+  selection: SpaceContextSelection,
+  sourceId: string,
+  chosen: boolean,
+): SpaceContextSelection {
+  const others = selection.selectedSourceIds.filter((id) => id !== sourceId)
+  return {
+    ...selection,
+    selectedSourceIds: chosen ? [...others, sourceId] : others,
+  }
+}

@@ -2,6 +2,7 @@ import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '#lib/cn.pure'
 import { focusRing } from '#lib/focus-ring.styles'
+import { disclosureChevron } from './collapsible.styles'
 
 type CollapsibleProps = Omit<BaseCollapsible.Root.Props, 'className'> & {
   className?: string
@@ -48,7 +49,10 @@ function CollapsibleTrigger({
       <ChevronRight
         aria-hidden
         data-slot="collapsible-chevron"
-        className="size-3 shrink-0 transition-transform duration-fast group-data-panel-open/collapsible:rotate-90 motion-reduce:transition-none"
+        className={cn(
+          'size-3 group-data-panel-open/collapsible:rotate-90',
+          disclosureChevron,
+        )}
       />
     )
   return (

@@ -90,7 +90,8 @@ export function FeedbackButton({
         onClick={() => onOpenChange(true)}
         className={cn(FLOATING_CORNER_BUTTON_CLASS, floatingButtonClass)}
       >
-        <MessageSquarePlus className="h-5 w-5 stroke-[2.25]" />
+        {/* Lucide's own stroke, as every glyph (NAV-6). */}
+        <MessageSquarePlus className="h-5 w-5" />
       </IconButton>
 
       <FormDialog

@@ -2,12 +2,14 @@ import type { FC } from 'react'
 import type { ProviderDebugEntry } from '@/entities/provider-debug'
 import {
   Button,
+  Card,
   Dialog,
   DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  EmptyState,
 } from '@convergence/ui'
 import { drawerStyles } from './session-debug-drawer.styles'
 
@@ -100,13 +102,24 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
             {entries.length} entries · session {sessionId.slice(0, 8)}
           </p>
           {entries.length === 0 ? (
-            <div className={drawerStyles.empty}>No events captured yet.</div>
+            // Nothing yet, in the middle of the log (DLG-18).
+            <EmptyState
+              variant="plain"
+              layout="centred"
+              title="No events captured yet"
+            />
           ) : (
             <ul className={drawerStyles.list}>
               {entries.map((entry, index) => {
                 const payload = describePayload(entry)
                 return (
-                  <li key={`${entry.at}-${index}`} className={drawerStyles.row}>
+                  // Each event a Card on the inset surface (DS-10).
+                  <Card
+                    key={`${entry.at}-${index}`}
+                    render={<li />}
+                    padding="none"
+                    className={drawerStyles.row}
+                  >
                     <div className={drawerStyles.rowHeader}>
                       <span>{formatTime(entry.at)}</span>
                       <span className={drawerStyles.channel}>
@@ -122,7 +135,7 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
                       // raw-element: one event's payload in the row's own small print, dozens to a page; CodeBlock's framed box would wrap each
                       <pre className={drawerStyles.payload}>{payload}</pre>
                     ) : null}
-                  </li>
+                  </Card>
                 )
               })}
             </ul>

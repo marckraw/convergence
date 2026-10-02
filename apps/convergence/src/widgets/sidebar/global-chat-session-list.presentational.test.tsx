@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SessionSummary } from '@/entities/session'
 import { TooltipProvider } from '@convergence/ui'
 import {
+  ARCHIVED_CHATS_STAY_OPEN_WHILE_YOU_SEARCH,
   GlobalChatSessionList,
   type ChatSidebarSpace,
 } from './global-chat-session-list.presentational'
@@ -63,11 +64,13 @@ function renderList(
     selectedSpaceId: null,
     expandedSpaceIds: new Set(),
     archivedSpacesExpanded: false,
+    archivedChatsExpanded: false,
     onNewSession: vi.fn(),
     onNewSpace: vi.fn(),
     onSelectSpace: vi.fn(),
     onToggleSpace: vi.fn(),
     onToggleArchivedSpaces: vi.fn(),
+    onToggleArchivedChats: vi.fn(),
     onArchiveSpace: vi.fn(),
     onUnarchiveSpace: vi.fn(),
     onSelectSpaceAttempt: vi.fn(),
@@ -269,6 +272,52 @@ describe('GlobalChatSessionList', () => {
     expect(
       screen.getByRole('button', { name: /expand archived spaces/i }),
     ).toBeInTheDocument()
+  })
+
+  it('NAV-13 folds the archived chats as the code tree folds its archive, held open by a search — mutation draw them under a plain header turns red', () => {
+    const archived = {
+      ...baseSession,
+      id: 'old-chat',
+      name: 'Old taxes',
+      archivedAt: '2026-01-02T00:00:00.000Z',
+    }
+    const onToggleArchivedChats = vi.fn()
+    const row = () =>
+      screen.queryByRole('button', { name: 'Open chat session Old taxes' })
+    const first = renderList({ sessions: [archived], onToggleArchivedChats })
+    const fold = screen.getByRole('button', { name: 'Expand archived chats' })
+    const folded = { expanded: fold.getAttribute('aria-expanded'), row: row() }
+    fireEvent.click(fold)
+    first.unmount()
+    const second = renderList({
+      sessions: [archived],
+      archivedChatsExpanded: true,
+    })
+    const open = Boolean(row())
+    second.unmount()
+    renderList({ sessions: [archived], nameSearchQuery: 'taxes' })
+    const searchFold = screen.getByRole('button', {
+      name: 'Collapse archived chats',
+    })
+    expect({
+      folded,
+      toggled: onToggleArchivedChats.mock.calls.length,
+      open,
+      search: {
+        row: Boolean(row()),
+        locked: searchFold.getAttribute('aria-disabled'),
+        reason: searchFold.getAttribute('aria-description'),
+      },
+    }).toEqual({
+      folded: { expanded: 'false', row: null },
+      toggled: 1,
+      open: true,
+      search: {
+        row: true,
+        locked: 'true',
+        reason: ARCHIVED_CHATS_STAY_OPEN_WHILE_YOU_SEARCH,
+      },
+    })
   })
 
   it('detaches a linked Space attempt from the attempt actions menu', async () => {

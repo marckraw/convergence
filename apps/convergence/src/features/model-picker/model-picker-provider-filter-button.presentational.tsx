@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Star } from 'lucide-react'
-import { Badge, Button, cn, Tooltip } from '@convergence/ui'
+import { Badge, cn, ListRow, Tooltip } from '@convergence/ui'
 import { ProviderIcon } from '@/entities/provider'
 import type { ModelPickerProviderFilter } from './model-picker-dialog.types'
 
@@ -17,6 +17,12 @@ interface ProviderFilterButtonProps {
 const favoriteMark =
   'inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-tag-yellow/30 bg-tag-yellow/10 text-tag-yellow-ink'
 
+/**
+ * One provider in the model picker's rail (DLG-8): a row of a list, and the
+ * chosen one is a selected row, its fill and aria-current (R7), never a look
+ * typed onto a Button. Side by side on a narrow window, stacked beside the
+ * models on a wide one.
+ */
 export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
   id,
   label,
@@ -25,43 +31,37 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
   provider,
   onSelect,
 }) => (
-  <Button
-    type="button"
-    variant="ghost"
-    aria-pressed={selected}
+  <ListRow
+    density="dense"
+    selected={selected}
+    render={<button type="button" />}
     onClick={() => onSelect(id)}
-    size="md"
-    className={cn(
-      'shrink-0 justify-start text-left sm:w-full',
-      // R7: the chosen look is the selected fill; hover is half of it.
-      selected
-        ? 'bg-fill-selected text-on-highlight'
-        : 'text-ink-muted hover:bg-fill-hover hover:text-ink',
-    )}
-  >
-    {provider ? (
-      provider.kind === 'favorites' ? (
-        <span aria-hidden="true" className={favoriteMark}>
-          <Star className="size-3.5 fill-current" />
-        </span>
+    className="w-auto shrink-0 sm:w-full"
+    leading={
+      provider ? (
+        provider.kind === 'favorites' ? (
+          <span aria-hidden="true" className={favoriteMark}>
+            <Star className="size-3.5 fill-current" />
+          </span>
+        ) : (
+          <ProviderIcon
+            providerId={provider.id}
+            vendorLabel={provider.vendorLabel}
+            name={provider.name}
+          />
+        )
       ) : (
-        <ProviderIcon
-          providerId={provider.id}
-          vendorLabel={provider.vendorLabel}
-          name={provider.name}
-        />
+        <span
+          aria-hidden="true"
+          className={cn(favoriteMark, 'text-3xs leading-none font-semibold')}
+        >
+          *
+        </span>
       )
-    ) : (
-      <span
-        aria-hidden="true"
-        className={cn(favoriteMark, 'text-3xs leading-none font-semibold')}
-      >
-        *
-      </span>
-    )}
-    <span className="flex min-w-0 flex-1 items-center gap-1.5">
-      <span className="min-w-0 truncate">{label}</span>
-      {provider?.badge ? (
+    }
+    title={label}
+    marks={
+      provider?.badge ? (
         <Tooltip label={provider.badge.title}>
           <Badge
             tone="warning"
@@ -72,8 +72,8 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
             {provider.badge.label}
           </Badge>
         </Tooltip>
-      ) : null}
-    </span>
-    <Badge shape="count">{count}</Badge>
-  </Button>
+      ) : undefined
+    }
+    trailing={<Badge shape="count">{count}</Badge>}
+  />
 )

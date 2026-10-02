@@ -5,9 +5,10 @@ import {
 import { readHarnessFactRow } from '../../../electron/backend/session/harness-fact-row.pure'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { metaLine, seen } from '@/shared/testing/meta-line'
+import { metaLine, metaText, seen } from '@/shared/testing/meta-line'
 import { isUnavailable } from '@/shared/testing/unavailable'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
+import { MetaLine } from '@convergence/ui'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
 import { HarnessFactsSections } from './harness-facts.presentational'
 import { harnessPill } from './harness-facts.pure'
@@ -31,7 +32,7 @@ function HarnessFactsView(props: Parameters<typeof HarnessFactsSections>[0]) {
   return (
     <>
       <span data-testid="harness-pill" data-alert={pill.alert}>
-        {pill.label}
+        <MetaLine>{pill.facts}</MetaLine>
       </span>
       <HarnessFactsSections {...props} />
     </>
@@ -75,7 +76,7 @@ it('shows the same hook count and bounded output in the popover — mutation dro
   })
   const hooks = screen.queryByRole('region', { name: 'Hooks' })
   expect({
-    pill: screen.getByTestId('harness-pill').textContent,
+    pill: seen(screen.getByTestId('harness-pill')),
     name: hooks ? seen(metaLine('PreToolUse:Bash · PreToolUse', hooks)) : null,
     output: seen(metaLine('Output · truncated')),
     preview: screen.queryByText('bounded preview')?.textContent,
@@ -333,8 +334,8 @@ it('R2triple cuts are disclosed beside their text — mutation hide cut indicato
   })
   expect({
     rate: screen.queryByText('Rate limit text truncated')?.textContent,
-    compact: screen.queryByText('Compacted (cut) · text truncated')
-      ?.textContent,
+    // Its facts on a MetaLine (CONV-23), read as the eye reads them.
+    compact: seen(metaLine('Compacted (cut) · text truncated')),
     hook: screen.queryByText('Hook text truncated')?.textContent,
     retry: screen.queryByText('Retry text truncated')?.textContent,
     denial: seen(metaLine(/^Bash · text truncated/)),
@@ -510,11 +511,10 @@ it('MAR-3213 R2 names the connected servers under the count — mutation derive 
     rateLimit: null,
   }
   openHarnessPopover(facts)
-  expect(screen.getByText('MCP servers · 2 connected of 3')).toBeInTheDocument()
-  // The connected names line, then the not-connected list as today.
-  expect(
-    screen.getByText('Connected: claude.ai Figma, srv-b'),
-  ).toBeInTheDocument()
+  // Its readings as terms and values (CONV-24): the count, then the
+  // connected names, then the not-connected list as today.
+  expect(reading('MCP servers')).toBe('MCP servers: 2 connected of 3')
+  expect(reading('Connected')).toBe('Connected: claude.ai Figma, srv-b')
   expect(screen.getByText('… and 1 more connected')).toBeInTheDocument()
   expect(metaLine('linear · needs-auth')).toBeDefined()
 })
@@ -561,9 +561,9 @@ it('MAR-3213 R2 an old fact without the new fields renders exactly today — mut
     ctrlKey: false,
     pointerType: 'mouse',
   })
-  expect(screen.getByText('MCP servers · 1 connected of 2')).toBeInTheDocument()
+  expect(reading('MCP servers')).toBe('MCP servers: 1 connected of 2')
   expect(metaLine('linear · needs-auth')).toBeDefined()
-  expect(screen.queryByText(/Connected:/)).not.toBeInTheDocument()
+  expect(reading('Connected')).toBeUndefined()
   expect(screen.queryByText(/more connected/)).not.toBeInTheDocument()
   expect(container.textContent).not.toContain('undefined')
 })
@@ -598,7 +598,7 @@ it('MAR-3427 C caps an alert pill chaining every reason: it truncates and keeps 
   } as unknown as SessionHarnessFacts
   const pill = harnessPill(facts)
   render(
-    <HarnessAlertChip label={pill.label} expanded={false} onOpen={vi.fn()} />,
+    <HarnessAlertChip facts={pill.facts} expanded={false} onOpen={vi.fn()} />,
   )
   const chip = screen.getByTestId('harness-alert')
   const label =
@@ -609,7 +609,7 @@ it('MAR-3427 C caps an alert pill chaining every reason: it truncates and keeps 
   expect(chip).not.toHaveAttribute('title')
   // 15rem = 240 px, the width the header's layout test holds the chip to.
   expect(chip.className.split(/\s+/)).toContain('max-w-60')
-  const text = within(chip).getByText(label)
+  const text = within(chip).getByText(metaText(label))
   expect(text.className.split(/\s+/)).toEqual(
     expect.arrayContaining(['min-w-0', 'truncate']),
   )
@@ -723,7 +723,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
         mcp={mcp()}
       />,
     )
-    expect(screen.getByLabelText('MCP servers').textContent).toContain(
+    expect(seen(screen.getByLabelText('MCP servers'))).toContain(
       'MCP servers · 2 connected of 2',
     )
     expect(screen.queryByRole('note')).toBeNull()
@@ -745,9 +745,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
         />,
       )
       const list = screen.getByLabelText('MCP servers')
-      expect(list.textContent).toContain(
-        `unchanged since later · ${unavailable}`,
-      )
+      expect(seen(list)).toContain(`unchanged since later · ${unavailable}`)
       expect(
         within(list)
           .queryAllByRole('button')
@@ -771,7 +769,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
         mcp={mcp()}
       />,
     )
-    expect(screen.getByLabelText('MCP servers').textContent).toContain(
+    expect(seen(screen.getByLabelText('MCP servers'))).toContain(
       'unchanged since later · process running',
     )
   })
@@ -797,7 +795,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
       />,
     )
     expect(fact.servers).toHaveLength(20)
-    expect(screen.getByLabelText('MCP servers').textContent).toContain(
+    expect(seen(screen.getByLabelText('MCP servers'))).toContain(
       'MCP servers · 25 connected of 25 · ',
     )
   })

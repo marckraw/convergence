@@ -32,6 +32,11 @@ import {
   Undo2,
 } from 'lucide-react'
 import { disclosureChevronClass, emptyListLine } from './sidebar.styles'
+import { TreeDisclosureRow } from './tree-disclosure-row.presentational'
+
+/** Why the archived chats can't fold while a search runs: it shows its matches. */
+export const ARCHIVED_CHATS_STAY_OPEN_WHILE_YOU_SEARCH =
+  'Archived chats stay open while you search'
 
 export interface ChatSidebarSpaceAttempt {
   attemptId: string
@@ -55,6 +60,8 @@ interface GlobalChatSessionListProps {
   selectedSpaceId: string | null
   expandedSpaceIds: ReadonlySet<string>
   archivedSpacesExpanded: boolean
+  /** The archived chats are unfolded: folded unless opened, as the code tree's archive (NAV-13). */
+  archivedChatsExpanded: boolean
   nameSearchQuery?: string
   /** Sessions a notification just touched: their rows pulse once, as the code tree's do (NAV-21). */
   pulsingSessionIds?: Readonly<Record<string, true>>
@@ -63,6 +70,7 @@ interface GlobalChatSessionListProps {
   onSelectSpace: (id: string) => void
   onToggleSpace: (id: string) => void
   onToggleArchivedSpaces: () => void
+  onToggleArchivedChats: () => void
   onArchiveSpace: (id: string) => void
   onUnarchiveSpace: (id: string) => void
   onSelectSpaceAttempt: (sessionId: string) => void
@@ -99,6 +107,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
   selectedSpaceId,
   expandedSpaceIds,
   archivedSpacesExpanded,
+  archivedChatsExpanded,
   nameSearchQuery = '',
   pulsingSessionIds,
   onNewSession,
@@ -106,6 +115,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
   onSelectSpace,
   onToggleSpace,
   onToggleArchivedSpaces,
+  onToggleArchivedChats,
   onArchiveSpace,
   onUnarchiveSpace,
   onSelectSpaceAttempt,
@@ -134,6 +144,8 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
   const activeSpaces = visibleSpaces.filter((space) => !space.archivedAt)
   const archivedSpaces = visibleSpaces.filter((space) => space.archivedAt)
   const showArchivedSpaces = archivedSpacesExpanded
+  // A search holds the archive open, so its matches show (as the code tree's).
+  const showArchivedChats = searching || archivedChatsExpanded
   const nothingMatched =
     searching &&
     activeSpaces.length === 0 &&
@@ -435,10 +447,28 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
 
           {archivedSessions.length > 0 ? (
             <div className="mt-3 ml-2 border-l border-line pl-2">
-              <SectionHeader label="Archived" count={archivedSessions.length} />
-              <div className="ml-4 space-y-0.5">
-                {archivedSessions.map(renderSessionRow)}
-              </div>
+              {/* The archived chats fold as the code tree's archive does
+                  (NAV-13): one disclosure row, folded unless opened. */}
+              <TreeDisclosureRow
+                title="Archived"
+                icon={<Archive aria-hidden className="size-3 shrink-0" />}
+                expanded={showArchivedChats}
+                locked={searching}
+                tooltip="Archived chats"
+                tooltipDetail={
+                  searching
+                    ? ARCHIVED_CHATS_STAY_OPEN_WHILE_YOU_SEARCH
+                    : undefined
+                }
+                ariaLabel={`${showArchivedChats ? 'Collapse' : 'Expand'} archived chats`}
+                count={archivedSessions.length}
+                onToggle={onToggleArchivedChats}
+              />
+              {showArchivedChats ? (
+                <div className="ml-4 space-y-0.5">
+                  {archivedSessions.map(renderSessionRow)}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </>

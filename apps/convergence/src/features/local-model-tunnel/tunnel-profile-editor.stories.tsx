@@ -127,11 +127,12 @@ export const Default: Story = {
       autoStart: false,
     })
     await expect(canvas.getByLabelText('Local bind IP')).toBeDisabled()
+    // The command is a CodeBlock (DS-10): a figure named by what it is.
     await expect(
-      canvas.getByText(
-        'ssh -N -L 127.0.0.1:11435:127.0.0.1:11434 marcin@gpu.example.com',
-      ),
-    ).toBeVisible()
+      canvas.getByRole('figure', { name: 'Command preview' }),
+    ).toHaveTextContent(
+      'ssh -N -L 127.0.0.1:11435:127.0.0.1:11434 marcin@gpu.example.com',
+    )
     await userEvent.click(canvas.getByRole('button', { name: 'Save profile' }))
     await expect(args.onSave).toHaveBeenCalledOnce()
     await userEvent.click(canvas.getByRole('button', { name: 'Delete…' }))
@@ -269,7 +270,9 @@ export const Failed: Story = {
     await expect(
       canvas.getByText(/the local port 11435 is in use/),
     ).toBeVisible()
-    await expect(canvas.getByText('Exit code')).toBeVisible()
+    // The diagnostics are terms and values (DS-10).
+    await expect(canvas.getByText('Exit code').tagName).toBe('DT')
+    await expect(canvas.getByText('255').closest('dd')).not.toBeNull()
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
     await expect(args.onStart).toHaveBeenCalledOnce()
   },

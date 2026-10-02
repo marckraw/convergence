@@ -1,4 +1,4 @@
-import type { FC, Ref } from 'react'
+import type { FC, ReactNode, Ref } from 'react'
 import { GitPullRequest, TerminalSquare } from 'lucide-react'
 import type { Project } from '@/entities/project'
 import {
@@ -9,6 +9,7 @@ import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
 import {
   Button,
   cn,
+  Divider,
   MenuButton,
   Popover,
   PopoverContent,
@@ -25,7 +26,8 @@ interface ConversationProjectMenuProps {
   runtimeCwd: string | null
   /** What Open in… opens: the conversation's workspace. */
   openPath: string | null
-  pullRequestLabel: string
+  /** The pull request's reading: words, or its facts on a MetaLine. */
+  pullRequestLabel: ReactNode
   pullRequestOpen: boolean
   onTogglePullRequest: () => void
   hasTerminal: boolean
@@ -96,7 +98,7 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
         disabledReason={openApps.disabledReason}
         onOpen={(app) => thenClose(() => openApps.openIn(app))()}
       />
-      <div className="my-1 h-px bg-surface-muted" />
+      <Divider className="my-1" />
       <Button
         variant="ghost"
         aria-pressed={pullRequestOpen}

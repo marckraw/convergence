@@ -25,7 +25,7 @@ function StatusRow({ activity }: { activity: string }) {
       />
       <HeaderStatus kind="worktree-removed" />
       <HarnessAlertChip
-        label="Harness: rate limited until 14:00"
+        facts={['Harness', 'rate limited until 14:00']}
         expanded={false}
         onOpen={onOpen}
       />

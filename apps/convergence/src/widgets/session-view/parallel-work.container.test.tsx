@@ -1,5 +1,5 @@
 import { fullDateLabel } from '@convergence/ui'
-import { metaText } from '@/shared/testing/meta-line'
+import { metaText, seen } from '@/shared/testing/meta-line'
 import * as markerHelpers from './parallel-work.pure'
 import { Profiler, useRef, useState } from 'react'
 import {
@@ -393,7 +393,7 @@ it('L8 a refused Stop stays visible after the row is no longer running — mutat
     />,
   )
   fireEvent.click(
-    screen.getByRole('button', { name: '1 older · time not reported' }),
+    screen.getByRole('button', { name: '1 older, time not reported' }),
   )
   expect(screen.queryByText('This task is not running')).not.toBeNull()
 })
@@ -487,8 +487,9 @@ it('RUN64 R3 older bucket expands without changing all-time summary — mutation
   const before = [...container.querySelectorAll('[data-work-id]')].map((row) =>
     row.getAttribute('data-work-id'),
   )
+  // A MetaLine's dot is silent, and a screen reader hears a comma (CONV-23).
   const bucket = screen.queryByRole('button', {
-    name: '1 older · newest 1 h ago',
+    name: '1 older, newest 1 hour ago',
   })
   if (bucket) fireEvent.click(bucket)
   const after = [...container.querySelectorAll('[data-work-id]')].map((row) =>
@@ -519,10 +520,11 @@ it('RUN64 R2/R3 finished-only panel ages into archive — mutation clock only wi
     ),
   }
   const { unmount } = render(<ParallelWork {...input} />)
-  const before = Boolean(screen.queryByText(metaText('Completed · 59 m ago')))
+  // Timestamp writes the moment (CONV-22): 59½ minutes is "1 hour ago".
+  const before = Boolean(screen.queryByText(metaText('Completed · 1 hour ago')))
   act(() => vi.advanceTimersByTime(60000))
   const bucket = Boolean(
-    screen.queryByRole('button', { name: '1 older · newest 1 h ago' }),
+    screen.queryByRole('button', { name: '1 older, newest 1 hour ago' }),
   )
   unmount()
   vi.useRealTimers()
@@ -582,8 +584,8 @@ it('RUN64 round2 one root bucket keeps visible trees whole — mutation bucket e
   const before = [...container.querySelectorAll('[data-work-id]')].map((row) =>
     row.getAttribute('data-work-id'),
   )
-  const buttons = screen.queryAllByRole('button', { name: /older · newest/ })
-  const label = buttons[0]?.textContent
+  const buttons = screen.queryAllByRole('button', { name: /older, newest/ })
+  const label = seen(buttons[0])
   if (buttons[0]) fireEvent.click(buttons[0])
   const after = [...container.querySelectorAll('[data-work-id]')].map((row) =>
     row.getAttribute('data-work-id'),
@@ -593,7 +595,7 @@ it('RUN64 round2 one root bucket keeps visible trees whole — mutation bucket e
   expect({ before, buttons: buttons.length, label, after }).toEqual({
     before: ['agent:active', 'agent:old-child'],
     buttons: 1,
-    label: '3 older · newest 2 h ago',
+    label: '3 older · newest 2 hours ago',
     after: [
       'agent:active',
       'agent:old-child',
@@ -618,7 +620,7 @@ it.each(['reopen', 'session'] as const)(
     }
     const { rerender, unmount } = render(<ParallelWork {...input} />)
     const bucket = () =>
-      screen.getByRole('button', { name: '1 older · newest 3 h ago' })
+      screen.getByRole('button', { name: '1 older, newest 3 hours ago' })
     fireEvent.click(bucket())
     const expanded = bucket().getAttribute('aria-expanded')
     if (change === 'reopen') {

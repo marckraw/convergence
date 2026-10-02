@@ -1,4 +1,4 @@
-import { metaLine } from '@/shared/testing/meta-line'
+import { metaLine, metaText, seen } from '@/shared/testing/meta-line'
 import {
   act,
   fireEvent,
@@ -544,7 +544,8 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
     await waitFor(() =>
-      expect(screen.queryByTestId('compaction-marker')?.textContent).toBe(
+      // Its facts on a MetaLine (CONV-23), read as the eye reads them.
+      expect(seen(screen.queryByTestId('compaction-marker'))).toBe(
         'Compacted (auto) · 84k → 12k tokens',
       ),
     )
@@ -556,8 +557,8 @@ describe('SessionView', () => {
       name: 'Harness history',
     })
     expect(
-      within(harness).getByRole('region', { name: 'Compactions' }),
-    ).toHaveTextContent('Compacted (auto) · 84k → 12k tokens')
+      seen(within(harness).getByRole('region', { name: 'Compactions' })),
+    ).toContain('Compacted (auto) · 84k → 12k tokens')
   })
 
   describe('MAR-3206 R8 — Details reaches the running process', () => {
@@ -1206,7 +1207,8 @@ describe('SessionView', () => {
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
-    await waitFor(() => expect(rows?.textContent).toContain('#545 · open'))
+    // Its number and state on a MetaLine (CONV-23), read as the eye reads them.
+    await waitFor(() => expect(seen(rows)).toContain('#545 · open'))
     expect(rows?.textContent).not.toContain('None yet')
   })
 
@@ -1273,7 +1275,9 @@ describe('SessionView', () => {
       })),
     )
     expect(screen.queryAllByText('No PR for this branch')).toHaveLength(0)
-    expect(screen.getAllByText('#42 · open').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(metaText('#42 · open')).length).toBeGreaterThan(
+      0,
+    )
     expect(screen.getByText('agent/fresh')).toBeInTheDocument()
   })
 
@@ -1903,7 +1907,7 @@ describe('SessionView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Parallel work · 1' }))
     fireEvent.click(
       await screen.findByRole('button', {
-        name: '1 older · time not reported',
+        name: '1 older, time not reported',
       }),
     )
     const spawn = await screen.findByRole('button', { name: 'View spawn' })
@@ -2693,7 +2697,7 @@ describe('SessionView', () => {
       harnessAlert()
       renderView()
       const chip = await screen.findByTestId('harness-alert')
-      expect(chip).toHaveTextContent('Harness · 1 integration failed')
+      expect(seen(chip)).toBe('Harness · 1 integration failed')
       expect(header().contains(chip)).toBe(true)
       chip.focus()
       fireEvent.click(chip)
