@@ -225,15 +225,17 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           </Button>
         </div>
       ) : (
+        // It deletes the key from the Keychain, so it asks first: the quiet
+        // red, ending in "…" (R5).
         <Button
           type="button"
-          variant="ghost"
+          variant="danger-quiet"
           disabled={busy}
           onClick={onForgetKey}
           size="sm"
           className="justify-start font-normal"
         >
-          Forget key
+          Forget key…
         </Button>
       )}
 
