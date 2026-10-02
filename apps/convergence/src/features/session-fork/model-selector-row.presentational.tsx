@@ -78,7 +78,7 @@ export const ModelSelectorRow: FC<ModelSelectorRowProps> = ({
         value={selection.providerId || null}
         onValueChange={(next: string) => onProviderChange(next)}
       >
-        <SelectTrigger size="md" aria-label="Provider" className="text-xs">
+        <SelectTrigger size="md" density="compact" aria-label="Provider">
           <SelectValue placeholder="Select provider" />
         </SelectTrigger>
         <SelectContent>
@@ -96,7 +96,8 @@ export const ModelSelectorRow: FC<ModelSelectorRowProps> = ({
         value={selection.model?.label ?? 'Select model'}
         label="Model"
         onChange={(providerId, modelId) => onModelChange(modelId, providerId)}
-        triggerClassName="px-2 text-xs"
+        triggerVariant="field"
+        triggerDensity="compact"
       />
       {effortItems.length > 0 && (
         <Select
@@ -108,8 +109,8 @@ export const ModelSelectorRow: FC<ModelSelectorRowProps> = ({
         >
           <SelectTrigger
             size="md"
+            density="compact"
             aria-label="Reasoning effort"
-            className="text-xs"
           >
             <SelectValue placeholder="Select effort" />
           </SelectTrigger>

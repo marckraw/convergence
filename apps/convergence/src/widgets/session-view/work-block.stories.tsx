@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { metaName, metaText } from '@/shared/testing/meta-line'
 import { expect, fn } from 'storybook/test'
 import { WorkBlockRow } from './work-block.presentational'
 
@@ -6,7 +7,7 @@ const meta = {
   title: 'Widgets/SessionView/WorkBlock',
   component: WorkBlockRow,
   args: {
-    label: 'Read 4 files · searched 2 times · ran 1 command',
+    label: ['Read 4 files', 'searched 2 times', 'ran 1 command'],
     memberCount: 7,
     open: false,
     working: false,
@@ -29,7 +30,14 @@ type Story = StoryObj<typeof meta>
 /** One folded line for a run of tool calls; pressing it opens the run. */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    const row = canvas.getByRole('button', { name: args.label })
+    // Its facts on a MetaLine (CONV-23): a screen reader hears a comma where
+    // the eye reads a dot.
+    const row = canvas.getByRole('button', {
+      name: metaName(args.label.join(' · ')),
+    })
+    await expect(
+      canvas.getByText(metaText(args.label.join(' · '))),
+    ).toBeVisible()
     await expect(row).toHaveAttribute('aria-expanded', 'false')
     // The hint is the app's tooltip, and the row's description (MAR-3616).
     await expect(row).toHaveAttribute('data-tooltip', '7 entries · open')
@@ -46,7 +54,9 @@ export const Default: Story = {
 export const Open: Story = {
   args: { open: true },
   play: async ({ args, canvas }) => {
-    const row = canvas.getByRole('button', { name: args.label })
+    const row = canvas.getByRole('button', {
+      name: metaName(args.label.join(' · ')),
+    })
     await expect(row).toHaveAttribute('aria-expanded', 'true')
     await expect(row).toHaveAttribute('data-tooltip', '7 entries · fold')
   },
@@ -65,7 +75,7 @@ export const WithSentence: Story = {
 
 /** Still running: the block keeps growing as calls arrive. */
 export const Busy: Story = {
-  args: { working: true, memberCount: 1, label: 'Running npm test' },
+  args: { working: true, memberCount: 1, label: ['Running npm test'] },
   play: async ({ canvas }) => {
     await expect(
       canvas.getByRole('button', { name: 'Running npm test' }),
@@ -76,8 +86,14 @@ export const Busy: Story = {
 /** Labels and sentences longer than the row stay on one line each. */
 export const Long: Story = {
   args: {
-    label:
-      'Read 38 files · searched 12 times · edited 9 files · ran 14 commands · fetched 2 pages · 1 failed',
+    label: [
+      'Read 38 files',
+      'searched 12 times',
+      'edited 9 files',
+      'ran 14 commands',
+      'fetched 2 pages',
+      '1 failed',
+    ],
     memberCount: 76,
     sentence:
       'Moved every composer popover onto the shared Popover part, then chased three focus regressions through the picker containers and their tests.',

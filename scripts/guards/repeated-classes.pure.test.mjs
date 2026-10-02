@@ -4,6 +4,7 @@ import {
   classKeyOf,
   classStringsOf,
   configProblems,
+  looksLikeClasses,
   repeatedClasses,
   repeatedClassProblems,
   scanSource,
@@ -120,12 +121,42 @@ describe('classStringsOf', () => {
     assert.deepEqual(classesIn(text), [])
   })
 
+  it('with constants, reads a class string a declaration or an object key holds, in any file', () => {
+    const text = [
+      `const row = "${row}";`,
+      `export const styles = { root: '${row}', 'quoted-key': "flex-1 min-w-0 truncate block" };`,
+      'const sentence = "Couldn\'t load the people.";',
+      "const label = 'Mission control';",
+      "call('flex items-center gap-2 px-2');",
+    ].join('\n')
+    assert.deepEqual(classesIn(text), [])
+    assert.deepEqual(classesIn(text, { ...where, constants: true }), [
+      row,
+      row,
+      'flex-1 min-w-0 truncate block',
+    ])
+  })
+
   it("isn't fooled by className or cn( in a comment or a string", () => {
     const text = [
       '// <div className="a b c d">',
       'const help = "write cn(\\"x y z w\\") here";',
     ].join('\n')
     assert.deepEqual(classesIn(text), [])
+  })
+})
+
+describe('looksLikeClasses', () => {
+  it('takes utilities, and never a sentence or a name', () => {
+    assert.equal(looksLikeClasses('flex min-w-0 items-center gap-2'), true)
+    assert.equal(
+      looksLikeClasses('grid grid-cols-[auto_1fr] hover:bg-fill-hover'),
+      true,
+    )
+    assert.equal(looksLikeClasses('relative truncate'), true)
+    assert.equal(looksLikeClasses("Couldn't save the project."), false)
+    assert.equal(looksLikeClasses('the quick brown fox'), false)
+    assert.equal(looksLikeClasses('Mission Control'), false)
   })
 })
 

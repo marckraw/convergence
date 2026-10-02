@@ -23,7 +23,7 @@ function event(overrides: Partial<HistoryEventRow> = {}): HistoryEventRow {
   return {
     id: 'h1',
     kind: 'hop',
-    timeLabel: '14:32:10',
+    at: '2026-09-06T14:32:10',
     title: 'Fable → Opus',
     outcome: 'delivered',
     outcomeLabel: 'Delivered',
@@ -37,7 +37,8 @@ function event(overrides: Partial<HistoryEventRow> = {}): HistoryEventRow {
 function runRow(overrides: Partial<HistoryRunRow> = {}): HistoryRunRow {
   return {
     flowRunId: 'run-1',
-    timeLabel: '14:32',
+    startedAt: '2026-09-06T14:32:00',
+    timeFormat: 'clock',
     lastActivityLabel: '14:39',
     debt: null,
     activityLine: '',
@@ -113,7 +114,9 @@ describe('the history panel, rendered', () => {
     // ONE run row, not three: the whole point of laps is that three
     // correction cycles are one thing Marcin watches.
     expect(screen.getAllByText('3 laps · handed back')).toHaveLength(1)
-    expect(screen.getAllByText(/^14:32 · Fable$/)).toHaveLength(1)
+    expect(
+      screen.getAllByRole('button', { name: /^14:32 · Fable/ }),
+    ).toHaveLength(1)
     // …three lap headers…
     expect(screen.getByText(/Lap 1 · horse/)).toBeInTheDocument()
     expect(screen.getByText(/Lap 2 · horse/)).toBeInTheDocument()
@@ -497,5 +500,28 @@ it('RUN66 R3 held summary shows its sentence and reasons without an expander —
     reason: 'Opus: Different baton; Sol: Different baton',
     preview: 'Read the brief.',
     interactive: false,
+  })
+})
+
+describe('MC-27: History tells its times as Timestamps', () => {
+  it('draws a run’s start and an event’s moment as <time>s, the whole moment one hover away', () => {
+    renderPanel({
+      laps: [{ lap: 1, label: 'Lap 1', deliveries: 1, events: [event()] }],
+    })
+    const times = [...document.querySelectorAll('time[datetime]')]
+    const run = times.find((time) => time.textContent === '14:32')
+    const hop = times.find((time) => time.textContent === '14:32:10')
+    // Mutation: print the run's or the event's time as a bare string -> red.
+    expect(run?.getAttribute('datetime')).toBe(
+      new Date('2026-09-06T14:32:00').toISOString(),
+    )
+    expect(run).toHaveAttribute(
+      'data-tooltip',
+      fullDateLabel(new Date('2026-09-06T14:32:00')),
+    )
+    expect(hop).toHaveAttribute(
+      'data-tooltip',
+      fullDateLabel(new Date('2026-09-06T14:32:10')),
+    )
   })
 })

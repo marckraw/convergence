@@ -157,7 +157,7 @@ const meta = {
     isDisabled: false,
     triggerVariant: 'secondary',
     triggerSize: 'md',
-    triggerClassName: 'px-2 text-xs',
+    triggerDensity: 'default',
     // Never filled: HeldDialog renders the dialog with a ref of its own.
     inputRef: { current: null },
     onOpenChange: fn(),
@@ -195,6 +195,24 @@ export const Default: Story = {
   },
 }
 
+/**
+ * Among fields (Settings, the fork, Generate profile): the field frame
+ * SelectTrigger wears, in its compact 12 px words (DLG-15, ruling 10), with
+ * the value at the start and the chevron at the end.
+ */
+export const FieldTrigger: Story = {
+  args: { triggerVariant: 'field', triggerDensity: 'compact', label: 'Model' },
+  play: async ({ args, canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Model' })
+    await expect(trigger).toHaveAccessibleDescription('Claude Opus')
+    await expect(trigger).toHaveAttribute('data-density', 'compact')
+    await expect(getComputedStyle(trigger).fontSize).toBe('12px')
+    await expect(trigger.getBoundingClientRect().height).toBe(32)
+    await userEvent.click(trigger)
+    await expect(args.onOpenChange).toHaveBeenCalledWith(true)
+  },
+}
+
 /** Open: search, filter by provider, star a model, and pick one. */
 export const Open: Story = {
   args: { open: true },
@@ -206,10 +224,12 @@ export const Open: Story = {
     )
     await expect(args.onQueryChange).toHaveBeenLastCalledWith('gpt')
     const openai = within(dialog).getByRole('button', { name: /OpenAI/ })
-    await expect(openai).toHaveAttribute('aria-pressed', 'false')
+    // A selected row says aria-current, never aria-pressed (R7, DLG-8).
+    await expect(openai).not.toHaveAttribute('aria-current')
+    await expect(openai).not.toHaveAttribute('aria-pressed')
     await userEvent.click(openai)
     await expect(args.onProviderFilterChange).toHaveBeenCalledWith('codex')
-    await expect(openai).toHaveAttribute('aria-pressed', 'true')
+    await expect(openai).toHaveAttribute('aria-current', 'true')
     // The keyboard's star is the active row's, beside the field.
     await userEvent.hover(
       within(dialog).getByRole('option', { name: /GPT-5\.4/ }),

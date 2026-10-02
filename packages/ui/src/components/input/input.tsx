@@ -2,6 +2,8 @@ import { Input as InputPrimitive } from '@base-ui/react/input'
 import type { Ref } from 'react'
 import { cn } from '#lib/cn.pure'
 import {
+  type ControlDensity,
+  controlDensity,
   controlFrame,
   controlHeight,
   type ControlSize,
@@ -34,6 +36,8 @@ export type InputProps = Omit<
   type?: InputType
   /** R3: 24, 28, 32 or 36 px. `md` (32) unless said. */
   size?: ControlSize
+  /** `compact`: 12 px words at any height, for a dense panel (ruling 10). Never a text size in className. */
+  density?: ControlDensity
   /**
    * `field` (the default) wears the field frame and rings over its border.
    * `bare` is a field inside a box of its own, such as a stepper's: no
@@ -61,6 +65,7 @@ export function Input({
   className,
   type,
   size = 'md',
+  density = 'default',
   variant = 'field',
   ref,
   ...props
@@ -71,11 +76,13 @@ export function Input({
       type={type}
       data-slot="input"
       data-size={size}
+      data-density={density}
       data-variant={variant}
       className={cn(
         'flex px-3 py-1',
         controlFrame,
         controlHeight[size],
+        controlDensity[density],
         'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-ink',
         variant === 'bare' ? bare : focusRingField,
         className,

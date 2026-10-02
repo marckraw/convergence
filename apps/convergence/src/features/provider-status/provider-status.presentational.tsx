@@ -347,7 +347,7 @@ function renderProviderAccounts(
       {summary.hasSettingsOverride && (
         <Notice
           tone="warning"
-          className="text-xs"
+          size="sm"
           title="Shared settings.json supplies a credential to every Claude process, so account selection has no effect until it is removed."
         />
       )}
@@ -453,7 +453,7 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
         {/* The body takes the focus, so a keyboard can scroll it with nothing in it to reach. */}
         <DialogBody tabIndex={0} className={focusRingInset}>
           {error ? (
-            <Notice tone="danger" title="Couldn't check the providers">
+            <Notice tone="danger" title="Couldn’t check the providers">
               {error}
             </Notice>
           ) : isLoading && statuses.length === 0 ? (

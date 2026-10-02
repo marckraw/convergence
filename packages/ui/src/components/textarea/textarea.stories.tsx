@@ -41,6 +41,19 @@ export const Default: Story = {
   },
 }
 
+/** Compact (ruling 10): 12 px words, for a dense panel. Never a text size in className. */
+export const Compact: Story = {
+  args: {
+    density: 'compact',
+    defaultValue: 'Review the diff, then hand it on.',
+  },
+  play: async ({ canvas }) => {
+    const field = canvas.getByLabelText('Instructions')
+    await expect(field).toHaveAttribute('data-density', 'compact')
+    await expect(getComputedStyle(field).fontSize).toBe('12px')
+  },
+}
+
 /** AutoGrow: it grows a line at a time as you type, up to maxRows, then scrolls. */
 export const AutoGrow: Story = {
   args: { rows: 1, autoGrow: true, maxRows: 4, placeholder: 'Ask anything' },

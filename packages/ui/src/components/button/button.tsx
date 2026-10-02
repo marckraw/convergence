@@ -36,13 +36,16 @@ const VARIANTS = {
 /**
  * One size scale for every control (R3): 24, 28, 32 and 36 px. Each recipe
  * is the most common copy at its height today (R0); `md` was the kit's `sm`
- * and `lg` its default.
+ * and `lg` its default. `xl`, 44 px, is the Button's alone (ruling 9,
+ * 2 Oct 2026): a title you press that heads a panel, such as Loom's sheet
+ * titles and its folded strip, in the only copy at that height (R0), Loom's.
  */
 const TEXT_SIZES = {
   xs: 'h-6 gap-1 px-2 text-2xs',
   sm: 'h-7 gap-1.5 px-2 text-xs',
   md: 'h-8 gap-2 px-3 text-xs',
   lg: 'h-9 gap-2 px-4 py-2 text-sm',
+  xl: 'h-11 gap-2 px-3 text-xs',
 } as const
 
 /**
@@ -55,6 +58,7 @@ const ICON_SIZES = {
   sm: 'size-7',
   md: 'size-8',
   lg: 'size-9',
+  xl: 'size-11',
 } as const
 
 type ButtonVariant = keyof typeof VARIANTS
@@ -101,7 +105,7 @@ type ButtonProps = Omit<ButtonPrimitive.Props, 'className' | 'title'> & {
   className?: string
   /** What the button means; `primary` unless told otherwise. */
   variant?: ButtonVariant
-  /** 24, 28, 32 or 36 px; `md` (32) unless told otherwise. Never a className (R3). */
+  /** 24, 28, 32, 36 or 44 px; `md` (32) unless told otherwise. Never a className (R3). */
   size?: ButtonSize
   /**
    * What it does is under way: a Spinner before the label (in place of an

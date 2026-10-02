@@ -147,10 +147,17 @@ export const LoomIssueCard: FC<LoomIssueCardProps> = ({
   )
 
   if (door.kind === 'inert') {
+    // A Card too, so it draws the edge its openable neighbours draw (N6): the
+    // row card's class names an edge colour, and the Card gives it a width.
     return (
-      <div {...hooks} aria-disabled="true" className={shellClass}>
+      <Card
+        {...hooks}
+        padding="none"
+        aria-disabled="true"
+        className={shellClass}
+      >
         {body}
-      </div>
+      </Card>
     )
   }
   return door.kind === 'open' ? (

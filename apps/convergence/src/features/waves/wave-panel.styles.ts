@@ -5,6 +5,8 @@ import {
 } from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
 import { sectionLabelVariants } from '@convergence/ui'
+import type { Tone } from '@convergence/ui'
+import { SESSION_STATE_TONE } from '@/entities/session'
 
 /**
  * Every visual knob of the wave panel (MAR-3097), so "narrower" or "quieter"
@@ -91,11 +93,12 @@ export const WAVE_RAIL_CLASS =
 export const LOOM_STRIP_BUTTON_CLASS = 'shrink-0'
 
 /**
- * A sheet on the folded column: the glyph, the count under it, no word.
- * `h-auto` and `flex-col` undo the button size's single-line row.
+ * A sheet on the folded column: the glyph, the count under it, no word, on
+ * the Button's 44 px `xl` (ruling 9: a size, never a className height). Only
+ * its stack and its quiet ink are set here.
  */
 export const LOOM_STRIP_SHEET_CLASS =
-  'h-auto w-9 shrink-0 flex-col gap-0.5 rounded-md px-0 py-1.5 text-ink-muted hover:text-ink'
+  'shrink-0 flex-col gap-0.5 text-ink-muted hover:text-ink'
 
 /** The number under a folded sheet's glyph. */
 export const LOOM_STRIP_COUNT_CLASS = 'text-3xs font-normal tabular-nums'
@@ -103,7 +106,9 @@ export const LOOM_STRIP_COUNT_CLASS = 'text-3xs font-normal tabular-nums'
 /**
  * The guide's entry in expanded Loom's header: the guide's own control width
  * (148 px, the footer's quiet controls'), on the spacing scale. Its height,
- * padding and words are the Button's `md` (R3, MC-3).
+ * padding and words are the Button's `md` (R3, MC-3). The width is the
+ * guide's frozen frames' (R11), kept on purpose in
+ * scripts/guards/sizes-in-constants.json.
  */
 export const LOOM_GUIDE_ENTRY_CLASS = 'w-37 shrink-0'
 
@@ -145,10 +150,11 @@ export const WAVE_ROW_ACTION_CLASS = 'text-2xs text-warning-ink'
 /**
  * Loom, compact (MAR-3189): the column beside the conversation. No width
  * here, for the reason above -- the width is the decision's number, rendered
- * inline.
+ * inline. It stands on the canvas, the surface a side panel and expanded
+ * Loom stand on, not the canvas at an alpha over the window's chrome (MC-21).
  */
 export const LOOM_COMPACT_CLASS =
-  'flex h-full shrink-0 flex-col border-r border-hairline bg-canvas/40'
+  'flex h-full shrink-0 flex-col border-r border-hairline bg-canvas'
 
 /**
  * Loom, expanded: the whole content area, the sheets side by side.
@@ -181,13 +187,30 @@ export const LOOM_EXPANDED_CLASS =
 
 /**
  * A sheet's title: a button in both shapes, because it does the same thing in
- * both -- opens its sheet (R1, R7). Its ring sits inside its edge, since the
- * column clips what stands outside it (DS-7: it used to cancel the ring).
+ * both -- opens its sheet (R1, R7), on the Button's 44 px `xl` (ruling 9: its
+ * height, padding and words are the size's, never a className's). Its ring
+ * sits inside its edge, since the column clips what stands outside it (DS-7:
+ * it used to cancel the ring).
  */
-export const LOOM_SHEET_TITLE_CLASS = `flex w-full items-center gap-2 border-b border-hairline px-3 py-2 text-left text-2xs font-medium tracking-tight text-ink-muted transition-colors hover:bg-fill-hover focus-visible:bg-fill-hover ${focusRingInset}`
+export const LOOM_SHEET_TITLE_CLASS = `w-full shrink-0 justify-start rounded-xl text-left font-medium tracking-tight text-ink-muted transition-colors hover:bg-fill-hover focus-visible:bg-fill-hover ${focusRingInset}`
 
 /** The open sheet's title, the one the eye should land on first. */
 export const LOOM_SHEET_TITLE_OPEN_CLASS = 'text-ink'
+
+/**
+ * Expanded Loom's open title sits in from the paper's edge, so its words
+ * start where the rows' do (the frames' 24 px across, 20 down).
+ */
+export const LOOM_SHEET_TITLE_WIDE_CLASS = 'shrink-0 px-3 pt-2'
+
+/**
+ * A folded sheet in expanded Loom is a paper you press (MC-6): its glyph,
+ * name and counts stacked, and a CardAction whose hit area covers the paper,
+ * so no Button is stretched to the paper's height. The hover wash is drawn
+ * by that area, under the words (a negative layer inside the paper).
+ */
+export const LOOM_SHEET_TAB_CLASS =
+  'flex flex-col items-center gap-3 px-1 pt-5 text-center text-2xs font-medium tracking-tight text-ink-muted transition-colors after:-z-10 after:rounded-2xl hover:text-ink hover:after:bg-fill-hover'
 
 /** The open sheet's body: the only scroller in the stack. */
 export const LOOM_SHEET_BODY_CLASS =
@@ -200,6 +223,10 @@ export const LOOM_SHEET_BODY_CLASS =
  */
 export const WAVE_SECTION_HINT_CLASS = 'px-3 pb-1 text-2xs text-ink-muted'
 
+/**
+ * A line under a sheet's list: how many are older, what left the loop. Not
+ * an empty sheet's note, which is EmptyState's (MC-20).
+ */
 export const LOOM_SHEET_NOTE_CLASS = 'px-3 pt-3 text-2xs text-ink-muted'
 
 /** The horses line above the cards (MAR-3191): a section title (MC-34). */
@@ -217,12 +244,23 @@ export const LOOM_HORSES_LINE_CLASS = WAVE_SECTION_TITLE_CLASS
 export const LOOM_HORSE_CARD_CLASS =
   'flex w-full flex-col items-start gap-1.5 whitespace-normal px-3 py-3 text-left text-xs font-normal'
 
+export const LOOM_HORSE_TONE: Readonly<
+  Record<LoomHorseRuntime, Tone | undefined>
+> = {
+  // R1: a horse at work is info, as a working session is everywhere (MC-2);
+  // a failed one is danger. The Card's own `tone` draws them, its edge and
+  // its tint, never typed again here (N6).
+  working: SESSION_STATE_TONE.working,
+  failed: SESSION_STATE_TONE.failed,
+  idle: undefined,
+  'not-seen': undefined,
+}
+
+/** An untoned horse card's own frame: the hairline, quiet or faintly filled. */
 export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
   {
-    // R1: a horse at work is info, as a working session is everywhere
-    // (MC-2); a failed one is danger.
-    working: 'border-info-line bg-info-soft',
-    failed: 'border-danger-line bg-danger-soft',
+    working: '',
+    failed: '',
     idle: 'border-hairline bg-transparent',
     'not-seen': 'border-hairline bg-fill-quiet',
   }
@@ -250,9 +288,11 @@ export const LOOM_HORSE_META_CLASS =
 /** The runtime word itself, beside the seat's name. */
 export const LOOM_HORSE_RUNTIME_CLASS = 'shrink-0 text-2xs font-medium'
 
-/** The reveal control under Awaiting QA. */
-export const LOOM_QA_TOGGLE_CLASS =
-  'mx-3 mb-1 justify-start px-1 text-2xs text-ink-muted'
+/**
+ * The reveal control under Awaiting QA: the 24 px xs Button's own padding
+ * and words (R3), its margin set so its words start where they did.
+ */
+export const LOOM_QA_TOGGLE_CLASS = 'mx-2 mb-1 justify-start text-ink-muted'
 
 /** Expanded lays the horses and the QA list side by side (r4 508:363): columns of 320 px or more. */
 export const LOOM_NOW_WIDE_CLASS = 'grid grid-cols-fit-80 gap-4'
@@ -293,10 +333,6 @@ export const LOOM_SEARCH_TOGGLE_CLASS = 'shrink-0 text-ink-muted'
 
 /** Compact's subline row: the subline, then the search icon. */
 export const LOOM_SEARCH_SUBLINE_ROW_CLASS = 'mb-2 flex items-start gap-2'
-
-/** The "no match here" line in the open sheet (R3, R5). */
-export const LOOM_SEARCH_MISS_CLASS =
-  'px-3 pt-3 text-2xs leading-relaxed text-ink-muted'
 
 /**
  * One "1 in Plan" answer: a link Button that opens that sheet (R3). A link

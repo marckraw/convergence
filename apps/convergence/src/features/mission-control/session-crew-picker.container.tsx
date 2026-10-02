@@ -79,7 +79,11 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
           selectedIds={holding.map((crew) => crew.id)}
           value={label}
           ariaLabel={`Add ${sessionName} to a crew`}
-          variant={holding.length > 0 ? 'tonal' : 'ghost'}
+          // One trigger, quiet until the session is in a crew; then R7's
+          // chosen look, the raised chip beside the Hail's (DS-28, ruling
+          // 11), never a variant swapped in.
+          variant="ghost"
+          chosen={holding.length > 0}
           size="xs"
           chevron={false}
           className={cn(
@@ -141,7 +145,8 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                     value={draftName}
                     placeholder="Crew name"
                     aria-label="New crew name"
-                    className="flex-1 text-xs"
+                    density="compact"
+                    className="flex-1"
                     onChange={(event) => setDraftName(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {

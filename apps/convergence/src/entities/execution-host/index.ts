@@ -12,7 +12,7 @@ export type {
 } from './execution-host.types'
 
 export { WorkAddressSlot } from './work-address-slot.presentational'
-export { stripFactClass } from './work-address-slot.styles'
+export { stripFactSize } from './work-address-slot.styles'
 export {
   resolveWorkAddressSlot,
   branchNameFromDraft,

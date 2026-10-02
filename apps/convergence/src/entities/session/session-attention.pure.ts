@@ -79,6 +79,10 @@ export function summarizeAttentionRequests(sessions: SessionSummary[]): string {
 
 function compactAttentionLabel(session: SessionSummary): string {
   if (session.attention === 'needs-approval') return 'approval'
+  // A failed run waits on you too, and "N need you" counts it (ruling 6).
+  if (session.attention === 'failed' || session.status === 'failed') {
+    return 'failed run'
+  }
   if (session.attention !== 'needs-input') return 'attention item'
 
   switch (session.attentionRequestKind) {

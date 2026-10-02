@@ -261,7 +261,7 @@ describe('SpaceWorkboardDialog', () => {
 
     selectOption(/kind for public pr/i, 'Documentation')
     selectOption(/status for public pr/i, 'Ready')
-    selectOption(/source for public pr/i, 'No source Attempt')
+    selectOption(/source for public pr/i, 'No source attempt')
     fireEvent.blur(screen.getByLabelText(/label for public pr/i), {
       target: { value: 'Implementation PR' },
     })

@@ -10,7 +10,7 @@ import { needsYouCardModel } from './needs-you-card.pure'
 
 /**
  * A card as the Needs-you feed builds it. The fixture's context carries its
- * own clock, so "Last moved 5 m ago" never ages.
+ * own clock, so "Last moved 5 minutes ago" never ages.
  */
 const cardOf = (
   session: Parameters<typeof needsYouCardModel>[0],

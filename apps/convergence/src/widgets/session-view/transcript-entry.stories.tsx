@@ -637,7 +637,7 @@ export const Note: Story = {
   },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Authorize for this account' }),
+      canvas.getByRole('button', { name: 'Authorize for this account…' }),
     )
     await expect(args.onNoteAction).toHaveBeenCalledWith({
       kind: 'authorize-mcp-server',

@@ -13,7 +13,11 @@
  *
  * The card is the kit's Card (MC-2): these are the two colours its classes
  * paint, bg-(--needs-you-card-surface) and hover:bg-(--needs-you-card-hover),
- * so they win over the Card's own surface as utilities do.
+ * so they win over the Card's own surface as utilities do. The open
+ * conversation's card wears neither: it is a selected row (R7, ruling 11),
+ * the Card's own selected fill, with no wash over it, since 6 % of a
+ * provider's hue lifts the dark fill until the muted words fall to 4.4:1
+ * (pinned in app/theme-contrast.pure.test.ts).
  */
 @layer components {
   .needs-you-card {

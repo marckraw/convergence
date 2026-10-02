@@ -6,9 +6,9 @@ import type {
 } from '@/entities/project-script'
 import { ProjectScriptIcon } from '@/entities/project-script'
 import {
-  Button,
   cn,
   IconButton,
+  ListRow,
   Notice,
   PopoverContent,
   SectionLabel,
@@ -31,7 +31,6 @@ import { ProjectActionRunLog } from './project-action-run-log.presentational'
 import { formatProjectActionRunMeta } from './project-actions-menu.pure'
 import {
   actionAddRow,
-  actionButtonRow,
   actionDetail,
   actionIconBox,
   actionIconColumn,
@@ -103,7 +102,7 @@ export const ProjectActionsMenuPresentational: FC<
     </div>
 
     {error && (
-      <Notice tone="danger" title={error} className="m-1.5 py-1.5 text-xs" />
+      <Notice tone="danger" title={error} size="sm" className="m-1.5" />
     )}
 
     <div className="max-h-136 min-h-0 overflow-y-auto py-1">
@@ -219,67 +218,50 @@ export const ProjectActionsMenuPresentational: FC<
         </div>
       )}
 
-      <Button
-        type="button"
-        variant="ghost"
+      <ListRow
+        render={<button type="button" />}
         onClick={onAdd}
-        size="lg"
-        className={cn(actionAddRow, items.length > 0 && 'mt-2')}
-      >
-        <span className={actionIconColumn}>
+        leading={
           <span className={actionIconBox}>
-            <Plus className="h-4 w-4" />
+            <Plus />
           </span>
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">Add action</span>
-          <span className={actionDetail}>Create a project command</span>
-        </span>
-      </Button>
+        }
+        title="Add action"
+        meta={<span className={actionDetail}>Create a project command</span>}
+        className={cn(actionAddRow, items.length > 0 && 'mt-2')}
+      />
 
       <div className="mt-2 border-t border-line-soft pt-2">
         <SectionLabel className="px-2 pb-1">Lanes</SectionLabel>
-        <Button
-          type="button"
-          variant="ghost"
+        <ListRow
+          render={<button type="button" />}
           onClick={onCreateLane}
-          size="lg"
-          className={actionButtonRow}
-        >
-          <span className={actionIconColumn}>
+          leading={
             <span className={actionIconBox}>
-              <GitFork className="h-4 w-4" />
+              <GitFork />
             </span>
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium">Create lane…</span>
+          }
+          title="Create lane…"
+          meta={
             <span className={actionDetail}>
               {isLane
                 ? 'A sibling lane, made from the root project'
                 : 'A copy with its own git and sessions'}
             </span>
-          </span>
-        </Button>
+          }
+        />
         {isLane ? (
-          <Button
-            type="button"
-            variant="ghost"
+          <ListRow
+            render={<button type="button" />}
             onClick={onRevealLane}
-            size="lg"
-            className={actionButtonRow}
-          >
-            <span className={actionIconColumn}>
+            leading={
               <span className={actionIconBox}>
-                <FolderOpen className="h-4 w-4" />
+                <FolderOpen />
               </span>
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">
-                Reveal lane in Finder
-              </span>
-              <span className={actionDetail}>This project is a lane</span>
-            </span>
-          </Button>
+            }
+            title="Reveal lane in Finder"
+            meta={<span className={actionDetail}>This project is a lane</span>}
+          />
         ) : null}
       </div>
       {children}

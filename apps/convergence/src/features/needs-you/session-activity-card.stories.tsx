@@ -75,7 +75,7 @@ export const Expanded: Story = {
   args: { card: cardOf(cardFixtures.open), compact: false },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('gpt-6')).toBeVisible()
-    await expect(canvas.getByText('5 m ago')).toBeVisible()
+    await expect(canvas.getByText('5 minutes ago')).toBeVisible()
     await expect(
       canvas.getByRole('link', { name: /^Pull request #42/ }),
     ).toBeVisible()

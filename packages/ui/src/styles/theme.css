@@ -24,7 +24,9 @@
  * of specificity the old &:is(.dark *) gave it: in dark it still beats a same-property hover: or
  * data-[state]: utility the way it did, by source order, instead of losing to it. The fallback
  * (no data-theme: Storybook, tests, the moment before JS) adds none, so where both branches match
- * it never outweighs the first. When DS5 has swept dark: out of the app, :where() can follow.
+ * it never outweighs the first. DS5 swept dark: out of the app (no-dark-variant keeps it out), and
+ * :is() stays on purpose: the parts' own dark: utilities still lean on that one class of
+ * specificity, and :where() would let a hover: or data-[state]: utility win in dark (DS8).
  */
 @custom-variant dark {
   &:is([data-theme='dark'], [data-theme='dark'] *) {
@@ -253,6 +255,7 @@
   --spacing-control-sm: var(--control-sm);
   --spacing-control-md: var(--control-md);
   --spacing-control-lg: var(--control-lg);
+  --spacing-control-xl: var(--control-xl);
 
   /*
    * Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog(-sm|-md|-xl|-2xl),

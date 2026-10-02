@@ -24,7 +24,7 @@ function rowNote(row: ConnectionsOverviewRow): string | null {
     case 'not-connected':
       return 'Account not connected, so not checked'
     case 'failed':
-      return `Couldn't check: ${row.error ?? 'the check failed.'}`
+      return `Couldn’t check: ${row.error ?? 'the check failed.'}`
     case 'checked':
       return row.error
   }

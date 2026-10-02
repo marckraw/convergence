@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Library } from 'lucide-react'
-import { expect, fn, waitFor } from 'storybook/test'
+import { expect, waitFor } from 'storybook/test'
 import { InlinePicker, InlinePickerState } from './inline-picker.presentational'
 
 type PickerProps = {
@@ -14,14 +14,12 @@ function Picker({ state }: PickerProps) {
       <InlinePicker
         testId="inline-picker"
         heading={{ icon: <Library />, title: 'Skills', detail: 'Claude Code' }}
-        closeLabel="Close skill injection picker"
-        onDismiss={fn()}
         tall
       >
         {state === 'failed' ? (
           <InlinePickerState
             state="failed"
-            title="Couldn't load skills"
+            title="Couldn’t load skills"
             detail="The provider didn't answer."
           />
         ) : state === 'loading' ? (
@@ -45,13 +43,21 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** Nothing matches: the words stand in for the list. */
+/**
+ * Nothing matches: the words stand in for the list. Nothing in it takes the
+ * keyboard's focus: the field keeps it, and Escape there closes the picker
+ * (ruling 5: no stop where the focus lands on nothing). Nothing makes it
+ * scroll either.
+ */
 export const Empty: Story = {
-  play: async ({ canvas }) => {
+  play: async ({ canvas, userEvent }) => {
     await expect(canvas.getByText('No matching skills')).toBeVisible()
-    await expect(
-      canvas.getByRole('button', { name: 'Close skill injection picker' }),
-    ).toBeInTheDocument()
+    await userEvent.tab()
+    await expect(canvas.getByTestId('inline-picker')).not.toContainElement(
+      document.activeElement as HTMLElement,
+    )
+    const picker = canvas.getByTestId('inline-picker')
+    await expect(picker.scrollHeight).toBe(picker.clientHeight)
   },
 }
 
@@ -78,7 +84,7 @@ export const Failed: Story = {
   args: { state: 'failed' },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      "Couldn't load skills",
+      'Couldn’t load skills',
     )
   },
 }

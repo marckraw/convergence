@@ -170,11 +170,11 @@ export const ProjectTree = memo(function ProjectTree({
     const canRegenerateName = session.providerId !== 'shell'
 
     return (
-      // A row's ⋯ shows with its row (ListRow's actions); a card's always.
+      // A row's ⋯ shows with its row (ListRow's actions); a card's always,
+      // at sm, as the Needs-you card's (R3: 28 in a panel; NAV-6).
       <RowActions
         label={`Session actions ${session.name}`}
-        size={card ? 'lg' : 'xs'}
-        className={card ? 'rounded-lg' : undefined}
+        size={card ? 'sm' : 'xs'}
       >
         <MenuItem
           onClick={() => {
@@ -319,7 +319,8 @@ export const ProjectTree = memo(function ProjectTree({
                   cancelRename()
                 }
               }}
-              className="flex-1 min-w-0 text-xs"
+              density="compact"
+              className="flex-1 min-w-0"
               autoFocus
               aria-label={`Rename ${session.name}`}
             />

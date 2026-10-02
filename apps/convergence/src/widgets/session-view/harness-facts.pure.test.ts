@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   placeCompactions,
   harnessPill,
-  compactionLabel,
+  compactionFacts,
   hiddenPluginSentence,
   hiddenPluginServers,
   mcpReconnectErrorFor,
@@ -34,10 +34,11 @@ it('R9 pill uses the same current-turn fold as the popover — mutation separate
     compactions: [compact],
     init: null,
   } as unknown as SessionHarnessFacts
+  // The chip's facts, one by one, for its MetaLine (CONV-23).
   expect(harnessPill(facts)).toEqual({
-    label: 'Harness · hooks 2 · retry 3 · denied 1',
+    facts: ['Harness', 'hooks 2', 'retry 3', 'denied 1'],
     alert: false,
-    reason: null,
+    reasons: [],
   })
 })
 it.each([
@@ -57,9 +58,9 @@ it.each([
       init: null,
     } as unknown as SessionHarnessFacts
     expect(harnessPill(facts)).toEqual({
-      label: `Harness · ${text}`,
+      facts: ['Harness', text],
       alert,
-      reason: alert ? text : null,
+      reasons: alert ? [text] : [],
     })
   },
 )
@@ -81,7 +82,25 @@ it('R3 disconnected MCP is red — mutation ignore MCP status', () => {
   ).toBe(true)
 })
 it('R5 compaction format carries the recorded boundary — mutation discard post tokens', () => {
-  expect(compactionLabel(compact)).toBe('Compacted (auto) · 84k → 12k tokens')
+  // Its facts one by one, for a MetaLine (CONV-23).
+  expect(compactionFacts(compact)).toEqual([
+    'Compacted (auto)',
+    '84k → 12k tokens',
+  ])
+  expect(
+    compactionFacts({
+      ...compact,
+      trigger: null,
+      postTokens: null,
+      truncated: true,
+      fieldBounds: { trigger: { truncated: true, bytes: 9000 } },
+    }),
+  ).toEqual([
+    'Compacted (not reported)',
+    '84k tokens before',
+    'record truncated',
+    'text truncated',
+  ])
 })
 
 it('places boundaries by timestamp and preserves sequence ties — mutation put every compaction at the tail turns red', () => {
@@ -227,38 +246,44 @@ it.each([
   const pill = harnessPill(pillFacts([status]))
   expect(pill.alert).toBe(isMcpAlertStatus(status))
   if (pill.alert) {
-    expect(pill.reason).not.toBeNull()
-    expect(pill.label).toContain(pill.reason)
+    expect(pill.reasons).not.toEqual([])
+    expect(pill.facts).toEqual(expect.arrayContaining(pill.reasons))
     if (status !== 'needs-auth' && status !== 'failed') {
-      expect(pill.reason).toBe('1 integration needs attention')
+      expect(pill.reasons).toEqual(['1 integration needs attention'])
     }
   }
 })
 it('CH1 R1 the alert reason leads the label even with compaction history', () => {
   expect(harnessPill(pillFacts(['needs-auth']))).toEqual({
-    label: 'Harness · 1 integration needs sign-in',
+    facts: ['Harness', '1 integration needs sign-in'],
     alert: true,
-    reason: '1 integration needs sign-in',
+    reasons: ['1 integration needs sign-in'],
   })
   expect(harnessPill(pillFacts(['failed', 'failed']))).toEqual({
-    label: 'Harness · 2 integrations failed',
+    facts: ['Harness', '2 integrations failed'],
     alert: true,
-    reason: '2 integrations failed',
+    reasons: ['2 integrations failed'],
   })
 })
 it('CH1 R1 compaction history alone is quiet and absent from the pill', () => {
   expect(harnessPill(pillFacts([]))).toEqual({
-    label: 'Harness',
+    facts: ['Harness'],
     alert: false,
-    reason: null,
+    reasons: [],
   })
 })
 it('CH1 R1 omitted alerts count without inventing their statuses', () => {
   expect(harnessPill(pillFacts(['needs-auth'], 2))).toEqual({
-    label:
-      'Harness · 1 integration needs sign-in · 2 more integrations need attention',
+    facts: [
+      'Harness',
+      '1 integration needs sign-in',
+      '2 more integrations need attention',
+    ],
     alert: true,
-    reason: '1 integration needs sign-in · 2 more integrations need attention',
+    reasons: [
+      '1 integration needs sign-in',
+      '2 more integrations need attention',
+    ],
   })
 })
 
@@ -457,9 +482,20 @@ describe('MAR-3206 R5 R6 R7 — the MCP heading and a Reconnect error', () => {
       stopped: mcpStatusHeading(allConnected, false, writeTime),
       unknown: mcpStatusHeading(allConnected, null, writeTime),
     }).toEqual({
-      running: `MCP servers · 1 connected of 1 · unchanged since ${time} · process running`,
-      stopped: `MCP servers · 1 connected of 1 · unchanged since ${time} · no process is running; the next message starts one and reads its connectors afresh`,
-      unknown: `MCP servers · 1 connected of 1 · unchanged since ${time}`,
+      // Its facts one by one, for a MetaLine (CONV-23).
+      running: [
+        'MCP servers',
+        '1 connected of 1',
+        `unchanged since ${time}`,
+        'process running',
+      ],
+      stopped: [
+        'MCP servers',
+        '1 connected of 1',
+        `unchanged since ${time}`,
+        'no process is running; the next message starts one and reads its connectors afresh',
+      ],
+      unknown: ['MCP servers', '1 connected of 1', `unchanged since ${time}`],
     })
   })
 
@@ -473,8 +509,8 @@ describe('MAR-3206 R5 R6 R7 — the MCP heading and a Reconnect error', () => {
         status(listed, { connected: 25, omitted: 5 }),
         null,
         writeTime,
-      ),
-    ).toMatch(/^MCP servers · 25 connected of 25 · /)
+      ).slice(0, 2),
+    ).toEqual(['MCP servers', '25 connected of 25'])
   })
 
   it('R6 an error shows only while its server is still an alert in the latest status', () => {

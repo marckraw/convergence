@@ -103,7 +103,8 @@ export function classifySessionCardState(card: SessionCard): SessionCardState {
  * draws the card (MC-4): the Flat grid and the canvas node. The host guard
  * comes first: a session on a host the room cannot see is neither running nor
  * asking, whatever its last record says, so it never pulses and never wears
- * an attention badge. It shows the warning dot and says so in words.
+ * an attention badge. It shows its own glyph in the warning tone and says so
+ * in words (R1, MC-2).
  */
 export interface SessionCardSignal {
   state: SessionCardState

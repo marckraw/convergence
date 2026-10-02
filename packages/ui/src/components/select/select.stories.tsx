@@ -258,6 +258,91 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
 }
 
+const efforts = [
+  { value: 'low', label: 'Low', description: 'Answers sooner, thinks less.' },
+  { value: 'medium', label: 'Medium' },
+  {
+    value: 'max',
+    label: 'Max',
+    description: "This account's plan doesn't offer Max on this model.",
+    disabled: true,
+  },
+]
+
+/**
+ * In a toolbar (ruling 12): the composer's provider and effort. A ghost
+ * Button of its size (28 px here), named by what it picks and showing its
+ * value; each choice may carry a line under it, and an unavailable one says
+ * why, in full.
+ */
+export const Toolbar: Story = {
+  render: (args) => (
+    <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-3">
+      <Select
+        items={efforts}
+        defaultValue="medium"
+        onValueChange={args.onValueChange}
+      >
+        <SelectTrigger
+          variant="ghost"
+          size="sm"
+          aria-label="Reasoning effort"
+          className="text-ink-muted hover:text-ink"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {efforts.map((effort) => (
+            <SelectItem
+              key={effort.value}
+              value={effort.value}
+              description={effort.description}
+              disabled={effort.disabled}
+            >
+              {effort.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Reasoning effort' })
+    await expect(trigger).toHaveTextContent('Medium')
+    await expect(trigger).toHaveAttribute('data-variant', 'ghost')
+    await expect(trigger.getBoundingClientRect().height).toBe(28)
+    // A ghost Button has no edge of its own, unlike the field frame.
+    await expect(getComputedStyle(trigger).borderTopWidth).toBe('0px')
+    // The keyboard reaches it and it rings, as a Button does.
+    await userEvent.tab()
+    await expect(trigger).toHaveFocus()
+    await expect(getComputedStyle(trigger).outlineStyle).toBe('solid')
+
+    await userEvent.click(trigger)
+    const listbox = await screen.findByRole('listbox')
+    await arrived(panelOf(listbox))
+    const max = within(listbox).getByRole('option', { name: /Max/ })
+    await expect(max).toHaveAttribute('aria-disabled', 'true')
+    await expect(max).toHaveTextContent(/doesn't offer Max/)
+    const low = within(listbox).getByRole('option', { name: /Low/ })
+    await expect(low).toHaveTextContent('Answers sooner, thinks less.')
+    await userEvent.click(low)
+    await expect(args.onValueChange).toHaveBeenLastCalledWith(
+      'low',
+      expect.anything(),
+    )
+    // The trigger shows the choice's words, not its line.
+    await waitFor(() => expect(trigger).toHaveTextContent('Low'))
+    await expect(trigger).not.toHaveTextContent('Answers sooner')
+    await listClosed()
+  },
+}
+
+export const ToolbarDark: Story = {
+  ...Toolbar,
+  globals: { theme: 'dark' },
+}
+
 /** Reduced motion: dropped below its trigger it fades in, without the grow or the travel. */
 export const ReducedMotion: Story = {
   globals: { motion: 'reduced' },
@@ -283,5 +368,35 @@ export const ReducedMotion: Story = {
     await expect(opening.scale).toBe(1)
     await expect(opening.shiftY).toBe(0)
     await arrived(panel)
+  },
+}
+
+/**
+ * Compact (ruling 10): a dense panel's Select, as tall as its size and in
+ * 12 px words, as the fork's and Settings' pickers sit. A text size is this
+ * prop, never a className.
+ */
+export const Compact: Story = {
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      <Select items={args.models} defaultValue={args.models[0]?.value}>
+        <SelectTrigger aria-label="Model" density="compact" className="w-56">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {args.models.map((model) => (
+            <SelectItem key={model.value} value={model.value}>
+              {model.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Model' })
+    await expect(trigger).toHaveAttribute('data-density', 'compact')
+    await expect(getComputedStyle(trigger).fontSize).toBe('12px')
+    await expect(trigger.getBoundingClientRect().height).toBe(32)
   },
 }

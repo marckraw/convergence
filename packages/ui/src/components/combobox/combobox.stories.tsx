@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { FolderGit2, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
+import { tokenColor } from '../../../.storybook/color-testing'
 import {
   Dialog,
   DialogBody,
@@ -364,12 +365,12 @@ export const Busy: Story = {
 
 /** Failed: an alert says what went wrong, with Try again. */
 export const Failed: Story = {
-  args: { error: "Couldn't read the branches", onRetry: fn() },
+  args: { error: 'Couldn’t read the branches', onRetry: fn() },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('combobox', { name: 'Project' }))
     const dialog = await openedList()
     await expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      "Couldn't read the branches",
+      'Couldn’t read the branches',
     )
     await userEvent.click(
       within(dialog).getByRole('button', { name: 'Try again' }),
@@ -666,4 +667,111 @@ export const InField: Story = {
 export const ReducedMotion: Story = {
   ...Pointer,
   globals: { motion: 'reduced' },
+}
+
+const chipPicked = fn()
+
+/**
+ * A filter row's picker as a chip, beside chip Toggles (MC-15): nothing
+ * picked means all, and the chip is quiet; once it narrows the room it wears
+ * R7's chosen look, the raised chip, as a pressed chip Toggle does.
+ */
+function ProjectChip() {
+  const [ids, setIds] = useState<string[]>([])
+  const summary =
+    ids.length === 0
+      ? 'All projects'
+      : ids.length === 1
+        ? (PROJECTS.find((item) => item.id === ids[0])?.label ?? '1 project')
+        : `${ids.length} projects`
+  return (
+    <div className="flex items-center gap-1.5 rounded-md bg-canvas p-3">
+      <Combobox
+        multiple
+        variant="chip"
+        size="sm"
+        chosen={ids.length > 0}
+        selectedIds={ids}
+        value={summary}
+        ariaLabel="Filter by project"
+        items={PROJECTS.map((item) => ({ ...item, trailing: 3 }))}
+        searchPlaceholder="Search projects…"
+        onChange={(next) => {
+          setIds(next)
+          chipPicked(next)
+        }}
+      />
+    </div>
+  )
+}
+
+/**
+ * Chip: a 28 px filter chip, quiet until it holds a choice; then the raised
+ * chip (the chip's fill and the raised shadow), never the focus colour.
+ */
+export const Chip: Story = {
+  render: () => <ProjectChip />,
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Filter by project' })
+    await expect(trigger.getBoundingClientRect().height).toBe(28)
+    await expect(trigger).not.toHaveAttribute('data-chosen')
+    await expect(getComputedStyle(trigger).boxShadow).toBe('none')
+    await userEvent.click(trigger)
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Filter by project',
+    })
+    await waitFor(() => expect(dialog).toBeVisible())
+    await userEvent.click(
+      within(dialog).getByRole('option', { name: /codewalk/ }),
+    )
+    await expect(chipPicked).toHaveBeenLastCalledWith(['codewalk'])
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await expect(trigger).toHaveTextContent('codewalk')
+    await expect(trigger).toHaveAttribute('data-chosen')
+    // The fill eases in on the colour transition: read it once it lands.
+    // The token is read once, outside: its probe is a DOM change, and inside
+    // waitFor every change runs the check again, so it would never rest.
+    const chip = tokenColor('--chip')
+    await waitFor(() =>
+      expect(getComputedStyle(trigger).backgroundColor).toBe(chip),
+    )
+    await expect(getComputedStyle(trigger).boxShadow).not.toBe('none')
+  },
+}
+
+export const ChipDark: Story = {
+  ...Chip,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * Chosen: a Button's trigger that holds a choice (a session in a crew)
+ * wears the raised chip too, and keeps it under the pointer.
+ */
+export const Chosen: Story = {
+  render: () => (
+    <div className="rounded-md bg-canvas p-3">
+      <Combobox
+        items={PROJECTS}
+        multiple
+        selectedIds={['convergence']}
+        variant="ghost"
+        size="xs"
+        chosen
+        value="convergence"
+        ariaLabel="Crew"
+        onChange={fn()}
+      />
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Crew' })
+    await expect(trigger).toHaveAttribute('data-chosen')
+    await expect(getComputedStyle(trigger).boxShadow).not.toBe('none')
+    await userEvent.hover(trigger)
+    await expect(getComputedStyle(trigger).backgroundColor).toBe(
+      tokenColor('--chip'),
+    )
+  },
 }

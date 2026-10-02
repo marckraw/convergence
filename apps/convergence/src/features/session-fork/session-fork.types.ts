@@ -21,6 +21,15 @@ export type PreviewState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; summary: ForkSummary }
-  | { status: 'error'; message: string }
+  /** The summary failed; `message` is why, when the failure said (R10). */
+  | { status: 'error'; message?: string }
+
+/**
+ * Creating the fork failed (DLG-31): the dialog says "Couldn’t create the
+ * fork." and puts `reason`, when there is one, on the line under it.
+ */
+export interface ForkSubmitError {
+  reason?: string
+}
 
 export const MIN_TRANSCRIPT_ENTRIES_FOR_SUMMARY = 4

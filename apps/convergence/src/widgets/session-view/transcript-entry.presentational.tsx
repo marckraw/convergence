@@ -618,7 +618,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 onClick={() => onNoteAction(entry.action!)}
                 className="mt-2"
               >
-                Authorize for this account
+                Authorize for this account…
               </Button>
             ) : null}
           </div>

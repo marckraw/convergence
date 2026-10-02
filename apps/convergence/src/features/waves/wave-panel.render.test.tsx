@@ -2539,6 +2539,13 @@ describe('MAR-3097: through the containers and the real stores', () => {
       // Nothing at all: the sheet's own name, not LV1's retired apology.
       await openPlan([])
       expect(screen.getByText('Nothing in Plan right now.')).toBeTruthy()
+      // An empty sheet's note is EmptyState's, compact (MC-20). Mutation: a
+      // hand <p> again -> red.
+      expect(
+        screen
+          .getByText('Nothing in Plan right now.')
+          .closest('[data-slot="empty-state"]'),
+      ).not.toBeNull()
       expect(screen.queryByText(/left the loop/)).toBeNull()
       expect(screen.queryByText(/wider read/)).toBeNull()
     })

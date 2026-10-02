@@ -3,10 +3,14 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 import {
+  type ControlDensity,
   type ControlSize,
+  controlDensity,
   fieldTrigger,
   fieldTriggerSize,
 } from '#lib/control-frame.styles'
+import { textStack } from '#lib/text-stack.styles'
+import { Button } from '../button/button'
 import {
   popupItem,
   popupItemCheck,
@@ -62,10 +66,21 @@ function Select<Value>({ onValueChange, ...props }: SelectProps<Value>) {
   )
 }
 
+/**
+ * The trigger's look: `field`, the field frame, for a form; or `ghost`, a
+ * ghost Button's, for a toolbar where it sits among buttons (the composer's
+ * provider and effort, ruling 12), as a Combobox's `variant` is.
+ */
+type SelectTriggerVariant = 'field' | 'ghost'
+
 type SelectTriggerProps = Omit<SelectPrimitive.Trigger.Props, 'className'> & {
   className?: string
   /** 24, 28, 32 or 36 px; `md` (32) unless told otherwise. Never a className (R3). */
   size?: ControlSize
+  /** `compact`: 12 px words at any height, for a dense panel (ruling 10). Never a text size in className. */
+  density?: ControlDensity
+  /** `field` unless told otherwise. */
+  variant?: SelectTriggerVariant
 }
 
 /**
@@ -74,25 +89,62 @@ type SelectTriggerProps = Omit<SelectPrimitive.Trigger.Props, 'className'> & {
  * the same constant (`fieldTrigger`, DS-15): the control border, the ring
  * over it, and the danger border when it is invalid, by `aria-invalid` or
  * its Field's `invalid`. It is as wide as its value unless told otherwise,
- * and `app-no-drag`.
+ * and `app-no-drag`. In a toolbar, `variant="ghost"` draws it as a ghost
+ * Button of its size, with a Button's ring and the Combobox's small chevron.
  */
 function SelectTrigger({
   className,
   size = 'md',
+  density = 'default',
+  variant = 'field',
   children,
   ...props
 }: SelectTriggerProps) {
+  const chevron = (
+    <SelectPrimitive.Icon className="flex text-ink-muted">
+      <ChevronDownIcon
+        aria-hidden
+        className={variant === 'ghost' ? 'size-3' : undefined}
+      />
+    </SelectPrimitive.Icon>
+  )
+  if (variant === 'ghost') {
+    return (
+      <SelectPrimitive.Trigger
+        data-slot="select-trigger"
+        data-size={size}
+        data-variant={variant}
+        render={
+          <Button
+            variant="ghost"
+            size={size}
+            className={cn('min-w-0 justify-between', className)}
+          />
+        }
+        {...props}
+      >
+        {children}
+        {chevron}
+      </SelectPrimitive.Trigger>
+    )
+  }
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
-      className={cn('w-fit', fieldTrigger, fieldTriggerSize[size], className)}
+      data-density={density}
+      data-variant={variant}
+      className={cn(
+        'w-fit',
+        fieldTrigger,
+        fieldTriggerSize[size],
+        controlDensity[density],
+        className,
+      )}
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon className="flex text-ink-muted">
-        <ChevronDownIcon aria-hidden />
-      </SelectPrimitive.Icon>
+      {chevron}
     </SelectPrimitive.Trigger>
   )
 }
@@ -215,23 +267,56 @@ function SelectLabel({ className, ...props }: SelectLabelProps) {
 
 type SelectItemProps = Omit<SelectPrimitive.Item.Props, 'className'> & {
   className?: string
+  /**
+   * A second, muted line under the choice: what it means, or, on a disabled
+   * option, why it can't be chosen, which wraps rather than being cut short.
+   * It is read with the option, as a Combobox row's is.
+   */
+  description?: ReactNode
 }
 
+/** The choice's words: what the trigger shows once it is chosen. */
+const itemText = 'flex min-w-0 items-center gap-2 truncate'
+
 /** One option, with a check when it is the chosen one. */
-function SelectItem({ className, children, ...props }: SelectItemProps) {
+function SelectItem({
+  className,
+  children,
+  description,
+  disabled,
+  ...props
+}: SelectItemProps) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
         popupItem,
-        "w-full pr-8 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-ink-muted",
+        "group w-full pr-8 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-ink-muted",
         className,
       )}
+      disabled={disabled}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex min-w-0 flex-1 items-center gap-2 truncate">
-        {children}
-      </SelectPrimitive.ItemText>
+      {description == null ? (
+        <SelectPrimitive.ItemText className={cn(itemText, 'flex-1')}>
+          {children}
+        </SelectPrimitive.ItemText>
+      ) : (
+        <span className={textStack}>
+          <SelectPrimitive.ItemText className={itemText}>
+            {children}
+          </SelectPrimitive.ItemText>
+          <span
+            data-slot="select-item-description"
+            className={cn(
+              'text-2xs text-ink-muted group-data-highlighted:text-inherit',
+              disabled ? 'whitespace-normal' : 'truncate',
+            )}
+          >
+            {description}
+          </span>
+        </span>
+      )}
       <SelectPrimitive.ItemIndicator
         render={<span className={popupItemCheck} />}
       >
@@ -275,6 +360,7 @@ export {
   type SelectSeparatorProps,
   SelectTrigger,
   type SelectTriggerProps,
+  type SelectTriggerVariant,
   SelectValue,
   type SelectValueProps,
 }

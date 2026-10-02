@@ -73,7 +73,6 @@ import {
   spaceAttentionOptions,
   spaceStatusLabels,
   spaceStatusOptions,
-  suggestionBox,
   suggestionRow,
 } from './space-workboard.styles'
 import type { SpaceArtifactSuggestion } from './space-artifact-suggestions.pure'
@@ -404,7 +403,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                     onClick={onSynthesize}
                     disabledReason={
                       selectedAttempts.length === 0
-                        ? 'Link an Attempt to synthesize from first.'
+                        ? 'Link an attempt to synthesize from first.'
                         : undefined
                     }
                     pending={isSynthesizing}
@@ -430,7 +429,9 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
               </div>
 
               {synthesisPreview ? (
-                <section className={suggestionBox}>
+                // What synthesis suggests is a Card in the info tone: a
+                // hint to accept or not (DS-10).
+                <Card tone="info" render={<section />} className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <SectionLabel as="h4" className={toneInk.info}>
@@ -486,7 +487,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
 
                   {synthesisPreview.artifacts.length > 0 ? (
                     <div className="space-y-2">
-                      <SectionLabel>Proposed artifacts</SectionLabel>
+                      <SectionLabel>Proposed Artifacts</SectionLabel>
                       {synthesisPreview.artifacts.map((artifact) => (
                         <div key={artifact.id} className={suggestionRow}>
                           <div className="min-w-0">
@@ -513,7 +514,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       ))}
                     </div>
                   ) : null}
-                </section>
+                </Card>
               ) : null}
 
               <div className="grid gap-3 sm:grid-cols-3">
@@ -532,7 +533,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                 <SectionLabel as="h3">Attempts</SectionLabel>
                 {selectedAttempts.length === 0 ? (
                   <EmptyState
-                    title="No linked Attempts yet"
+                    title="No linked attempts yet"
                     detail="Link a session to this Space from its header."
                   />
                 ) : (
@@ -559,7 +560,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       onClick={onDiscoverArtifacts}
                       disabledReason={
                         selectedAttempts.length === 0
-                          ? 'Link an Attempt to discover from first.'
+                          ? 'Link an attempt to discover from first.'
                           : undefined
                       }
                       pending={isDiscoveringArtifacts}
@@ -585,7 +586,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                   <div className="space-y-2">
                     <SectionLabel>Suggestions</SectionLabel>
                     {artifactSuggestions.map((suggestion) => (
-                      <div key={suggestion.id} className={suggestionBox}>
+                      <Card key={suggestion.id} tone="info">
                         <div className={rowTop}>
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">
@@ -618,7 +619,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                             </IconButton>
                           </div>
                         </div>
-                      </div>
+                      </Card>
                     ))}
                   </div>
                 ) : null}
@@ -626,7 +627,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                 {selectedArtifacts.length === 0 ? (
                   <EmptyState
                     title="No Artifacts yet"
-                    detail="Add one, or discover them from the Attempts."
+                    detail="Add one, or discover them from the attempts."
                   />
                 ) : (
                   <div className="space-y-2">
@@ -698,7 +699,7 @@ function renderAddArtifact(input: {
         </Button>
       }
       title="Add Artifact"
-      description="Attach a concrete artifact produced by this Space."
+      description="Attach a concrete Artifact produced by this Space."
       saves="on-save"
       onSave={onCreateArtifact}
       saveShortcut={shortcut}
@@ -811,7 +812,7 @@ function renderAddArtifact(input: {
 /** A source-session choice's labels: none, or one of the Space's attempts. */
 function sourceSessionItems(attempts: SpaceAttemptView[]) {
   return {
-    [SELECT_EMPTY_VALUE]: 'No source Attempt',
+    [SELECT_EMPTY_VALUE]: 'No source attempt',
     ...Object.fromEntries(
       attempts.map((view) => [view.attempt.sessionId, view.sessionName]),
     ),
@@ -836,10 +837,10 @@ function renderSourceSelect(input: {
       }
     >
       <SelectTrigger size="lg" className="w-full" aria-label={label}>
-        <SelectValue placeholder="No source Attempt" />
+        <SelectValue placeholder="No source attempt" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={SELECT_EMPTY_VALUE}>No source Attempt</SelectItem>
+        <SelectItem value={SELECT_EMPTY_VALUE}>No source attempt</SelectItem>
         {attempts.map((view) => (
           <SelectItem
             key={view.attempt.sessionId}

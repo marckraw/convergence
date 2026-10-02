@@ -223,11 +223,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           panel says both — a failure that only said "couldn't save" would
           leave the person unsure which version is live. */}
       {saveError ? (
-        <Notice
-          tone="danger"
-          title="Couldn’t save the connection"
-          className="text-2xs"
-        >
+        <Notice tone="danger" title="Couldn’t save the connection" size="xs">
           <span className="block text-ink-muted">
             Your draft is kept here. The saved connection has not changed.
           </span>
@@ -237,11 +233,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
 
       {/* Frame 10-01. The row survives; only its far end is gone. */}
       {recipientMissing ? (
-        <Notice
-          tone="warning"
-          title="Recipient unavailable"
-          className="text-2xs"
-        >
+        <Notice tone="warning" title="Recipient unavailable" size="xs">
           <span className="block text-ink-muted">
             This conversation is no longer available. Choose a replacement to
             continue editing this connection.
@@ -441,7 +433,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             aria-label="Name for the new session"
             disabled={busy}
             onChange={(event) => onSpawnChange({ name: event.target.value })}
-            className="text-xs"
+            density="compact"
           />
         </div>
       ) : null}
@@ -477,7 +469,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               aria-label="The final line this connection waits for"
               disabled={busy}
               onChange={(event) => onConditionTokenChange(event.target.value)}
-              className="text-xs"
+              density="compact"
             />
             <p className={INSPECTOR_NOTE_CLASS}>
               Only this final line sends the reply to{' '}
@@ -528,7 +520,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               aria-describedby={customOpenerNote ? openerNoteId : undefined}
               disabled={busy}
               onChange={(event) => onCustomOpenerChange(event.target.value)}
-              className="text-xs"
+              density="compact"
             />
           ) : null}
           <p className={INSPECTOR_NOTE_CLASS}>
@@ -550,7 +542,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           disabled={busy}
           rows={4}
           onChange={(event) => onInstructionsChange(event.target.value)}
-          className="min-h-20 text-xs"
+          density="compact"
+          className="min-h-20"
         />
         <FieldDescription className={INSPECTOR_NOTE_CLASS}>
           {recipientName ?? 'The recipient'} receives {sourceName}’s full last

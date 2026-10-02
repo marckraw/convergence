@@ -1,7 +1,11 @@
 import { Field as FieldPrimitive } from '@base-ui/react/field'
 import type { ComponentProps } from 'react'
 import { cn } from '#lib/cn.pure'
-import { controlFrame } from '#lib/control-frame.styles'
+import {
+  type ControlDensity,
+  controlDensity,
+  controlFrame,
+} from '#lib/control-frame.styles'
 import { focusRingField } from '#lib/focus-ring.styles'
 
 export type TextareaProps = Omit<ComponentProps<'textarea'>, 'className'> & {
@@ -21,6 +25,8 @@ export type TextareaProps = Omit<ComponentProps<'textarea'>, 'className'> & {
    * (DS-7).
    */
   variant?: TextareaVariant
+  /** `compact`: 12 px words, for a dense panel (ruling 10). Never a text size in className. */
+  density?: ControlDensity
 }
 
 export type TextareaVariant = 'field' | 'bare'
@@ -48,6 +54,7 @@ export function Textarea({
   autoGrow = false,
   maxRows,
   variant = 'field',
+  density = 'default',
   ...props
 }: TextareaProps) {
   // py-2 and the 1 px border: what a line count adds to make a height.
@@ -61,10 +68,12 @@ export function Textarea({
       data-slot="textarea"
       data-auto-grow={autoGrow ? '' : undefined}
       data-variant={variant}
+      data-density={density}
       render={<textarea />}
       className={cn(
         'flex min-h-9 px-3 py-2',
         controlFrame,
+        controlDensity[density],
         autoGrow && 'field-sizing-content',
         variant === 'bare' ? bare : focusRingField,
         className,

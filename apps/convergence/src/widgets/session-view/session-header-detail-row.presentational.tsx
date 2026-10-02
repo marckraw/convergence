@@ -4,7 +4,8 @@ import { DescriptionItem } from '@convergence/ui'
 interface SessionHeaderDetailRowProps {
   icon?: ReactNode
   label: string
-  value: string
+  /** Its value: words, or a MetaLine of facts (CONV-23). */
+  value: ReactNode
   testId?: string
 }
 

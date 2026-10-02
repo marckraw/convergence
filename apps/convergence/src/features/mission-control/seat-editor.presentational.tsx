@@ -194,7 +194,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           data-seat-orphan
           tone="warning"
           title={`${label}’s conversation no longer exists`}
-          className="text-2xs"
+          size="xs"
           actions={
             <Button
               type="button"
@@ -237,7 +237,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 onNameCommit()
               }
             }}
-            className="flex-1 text-xs"
+            density="compact"
+            className="flex-1"
           />
           <IconButton
             label={`Close ${label}`}
@@ -310,14 +311,16 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             rows={8}
             onChange={(event) => onCardChange(event.target.value)}
             onBlur={onCardCommit}
-            className="min-h-40 resize-y p-2 text-2xs leading-relaxed"
+            density="compact"
+            className="min-h-40 resize-y leading-relaxed"
           />
         ) : (
           <Notice
             data-seat-no-card
             tone="warning"
             title="No card yet"
-            className="border-dashed text-2xs"
+            size="xs"
+            className="border-dashed"
             actions={
               <Button
                 type="button"
@@ -340,7 +343,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       </div>
 
       <section aria-label="Policy" className="flex flex-col gap-2">
-        <SectionLabel as="h4" size="sm">
+        {/* A seat's own section, under its group's h5 (MC-13). */}
+        <SectionLabel as="h6" size="sm">
           Policy
         </SectionLabel>
         {recipe ? (
@@ -363,7 +367,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               <SelectTrigger
                 size="md"
                 aria-describedby={refusalId('hostPolicy')}
-                className="w-full text-xs"
+                density="compact"
+                className="w-full"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -427,7 +432,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               aria-describedby={refusalId('lanePath')}
               onChange={(event) => onLanePathChange(event.target.value)}
               onBlur={onLanePathCommit}
-              className="text-xs"
+              density="compact"
             />
             {refusalFor('lanePath')}
           </Field>

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Zap } from 'lucide-react'
 import { expect, fn, screen } from 'storybook/test'
+import { tokenColor } from '../../../.storybook/color-testing'
 import { Toggle } from './toggle'
 
 const meta = {
@@ -100,5 +101,45 @@ export const DisabledWithReason: Story = {
 
 export const Dark: Story = {
   ...Default,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * Hue: a chip that stands for a crew wears the crew's hue on its edge, at
+ * rest and pressed (MC-28: Badge's crew mix, not one typed by hand); pressed
+ * is the raised chip, as every chip's is (R7).
+ */
+export const Hue: Story = {
+  render: () => (
+    <div className="flex gap-1.5 rounded-md bg-canvas p-3">
+      <Toggle variant="chip" size="sm" hue="crew-violet">
+        Night shift
+      </Toggle>
+      <Toggle variant="chip" size="sm" hue="crew-green" defaultPressed>
+        Day shift
+      </Toggle>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const night = canvas.getByRole('button', { name: 'Night shift' })
+    const day = canvas.getByRole('button', { name: 'Day shift' })
+    await expect(getComputedStyle(night).borderTopColor).not.toBe(
+      tokenColor('--hairline'),
+    )
+    await expect(getComputedStyle(night).boxShadow).toBe('none')
+    await expect(getComputedStyle(day).boxShadow).not.toBe('none')
+    await expect(getComputedStyle(day).backgroundColor).toBe(
+      tokenColor('--chip'),
+    )
+    const edge = getComputedStyle(night).borderTopColor
+    await userEvent.click(night)
+    await expect(night).toHaveAttribute('aria-pressed', 'true')
+    // The hue holds when chosen: the edge is the crew's, not the chip's.
+    await expect(getComputedStyle(night).borderTopColor).toBe(edge)
+  },
+}
+
+export const HueDark: Story = {
+  ...Hue,
   globals: { theme: 'dark' },
 }

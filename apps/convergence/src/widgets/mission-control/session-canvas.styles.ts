@@ -55,6 +55,20 @@ export const CANVAS_THEME_VARS = {
   '--xy-selection-border': '1px solid var(--line)',
 } as CSSProperties
 
+/**
+ * A small node's body on the canvas, the chair and a spawn alike: its two
+ * lines stacked in the middle, inside the Card that draws its frame (MC-21).
+ */
+export const CANVAS_NODE_BODY_CLASS =
+  'flex flex-col justify-center gap-0.5 px-3 py-2'
+
+/**
+ * Mission Control's toolbar, the search and the filter chips, wrapping under
+ * the header's line on its 16 px edge (NAV F1).
+ */
+export const MISSION_CONTROL_TOOLBAR_CLASS =
+  'flex flex-wrap items-center gap-1.5 px-4 py-3'
+
 /** A full-height column: the room, the crew canvas and its empty state. */
 export const ROOM_COLUMN_CLASS = 'flex h-full min-h-0 flex-col'
 

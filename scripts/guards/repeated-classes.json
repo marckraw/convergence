@@ -17,6 +17,7 @@
     "overlayClassName"
   ],
   "functions": ["cn", "cva"],
+  "constants": true,
   "minUtilities": 4,
   "maxOccurrences": 2,
   "allowlist": [
@@ -59,6 +60,14 @@
     {
       "classes": "flex flex-wrap items-center gap-1",
       "reason": "A layout sentence, not a component: a row of small chips that wraps when it runs out of room, at the tight gap."
+    },
+    {
+      "classes": "flex flex-wrap items-center justify-between gap-2",
+      "reason": "A layout sentence, not a component: a row whose two ends sit apart and wrap when it runs out of width (a heading and its actions), around different content in Settings' accounts and connections and in Loom's sections. Seen once the guard read plain constants (DS8)."
+    },
+    {
+      "classes": "flex min-w-0 flex-col gap-0.5",
+      "reason": "A layout sentence, not a component: lines a hair apart that may be cut short, a term over its value (DescriptionList), an error over its reason (FormError), an issue's identifier over its title (Loom's detail). textStack without its flex-1, which would stretch it inside a column. Seen once the guard read plain constants (DS8)."
     }
   ]
 }

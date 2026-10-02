@@ -44,7 +44,8 @@
   body {
     @apply text-ink;
     background: transparent;
-    font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;
+    /* The system's own face, read from its token, not a copy of its value. */
+    font-family: var(--type-family-sans);
     -webkit-font-smoothing: antialiased;
   }
 }
@@ -198,6 +199,18 @@
  */
 @theme {
   --breakpoint-learn-loom: 53.75rem;
+}
+
+/*
+ * The conversation's width where the Actions button leaves the row under the
+ * composer for the right gutter beside it (CONV-29): the column,
+ * --layout-conversation's 42rem, and 7rem each side. A container query can't
+ * read var() either, so the sum is written out, as a container size of the
+ * app's own, `@min-actions-beside:`; the Actions placement test
+ * (session-conversation-surface.container.test.tsx) reads it from here.
+ */
+@theme {
+  --container-actions-beside: 56rem;
 }
 
 @keyframes loom-enter {

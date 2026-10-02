@@ -45,14 +45,26 @@ type BadgeHue = keyof typeof HUES
 
 type BadgeShape = 'pill' | 'label' | 'count'
 
+type BadgeSize = 'sm' | 'md'
+
 const badgeVariants = cva(
   [
     'inline-flex h-5 max-w-full items-center gap-1 border align-middle whitespace-nowrap',
-    'text-3xs leading-3xs',
     '[&_svg]:pointer-events-none [&_svg]:size-3 [&_svg]:shrink-0',
   ],
   {
     variants: {
+      /**
+       * Its words, in R4's two small steps, in the same 20 px box: 10 px
+       * (`sm`, the default), or 11 px (`md`) where it sits among 11 px words,
+       * as the composer's strip states its machine (MAR-2642). A size is a
+       * prop, never a className (R3, DS-4).
+       */
+      size: {
+        sm: 'text-3xs leading-3xs',
+        // No leading of its own: the strip's line, as its className left it (R0).
+        md: 'text-2xs',
+      },
       /**
        * A pill is a state or a fact (Draft, Local); a label names a kind in a
        * smaller box (Provider); a count is a number, its figures one width.
@@ -64,7 +76,7 @@ const badgeVariants = cva(
           'min-w-5 shrink-0 justify-center rounded-full px-1.5 tabular-nums',
       },
     },
-    defaultVariants: { shape: 'pill' },
+    defaultVariants: { shape: 'pill', size: 'sm' },
   },
 )
 
@@ -85,6 +97,8 @@ type BadgeProps = Omit<ComponentProps<'span'>, 'className'> & {
   /** A category told apart by hue instead of a state; wins over `tone`. */
   hue?: BadgeHue
   shape?: BadgeShape
+  /** 10 px words (`sm`, the default), or 11 px (`md`) among 11 px words; always 20 px tall. */
+  size?: BadgeSize
   /** A 12 px glyph before the word, decorative: the word says it. */
   icon?: ReactNode
   /**
@@ -113,6 +127,7 @@ function Badge({
   tone = 'neutral',
   hue,
   shape = 'pill',
+  size = 'sm',
   icon,
   caps = false,
   outline = false,
@@ -142,9 +157,10 @@ function Badge({
       data-tone={hue === undefined ? tone : undefined}
       data-hue={hue}
       data-shape={shape}
+      data-size={size}
       data-outline={outline && hue === undefined ? '' : undefined}
       className={cn(
-        badgeVariants({ shape }),
+        badgeVariants({ shape, size }),
         colours,
         caps && 'uppercase',
         className,
@@ -166,4 +182,10 @@ function Badge({
   )
 }
 
-export { Badge, type BadgeHue, type BadgeProps, type BadgeShape }
+export {
+  Badge,
+  type BadgeHue,
+  type BadgeProps,
+  type BadgeShape,
+  type BadgeSize,
+}

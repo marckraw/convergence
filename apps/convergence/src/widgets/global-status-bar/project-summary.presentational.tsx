@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import {
+  ATTENTION_WORDS,
   COMPACTING_CONTEXT_LABEL,
   formatActivityLabel,
   formatSessionAttentionLabel,
@@ -30,9 +31,14 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
         const waiting =
           session.attention === 'needs-approval' ||
           session.attention === 'needs-input'
+        // A failed run waits on you too (ruling 6), in failure's own tone.
+        const failed =
+          !waiting && project.needsAttention.some(({ id }) => id === session.id)
         const attentionLabel = waiting
           ? formatSessionAttentionLabel(session)
-          : null
+          : failed
+            ? ATTENTION_WORDS.failed
+            : null
         return (
           <div
             key={session.id}
@@ -40,7 +46,13 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
           >
             <StatusDot
               size="sm"
-              tone={waiting ? barTone.waiting : barTone.running}
+              tone={
+                waiting
+                  ? barTone.waiting
+                  : failed
+                    ? barTone.failed
+                    : barTone.running
+              }
             />
             <span className="max-w-40 truncate text-ink">{session.name}</span>
             <span className="shrink-0 text-ink-muted">

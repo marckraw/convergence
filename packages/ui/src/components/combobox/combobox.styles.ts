@@ -3,6 +3,7 @@
  * tokens (R0): the raised popup surface (R8), rows that take the highlight
  * fill, and hairlines between the search, the list and the footer.
  */
+import { popupSurface } from '../../motion/popup-surface.styles'
 
 /**
  * Where the popup sits: a flex row that caps it at a picker's size (24 rem
@@ -14,12 +15,13 @@ export const comboboxPositioner =
   'z-50 flex max-h-picker max-w-picker outline-none app-no-drag'
 
 /**
- * The popup: as wide as the trigger (at least 13 rem, at most 24 rem or the
- * room the window leaves), as tall as the room below or above it allows, up
- * to 24 rem.
+ * The popup, on the one popup surface (R8, imported, not retyped: DS-18): as
+ * wide as the trigger (at least 13 rem, at most 24 rem or the room the window
+ * leaves), as tall as the room below or above it allows, up to 24 rem.
  */
 export const comboboxPopup = [
-  'flex min-h-0 flex-col overflow-hidden rounded-md border border-line bg-raised text-ink shadow-raised outline-none',
+  popupSurface,
+  'flex min-h-0 flex-col overflow-hidden outline-none',
   'w-(--anchor-width) min-w-52 max-w-(--available-width)',
   'max-h-(--available-height)',
 ].join(' ')

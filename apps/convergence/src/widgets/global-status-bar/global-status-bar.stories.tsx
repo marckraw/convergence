@@ -134,6 +134,7 @@ const meta = {
     meterSessions: [stories, overflow, release],
     runningCount: 3,
     attentionCount: 1,
+    attentionTone: 'warning',
     byProject,
     recency: {
       session: {
@@ -291,11 +292,57 @@ export const Failed: Story = {
   },
 }
 
+/**
+ * Only a failed run waits on you (ruling 6): it counts in "1 needs you", its
+ * project's chip and the count wear failure's tone, and the tooltip says
+ * "Failed".
+ */
+export const FailedWaits: Story = {
+  name: 'Failed waits',
+  args: {
+    runningCount: 1,
+    attentionCount: 1,
+    attentionTone: 'danger',
+    byProject: [
+      {
+        projectId: 'emergence',
+        projectName: 'emergence',
+        running: [release],
+        needsAttention: [
+          session({
+            id: 'migrate',
+            name: 'Migrate the settings store',
+            projectId: 'emergence',
+            status: 'failed',
+            attention: 'failed',
+          }),
+        ],
+        providerIds: ['codex', 'claude-code'],
+      },
+    ],
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(
+      canvas.getByRole('group', { name: 'Agents: 1 running, 1 needs you' }),
+    ).toBeInTheDocument()
+    const chip = canvas.getByRole('button', {
+      name: 'Switch to project emergence, 1 running, 1 failed run',
+    })
+    await userEvent.hover(chip)
+    const tooltip = await screen.findByRole('tooltip')
+    await expect(
+      within(tooltip).getByText('Migrate the settings store'),
+    ).toBeInTheDocument()
+    await expect(within(tooltip).getByText('· Failed')).toBeInTheDocument()
+  },
+}
+
 /** Nothing running anywhere: one quiet line. */
 export const Empty: Story = {
   args: {
     runningCount: 0,
     attentionCount: 0,
+    attentionTone: null,
     byProject: [],
     recency: null,
     meter: undefined,

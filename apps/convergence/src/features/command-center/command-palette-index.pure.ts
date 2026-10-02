@@ -178,7 +178,7 @@ export function buildPaletteIndex(
       : undefined
     const projectName =
       session.contextKind === 'global'
-        ? 'Convergence Chat'
+        ? 'Convergence chat'
         : (project?.name ?? '')
     const workspace = session.workspaceId
       ? (workspacesById.get(session.workspaceId) ?? null)

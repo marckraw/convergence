@@ -80,9 +80,10 @@ export const ForkComposer: FC<ForkComposerProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onPaste={onPaste}
-        // It grows with what's typed, to about 200 px, then scrolls (CONV-17).
+        // It grows with what's typed to nine lines, then scrolls: the
+        // composer's own card, so the composer's own limit (CONV-17).
         autoGrow
-        maxRows={8}
+        maxRows={9}
         placeholder={placeholder}
         disabled={disabled}
         rows={1}

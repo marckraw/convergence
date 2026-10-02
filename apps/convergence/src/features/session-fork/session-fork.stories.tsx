@@ -207,9 +207,12 @@ export const Summary: Story = {
   args: { strategy: 'summary' },
   play: async ({ args, userEvent }) => {
     const dialog = await openedDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create fork' }),
-    ).toBeDisabled()
+    // R2: Create stays reachable and says why it waits (DLG §4 13).
+    const create = within(dialog).getByRole('button', { name: 'Create fork' })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription(
+      'Generate the summary first.',
+    )
     await userEvent.click(
       within(dialog).getByRole('button', { name: 'Generate summary' }),
     )
@@ -299,15 +302,41 @@ export const Failed: Story = {
   },
 }
 
+/**
+ * Creating the fork failed: what failed over the buttons, and why on the
+ * line under it (R10, DLG-31).
+ */
+export const CreateFailed: Story = {
+  name: 'Create failed',
+  args: {
+    submitError: { reason: 'The branch fork/composer-focus already exists.' },
+  },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openedDialog()
+    const alert = within(dialog).getByRole('alert')
+    await expect(alert).toHaveTextContent('Couldn’t create the fork.')
+    await expect(
+      within(alert).getByText('The branch fork/composer-focus already exists.'),
+    ).toBeVisible()
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Create fork' }),
+    )
+    await expect(args.onConfirm).toHaveBeenCalledOnce()
+  },
+}
+
 /** A new workspace needs a branch name before Create. */
 export const NewWorkspace: Story = {
   name: 'New workspace',
   args: { workspaceMode: 'fork', workspaceBranchName: '' },
   play: async ({ args, userEvent }) => {
     const dialog = await openedDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create fork' }),
-    ).toBeDisabled()
+    // R2: Create stays reachable and says why it waits (DLG §4 13).
+    const create = within(dialog).getByRole('button', { name: 'Create fork' })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription(
+      'Name the new branch first.',
+    )
     await userEvent.type(
       within(dialog).getByPlaceholderText('fork/branch-name'),
       'f',

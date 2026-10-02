@@ -47,9 +47,12 @@ Chaperone checks it: a class string's third copy (`repeated-classes`) and a past
   is slow, unstyled and never shows on focus (105 of them); one label keeps what a screen reader
   says and what the eye reads the same.
 - **R3 · One size scale for every control**: `xs` 24, `sm` 28, `md` 32 (the default), `lg` 36 px.
-  Icon buttons are 24 in rows, chips and toolbars, 28 in headers and panels. Size is a prop,
-  never a className. Why: 264 Button heights were set by hand, and controls side by side line up
-  only on one scale.
+  Icon buttons are 24 in rows, chips and toolbars, 28 in headers and panels. The Button alone
+  has `xl`, 44 px, for a title you press, such as Loom's sheet titles and its folded strip
+  (Marcin, 2 Oct 2026). Size is a prop, never a className, and that holds for the words too:
+  Notice takes `size` (`sm` 12 px, `xs` 11 px) and the field frame `density="compact"` (12 px
+  words at any height) where a dense panel wants smaller print (Marcin, 2 Oct 2026). Why: 264
+  Button heights were set by hand, and controls side by side line up only on one scale.
 - **R4 · Small text is `text-2xs` (11 px) or `text-3xs` (10 px)**, today's two sizes, so nothing
   moves; an 11 px floor waits for the redesign. Why: 477 arbitrary `text-[10px]` and
   `text-[11px]` were these two sizes typed by hand.
@@ -82,13 +85,15 @@ Chaperone checks it: a class string's third copy (`repeated-classes`) and a past
   while they fit, and a list that loads needs a search.
 - **R10 · Words.** Sentence case for titles, labels and buttons. "…" (the character) on busy
   labels ("Saving…"), and on every item or button that opens a dialog or a confirmation. A
-  failure reads "Couldn't <verb> <thing>." with the reason under it (FormError, Notice). Refusing
+  failure reads "Couldn’t <verb> <thing>." with the typographic apostrophe and the reason under
+  it (FormError, Notice, `failureTitle`, `notify.failure`). Refusing
   an agent: "Deny" for a permission, "Decline" for a form or a link. A name is a constant in the
   feature that owns it. Product nouns keep their capital inside a sentence-case label, and only
-  these: Space, Artifact, Command Center ("Create Space…", "Add Artifact"); every other word is
-  sentence case. Why: the same states were worded many ways (27 busy labels swapped by
+  these: Space, Artifact, Command Center, Mission Control ("Create Space…", "Add Artifact",
+  "Show Mission Control"); every other word is sentence case, "attempt" included.
+  Why: the same states were worded many ways (27 busy labels swapped by
   hand), and "…" is how a control says more comes next; the list makes the capitals a decision,
-  not a habit (DLG-32).
+  not a habit (DLG-32; Mission Control and "attempt" by Marcin's ruling 7).
 - **R11 · A number from a design handoff maps to the nearest token** when it's built. A value with
   no token becomes a new token or a recorded exception; only an illustration's geometry stays
   numeric. Why: measured values typed as they came made sizes nothing else used.

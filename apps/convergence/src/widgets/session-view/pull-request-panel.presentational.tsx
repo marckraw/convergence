@@ -87,7 +87,7 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
         ) : null}
 
         {error ? (
-          <Notice tone="danger" title="Couldn't check the pull request">
+          <Notice tone="danger" title="Couldn’t check the pull request">
             {error}
           </Notice>
         ) : null}

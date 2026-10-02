@@ -42,7 +42,7 @@ export const LoomTitleView: FC<LoomTitleViewProps> = ({
     aria-expanded={open}
     aria-controls={open ? `loom-sheet-${sheet}` : undefined}
     onClick={onSelect}
-    size="lg"
+    size="xl"
     className={cn(
       LOOM_SHEET_TITLE_CLASS,
       open && LOOM_SHEET_TITLE_OPEN_CLASS,

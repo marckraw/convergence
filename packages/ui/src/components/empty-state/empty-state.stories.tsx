@@ -91,7 +91,7 @@ function CouldNotLoad() {
       <EmptyState
         state="failed"
         icon={CloudOff}
-        title="Couldn't load the skills"
+        title="Couldn’t load the skills"
         detail="The provider didn't answer."
         retrying={retrying}
         onRetry={() => setRetrying(true)}
@@ -108,7 +108,7 @@ export const Failed: Story = {
   render: () => <CouldNotLoad />,
   play: async ({ canvas, userEvent }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      "Couldn't load the skills",
+      'Couldn’t load the skills',
     )
     const retry = canvas.getByRole('button', { name: 'Try again' })
     await userEvent.click(retry)

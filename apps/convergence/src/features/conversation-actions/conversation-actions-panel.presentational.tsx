@@ -58,7 +58,7 @@ export const ConversationActionsPanel: FC<
     >
       <div className={styles.panelScroll}>
         <Button
-          size="sm"
+          size="lg"
           type="button"
           variant="ghost"
           role={isMenu ? 'menuitem' : undefined}

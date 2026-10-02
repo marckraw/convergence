@@ -26,6 +26,7 @@ export function ModelPickerDialog({
   disabled = false,
   triggerVariant = 'secondary',
   triggerSize = 'md',
+  triggerDensity = 'default',
   triggerClassName,
 }: ModelPickerDialogProps) {
   const [open, setOpen] = useState(false)
@@ -136,6 +137,7 @@ export function ModelPickerDialog({
       isDisabled={isDisabled}
       triggerVariant={triggerVariant}
       triggerSize={triggerSize}
+      triggerDensity={triggerDensity}
       triggerClassName={triggerClassName}
       inputRef={inputRef}
       onOpenChange={(nextOpen) => {

@@ -1,10 +1,14 @@
-import { cn } from '@convergence/ui'
+import { CardAction, cn } from '@convergence/ui'
 import { LoomSheetView } from './loom-sheet.presentational'
 import { LOOM_SHEET_ICONS, LOOM_SHEET_ICON_CLASS } from './loom-sheet.styles'
 import { LoomTitleView } from './loom-title.presentational'
 import { loomSheetCounts, loomSheetTitle } from './loom-sheets.pure'
 import { LOOM_SHEETS, LOOM_SHEET_NAMES } from './wave-panel-sheet.pure'
 import type { LoomStackProps } from './loom-stack.types'
+import {
+  LOOM_SHEET_TAB_CLASS,
+  LOOM_SHEET_TITLE_WIDE_CLASS,
+} from './wave-panel.styles'
 
 const icons = LOOM_SHEET_ICONS
 
@@ -60,35 +64,50 @@ export function LoomStackView({
                   }),
             }}
           >
-            <LoomTitleView
-              sheet={sheet}
-              title={title}
-              open={open}
-              onSelect={() => props.onSelectSheet(sheet)}
-              titleRef={props.titleRef}
-              className={cn(
-                'h-auto min-h-11 shrink-0 justify-start whitespace-normal rounded-xl border-0 px-3 py-3 text-xs',
-                wide && open && 'px-6 pt-5 text-sm',
-                wide &&
-                  !open &&
-                  'h-full flex-col justify-start gap-3 px-1 pt-5 text-center text-2xs',
-              )}
-            >
-              <Icon
-                aria-hidden="true"
-                className={cn('size-4 shrink-0', LOOM_SHEET_ICON_CLASS[sheet])}
-              />
-              {wide && !open ? (
-                <>
-                  <span>{LOOM_SHEET_NAMES[sheet]}</span>
-                  <span className="text-3xs leading-relaxed text-ink-muted">
-                    {title.split(' · ').slice(1).join(' · ')}
-                  </span>
-                </>
-              ) : (
-                <span>{title}</span>
-              )}
-            </LoomTitleView>
+            {wide && !open ? (
+              // A folded paper is pressed as a whole (MC-6): a CardAction
+              // whose hit area covers it, not a Button stretched to its height.
+              <CardAction
+                data-loom-sheet-title={sheet}
+                aria-label={title}
+                aria-expanded={false}
+                onClick={() => props.onSelectSheet(sheet)}
+                className={LOOM_SHEET_TAB_CLASS}
+              >
+                <Icon
+                  aria-hidden="true"
+                  className={cn(
+                    'size-4 shrink-0',
+                    LOOM_SHEET_ICON_CLASS[sheet],
+                  )}
+                />
+                <span>{LOOM_SHEET_NAMES[sheet]}</span>
+                <span className="text-3xs leading-relaxed text-ink-muted">
+                  {title.split(' · ').slice(1).join(' · ')}
+                </span>
+              </CardAction>
+            ) : (
+              // The title is the Button's 44 px xl in both shapes (ruling 9);
+              // expanded, it sits in from the paper's edge.
+              <div className={wide ? LOOM_SHEET_TITLE_WIDE_CLASS : 'shrink-0'}>
+                <LoomTitleView
+                  sheet={sheet}
+                  title={title}
+                  open={open}
+                  onSelect={() => props.onSelectSheet(sheet)}
+                  titleRef={props.titleRef}
+                >
+                  <Icon
+                    aria-hidden="true"
+                    className={cn(
+                      'size-4 shrink-0',
+                      LOOM_SHEET_ICON_CLASS[sheet],
+                    )}
+                  />
+                  <span className="min-w-0 truncate">{title}</span>
+                </LoomTitleView>
+              </div>
+            )}
             {open ? (
               <LoomSheetView
                 {...props}

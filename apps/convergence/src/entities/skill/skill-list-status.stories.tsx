@@ -54,7 +54,7 @@ export const Failed: Story = {
   },
   play: async ({ canvas }) => {
     const alert = canvas.getByRole('alert')
-    await expect(alert).toHaveTextContent("Couldn't load skills")
+    await expect(alert).toHaveTextContent('Couldn’t load skills')
     await expect(alert).toHaveTextContent('timed out after 10s')
   },
 }

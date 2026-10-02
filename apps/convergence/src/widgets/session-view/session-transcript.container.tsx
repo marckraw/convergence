@@ -776,7 +776,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                   {olderError && (
                     <>
                       <FormError className="shrink-0">
-                        Couldn't load earlier messages.
+                        Couldn’t load earlier messages.
                       </FormError>
                       <Tooltip label={olderError} when="truncated">
                         <span className="min-w-0 truncate">{olderError}</span>

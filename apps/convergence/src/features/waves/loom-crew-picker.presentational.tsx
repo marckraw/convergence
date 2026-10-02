@@ -40,7 +40,7 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
           // Expanded Loom's header is the window's drag strip (MAR-3284 R1):
           // the trigger, like every control of the kit, is app-no-drag.
           size="sm"
-          className="inline-flex max-w-full gap-1 px-2"
+          className="inline-flex max-w-full gap-1"
         >
           <SelectValue />
         </SelectTrigger>

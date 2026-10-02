@@ -28,7 +28,7 @@ function NoticeSheet() {
       <Notice
         tone="danger"
         icon={<CircleAlert />}
-        title="Couldn't save the project."
+        title="Couldn’t save the project."
       >
         The folder is read-only.
       </Notice>
@@ -58,7 +58,7 @@ export const Default: Story = {
     ])
     await expect(canvas.getAllByRole('status')).toHaveLength(3)
     const failed = canvas.getByRole('alert', {
-      name: "Couldn't save the project.",
+      name: 'Couldn’t save the project.',
     })
     await expect(getComputedStyle(failed).color).toBe(
       tokenColor('--danger-ink'),
@@ -96,7 +96,7 @@ function SaveForm() {
         <Notice
           tone="danger"
           icon={<CircleAlert />}
-          title="Couldn't save the project."
+          title="Couldn’t save the project."
         >
           The folder is read-only.
         </Notice>
@@ -112,7 +112,7 @@ export const Failed: Story = {
     await expect(canvas.queryByRole('alert')).toBeNull()
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }))
     const alert = canvas.getByRole('alert', {
-      name: "Couldn't save the project.",
+      name: 'Couldn’t save the project.',
     })
     await expect(alert).toHaveTextContent('The folder is read-only.')
   },
@@ -164,5 +164,57 @@ export const Dismissible: Story = {
     ).toHaveTextContent('Not now')
     await userEvent.keyboard('{Enter}')
     await expect(onDismiss).toHaveBeenCalledOnce()
+  },
+}
+
+/**
+ * Sizes (ruling 10): the body size (`md`, the default), 12 px (`sm`) for the
+ * composer's strip and Settings' dense rows, and 11 px (`xs`) for Mission
+ * Control's panels. The room around the words stays the same; a glyph sits
+ * on the first line at every size. Never a text size in its className.
+ */
+export const Sizes: Story = {
+  render: () => (
+    <div className="flex w-80 flex-col gap-2 rounded-md bg-canvas p-4">
+      <Notice tone="warning" icon={<TriangleAlert />} title="Body size, md." />
+      <Notice
+        tone="warning"
+        size="sm"
+        icon={<TriangleAlert />}
+        title="Compact, sm."
+      >
+        Twelve pixels, as the composer's notices are.
+      </Notice>
+      <Notice
+        tone="warning"
+        size="xs"
+        icon={<TriangleAlert />}
+        title="Smallest, xs."
+      >
+        Eleven pixels, as a Mission Control panel is.
+      </Notice>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const sizes = [
+      ['Body size, md.', 'md', '14px'],
+      ['Compact, sm.', 'sm', '12px'],
+      ['Smallest, xs.', 'xs', '11px'],
+    ] as const
+    for (const [name, size, px] of sizes) {
+      const notice = canvas.getByRole('alert', { name })
+      await expect(notice).toHaveAttribute('data-size', size)
+      await expect(getComputedStyle(notice).fontSize).toBe(px)
+      // The glyph sits on the title's line: their middles meet.
+      const middle = (element: Element) => {
+        const box = element.getBoundingClientRect()
+        return box.top + box.height / 2
+      }
+      const glyph = notice.querySelector('[aria-hidden]')!
+      const title = canvas.getByText(name)
+      await expect(Math.abs(middle(glyph) - middle(title))).toBeLessThanOrEqual(
+        1,
+      )
+    }
   },
 }

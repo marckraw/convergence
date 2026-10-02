@@ -39,7 +39,10 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('Runs on')).toBeVisible()
-    await userEvent.click(canvas.getByRole('combobox', { name: 'Local' }))
+    // Named by those words, its value in it (CONV N2).
+    const machine = canvas.getByRole('combobox', { name: 'Runs on' })
+    await expect(machine).toHaveTextContent('Local')
+    await userEvent.click(machine)
     await userEvent.click(
       await screen.findByRole('option', { name: 'grok-mac' }),
     )
@@ -150,7 +153,9 @@ export const Failed: Story = {
 export const Disabled: Story = {
   args: { disabled: true },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('combobox', { name: 'Local' })).toBeDisabled()
+    await expect(
+      canvas.getByRole('combobox', { name: 'Runs on' }),
+    ).toBeDisabled()
   },
 }
 

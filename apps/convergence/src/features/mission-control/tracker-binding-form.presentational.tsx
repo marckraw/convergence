@@ -128,7 +128,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           value={draft.projectId}
           disabled={busy}
           onChange={(event) => onDraftChange({ projectId: event.target.value })}
-          className="text-xs"
+          density="compact"
         />
         {boundProjectName === null ? null : (
           <FieldDescription className={LABEL} data-tracker-bound-project>
@@ -147,7 +147,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             onChange={(event) =>
               onDraftChange({ labelPrefix: event.target.value })
             }
-            className="text-xs"
+            density="compact"
           />
         </Field>
         <Field className="flex-1 gap-1">
@@ -160,7 +160,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             onChange={(event) =>
               onDraftChange({ wavePrefix: event.target.value })
             }
-            className="text-xs"
+            density="compact"
           />
         </Field>
       </div>
@@ -212,7 +212,8 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             value={keyDraft}
             disabled={busy}
             onChange={(event) => onKeyDraftChange(event.target.value)}
-            className="flex-1 text-xs"
+            density="compact"
+            className="flex-1"
           />
           <Button
             type="button"

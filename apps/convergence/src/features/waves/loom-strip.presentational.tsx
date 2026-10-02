@@ -162,6 +162,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
             data-loom-strip-sheet={sheet}
             aria-label={name}
             onClick={() => onSelectSheet(sheet)}
+            size="xl"
             className={LOOM_STRIP_SHEET_CLASS}
           >
             <Icon className={cn('size-3.5', LOOM_SHEET_ICON_CLASS[sheet])} />

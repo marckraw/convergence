@@ -1,7 +1,7 @@
 import { AlertCircle, KeyRound, LoaderCircle } from 'lucide-react'
 import { describeAccountHandoffRefusal } from '@/entities/provider-account'
 import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
-import { Button, Notice } from '@convergence/ui'
+import { Button, MetaLine, Notice } from '@convergence/ui'
 
 export type ComposerAccountNoticeState =
   | { kind: 'pending' | 'staged' }
@@ -25,17 +25,23 @@ export function ComposerAccountNotice({
       <Notice
         tone="danger"
         icon={<AlertCircle />}
-        title={`Not sent · ${describeAccountHandoffRefusal(refusal.stage)}`}
+        title={
+          // Its facts on a MetaLine (CONV-23).
+          <MetaLine wrap>
+            Not sent
+            {describeAccountHandoffRefusal(refusal.stage)}
+          </MetaLine>
+        }
         data-stage={refusal.stage}
         actions={
           onManageAccounts &&
           (refusal.stage === 'layout' || refusal.stage === 'missing-thread') ? (
             <Button type="button" variant="link" onClick={onManageAccounts}>
-              Manage accounts
+              Manage accounts…
             </Button>
           ) : undefined
         }
-        className="text-xs"
+        size="sm"
       >
         {refusal.message}
       </Notice>
@@ -46,7 +52,7 @@ export function ComposerAccountNotice({
       tone="info"
       icon={<LoaderCircle />}
       title="Switching accounts…"
-      className="text-xs"
+      size="sm"
     >
       Your message has not been accepted yet.
     </Notice>
@@ -55,7 +61,7 @@ export function ComposerAccountNotice({
       tone="info"
       icon={<KeyRound />}
       title="Your next turn will use the selected account."
-      className="text-xs"
+      size="sm"
     >
       Switching accounts restarts idle servers. Running work elsewhere on either
       account can block a switch. Your conversation is preserved.

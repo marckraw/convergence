@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
+import { reasonOf } from '@convergence/ui'
 import {
   resolveProviderSelection,
   sessionApi,
@@ -28,6 +29,7 @@ import {
 } from './session-fork.pure'
 import {
   MIN_TRANSCRIPT_ENTRIES_FOR_SUMMARY,
+  type ForkSubmitError,
   type PreviewState,
 } from './session-fork.types'
 
@@ -81,7 +83,7 @@ export const SessionForkDialogContainer: FC = () => {
   const [preview, setPreview] = useState<PreviewState>(EMPTY_PREVIEW)
   const [previewRequestId, setPreviewRequestId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<ForkSubmitError | null>(null)
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
     null,
   )
@@ -231,11 +233,8 @@ export const SessionForkDialogContainer: FC = () => {
       setSeedMarkdown(md)
       setSeedEdited(false)
     } catch (err) {
-      setPreview({
-        status: 'error',
-        message:
-          err instanceof Error ? err.message : 'Failed to extract summary',
-      })
+      // R10: the headline is the dialog's; this is only why (DLG-31).
+      setPreview({ status: 'error', message: reasonOf(err) })
     }
   }, [parent, previewFork, additionalInstruction, summarizerSelection])
 
@@ -374,9 +373,7 @@ export const SessionForkDialogContainer: FC = () => {
       attachmentDraft.clearDraft()
       closeDialog()
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : 'Failed to create fork',
-      )
+      setSubmitError({ reason: reasonOf(err) })
     } finally {
       setIsSubmitting(false)
     }

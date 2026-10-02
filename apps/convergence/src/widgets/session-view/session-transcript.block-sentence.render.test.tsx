@@ -170,7 +170,7 @@ describe('MAR-3395 CV3 the model sentence beside the facts', () => {
     await act(async () => {})
     expect(sentenceLine()).toBeNull()
     const props = {
-      label: 'Read 2 files in src/app',
+      label: ['Read 2 files in src/app'],
       memberCount: 4,
       open: false,
       working: false,

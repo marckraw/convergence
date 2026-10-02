@@ -514,7 +514,7 @@ describe('App', () => {
 
     const sidebar = getSidebarQueries()
 
-    expect(screen.queryByText('Convergence Chat')).not.toBeInTheDocument()
+    expect(screen.queryByText('Convergence chat')).not.toBeInTheDocument()
     expect(
       screen.getByText('Start a project-free agent conversation.'),
     ).toBeInTheDocument()
@@ -646,6 +646,84 @@ describe('App', () => {
       } else expect(indicator.querySelectorAll('span')).toHaveLength(1)
     },
   )
+
+  // Ruling 6 (NAV-32 N1): one fixture, one count. The rail, the status bar and
+  // Mission Control each said "N need you" over a different count; now each
+  // reads `needsYouSessions`. Mutation: count finished work, or drop the
+  // snooze, in any one of the three turns this red.
+  it('says the same "N need you" on the rail, the status bar and Mission Control', async () => {
+    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
+    const snoozed = makeSessionSummary({
+      id: 'snoozed',
+      name: 'Snoozed ask',
+      attention: 'needs-input',
+    })
+    mockElectronAPI.session.getAllSummaries.mockResolvedValue([
+      makeSessionSummary({
+        id: 'approval',
+        name: 'Asks approval',
+        status: 'running',
+        attention: 'needs-approval',
+      }),
+      makeSessionSummary({
+        id: 'input',
+        name: 'Asks input',
+        attention: 'needs-input',
+      }),
+      makeSessionSummary({
+        id: 'failed',
+        name: 'Failed run',
+        status: 'failed',
+        attention: 'failed',
+      }),
+      makeSessionSummary({ id: 'finished', name: 'Finished run' }),
+      makeSessionSummary({
+        id: 'unreachable',
+        name: 'Far run',
+        status: 'failed',
+        attention: 'host-unreachable',
+      }),
+      snoozed,
+    ])
+    mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValue({
+      snoozed: { updatedAt: snoozed.updatedAt, disposition: 'snoozed' },
+    })
+    Object.defineProperty(window, 'electronAPI', {
+      value: {
+        ...mockElectronAPI,
+        crew: { list: vi.fn(async () => []), onUpdated: vi.fn(() => vi.fn()) },
+        crewHail: {
+          listOpen: vi.fn(async () => []),
+          onUpdated: vi.fn(() => vi.fn()),
+        },
+        workLedger: {
+          list: vi.fn(async () => []),
+          onUpdated: vi.fn(() => vi.fn()),
+        },
+      },
+      writable: true,
+      configurable: true,
+    })
+
+    // Mission Control's room, with the sidebar and the status bar beside it.
+    render(<App mainViewRoute={{ kind: 'mission-control' }} />)
+    // Mission Control's subtitle.
+    expect(
+      await screen.findByText(/^\d+ sessions · 3 need you · \d+ running$/),
+    ).toBeInTheDocument()
+    // The status bar: the counts' group says it.
+    expect(
+      await screen.findByRole('group', {
+        name: 'Agents: 1 running, 3 need you',
+      }),
+    ).toBeInTheDocument()
+    // The rail.
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+    expect(
+      await screen.findByRole('button', { name: '3 need you' }),
+    ).toBeInTheDocument()
+  })
 
   describe('the collapsed rail and its peek (NAV-17, NAV-27)', () => {
     async function renderCollapsed() {

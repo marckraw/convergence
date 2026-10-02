@@ -1,7 +1,9 @@
 import type {
   ForkArtifacts,
+  ForkStrategy,
   ForkSummary,
   ConversationItem,
+  WorkspaceMode,
 } from '@/entities/session'
 
 const CHARS_PER_TOKEN_ESTIMATE = 4
@@ -34,6 +36,36 @@ export function computeSeedSizeWarning(
     windowTokens,
     percentage: Math.round(ratio * 100),
   }
+}
+
+/**
+ * Why "Create fork" can't go yet, or null when it can (R2, DLG §4 13): the
+ * button stays reachable and its tooltip says this. The checks run in the
+ * order the dialog is filled in, so the reason names the first thing left.
+ * Forking itself is the button's busy state, not a reason.
+ */
+export function forkConfirmBlockedReason(input: {
+  name: string
+  providerId: string
+  modelId: string
+  workspaceMode: WorkspaceMode
+  workspaceBranchName: string
+  strategy: ForkStrategy
+  previewReady: boolean
+  seedMarkdown: string
+  attachmentsValid: boolean
+}): string | null {
+  if (!input.name.trim()) return 'Name the fork first.'
+  if (!input.providerId || !input.modelId) return 'Pick a model first.'
+  if (input.workspaceMode === 'fork' && !input.workspaceBranchName.trim())
+    return 'Name the new branch first.'
+  if (input.strategy === 'summary') {
+    if (!input.previewReady) return 'Generate the summary first.'
+    if (!input.seedMarkdown.trim()) return 'The summary seed is empty.'
+  }
+  if (!input.attachmentsValid)
+    return 'Remove the attachments this model can’t read.'
+  return null
 }
 
 export const FORK_PROGRESS_SECONDARY_THRESHOLD_MS = 30_000

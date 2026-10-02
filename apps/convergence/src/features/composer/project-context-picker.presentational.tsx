@@ -3,12 +3,19 @@ import type { ProjectContextItem } from '@/entities/project-context'
 import {
   Badge,
   Button,
+  Card,
+  CardAction,
   cn,
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@convergence/ui'
-import { pickPopover, pickRowClass, pickRowDetail } from './pick-row.styles'
+import {
+  pickPopover,
+  pickRowAction,
+  pickRowClass,
+  pickRowDetail,
+} from './pick-row.styles'
 import { Check, FileText, Repeat } from 'lucide-react'
 
 interface ProjectContextPickerProps {
@@ -78,38 +85,43 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
           {items.map((item) => {
             const selected = selectedIds.includes(item.id)
             return (
-              <Button
+              <Card
                 key={item.id}
-                type="button"
-                variant="ghost"
-                aria-pressed={selected}
-                onClick={() => onToggleItem(item.id)}
-                size="lg"
+                interactive
+                padding="none"
                 className={pickRowClass(selected)}
               >
-                <span className="min-w-0 flex-1">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {itemLabel(item)}
+                <CardAction
+                  aria-pressed={selected}
+                  onClick={() => onToggleItem(item.id)}
+                  className={pickRowAction}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-medium">
+                        {itemLabel(item)}
+                      </span>
+                      {selected ? (
+                        <Check aria-hidden className="size-3.5" />
+                      ) : null}
+                      {item.reinjectMode === 'every-turn' ? (
+                        <Repeat
+                          aria-hidden
+                          className="size-3.5 shrink-0 text-warning-ink"
+                        />
+                      ) : null}
                     </span>
-                    {selected ? (
-                      <Check aria-hidden className="size-3.5" />
-                    ) : null}
-                    {item.reinjectMode === 'every-turn' ? (
-                      <Repeat
-                        aria-hidden
-                        className="size-3.5 shrink-0 text-warning-ink"
-                      />
-                    ) : null}
+                    <span className={pickRowDetail}>
+                      {bodyPreview(item.body)}
+                    </span>
+                    <Badge caps className="mt-2">
+                      {item.reinjectMode === 'every-turn'
+                        ? 'Every turn'
+                        : 'Boot'}
+                    </Badge>
                   </span>
-                  <span className={pickRowDetail}>
-                    {bodyPreview(item.body)}
-                  </span>
-                  <Badge caps className="mt-2">
-                    {item.reinjectMode === 'every-turn' ? 'Every turn' : 'Boot'}
-                  </Badge>
-                </span>
-              </Button>
+                </CardAction>
+              </Card>
             )
           })}
         </div>

@@ -18,24 +18,30 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** A plain crew: nothing pressed, and no "no accent" control to offer. */
+/**
+ * A plain crew: each row is a radio group of swatches (R9), "none" chosen in
+ * both, and a pick reports the choice.
+ */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    const emoji = canvas.getByRole('group', { name: 'Crew emoji' })
+    const emoji = canvas.getByRole('radiogroup', { name: 'Crew emoji' })
+    await expect(
+      within(emoji).getByRole('radio', { name: 'No emoji' }),
+    ).toBeChecked()
     await userEvent.click(
-      within(emoji).getByRole('button', { name: 'Emoji 🐎' }),
+      within(emoji).getByRole('radio', { name: 'Emoji 🐎' }),
     )
     await expect(args.onEmojiChange).toHaveBeenCalledWith('🐎')
-    const accent = canvas.getByRole('group', { name: 'Crew accent color' })
-    await userEvent.click(
-      within(accent).getByRole('button', { name: 'Violet' }),
-    )
+    const accent = canvas.getByRole('radiogroup', {
+      name: 'Crew accent color',
+    })
+    await expect(
+      within(accent).getByRole('radio', { name: 'No accent color' }),
+    ).toBeChecked()
+    await userEvent.click(within(accent).getByRole('radio', { name: 'Violet' }))
     await expect(args.onAccentColorChange).toHaveBeenCalledWith(
       crewTokens.violet,
     )
-    await expect(
-      canvas.queryByRole('button', { name: 'No accent color' }),
-    ).toBeNull()
   },
 }
 
@@ -45,23 +51,28 @@ export const Dark: Story = {
 }
 
 /**
- * A decorated crew: the choices are pressed, picking one again clears it,
- * and the accent can be taken off outright.
+ * A decorated crew: its choices are checked, in R7's chosen look (the raised
+ * chip, never a ring or a scale: ruling 11), and "none" takes them off.
  */
 export const Busy: Story = {
   args: { emoji: '🛰️', accentColor: crewTokens.blue },
   play: async ({ args, canvas, userEvent }) => {
-    const satellite = canvas.getByRole('button', { name: 'Emoji 🛰️' })
-    await expect(satellite).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(satellite)
+    const satellite = canvas.getByRole('radio', { name: 'Emoji 🛰️' })
+    await expect(satellite).toBeChecked()
+    await expect(getComputedStyle(satellite).boxShadow).not.toBe('none')
+    await userEvent.click(canvas.getByRole('radio', { name: 'No emoji' }))
     await expect(args.onEmojiChange).toHaveBeenCalledWith(null)
-    await expect(canvas.getByRole('button', { name: 'Blue' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    const blue = canvas.getByRole('radio', { name: 'Blue' })
+    await expect(blue).toBeChecked()
+    await expect(getComputedStyle(blue).transform).toBe('none')
     await userEvent.click(
-      canvas.getByRole('button', { name: 'No accent color' }),
+      canvas.getByRole('radio', { name: 'No accent color' }),
     )
     await expect(args.onAccentColorChange).toHaveBeenCalledWith(null)
   },
+}
+
+export const BusyDark: Story = {
+  ...Busy,
+  globals: { theme: 'dark' },
 }

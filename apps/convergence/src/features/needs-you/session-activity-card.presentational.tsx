@@ -8,7 +8,14 @@ import {
   Server,
 } from 'lucide-react'
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { Card, CardAction, cn, Spinner, Tooltip } from '@convergence/ui'
+import {
+  Card,
+  CardAction,
+  cn,
+  Spinner,
+  Timestamp,
+  Tooltip,
+} from '@convergence/ui'
 import { ProviderIcon, resolveProviderIcon } from '@/entities/provider'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
 import { NeedsYouCardStatus } from './needs-you-card-status.presentational'
@@ -35,7 +42,8 @@ interface SessionActivityCardProps {
  * It is the kit's Card, its door a CardAction stretched over the whole card
  * (MC-2, MC-12): one tab stop, the kit's focus ring round the card, and the
  * card's other controls raised above the door. Its surface stays its own:
- * the provider's wash and its hover (needs-you-card.css), and its ring.
+ * the provider's wash and its hover (needs-you-card.css); selected, it wears
+ * the Card's fill (R7).
  */
 export function SessionActivityCard({
   card,
@@ -58,8 +66,9 @@ export function SessionActivityCard({
     <Card
       render={<article />}
       interactive
-      // The open conversation: aria-current on the door. Its look is the
-      // ring below, not the selected fill, which the wash keeps out (R0).
+      // The open conversation, as R7 marks a selected row: aria-current on
+      // the door and the Card's selected fill, never a ring of its own
+      // (ruling 11).
       selected={active}
       padding="none"
       data-pulse={pulsing ? 'true' : undefined}
@@ -72,8 +81,11 @@ export function SessionActivityCard({
         } as CSSProperties
       }
       className={cn(
-        'needs-you-card flex min-w-0 flex-wrap items-start border-0 bg-(--needs-you-card-surface) shadow-control ring-1 ring-line-soft hover:bg-(--needs-you-card-hover)',
-        active && 'ring-ink/25',
+        'needs-you-card flex min-w-0 flex-wrap items-start border-0 shadow-control ring-1 ring-line-soft',
+        // Its wash and its hover; selected, the Card's fill instead, held
+        // under the pointer as a selected row's is.
+        !active &&
+          'bg-(--needs-you-card-surface) hover:bg-(--needs-you-card-hover)',
       )}
     >
       <div className="min-w-0 flex-1 p-2 text-left">
@@ -186,13 +198,19 @@ export function SessionActivityCard({
                 <time dateTime={session.executionHostLastEventAt ?? undefined}>
                   {card.hostLiveness}
                 </time>
-              ) : (
+              ) : card.lastMovedAt ? (
                 <>
+                  {/* Timestamp's relative words, the whole moment in its
+                      tooltip, on the feed's clock (MC-27). */}
                   Last moved{' '}
-                  <time dateTime={session.updatedAt} className="tabular-nums">
-                    {card.lastMoved}
-                  </time>
+                  <Timestamp
+                    date={card.lastMovedAt}
+                    format="relative"
+                    now={new Date(card.now)}
+                  />
                 </>
+              ) : (
+                'Time not recorded'
               )}
             </span>
           </div>

@@ -119,7 +119,7 @@ export const Disabled: Story = {
 /** Failed: the last save's error is announced over Done. */
 export const Failed: Story = {
   args: {
-    error: "Couldn't save the project settings. The database is locked.",
+    error: 'Couldn’t save the project settings. The database is locked.',
   },
   play: async () => {
     const dialog = await openDialog()

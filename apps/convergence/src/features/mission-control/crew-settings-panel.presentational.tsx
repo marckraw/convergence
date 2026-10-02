@@ -448,7 +448,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               data-seat-group={group.role}
               className="flex flex-col gap-1"
             >
-              <SectionLabel as="h4" size="sm">
+              {/* Under "Seats" (h4): a rank down, so each rank has one size
+                  (MC-13). */}
+              <SectionLabel as="h5" size="sm">
                 {group.title} {group.count}
               </SectionLabel>
               <ul className="flex flex-col gap-1">
@@ -472,7 +474,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               value={crewName}
               disabled={busy}
               onChange={(event) => onCrewNameChange(event.target.value)}
-              className="text-xs"
+              density="compact"
             />
           </Field>
 
@@ -503,7 +505,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onDeliveryLimitChange(readLimit(event.target.value))
                 }
-                className="w-16 text-xs"
+                density="compact"
+                className="w-16"
               />
               <span className="text-2xs text-ink-muted">per run</span>
             </Field>
@@ -524,7 +527,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onAttentionMinutesChange(readLimit(event.target.value))
                 }
-                className="w-16 text-xs"
+                density="compact"
+                className="w-16"
               />
               <span className="text-2xs text-ink-muted">minutes</span>
             </Field>
@@ -546,7 +550,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 onChange={(event) =>
                   onLapCapChange(readLimit(event.target.value))
                 }
-                className="w-16 text-xs"
+                density="compact"
+                className="w-16"
               />
               <span className="text-2xs text-ink-muted">per issue</span>
             </Field>
@@ -615,7 +620,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
 
           <Notice
             title="A run can contain several laps"
-            className="text-2xs text-ink"
+            size="xs"
+            className="text-ink"
           >
             <span className="text-3xs text-ink-muted">
               Correction laps stay in the same run until a human handoff. The

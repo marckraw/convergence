@@ -1,7 +1,8 @@
 import { isLocalExecutionHost } from '@/entities/execution-host'
 import { resolveProviderIcon } from '@/entities/provider'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
-import { NEEDS_YOU } from './needs-you-words.pure'
+import { waitsOnYou } from './needs-you-sessions.pure'
+import { WAITING_ON_YOU } from './needs-you-words.pure'
 import {
   feedOrders,
   sortFeedCards,
@@ -25,7 +26,7 @@ export type FeedGroup = { title: string; cards: NeedsYouCardModel[] }
  */
 export const FEED_SECTIONS = [
   { title: 'Pinned', source: 'Pinned' },
-  { title: NEEDS_YOU, source: 'Waiting on you' },
+  { title: WAITING_ON_YOU, source: 'Waiting on you' },
   { title: 'Review', source: 'Needs review' },
   { title: 'Working', source: 'Working' },
   { title: 'Errands with a PR', source: 'Errands with a PR' },
@@ -55,15 +56,13 @@ function providerValue(card: NeedsYouCardModel): string {
 function hostValue(card: NeedsYouCardModel): FeedHost {
   return isLocalExecutionHost(card.session.executionHost) ? 'local' : 'remote'
 }
-/** Interpret attention without promoting unknown or acknowledged work to an action. */
+/**
+ * Interpret attention without promoting unknown or acknowledged work to an
+ * action. What waits on you is what "N need you" counts (ruling 6), read by
+ * the same predicate, so the filter's number and the rail's agree.
+ */
 function activityValue(card: NeedsYouCardModel): ActivityFilter | null {
-  if (
-    !card.dismissed &&
-    (card.attentionGroup === 'Waiting on you' ||
-      card.session.attention === 'failed' ||
-      card.session.status === 'failed')
-  )
-    return 'needs-me'
+  if (!card.dismissed && waitsOnYou(card.session)) return 'needs-me'
   if (card.working) return 'working'
   if (!card.dismissed && card.attentionGroup === 'Needs review') return 'review'
   return null
@@ -148,7 +147,7 @@ export function buildFeedView(source: FeedGroup[], view: FeedView) {
     const title = card.session.pinnedAt
       ? 'Pinned'
       : activity === 'needs-me'
-        ? NEEDS_YOU
+        ? WAITING_ON_YOU
         : activity === 'working'
           ? 'Working'
           : activity === 'review'

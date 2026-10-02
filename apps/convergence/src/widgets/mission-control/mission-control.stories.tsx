@@ -74,9 +74,18 @@ export const Default: Story = {
     // The top strip drags the window (NAV-4); its controls keep their clicks.
     const region = (element: Element) =>
       getComputedStyle(element).getPropertyValue('-webkit-app-region')
+    const header = canvasElement.querySelector<HTMLElement>(
+      '[data-mission-control-header]',
+    )!
+    await expect(region(header)).toBe('drag')
+    // One 48 px row and its line, where the sidebar draws its own (NAV F1):
+    // the search and the filters are the toolbar under it, not inside.
+    await expect(header.getBoundingClientRect().height).toBe(49)
     await expect(
-      region(canvasElement.querySelector('[data-mission-control-header]')!),
-    ).toBe('drag')
+      header.contains(
+        canvas.getByRole('searchbox', { name: 'Search session cards' }),
+      ),
+    ).toBe(false)
     await expect(region(canvas.getByRole('radio', { name: 'Canvas' }))).toBe(
       'no-drag',
     )
@@ -125,7 +134,7 @@ export const Order: Story = {
 export const Empty: Story = {
   args: { totalCount: 0, visibleCount: 0, attentionCount: 0, runningCount: 0 },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('no sessions')).toBeVisible()
+    await expect(canvas.getByText('No sessions')).toBeVisible()
     await expect(canvas.getByText('No sessions yet')).toBeVisible()
     await expect(
       canvas.queryByRole('list', { name: 'Session cards' }),

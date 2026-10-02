@@ -357,7 +357,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-sm font-medium">
-                      {editingArtifactId ? 'Edit artifact' : 'Add artifact'}
+                      {editingArtifactId ? 'Edit Artifact' : 'Add Artifact'}
                     </h2>
                     <p className="mt-1 text-sm text-ink-muted">
                       Promoted outputs worth keeping with this Space.
@@ -517,7 +517,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     ) : (
                       <Plus aria-hidden />
                     )}
-                    {editingArtifactId ? 'Save artifact' : 'Add artifact'}
+                    {editingArtifactId ? 'Save Artifact' : 'Add Artifact'}
                   </Button>
                   {editingArtifactId ? (
                     <Button variant="ghost" onClick={onCancelArtifactEdit}>
@@ -561,7 +561,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                             {spaceArtifactStatusLabels[artifact.status]}
                           </StatusPill>
                           <IconButton
-                            label={`Edit artifact ${artifact.label}`}
+                            label={`Edit Artifact ${artifact.label}`}
                             variant="quiet"
                             size="sm"
                             onClick={() => onEditArtifact(artifact)}
@@ -583,8 +583,8 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                 </div>
               ) : (
                 <EmptyState
-                  title="No artifacts yet"
-                  detail="Add a manual artifact or copy a file-backed artifact into this Space."
+                  title="No Artifacts yet"
+                  detail="Add a manual Artifact or copy a file-backed Artifact into this Space."
                 />
               )}
             </TabsPanel>
