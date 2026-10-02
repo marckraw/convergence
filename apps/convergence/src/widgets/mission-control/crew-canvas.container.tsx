@@ -1,7 +1,7 @@
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { type LocalRepositoryState } from '@/entities/execution-host'
 import { resolveConnectionWorkAddress } from '@/features/mission-control'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { projectOpenApi } from '@/entities/project-open'
 import {
   useCallback,
@@ -1503,7 +1503,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         includePositions,
       })
       if (!result) return
-      toast.success('Crew exported', {
+      notify.success('Crew exported', {
         description: result.path,
         action: {
           label: 'Reveal',
@@ -1518,16 +1518,15 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
             )
             void projectOpenApi
               .open({ appId: 'finder', path: directory })
-              .catch((error) => toast.error(String(error)))
+              .catch((error: unknown) =>
+                notify.failure('reveal the export in Finder', error),
+              )
           },
         },
       })
       closePanel()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      toast.error('Could not export crew', {
-        description: message,
-      })
+      notify.failure('export the crew', error)
     } finally {
       setExporting(false)
     }

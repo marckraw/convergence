@@ -1,5 +1,10 @@
-export const stripFactClass =
-  'rounded-md border border-line-soft px-1.5 py-0.5 text-2xs font-medium text-ink'
+/**
+ * The machine or the place, once settled: a quiet label Badge (CONV-18),
+ * outlined, at the strip's own 11 px, the scale Marcin ruled quiet
+ * (MAR-2642) and composer.container.test.tsx pins. The composer's Execution
+ * Bar wears the same one.
+ */
+export const stripFactClass = 'text-2xs'
 
 export const stripInputClass =
   'w-40 border-line-soft px-1.5 text-2xs shadow-none'

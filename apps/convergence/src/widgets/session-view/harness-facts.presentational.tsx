@@ -62,9 +62,10 @@ export function HarnessFactsSections({
           section below is that same title, so there is still one (CH4 E). */}
       {!init && <h3 className="font-medium">Harness</h3>}
       {error ? (
-        <div role="alert">
-          {error}{' '}
-          <Button variant="ghost" onClick={onRetry}>
+        // R10: what failed, the reason under it, and one Retry (CONV-7).
+        <div className="flex flex-col items-start gap-1">
+          <FormError detail={error}>Couldn't read the harness facts.</FormError>
+          <Button variant="link" onClick={onRetry}>
             Retry
           </Button>
         </div>

@@ -17,6 +17,7 @@ import {
   DialogTrigger,
   SectionLabel,
 } from '@convergence/ui'
+import { RELEASE_NOTES_TITLE } from '@/entities/updates'
 import { Markdown } from '@/shared/ui/markdown.container'
 
 export interface ReleaseHistoryPageItem {
@@ -54,7 +55,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
       {/* A dialog you read and leave: no footer, its ✕ the way out (R6). */}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>About Convergence</DialogTitle>
+          <DialogTitle>{RELEASE_NOTES_TITLE}</DialogTitle>
           <DialogDescription>
             Version {bundle.currentVersion}
             {latest?.date

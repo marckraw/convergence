@@ -186,12 +186,12 @@ export const Busy: Story = {
 export const Failed: Story = {
   args: {
     facts: null,
-    error: 'Could not read harness facts: the session database is locked.',
+    error: 'The session database is locked.',
   },
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'the session database is locked',
-    )
+    const alert = canvas.getByRole('alert')
+    await expect(alert).toHaveTextContent("Couldn't read the harness facts.")
+    await expect(alert).toHaveTextContent('The session database is locked.')
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
     await expect(args.onRetry).toHaveBeenCalledOnce()
   },

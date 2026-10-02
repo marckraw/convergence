@@ -106,6 +106,9 @@ mapping in its message is the DS5 codemod's table
 | `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
 | `no-buttons-as-rows`      | `h-auto` in a `<Button>`'s or `<IconButton>`'s `className`: a button stretched so more lines fit, as a row or a card                                                                                                                       | `ListRow` for a row, `Card` with a `CardAction` for a box that opens, `ChoiceCard` for an option with a sentence, a link Button for words                                                    | DS-21       |
+| `use-notify`              | an import of `sonner` (its `toast`, its `Toaster`, or a type) anywhere in the app, tests too                                                                                                                                               | `notify` from `@convergence/ui`: `notify.failure("update Codex", error)` reads "Couldn’t update Codex." with the reason under it (R10); `toast` for the rest                                 | DS-8        |
+| `use-section-label`       | a hand-typed eyebrow: `uppercase` and a `tracking-…` utility in one class string (a `className`, an argument to `cn`, a `*.styles.ts` constant), in the app                                                                                | `SectionLabel` (`size="sm"` for the 10 px step, `as="h3"` when it names a section), or `sectionLabel` / `sectionLabelVariants({ size })` where the element can't be one                      | DS-20       |
+| `use-badge-caps`          | `uppercase` in a `<Badge>`'s `className`                                                                                                                                                                                                   | Badge's `caps`: one look for a kind or a short state in capitals                                                                                                                             | DLG         |
 
 A regex reads text, not code, so it sees only what's written where it looks: a size override kept
 in a `*.styles.ts` constant passes `use-button-sizes`, and `repeated-classes` is what catches that
@@ -126,6 +129,21 @@ picture, two section titles and "New workspace" are link Buttons, which have no 
 "Forked from" is one line on the 28 px Button. Like `use-button-sizes`, it reads only the tag: an
 `h-auto` kept in a `*.styles.ts` constant, or handed to a component that passes it on to a Button,
 is out of its reach.
+
+`use-notify` is the one rule here that reads imports rather than text: a `forbidden-import` rule
+(the type Chaperone's import rules use), so a comment or a string that names `sonner` is not an
+import, and a type import counts too (`includeTypeImports`). Ruling 2 (2 Oct 2026) moved the
+toasts onto the design system: `Toaster` draws each one on the popup surface with its kind in R1's
+tones, and `notify` words a failure as R10 does, so a toast raised from `sonner` itself would skip
+both. Tests count too, unlike the regex rules': a test mocks `notify` from `@convergence/ui`, and a
+`vi.mock('sonner')` under it is not an import.
+
+`use-section-label` reads one class string at a time, wherever it is written, so a constant handed
+to an element is seen as well as a `className`; an eyebrow split across two strings is not. A
+Badge's capitals are `caps`, which `use-badge-caps` asks for: it reads the Badge's tag past a glyph
+handed in a prop (`icon={<CheckCircle2 />}`), whose `/>` would otherwise end it. Both came with
+DS6's labels sweep (MAR-3608), which brought each to zero first; their canary is
+`features/skill-tags/skill-tags.presentational.tsx`.
 
 ## 3. A raw element needs a reason
 
@@ -272,9 +290,12 @@ Streamdown name.
 | `app-parts-have-stories`     | `design-system-drift.json`      | error    |
 | `stories-titled-by-group`    | `design-system-drift.json`      | error    |
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
+| `use-notify`                 | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
 | `no-buttons-as-rows`         | `design-system-drift.json`      | error    |
+| `use-section-label`          | `design-system-drift.json`      | error    |
+| `use-badge-caps`             | `design-system-drift.json`      | error    |
 
 A rule is never relaxed to reach zero, and never turned back into a warning to let a change
 through. When one fires, fix what it found ([When one fires](#when-one-fires)). When it can't be

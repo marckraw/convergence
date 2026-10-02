@@ -17,7 +17,8 @@ export function renderScopeChip(scope: SkillScope): ReactNode {
   const origin = SKILL_ORIGIN_META[scopeOrigin(scope)]
   return (
     <Badge
-      className="font-medium uppercase"
+      caps
+      className="font-medium"
       icon={<span className={cn('size-1.5 rounded-full', origin.dotClass)} />}
     >
       {SCOPE_LABELS[scope]}
@@ -28,11 +29,11 @@ export function renderScopeChip(scope: SkillScope): ReactNode {
 /** Enabled or disabled, as a state (R1). */
 export function renderStatusBadge(enabled: boolean): ReactNode {
   return enabled ? (
-    <Badge tone="success" icon={<CheckCircle2 />} className="uppercase">
+    <Badge tone="success" icon={<CheckCircle2 />} caps>
       Enabled
     </Badge>
   ) : (
-    <Badge icon={<XCircle />} className="uppercase">
+    <Badge icon={<XCircle />} caps>
       Disabled
     </Badge>
   )
@@ -59,7 +60,7 @@ export function renderWarningBadge(count: number): ReactNode {
 }
 
 export function renderProviderChip(name: string): ReactNode {
-  return <Badge className="uppercase">{name}</Badge>
+  return <Badge caps>{name}</Badge>
 }
 
 export function skillIsDuplicate(skill: SkillCatalogEntry): boolean {

@@ -25,9 +25,11 @@ type Story = StoryObj<typeof meta>
 /** A different account is chosen for the next turn. */
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Your next turn will use the selected account.',
-    )
+    await expect(
+      canvas.getByRole('status', {
+        name: 'Your next turn will use the selected account.',
+      }),
+    ).toHaveTextContent('Your conversation is preserved.')
   },
 }
 
@@ -35,8 +37,9 @@ export const Default: Story = {
 export const Busy: Story = {
   args: { notice: { kind: 'pending' } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Switching accounts… Your message has not been accepted yet.',
+    const status = canvas.getByRole('status', { name: 'Switching accounts…' })
+    await expect(status).toHaveTextContent(
+      'Your message has not been accepted yet.',
     )
   },
 }

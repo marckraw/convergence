@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import {
   isAutomaticallyUpdatable,
   useProviderUpdatesStore,
@@ -29,7 +29,7 @@ export function ProviderUpdatesToastContainer() {
 
   useEffect(() => {
     if (outdatedProviders.length === 0) {
-      toast.dismiss(AVAILABLE_TOAST_ID)
+      notify.dismiss(AVAILABLE_TOAST_ID)
       lastAvailableKeyRef.current = null
       return
     }
@@ -42,7 +42,7 @@ export function ProviderUpdatesToastContainer() {
 
     const first = outdatedProviders[0]!
     const multiple = outdatedProviders.length > 1
-    toast.info(
+    notify.info(
       multiple
         ? `${outdatedProviders.length} provider updates available`
         : `Provider update available — ${first.name} ${first.update.latestVersion}`,
@@ -60,25 +60,25 @@ export function ProviderUpdatesToastContainer() {
             else void updateProvider(first.id)
           },
         },
-        cancel: {
+        secondaryAction: {
           label: 'Providers',
           onClick: () => openDialog('providers'),
         },
-        duration: Infinity,
+        persistent: true,
       },
     )
   }, [openDialog, outdatedProviders, updateAllOutdated, updateProvider])
 
   useEffect(() => {
     if (!updatingProviderId) {
-      toast.dismiss(UPDATING_TOAST_ID)
+      notify.dismiss(UPDATING_TOAST_ID)
       return
     }
 
     const provider = statuses.find((item) => item.id === updatingProviderId)
-    toast.loading(`Updating ${provider?.name ?? updatingProviderId}…`, {
+    notify.loading(`Updating ${provider?.name ?? updatingProviderId}…`, {
       id: UPDATING_TOAST_ID,
-      duration: Infinity,
+      persistent: true,
     })
   }, [statuses, updatingProviderId])
 
@@ -86,12 +86,11 @@ export function ProviderUpdatesToastContainer() {
     if (!lastResult) return
 
     if (lastResult.ok) {
-      toast.success(`${lastResult.providerName} updated`, {
+      notify.success(`${lastResult.providerName} updated`, {
         description: 'New sessions will use the refreshed provider.',
       })
     } else {
-      toast.error(`Could not update ${lastResult.providerName}`, {
-        description: lastResult.error ?? 'Provider update failed.',
+      notify.failure(`update ${lastResult.providerName}`, lastResult.error, {
         action: {
           label: 'Providers',
           onClick: () => openDialog('providers'),

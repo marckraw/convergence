@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { FC } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
@@ -39,9 +39,10 @@ export const SessionIntentDialogContainer: FC<
   const handleSelectTerminal = useCallback(async () => {
     if (creating) return
     if (!activeProject) {
-      toast.error('Couldn’t create the session.', {
-        description: 'No project is open. Open a project first.',
-      })
+      notify.failure(
+        'create the session',
+        'No project is open. Open a project first.',
+      )
       closeDialog()
       return
     }
@@ -60,9 +61,7 @@ export const SessionIntentDialogContainer: FC<
       onSelectCodeSession?.(session.id)
     } catch (err) {
       // R10: what failed, then why, underneath.
-      toast.error('Couldn’t create the terminal session.', {
-        description: err instanceof Error ? err.message : undefined,
-      })
+      notify.failure('create the terminal session', err)
     } finally {
       setCreating(false)
     }

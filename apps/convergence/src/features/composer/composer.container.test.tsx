@@ -1788,9 +1788,13 @@ describe('ComposerContainer', () => {
       expect(classTokens(label)).toContain('text-ink-muted')
 
       // The machine governs every turn above it and is still 11px. That is the
-      // reading that was heard and declined, held in place.
-      const fact = screen.getByText('Removed endpoint (daemon-b)')
-      expect(textSizeClasses(fact)).toEqual([STRIP_TEXT_SIZE_CLASS])
+      // reading that was heard and declined, held in place. The fact is a
+      // label Badge (CONV-18), so its scale is the Badge's own element's.
+      const fact = screen
+        .getByText('Removed endpoint (daemon-b)')
+        .closest('[data-slot="badge"]')
+      expect(fact).not.toBeNull()
+      expect(textSizeClasses(fact!)).toEqual([STRIP_TEXT_SIZE_CLASS])
 
       // The one exception, and an exception in colour alone: a session that
       // will refuse to run is a live signal, not context.
@@ -3277,18 +3281,23 @@ describe('ComposerContainer', () => {
       render(<ComposerContainer context={handoffContext} />)
       fireEvent.click(await screen.findByText('a@example.com'))
       fireEvent.click(screen.getByText('b@example.com'))
-      const explanation =
-        /Your next turn will use the selected account\. Switching accounts restarts idle servers/
-      expect(screen.getByText(explanation)).toBeVisible()
+      const explanation = () =>
+        screen.queryByRole('status', {
+          name: 'Your next turn will use the selected account.',
+        })
+      expect(explanation()).toBeVisible()
+      expect(explanation()).toHaveTextContent(
+        'Switching accounts restarts idle servers.',
+      )
       expect(screen.getByTestId('composer-root')).toContainElement(
-        screen.getByText(explanation),
+        explanation(),
       )
       const textbox = screen.getByPlaceholderText('Send a follow-up...')
       fireEvent.change(textbox, { target: { value: 'queued for B' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
       await waitFor(() => expect(textbox).toHaveValue(''))
       // Queue acceptance is not evidence that B served a turn.
-      expect(screen.getByText(explanation)).toBeVisible()
+      expect(explanation()).toBeVisible()
       const turn = {
         id: 'turn-b',
         sessionId: 'session-1',
@@ -3304,7 +3313,7 @@ describe('ComposerContainer', () => {
       act(() =>
         turnDeltaListener?.({ kind: 'turn.add', sessionId: 'session-1', turn }),
       )
-      expect(screen.queryByText(explanation)).not.toBeInTheDocument()
+      expect(explanation()).not.toBeInTheDocument()
       // An externally dispatched A turn becomes the source without reopening.
       act(() =>
         turnDeltaListener?.({
@@ -3318,7 +3327,7 @@ describe('ComposerContainer', () => {
           },
         }),
       )
-      expect(screen.getByText(explanation)).toBeVisible()
+      expect(explanation()).toBeVisible()
     })
 
     it.each([false, true])(
@@ -3367,12 +3376,13 @@ describe('ComposerContainer', () => {
         await waitFor(() => expect(send).toHaveBeenCalledOnce())
         expect(textbox).toHaveValue('Continue on B with my draft')
         expect(textbox).toBeDisabled()
-        expect(
-          screen.getByText(/Switching accounts… Your message has not/),
-        ).toBeInTheDocument()
-        expect(screen.getByTestId('composer-root')).toContainElement(
-          screen.getByText(/Switching accounts… Your message has not/),
+        const switching = screen.getByRole('status', {
+          name: 'Switching accounts…',
+        })
+        expect(switching).toHaveTextContent(
+          'Your message has not been accepted yet.',
         )
+        expect(screen.getByTestId('composer-root')).toContainElement(switching)
         expect(
           screen.getByRole('combobox', { name: 'b@example.com' }),
         ).toBeDisabled()

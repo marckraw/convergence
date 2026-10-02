@@ -1,4 +1,4 @@
-import { ChevronRight, Pin } from 'lucide-react'
+import { Pin } from 'lucide-react'
 import {
   cardStateTone,
   foldedSectionSummary,
@@ -6,7 +6,12 @@ import {
   type NeedsYouCardModel,
   type NeedsYouCardProps,
 } from '@/features/needs-you'
-import { Button, cn } from '@convergence/ui'
+import {
+  cn,
+  Collapsible,
+  CollapsiblePanel,
+  SectionHeader,
+} from '@convergence/ui'
 import { FoldedGlyphs } from './needs-you-fold-glyphs.presentational'
 import { FoldedLine } from './needs-you-fold-line.presentational'
 export interface NeedsYouSectionProps {
@@ -44,62 +49,57 @@ export function NeedsYouSection({
       data-section-kind={pinned ? 'pinned' : undefined}
       className={cn(pinned && 'border-l-2 border-ink/40 pl-2')}
     >
-      <div className="mb-1.5">
-        <h2
-          className={cn(
-            'flex items-center gap-1.5 text-2xs font-medium',
-            pinned ? 'text-ink' : 'text-ink-muted',
+      {/* The kit's section head (NAV-12): its words open and close the
+          cards, and a folded one keeps its glyphs beside its name. */}
+      <Collapsible open={!folded} onOpenChange={() => onToggleFold?.(title)}>
+        <div className="mb-1.5">
+          <SectionHeader
+            collapsible
+            className={cn(pinned && 'text-ink')}
+            label={
+              <>
+                {pinned && (
+                  <Pin
+                    aria-hidden="true"
+                    data-section-pin=""
+                    className="mr-1 inline-block size-3 align-middle"
+                  />
+                )}
+                {/* A fold never hides an ask: the title takes its tone (R4). */}
+                <span
+                  data-section-title=""
+                  className={cn(
+                    summary?.urgent && cardStateTone[summary.urgent],
+                  )}
+                >
+                  {title}
+                </span>
+              </>
+            }
+            summary={summary && <FoldedGlyphs summary={summary} />}
+            count={cards.length}
+          />
+          {summary && (
+            <FoldedLine
+              summary={summary}
+              className={pinned ? 'pl-8' : 'pl-4'}
+            />
           )}
-        >
-          <Button
-            type="button"
-            variant="link"
-            aria-expanded={!folded}
-            onClick={() => onToggleFold?.(title)}
-            className="shrink-0 gap-1 rounded-sm text-inherit hover:text-ink hover:no-underline"
-          >
-            <ChevronRight
-              aria-hidden="true"
-              className={cn(
-                'size-3 shrink-0 transition-transform motion-reduce:transition-none',
-                !folded && 'rotate-90',
-              )}
-            />
-            {pinned && (
-              <Pin
-                aria-hidden="true"
-                data-section-pin=""
-                className="size-3 shrink-0"
-              />
-            )}
-            {/* A fold never hides an ask: the title takes its tone (R4). */}
-            <span
-              data-section-title=""
-              className={cn(summary?.urgent && cardStateTone[summary.urgent])}
-            >
-              {title}
-            </span>
-          </Button>
-          {summary && <FoldedGlyphs summary={summary} />}
-          <span className="ml-auto tabular-nums">{cards.length}</span>
-        </h2>
-        {summary && (
-          <FoldedLine summary={summary} className={pinned ? 'pl-8' : 'pl-4'} />
-        )}
-      </div>
-      {!folded && (
-        <div className="space-y-2">
-          {cards.map((card) => (
-            <NeedsYouCard
-              key={card.session.id}
-              card={card}
-              active={activeSessionId === card.session.id}
-              pulsing={pulsingSessionIds?.[card.session.id]}
-              {...actions}
-            />
-          ))}
         </div>
-      )}
+        <CollapsiblePanel>
+          <div className="space-y-2">
+            {cards.map((card) => (
+              <NeedsYouCard
+                key={card.session.id}
+                card={card}
+                active={activeSessionId === card.session.id}
+                pulsing={pulsingSessionIds?.[card.session.id]}
+                {...actions}
+              />
+            ))}
+          </div>
+        </CollapsiblePanel>
+      </Collapsible>
     </section>
   )
 }

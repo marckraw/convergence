@@ -1,5 +1,6 @@
 import { durationsMs } from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
+import { sectionLabelVariants } from '@convergence/ui'
 
 export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from '@convergence/ui'
 
@@ -108,10 +109,10 @@ export const LOOM_COLLAPSE_BUTTON_CLASS = 'shrink-0'
 
 /**
  * A sheet's section heading, in the eyebrow look at the 10 px step: Loom's
- * section titles and its horses line are one string (MC-34).
+ * section titles and its horses line are one string (MC-34), the kit's
+ * SectionLabel print (MC-5).
  */
-export const WAVE_SECTION_TITLE_CLASS =
-  'px-3 pb-1 pt-3 text-3xs font-medium uppercase tracking-eyebrow text-ink-muted'
+export const WAVE_SECTION_TITLE_CLASS = `px-3 pb-1 pt-3 ${sectionLabelVariants({ size: 'sm' })}`
 
 export const WAVE_ROW_CLASS =
   'flex w-full flex-col items-start justify-start gap-0.5 rounded-md px-3 py-1.5 text-left text-xs font-normal'
@@ -133,22 +134,10 @@ export const LOOM_ROW_CARD_CLASS =
 /** A row outside Loom's cards: no edge, no fill of its own. */
 export const WAVE_ROW_PLAIN_CLASS = 'border-transparent bg-transparent'
 
-/**
- * A read-only label chip on a Loom card, an outside row and in the issue
- * detail: a span, never a control (R6), the same chip everywhere (MC-14,
- * MC-35). An outline, not a tint: on the dark paper a tinted chip put its
- * muted words under 4.5:1.
- */
-export const LOOM_CHIP_CLASS =
-  'rounded border border-hairline px-1.5 py-0.5 text-2xs text-ink-muted'
-
 export const WAVE_ROW_META_CLASS = 'truncate text-2xs text-ink-muted'
 
 /** What the row asks of a person, and a blocked or outage marker: a heads-up. */
 export const WAVE_ROW_ACTION_CLASS = 'text-2xs text-warning-ink'
-
-/** The dot on the rail and the header when the tracker is not answering. */
-export const WAVE_OUTAGE_DOT_CLASS = 'size-1.5 rounded-full bg-warning-solid'
 
 /**
  * Loom, compact (MAR-3189): the column beside the conversation. No width
@@ -278,14 +267,10 @@ export const LOOM_DETAIL_CLASS =
 export const LOOM_DETAIL_SECTION_CLASS =
   'flex flex-col gap-1 rounded-md border border-hairline p-2'
 
-/** A read-only label chip: a span, never a control (R6); the cards' own chip. */
-export const LOOM_DETAIL_CHIP_CLASS = LOOM_CHIP_CLASS
-
 export const LOOM_DETAIL_MUTED_CLASS = 'text-2xs text-ink-muted'
 
 /** The detail's own footer: what this card is, and how fresh. */
-export const LOOM_DETAIL_FOOTER_CLASS =
-  'pt-1 text-3xs uppercase tracking-eyebrow text-ink-muted'
+export const LOOM_DETAIL_FOOTER_CLASS = `pt-1 ${sectionLabelVariants({ size: 'sm' })}`
 
 /**
  * Loom's search field (MAR-3234): the kit's SearchField (MC-17), placed by

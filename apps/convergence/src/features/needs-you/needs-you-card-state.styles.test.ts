@@ -6,7 +6,6 @@ import { cardStateTone, cardStateToneKeys } from './needs-you-card-state.styles'
 
 const sourceRoot = resolve(__dirname, '../..')
 const roots = ['features/needs-you', 'widgets/sidebar']
-const home = 'features/needs-you/needs-you-card-state.styles.ts'
 
 /**
  * Files where one of these classes paints a different fact than a card's
@@ -46,8 +45,11 @@ function sourceFiles(directory: string): string[] {
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // Two source trees, so this spends the shared walk budget (MAR-3385).
+// The inks come from the kit's toneInk through the session's own map
+// (NAV-1, SESSION_STATE_TONE), so no file in these trees types one: the
+// card state's home holds names, not classes.
 it(
-  'MAR-3366 R6 each card tone class lives in one non-test file — mutation: the strip keeps its own copy of the classes turns red',
+  'MAR-3366 R6 no card tone class is typed in the feed or the sidebar — mutation: the strip keeps its own copy of the classes turns red',
   { timeout: WALK_TEST_TIMEOUT_MS },
   () => {
     const files = roots
@@ -70,7 +72,7 @@ it(
           return !otherFacts[name]?.includes(token)
         })
         .map(({ name }) => name)
-      expect({ token, holders }).toEqual({ token, holders: [home] })
+      expect({ token, holders }).toEqual({ token, holders: [] })
     }
   },
 )

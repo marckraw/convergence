@@ -11,6 +11,7 @@ import {
   IconButton,
   Notice,
   PopoverContent,
+  SectionLabel,
   Tooltip,
   type PopupFinalFocus,
   type PopupOpenChangeDetails,
@@ -96,7 +97,7 @@ export const ProjectActionsMenuPresentational: FC<
     finalFocus={contentFocus?.finalFocus}
   >
     <div className="flex items-center justify-between border-b border-line-soft px-2 py-1.5 text-2xs text-ink-muted">
-      <span>Project actions</span>
+      <SectionLabel>Project actions</SectionLabel>
       <span className="max-w-32 truncate">{projectName}</span>
     </div>
 
@@ -240,7 +241,7 @@ export const ProjectActionsMenuPresentational: FC<
       </Button>
 
       <div className="mt-2 border-t border-line-soft pt-2">
-        <div className="px-2 pb-1 text-2xs text-ink-muted">Lanes</div>
+        <SectionLabel className="px-2 pb-1">Lanes</SectionLabel>
         <Button
           type="button"
           variant="ghost"
