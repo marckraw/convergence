@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { render } from './loom-tooltip.fixture'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useSessionCrewStore, type SessionCrew } from '@/entities/session-crew'
@@ -298,7 +298,8 @@ describe('MAR-3234 R7: both shapes', () => {
     expect(search?.contains(field())).toBe(true)
     expect(at(subline)).toBeLessThan(at(search))
     expect(at(search)).toBe(at(guide!) - 1)
-    expect(search?.className).toMatch(/max-w-\[240px\]/)
+    // 240 px at most, on the spacing scale.
+    expect(search?.className).toMatch(/\bmax-w-60\b/)
     // No icon in expanded: the field is always there.
     expect(screen.queryByRole('button', { name: 'Search Loom' })).toBeNull()
   })
@@ -517,7 +518,11 @@ describe('MAR-3234 R6: keyboard and Escape order', () => {
     })
     // Focused first, as a keyboard or a pointer leaves it: closing the
     // detail gives focus back to it, so the third Escape starts in Loom.
-    const opener = rowIn('plan', 'EX-PLAN') as HTMLElement
+    // The row's door (its title, a CardAction since MC-26) is what a keyboard
+    // or a pointer leaves focused.
+    const opener = within(rowIn('plan', 'EX-PLAN') as HTMLElement).getByRole(
+      'button',
+    )
     opener.focus()
     await act(async () => {
       fireEvent.click(opener)

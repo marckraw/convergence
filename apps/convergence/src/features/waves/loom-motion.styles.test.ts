@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { durationsMs } from '@convergence/ui'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
@@ -37,8 +38,11 @@ describe('MAR-3312: the fold`s motion is declared where it is used', () => {
   })
 
   it('the fade waits exactly as long as the shell takes to travel', () => {
+    // Since MAR-3617 every half names a motion token instead of a number, so
+    // the three can only agree: the fade is --motion-fast, its delay is the
+    // shell's --motion-panel.
     const declared =
-      /--animate-loom-enter:\s*loom-enter\s+(\d+)ms\s+[a-z-]+\s+(\d+)ms\s+both\s*;/.exec(
+      /--animate-loom-enter:\s*loom-enter\s+var\(--motion-([a-z]+)\)\s+var\(--motion-ease-[a-z]+\)\s+var\(--motion-([a-z]+)\)\s+both\s*;/.exec(
         GLOBAL_CSS,
       )
     expect(
@@ -46,12 +50,14 @@ describe('MAR-3312: the fold`s motion is declared where it is used', () => {
       'the theme entry no longer has the expected shape',
     ).toBeTruthy()
     // The fade's own length, and the delay that is the SHELL's length.
-    expect(Number(declared![1])).toBe(LOOM_ENTER_MS)
-    expect(Number(declared![2])).toBe(LOOM_SLIDE_MS)
+    expect(declared![1]).toBe('fast')
+    expect(LOOM_ENTER_MS).toBe(durationsMs.fast)
+    expect(declared![2]).toBe('panel')
+    expect(LOOM_SLIDE_MS).toBe(durationsMs.panel)
     // ...and the shell really does take that long. Mutation: change
-    // `duration-200` to `duration-300` -> red, because the icons would then
+    // `duration-panel` to `duration-slow` -> red, because the icons would then
     // arrive on a column still shrinking.
-    expect(LOOM_SHELL_CLASS).toContain(`duration-${LOOM_SLIDE_MS}`)
+    expect(LOOM_SHELL_CLASS).toContain('duration-panel')
   })
 
   it('reduced motion stays a class on both halves', () => {

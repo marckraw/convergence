@@ -535,3 +535,42 @@
 @utility app-no-drag {
   -webkit-app-region: no-drag;
 }
+
+/*
+ * A grid of cards that takes as many columns as fit, each at least N spacing
+ * steps wide and never wider than the row (MAR-3617): Mission Control's card
+ * grid, Loom's wide sheets, Learn Loom's lesson. `fill` keeps the spare
+ * columns (cards keep their width), `fit` lets the cards stretch into them.
+ * `grid-cols-fill-65` is columns of at least 260 px.
+ */
+@utility grid-cols-fill-* {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, calc(var(--spacing) * --value(integer))), 1fr)
+  );
+}
+
+@utility grid-cols-fit-* {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--spacing) * --value(integer))), 1fr)
+  );
+}
+
+/*
+ * A box that travels or resizes, its edge and fill with it (MAR-3617): Loom's
+ * folding shell, its paper stack, Learn Loom's sheets. Tailwind has no
+ * utility for size and place, so each wrote its own transition-[…] list.
+ * Like Tailwind's own transition utilities it runs on the default duration and
+ * easing, and duration-* and ease-* set them.
+ */
+@utility transition-layout {
+  transition-property:
+    width, height, inset, top, right, bottom, left, flex-grow, flex-basis,
+    padding, margin, border-color, background-color;
+  transition-timing-function: var(
+    --tw-ease,
+    var(--default-transition-timing-function)
+  );
+  transition-duration: var(--tw-duration, var(--default-transition-duration));
+}

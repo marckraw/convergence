@@ -23,7 +23,7 @@ function OnCanvas(data: CanvasSessionNodeData) {
     },
   ]
   return (
-    <div className="h-[200px] w-[360px]">
+    <div className="h-50 w-90">
       <ReactFlow
         nodes={nodes}
         edges={[]}
@@ -94,12 +94,16 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
+/** The card a node's door belongs to. */
+const cardOfDoor = (door: HTMLElement) =>
+  door.closest<HTMLElement>('[data-canvas-session-node]')!
+
 /** A session on the canvas: the card's face; the body opens it, by click or key. */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const node = await canvas.findByRole('button', { name: 'Open opus-mac' })
     await waitFor(() => expect(node).toBeVisible())
-    await expect(node).toHaveTextContent('Claude Code')
+    await expect(cardOfDoor(node)).toHaveTextContent('Claude Code')
     await userEvent.click(node)
     await expect(args.onOpen).toHaveBeenCalledWith(args.card)
     node.focus()
@@ -141,7 +145,9 @@ export const Busy: Story = {
       name: 'opus-mac is the source — pick a recipient, or pick it again to start over',
     })
     await waitFor(() => expect(node).toBeVisible())
-    await expect(node).toHaveTextContent('working · reading the Loom sheets')
+    await expect(cardOfDoor(node)).toHaveTextContent(
+      'working · reading the Loom sheets',
+    )
   },
 }
 
@@ -156,6 +162,36 @@ export const Failed: Story = {
   play: async ({ canvas }) => {
     const node = await canvas.findByRole('button', { name: 'Open opus-mac' })
     await waitFor(() => expect(node).toBeVisible())
-    await expect(node).toHaveTextContent('failed · the provider exited')
+    await expect(cardOfDoor(node)).toHaveTextContent(
+      'failed · the provider exited',
+    )
   },
+}
+
+/**
+ * A running session on a host the room cannot see (MC-4): the node keeps the
+ * card's guard, so it says "Host unreachable" with a still warning dot, never
+ * a working pulse or an attention badge.
+ */
+export const HostUnreachable: Story = {
+  args: {
+    card: cardOf(
+      { status: 'running', attention: 'host-unreachable' },
+      'working · reading the Loom sheets',
+    ),
+  },
+  play: async ({ canvas }) => {
+    const node = await canvas.findByRole('button', { name: 'Open opus-mac' })
+    await waitFor(() => expect(node).toBeVisible())
+    const card = cardOfDoor(node)
+    await expect(card).toHaveTextContent('Host unreachable')
+    const dot = card.querySelector('[data-slot="status-dot"]')!
+    await expect(dot).toHaveAttribute('data-tone', 'warning')
+    await expect(dot).not.toHaveAttribute('data-pulse')
+  },
+}
+
+export const HostUnreachableDark: Story = {
+  ...HostUnreachable,
+  globals: { theme: 'dark' },
 }

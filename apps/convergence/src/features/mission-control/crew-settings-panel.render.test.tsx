@@ -152,7 +152,8 @@ it('shows Last exported to only for a successful export, shortened with the full
   const path = '/Users/marc/Projects/crew-recipes/review.yaml'
   renderPanel(null, path)
   const line = screen.getByText(/Last exported to/)
-  expect(line).toHaveAttribute('title', path)
+  // The full path is its tooltip (R2: our Tooltip, never a native title).
+  expect(line).toHaveAttribute('data-tooltip', path)
   expect(line).toHaveTextContent('Last exported to …/crew-recipes/review.yaml')
 })
 
@@ -198,11 +199,12 @@ describe('the member editor shows what the seat holds', () => {
     // seat is back to being something only a dispatch message can say.
     renderPanel(null, null, [seated], vi.fn(), { openSeatKey: 's1' })
 
+    // One of four, a radio group since MC-7.
     expect(
       within(
-        screen.getByRole('group', { name: 'Role for horse opus' }),
-      ).getByRole('button', { name: 'reviewer' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+        screen.getByRole('radiogroup', { name: 'Role for horse opus' }),
+      ).getByRole('radio', { name: 'reviewer' }),
+    ).toBeChecked()
     expect(screen.getByLabelText('Role card for horse opus')).toHaveValue(
       'You read blind.',
     )
@@ -242,7 +244,7 @@ describe('the member editor shows what the seat holds', () => {
     )
   })
 
-  it('lets a recipe seat choose its own host, and addresses it by baton name', () => {
+  it('lets a recipe seat choose its own host, and addresses it by baton name', async () => {
     const onSeatEdit = vi.fn()
     const recipe: SessionCrewMember = {
       ...DEFAULT_CREW_MEMBER_SEAT,
@@ -258,8 +260,12 @@ describe('the member editor shows what the seat holds', () => {
       openSeatKey: 'baton:errand',
     })
 
-    fireEvent.change(screen.getByLabelText('Host for errand'), {
-      target: { value: 'local' },
+    // The app's Select (MC-10): open it from the keyboard and pick the host.
+    const host = screen.getByRole('combobox', { name: 'Host for errand' })
+    host.focus()
+    fireEvent.keyDown(host, { key: 'ArrowDown' })
+    fireEvent.keyDown(await screen.findByRole('option', { name: 'This Mac' }), {
+      key: 'Enter',
     })
 
     // Mutation: key the row and its writes on `sessionId` and a recipe cannot
@@ -276,8 +282,8 @@ describe('the member editor shows what the seat holds', () => {
 
     fireEvent.click(
       within(
-        screen.getByRole('group', { name: 'Role for horse opus' }),
-      ).getByRole('button', { name: 'mastermind' }),
+        screen.getByRole('radiogroup', { name: 'Role for horse opus' }),
+      ).getByRole('radio', { name: 'mastermind' }),
     )
 
     // Addressed by the member reference the doors take, never a bare id.
@@ -481,9 +487,13 @@ describe('R4 — facts are text, policy is controls', () => {
       openSeatKey: 'baton:glm',
     })
     const policy = screen.getByRole('region', { name: 'Policy' })
-    expect(within(policy).getByLabelText('Host for glm')).toHaveValue('lm')
+    // A short fixed list is the app's Select (MC-10): its trigger shows the
+    // chosen host's label.
     expect(
-      within(policy).getByRole('group', { name: 'Lane for glm' }),
+      within(policy).getByRole('combobox', { name: 'Host for glm' }),
+    ).toHaveTextContent('little-monster')
+    expect(
+      within(policy).getByRole('radiogroup', { name: 'Lane for glm' }),
     ).toBeInTheDocument()
     view.unmount()
 
@@ -582,8 +592,12 @@ describe('R7 — refusals under the field, typed text kept', () => {
       expect(
         before(refusal, screen.getByRole('region', { name: 'Facts' })),
       ).toBe(true)
-      if (field === 'roleCard')
-        expect(screen.getByText('4,212 / 4,000')).toHaveClass('text-amber-400')
+      // An over-long card marks its field invalid (MC-3, MC-12): the state,
+      // not a palette class, is what the test reads.
+      if (field === 'roleCard') {
+        expect(screen.getByText('4,212 / 4,000')).toBeInTheDocument()
+        expect(input).toHaveAttribute('aria-invalid', 'true')
+      }
     },
   )
 
@@ -651,7 +665,13 @@ describe('R8 — drawer order and Crew details', () => {
     // Mutation: put Crew details above Seats -> red.
     for (let index = 1; index < landmarks.length; index++)
       expect(before(landmarks[index - 1]!, landmarks[index]!)).toBe(true)
-    // The crew sections live inside the disclosure, unchanged.
+    // The crew sections live inside the disclosure, unchanged; open it (a
+    // Collapsible since MC-31) to reach them.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Crew details — name, decoration, loop limits, tracker, export',
+      }),
+    )
     const details = panel.querySelector('[data-crew-details]')!
     expect(
       within(details as HTMLElement).getByLabelText('Crew name'),
@@ -695,7 +715,8 @@ describe('R8 — drawer order and Crew details', () => {
 describe('R9 — Add has two entries', () => {
   it('offers Add conversation… and a disabled New recipe that says when it comes', () => {
     renderPanel(null, null, [opus], vi.fn(), { ...seatCtx, addMenuOpen: true })
-    const menu = screen.getByRole('menu', { name: 'Add a seat' })
+    // A real Menu (MC-5), named by the button that opens it.
+    const menu = screen.getByRole('menu', { name: 'Add' })
     const items = within(menu).getAllByRole('menuitem')
 
     // Mutation: hide the New recipe entry -> one item, red.
@@ -703,11 +724,11 @@ describe('R9 — Add has two entries', () => {
       'Add conversation…',
       'New recipe',
     ])
-    expect(items[1]).toBeDisabled()
-    expect(items[1]!.parentElement).toHaveAttribute(
-      'title',
-      'Coming with MAR-3099',
-    )
+    // Unavailable, and it says when it comes: its description and its
+    // tooltip (R2), never a native title.
+    expect(items[1]).toHaveAttribute('aria-disabled', 'true')
+    expect(items[1]).toHaveAttribute('aria-description', 'Coming with MAR-3099')
+    expect(items[1]).toHaveAttribute('data-tooltip', 'Coming with MAR-3099')
   })
 })
 
@@ -718,7 +739,10 @@ describe('R10 — the edge states that are real', () => {
     expect(
       screen.getByRole('button', { name: 'Add conversation…' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'New recipe' })).toBeDisabled()
+    // Unavailable with a reason (R2): focusable, its tooltip says when.
+    const recipe = screen.getByRole('button', { name: 'New recipe' })
+    expect(recipe).toHaveAttribute('aria-disabled', 'true')
+    expect(recipe).toHaveAccessibleDescription('Coming with MAR-3099')
   })
 
   it('reads an orphan seat as "conversation gone", and offers to remove it without removing anything', () => {
@@ -733,7 +757,7 @@ describe('R10 — the edge states that are real', () => {
     })
     const row = screen.getByRole('button', { name: /^grok — / })
     expect(row).toHaveAccessibleName(/^grok — conversation gone · /)
-    expect(row).toHaveClass('border-amber-500/50')
+    expect(row).toHaveAttribute('data-seat-orphan', 'true')
     expect(onRemoveMember).not.toHaveBeenCalled()
 
     rerender(<CrewSettingsPanel {...props} openSeatKey="s2" />)
@@ -847,8 +871,11 @@ describe('MAR-3084: the tracker lives inside the crew details, never above the s
         trackerSection={<section aria-label="Tracker">tracker form</section>}
       />,
     )
-    const details = document.querySelector('details[data-crew-details]')
-    const tracker = screen.getByRole('region', { name: 'Tracker' })
+    const details = document.querySelector('[data-crew-details]')
+    const tracker = screen.getByRole('region', {
+      name: 'Tracker',
+      hidden: true,
+    })
     expect(details?.contains(tracker)).toBe(true)
   })
 })

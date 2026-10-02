@@ -4,6 +4,8 @@ import {
   type ConnectionService,
   type ConnectionsOverviewRow,
 } from '@/entities/provider-account'
+// Loom reads every clock one way, 24-hour (MC-27).
+import { loomDispatchClock } from './loom-horses.pure'
 
 /**
  * What a horse's account can reach, on its Loom card (MAR-3519). Marcin's
@@ -75,7 +77,7 @@ export function loomHorseAccessLine(input: {
   const at = input.checkedAt ? new Date(input.checkedAt) : null
   const when =
     at && !Number.isNaN(at.getTime())
-      ? ` · checked ${at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      ? ` · checked ${loomDispatchClock(at.toISOString())}`
       : ''
   return {
     text: `${parts.join(' · ')} · ${row.identity}${when}`,

@@ -591,8 +591,9 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
     // the layout entirely.
     expect(LOOM_EXPANDED_CLASS).toContain('absolute')
     expect(LOOM_EXPANDED_CLASS).toContain('inset-0')
-    expect(LOOM_EXPANDED_CLASS).toContain('bg-background')
-    expect(LOOM_EXPANDED_CLASS).not.toMatch(/bg-background\//)
+    // The canvas token since MAR-3617 (was bg-background, the same colour).
+    expect(LOOM_EXPANDED_CLASS).toContain('bg-canvas')
+    expect(LOOM_EXPANDED_CLASS).not.toMatch(/bg-canvas\//)
   })
 
   it('MAR-3155 R6: the compact class carries no width of its own', () => {

@@ -3,19 +3,24 @@ import {
   type WorkAddressSlotView,
 } from '@/entities/execution-host'
 import type { FC } from 'react'
-import { ArrowRight, X } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { ProviderAccountPicker } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
 import {
   Button,
-  cn,
-  IconButton,
   ChoiceField,
   Input,
   Combobox,
+  Notice,
+  RadioGroup,
+  RadioGroupItem,
+  SectionLabel,
+  sectionLabel,
   Switch,
   Textarea,
 } from '@convergence/ui'
+import { InspectorHeader } from './inspector-header.presentational'
+import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import type {
   BeforeDeliveryMode,
@@ -152,78 +157,90 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
   const activeBeforeDelivery = beforeDelivery.find(
     (option) => option.mode === draft.beforeDelivery,
   )
+  // What each picker's trigger says. A picker is named "Field: value" (MC-12),
+  // as the composer's are: its value alone told a screen reader "Opus,
+  // combobox" and never which choice that was.
+  const recipientValue = spawning
+    ? 'Start a new session…'
+    : (recipientName ?? 'Choose a conversation')
+  const hostValue = spec
+    ? (hostOptions.find((option) => option.id === spec.executionHost)?.label ??
+      spec.executionHost)
+    : ''
+  const providerValue =
+    providerOptions.find((option) => option.id === spec?.providerId)?.label ??
+    'Pick a provider'
+  const modelValue =
+    modelOptions.find((option) => option.id === spec?.model)?.label ??
+    'Default model'
+  const effortValue =
+    effortOptions.find((option) => option.id === spec?.effort)?.label ??
+    'Default effort'
+  const projectValue =
+    projectOptions.find(
+      (option) => option.id === (spec?.projectId ?? GLOBAL_PROJECT_OPTION_ID),
+    )?.label ?? 'Pick a project'
 
   return (
     <section
       data-connection-inspector
       aria-label="Connection"
-      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/10 px-4 py-3"
+      className={INSPECTOR_SHELL_CLASS}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col gap-0.5">
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            {isNew ? 'New connection' : 'Connection'}
-          </p>
-          <h3 className="flex items-center gap-1.5 text-sm font-medium">
+      <InspectorHeader
+        eyebrow={isNew ? 'New connection' : 'Connection'}
+        title={
+          <span className="flex items-center gap-1.5">
             {sourceName}
             <ArrowRight aria-hidden className="size-3.5" />
             {recipientName ?? '…'}
-          </h3>
-          {/* Draft, unsaved and saved are three different sentences, because
-              "is this stored?" is the question the whole panel turns on. */}
-          <p className="text-[11px] text-muted-foreground">
-            {isNew
-              ? 'Not saved yet'
-              : dirty
-                ? `Unsaved changes · connection ${draft.enabled ? 'on' : 'off'}`
-                : `Saved · ${draft.enabled ? 'on' : 'off'}`}
-          </p>
-        </div>
-        <IconButton
-          label="Close the connection panel"
-          type="button"
-          variant="quiet"
-          onClick={onClose}
-          size="sm"
-          className="shrink-0"
-        >
-          <X className="size-3.5" />
-        </IconButton>
-      </div>
+          </span>
+        }
+        // Draft, unsaved and saved are three different sentences, because
+        // "is this stored?" is the question the whole panel turns on.
+        subtitle={
+          isNew
+            ? 'Not saved yet'
+            : dirty
+              ? `Unsaved changes · connection ${draft.enabled ? 'on' : 'off'}`
+              : `Saved · ${draft.enabled ? 'on' : 'off'}`
+        }
+        closeLabel="Close the connection panel"
+        onClose={onClose}
+      />
 
       {/* Frame 09. The draft is kept and the STORED wire is untouched, and the
           panel says both — a failure that only said "couldn't save" would
           leave the person unsure which version is live. */}
       {saveError ? (
-        <div
-          role="alert"
-          className="flex flex-col gap-1 rounded-md border border-red-500/40 bg-red-500/5 px-3 py-2"
+        <Notice
+          tone="danger"
+          title="Couldn’t save the connection"
+          className="text-2xs"
         >
-          <p className="text-[11px] font-medium text-red-400">
-            Couldn’t save the connection
-          </p>
-          <p className="text-[11px] text-muted-foreground">
+          <span className="block text-ink-muted">
             Your draft is kept here. The saved connection has not changed.
-          </p>
-          <p className="text-[10px] text-muted-foreground/70">{saveError}</p>
-        </div>
+          </span>
+          <span className="block text-3xs text-ink-muted">{saveError}</span>
+        </Notice>
       ) : null}
 
       {/* Frame 10-01. The row survives; only its far end is gone. */}
       {recipientMissing ? (
-        <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
-          <p className="text-[11px] font-medium text-amber-400">
-            Recipient unavailable
-          </p>
-          <p className="text-[11px] text-muted-foreground">
+        <Notice
+          tone="warning"
+          title="Recipient unavailable"
+          className="text-2xs"
+        >
+          <span className="block text-ink-muted">
             This conversation is no longer available. Choose a replacement to
             continue editing this connection.
-          </p>
-          <p className="text-[10px] text-muted-foreground/70">
+          </span>
+          <span className="block text-3xs text-ink-muted">
             Existing history stays readable, even when a conversation is
             missing.
-          </p>
-        </div>
+          </span>
+        </Notice>
       ) : null}
 
       <ChoiceField
@@ -239,16 +256,11 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
       </ChoiceField>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          Recipient
-        </label>
+        <SectionLabel as="h4">Recipient</SectionLabel>
         <Combobox
           selectedId={selectedRecipientOptionId(draft)}
-          value={
-            spawning
-              ? 'Start a new session…'
-              : (recipientName ?? 'Choose a conversation')
-          }
+          value={recipientValue}
+          ariaLabel={`Recipient: ${recipientValue}`}
           items={[
             ...recipientOptions,
             // R9: the spawn path survives the redesign. A crew often has no
@@ -265,27 +277,25 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           emptyMessage="No other conversations in this crew."
         />
         {recipientNote ? (
-          <p className="text-[10px] text-amber-400/80">{recipientNote}</p>
+          <p className="text-3xs text-warning-ink">{recipientNote}</p>
         ) : null}
         {spawning ? null : (
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className={INSPECTOR_NOTE_CLASS}>
             Need another conversation? Add it to this crew first.
           </p>
         )}
       </div>
 
       {spec ? (
-        <div className="flex flex-col gap-1.5 rounded-md border border-white/10 px-2 py-2">
-          <p className="text-[11px] text-muted-foreground">
+        <div className="flex flex-col gap-1.5 rounded-md border border-hairline px-2 py-2">
+          <p className="text-2xs text-ink-muted">
             The session this connection opens
           </p>
-          <p className="text-[11px] text-muted-foreground">Execution host</p>
+          <p className="text-2xs text-ink-muted">Execution host</p>
           <Combobox
             selectedId={spec.executionHost}
-            value={
-              hostOptions.find((option) => option.id === spec.executionHost)
-                ?.label ?? spec.executionHost
-            }
+            value={hostValue}
+            ariaLabel={`Execution host: ${hostValue}`}
             items={hostOptions}
             onChange={(executionHost) =>
               onSpawnChange({
@@ -304,10 +314,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             onChange={onWorkAddressChange}
             onBranchChange={onBranchChange}
           />
-          <label
-            htmlFor="spawn-role-card"
-            className="text-[11px] text-muted-foreground"
-          >
+          <label htmlFor="spawn-role-card" className="text-2xs text-ink-muted">
             Role card
           </label>
           <Textarea
@@ -335,7 +342,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             />
           </ChoiceField>
           {spec.returnWire ? (
-            <label className="text-[11px] text-muted-foreground">
+            <label className="text-2xs text-ink-muted">
               Return instructions
               <Textarea
                 value={spec.returnWire.instruction}
@@ -350,10 +357,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           ) : null}
           <Combobox
             selectedId={spec.providerId}
-            value={
-              providerOptions.find((option) => option.id === spec.providerId)
-                ?.label ?? 'Pick a provider'
-            }
+            value={providerValue}
+            ariaLabel={`Provider: ${providerValue}`}
             items={providerOptions}
             onChange={(id) =>
               onSpawnChange({ providerId: id, model: null, effort: null })
@@ -366,10 +371,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           {modelOptions.length > 0 ? (
             <Combobox
               selectedId={spec.model}
-              value={
-                modelOptions.find((option) => option.id === spec.model)
-                  ?.label ?? 'Default model'
-              }
+              value={modelValue}
+              ariaLabel={`Model: ${modelValue}`}
               items={modelOptions}
               onChange={(id) => onSpawnChange({ model: id, effort: null })}
               disabled={busy}
@@ -381,10 +384,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           {effortOptions.length > 0 ? (
             <Combobox
               selectedId={spec.effort}
-              value={
-                effortOptions.find((option) => option.id === spec.effort)
-                  ?.label ?? 'Default effort'
-              }
+              value={effortValue}
+              ariaLabel={`Effort: ${effortValue}`}
               items={effortOptions}
               onChange={(id) => onSpawnChange({ effort: id })}
               disabled={busy}
@@ -405,12 +406,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           />
           <Combobox
             selectedId={spec.projectId ?? GLOBAL_PROJECT_OPTION_ID}
-            value={
-              projectOptions.find(
-                (option) =>
-                  option.id === (spec.projectId ?? GLOBAL_PROJECT_OPTION_ID),
-              )?.label ?? 'Pick a project'
-            }
+            value={projectValue}
+            ariaLabel={`Project: ${projectValue}`}
             items={projectOptions}
             onChange={(id) =>
               onSpawnChange({
@@ -435,34 +432,27 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
       ) : null}
 
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          When {sourceName} finishes
-        </label>
-        <div
-          role="group"
+        <SectionLabel as="h4">When {sourceName} finishes</SectionLabel>
+        {/* One of two, each in words (MC-7, R9): a radio group. */}
+        <RadioGroup
           aria-label="When this connection fires"
-          className="flex flex-col gap-0.5"
+          value={draft.condition.kind}
+          disabled={busy}
+          onValueChange={(kind) =>
+            onConditionKindChange(kind as 'any' | 'token')
+          }
+          className="gap-0"
         >
           {CONDITION_CHOICES.map((choice) => (
-            <Button
+            <ChoiceField
               key={choice.value}
-              type="button"
-              variant="ghost"
-              aria-pressed={draft.condition.kind === choice.value}
+              label={choice.label}
               disabled={busy}
-              onClick={() => onConditionKindChange(choice.value)}
-              size="sm"
-              className={cn(
-                'justify-start rounded-md text-[11px] font-normal',
-                draft.condition.kind === choice.value
-                  ? 'bg-white/10 text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
             >
-              {choice.label}
-            </Button>
+              <RadioGroupItem value={choice.value} />
+            </ChoiceField>
           ))}
-        </div>
+        </RadioGroup>
         {draft.condition.kind === 'token' ? (
           <>
             <Input
@@ -474,13 +464,13 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               onChange={(event) => onConditionTokenChange(event.target.value)}
               className="text-xs"
             />
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className={INSPECTOR_NOTE_CLASS}>
               Only this final line sends the reply to{' '}
               {recipientName ?? 'the recipient'}.
             </p>
           </>
         ) : (
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className={INSPECTOR_NOTE_CLASS}>
             Fires whenever {sourceName} finishes, whatever it says.
           </p>
         )}
@@ -491,35 +481,29 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           clear, or say first. */}
       {spawning ? null : (
         <div className="flex flex-col gap-1">
-          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            Before delivery
-          </label>
-          <div
-            role="group"
+          <SectionLabel as="h4">Before delivery</SectionLabel>
+          {/* One of a few, each in words (MC-7, R9). An option this provider
+              cannot run says why under its words (R2), not in a tooltip. */}
+          <RadioGroup
             aria-label="What happens before the reply is delivered"
-            className="flex flex-col gap-0.5"
+            value={draft.beforeDelivery}
+            disabled={busy}
+            onValueChange={(mode) =>
+              onBeforeDeliveryChange(mode as BeforeDeliveryMode)
+            }
+            className="gap-0"
           >
             {beforeDelivery.map((option) => (
-              <Button
+              <ChoiceField
                 key={option.mode}
-                type="button"
-                variant="ghost"
-                aria-pressed={draft.beforeDelivery === option.mode}
-                disabled={busy}
-                disabledReason={option.disabled ? option.help : undefined}
-                onClick={() => onBeforeDeliveryChange(option.mode)}
-                size="sm"
-                className={cn(
-                  'justify-start rounded-md text-[11px] font-normal',
-                  draft.beforeDelivery === option.mode
-                    ? 'bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
+                label={option.label}
+                hint={option.disabled ? option.help : undefined}
+                disabled={busy || option.disabled}
               >
-                {option.label}
-              </Button>
+                <RadioGroupItem value={option.mode} />
+              </ChoiceField>
             ))}
-          </div>
+          </RadioGroup>
           {draft.beforeDelivery === 'custom' ? (
             <Input
               size="md"
@@ -531,20 +515,17 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
               className="text-xs"
             />
           ) : null}
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className={INSPECTOR_NOTE_CLASS}>
             {activeBeforeDelivery?.help ?? ''}
           </p>
           {customOpenerNote ? (
-            <p className="text-[10px] text-amber-400/80">{customOpenerNote}</p>
+            <p className="text-3xs text-warning-ink">{customOpenerNote}</p>
           ) : null}
         </div>
       )}
 
       <div className="flex flex-col gap-1">
-        <label
-          htmlFor="connection-instructions"
-          className="text-[11px] uppercase tracking-wide text-muted-foreground"
-        >
+        <label htmlFor="connection-instructions" className={sectionLabel}>
           Standing instructions
         </label>
         <Textarea
@@ -554,25 +535,25 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           disabled={busy}
           rows={4}
           onChange={(event) => onInstructionsChange(event.target.value)}
-          className="min-h-[5rem] text-xs"
+          className="min-h-20 text-xs"
         />
-        <p className="text-[10px] text-muted-foreground/70">
+        <p className={INSPECTOR_NOTE_CLASS}>
           {recipientName ?? 'The recipient'} receives {sourceName}’s full last
           response with these instructions.
         </p>
       </div>
 
       <div className="mt-auto flex flex-col gap-2">
-        <p className="min-h-[1rem] text-[11px] text-amber-400">
-          {problem ?? ''}
-        </p>
+        {/* Why it can't be saved yet: a heads-up, not a failure, so the
+            warning ink; the line keeps its room so the buttons never jump. */}
+        <p className="min-h-4 text-2xs text-warning-ink">{problem ?? ''}</p>
         <div className="flex items-center gap-1.5">
           <Button
             type="button"
             variant="tonal"
             disabled={busy || problem !== null || (!isNew && !dirty)}
             onClick={onSave}
-            className="text-[11px]"
+            className="text-2xs"
           >
             {saveError ? 'Try again' : 'Save changes'}
           </Button>
@@ -581,24 +562,24 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             variant="ghost"
             disabled={busy}
             onClick={onCancel}
-            className="text-[11px]"
+            className="text-2xs"
           >
             {saveError ? 'Discard changes' : 'Cancel'}
           </Button>
         </div>
         {saveError ? (
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className={INSPECTOR_NOTE_CLASS}>
             Trying again saves settings. It does not resend a message.
           </p>
         ) : null}
         {isNew ? null : (
           <Button
             type="button"
-            variant="ghost"
+            variant="danger-quiet"
             disabled={busy}
             onClick={onDelete}
             size="sm"
-            className="self-start px-0 text-[11px] text-muted-foreground hover:text-red-400"
+            className="self-start px-0 text-2xs"
           >
             Delete connection
           </Button>

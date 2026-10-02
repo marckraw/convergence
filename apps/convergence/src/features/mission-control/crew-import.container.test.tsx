@@ -88,8 +88,12 @@ it('opens the picker, replans a choice, applies and shows the report (mutation: 
   })
   render(<CrewImport />)
   fireEvent.click(screen.getByRole('button', { name: 'Import crew…' }))
+  // The app's Select (MC-10): open it from the keyboard and pick.
   const select = await screen.findByRole('combobox', { name: 'Choose Horse' })
-  fireEvent.change(select, { target: { value: 's' } })
+  select.focus()
+  fireEvent.keyDown(select, { key: 'ArrowDown' })
+  const options = await screen.findAllByRole('option')
+  fireEvent.keyDown(options[1]!, { key: 'Enter' })
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled(),
   )

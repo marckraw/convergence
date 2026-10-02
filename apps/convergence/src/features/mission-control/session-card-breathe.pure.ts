@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { SessionCrew } from '@/entities/session-crew'
+import { crewColor } from './session-crew-picker.pure'
 import { CARD_BREATHE } from './session-card.styles'
 
 /**
@@ -20,8 +21,9 @@ export function buildCardBreatheStyle(
 
   // The first crew that actually carries an accent decides the colour: a
   // session can be held by several crews, and a crew is allowed to have no
-  // colour at all. A card cannot glare in a colour it does not have.
-  const accent = crews.find((crew) => crew.accentColor)?.accentColor
+  // colour at all. A card cannot glare in a colour it does not have. A palette
+  // colour glares in its hue token (R1's crew hues), never the stored hex.
+  const accent = crewColor(crews.find((crew) => crew.accentColor)?.accentColor)
 
   return {
     '--breathe-color': accent ?? CARD_BREATHE.neutralColor,

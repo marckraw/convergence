@@ -88,6 +88,16 @@ describe('cn with the Convergence theme', () => {
     expect(cn('ease-enter', 'ease-out')).toBe('ease-out')
     expect(cn('ease-in', 'ease-exit')).toBe('ease-exit')
     expect(cn('ease-guide', 'ease-linear')).toBe('ease-linear')
+    expect(cn('transition-colors', 'transition-layout')).toBe(
+      'transition-layout',
+    )
+    expect(cn('transition-layout', 'transition-none')).toBe('transition-none')
+  })
+
+  it('knows the card grids are column templates', () => {
+    expect(cn('grid-cols-2', 'grid-cols-fill-65')).toBe('grid-cols-fill-65')
+    expect(cn('grid-cols-fit-80', 'grid-cols-1')).toBe('grid-cols-1')
+    expect(cn('grid-cols-fill-65', 'grid-cols-fit-90')).toBe('grid-cols-fit-90')
   })
 
   it('knows the named transitions: what moves', () => {

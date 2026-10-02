@@ -1,6 +1,14 @@
 import type { FC } from 'react'
-import { Users, X } from 'lucide-react'
-import { Button, cn, IconButton, Input, Combobox } from '@convergence/ui'
+import { Users } from 'lucide-react'
+import {
+  Button,
+  cn,
+  Combobox,
+  SearchField,
+  SectionLabel,
+} from '@convergence/ui'
+import { InspectorHeader } from './inspector-header.presentational'
+import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
 import type { RelayEndpointOption } from './relay-sentence.pure'
 import { SeatRefusal } from './seat-refusal.presentational'
 
@@ -72,36 +80,23 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
   <section
     data-add-conversations-panel
     aria-label="Add conversations"
-    className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/10 px-4 py-3"
+    className={INSPECTOR_SHELL_CLASS}
   >
-    <div className="flex items-start justify-between gap-2">
-      <div className="flex flex-col gap-0.5">
-        <h3 className="text-sm font-medium">Add conversations</h3>
-        <p className="text-[11px] text-muted-foreground">
-          Bring existing conversations into {crewName}.
-        </p>
-      </div>
-      <IconButton
-        label="Close the add conversations panel"
-        type="button"
-        variant="quiet"
-        onClick={onClose}
-        size="sm"
-        className="shrink-0"
-      >
-        <X className="size-3.5" />
-      </IconButton>
-    </div>
+    <InspectorHeader
+      title="Add conversations"
+      subtitle={`Bring existing conversations into ${crewName}.`}
+      closeLabel="Close the add conversations panel"
+      onClose={onClose}
+    />
 
-    <Input
+    <SearchField
       size="md"
-      type="search"
       value={query}
       placeholder="Search conversations…"
       aria-label="Search conversations to add"
       disabled={busy}
       onChange={(event) => onQueryChange(event.target.value)}
-      className="text-xs"
+      onClear={() => onQueryChange('')}
     />
 
     <Combobox
@@ -121,12 +116,10 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
       emptyMessage="No projects."
     />
 
-    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-      Available conversations
-    </p>
+    <SectionLabel as="h4">Available conversations</SectionLabel>
 
     {available.length === 0 ? (
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-2xs text-ink-muted">
         {query.trim() || selectedProjectId
           ? 'No conversations match this search.'
           : 'Every conversation is already in this crew.'}
@@ -146,21 +139,20 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
                 size="lg"
                 className={cn(
                   'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 text-left font-normal',
+                  // R7: a picked row wears the selected fill, as History's do.
                   selected
-                    ? 'border-sky-500/60 bg-sky-500/5'
-                    : 'border-white/10 hover:border-white/20',
+                    ? 'border-hairline-strong bg-fill-selected'
+                    : 'border-hairline hover:border-hairline-strong',
                 )}
               >
-                <span className="text-[12px]">{entry.name}</span>
+                <span className="text-xs">{entry.name}</span>
                 {entry.inCrew ? (
-                  <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                  <span className="flex items-center gap-1 text-3xs text-warning-ink">
                     <Users aria-hidden className="size-3" />
                     In crew “{entry.inCrew}”
                   </span>
                 ) : null}
-                <span className="text-[10px] text-muted-foreground">
-                  {entry.detail}
-                </span>
+                <span className="text-3xs text-ink-muted">{entry.detail}</span>
               </Button>
             </li>
           )
@@ -187,7 +179,7 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
       : null}
 
     {alreadyInCrew.length > 0 ? (
-      <p className="text-[10px] text-muted-foreground/70">
+      <p className={INSPECTOR_NOTE_CLASS}>
         Already in this crew: {alreadyInCrew.join(', ')}.
       </p>
     ) : null}
@@ -199,7 +191,7 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
           variant="tonal"
           disabled={busy || selectedIds.length === 0}
           onClick={onAdd}
-          className="text-[11px]"
+          className="text-2xs"
         >
           {selectedIds.length === 1
             ? 'Add 1 conversation'
@@ -210,12 +202,12 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
           variant="ghost"
           disabled={busy}
           onClick={onClose}
-          className="text-[11px]"
+          className="text-2xs"
         >
           Cancel
         </Button>
       </div>
-      <p className="text-[10px] text-muted-foreground/70">
+      <p className={INSPECTOR_NOTE_CLASS}>
         Their history and model settings stay with them. Add connections after
         adding a conversation.
       </p>

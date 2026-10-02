@@ -1,19 +1,31 @@
+/*
+ * A Needs-you card is washed in its provider's hue token (--provider-*, R1's
+ * category hues) at 6 % over the surface. Its muted words are the app's own
+ * --ink-muted: the card no longer redefines "muted" for itself (MC-4).
+ *
+ * Under the pointer it takes the app's hover fill, --fill-hover over the
+ * card, as every interactive card does (R7). --fill-hover is exactly half of
+ * --fill-selected (the theme canary holds the two together), so the mix below
+ * is that fill laid over the card, written as an opaque colour so the
+ * transition and the accessibility check both read it. The ink at 4 % it
+ * replaces lifted a dark card until its muted words fell to 4.4:1; this keeps
+ * them at 4.8:1 or more (pinned in app/theme-contrast.pure.test.ts).
+ */
 @layer components {
   .needs-you-card {
-    --needs-you-provider-tint: var(--card);
+    --needs-you-provider-tint: var(--surface);
     --needs-you-card-surface: color-mix(
       in srgb,
       var(--needs-you-provider-tint) 6%,
-      var(--card)
+      var(--surface)
     );
-    --muted-foreground: color-mix(in srgb, var(--foreground) 70%, var(--card));
     background-color: var(--needs-you-card-surface);
   }
 
   .needs-you-card:hover {
     background-color: color-mix(
       in srgb,
-      var(--foreground) 4%,
+      var(--fill-selected) 50%,
       var(--needs-you-card-surface)
     );
   }

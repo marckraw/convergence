@@ -3,13 +3,16 @@ import { Button, cn } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomMastermindVerdictLine,
+  loomSeatCardIds,
   type LoomMastermind,
 } from './loom-horses.pure'
 import {
+  LOOM_CARD_HEAD_CLASS,
   LOOM_HORSE_CARD_CLASS,
   LOOM_HORSE_META_CLASS,
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TINT_CLASS,
+  LOOM_SEAT_CARD_DOOR_CLASS,
 } from './wave-panel.styles'
 
 export interface LoomMastermindCardProps {
@@ -27,7 +30,7 @@ export function LoomMastermindCard({
   onOpenSeat,
 }: LoomMastermindCardProps) {
   const openable = mastermind.openable && onOpenSeat !== undefined
-  const ids = `loom-mastermind-${mastermind.key.replace(/[^A-Za-z0-9_-]/g, '_')}`
+  const ids = loomSeatCardIds('mastermind', mastermind.key)
   return (
     <div className="px-3 py-0.5" data-loom-mastermind={mastermind.key}>
       <div
@@ -35,7 +38,7 @@ export function LoomMastermindCard({
           LOOM_HORSE_CARD_CLASS,
           LOOM_HORSE_TINT_CLASS[mastermind.runtime],
           'relative',
-          openable && 'hover:bg-white/5',
+          openable && 'hover:bg-fill-hover',
         )}
       >
         {openable ? (
@@ -53,10 +56,10 @@ export function LoomMastermindCard({
               .join(' ')}
             onClick={() => onOpenSeat?.(mastermind.sessionId!)}
             size="lg"
-            className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
+            className={LOOM_SEAT_CARD_DOOR_CLASS}
           />
         ) : null}
-        <span className="flex w-full items-baseline gap-1.5">
+        <span className={LOOM_CARD_HEAD_CLASS}>
           <span id={`${ids}-seat`} className="min-w-0 truncate font-medium">
             {mastermind.seat ?? 'unnamed seat'}
             {showCrewName && mastermind.crewName

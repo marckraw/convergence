@@ -8,7 +8,7 @@ import type {
   CrewImportDecisions,
   CrewImportReport,
 } from '@/shared/types/crew-import.types'
-import { Button } from '@convergence/ui'
+import { Button, FormError } from '@convergence/ui'
 import { CrewImportView } from './crew-import.presentational'
 
 export function CrewImport({
@@ -78,11 +78,7 @@ export function CrewImport({
           Import crew…
         </Button>
       )}
-      {!plan && error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {plan ? null : <FormError>{error}</FormError>}
       {plan && (
         <CrewImportView
           plan={plan}

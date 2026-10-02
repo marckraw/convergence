@@ -5,15 +5,19 @@ import type { FoldCardState } from './needs-you-fold.pure'
  * status icon and the folded section's glyph strip both read it, so a
  * retuned colour changes both at once. States the card leaves untinted fall
  * back to muted.
+ *
+ * R1's tones, the inks (MC-2, MC-3): waiting on you is warning, failed is
+ * danger, working is info, finished is success -- the colour the same
+ * session wears in Mission Control and on Loom.
  */
 export const cardStateTone: Readonly<Record<FoldCardState, string>> = {
-  waiting: 'text-warning-foreground',
-  failed: 'text-destructive',
-  working: 'text-blue-600 dark:text-blue-400',
-  finished: 'text-emerald-500',
-  unreachable: 'text-muted-foreground',
-  unknown: 'text-muted-foreground',
-  idle: 'text-muted-foreground',
+  waiting: 'text-warning-ink',
+  failed: 'text-danger-ink',
+  working: 'text-info-ink',
+  finished: 'text-success-ink',
+  unreachable: 'text-ink-muted',
+  unknown: 'text-ink-muted',
+  idle: 'text-ink-muted',
 }
 
 /** The tones that name a state; the muted fallback is not one of them. */

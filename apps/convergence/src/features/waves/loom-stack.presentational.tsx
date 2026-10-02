@@ -1,38 +1,10 @@
-import { CheckCircle2, Layers, Pencil, Timer } from 'lucide-react'
 import { cn } from '@convergence/ui'
 import { LoomSheetView } from './loom-sheet.presentational'
+import { LOOM_SHEET_ICONS, LOOM_SHEET_ICON_CLASS } from './loom-sheet.styles'
 import { LoomTitleView } from './loom-title.presentational'
 import { loomSheetCounts, loomSheetTitle } from './loom-sheets.pure'
 import { LOOM_SHEETS, LOOM_SHEET_NAMES } from './wave-panel-sheet.pure'
 import type { LoomStackProps } from './loom-stack.types'
-
-/**
- * The four sheets' icons, one map (MAR-3201 R2).
- *
- * Exported so the guide's illustration draws the icons the stack draws,
- * rather than a second list that could quietly disagree with the panel it
- * is teaching.
- */
-export const LOOM_SHEET_ICONS = {
-  before: CheckCircle2,
-  now: Timer,
-  next: Layers,
-  plan: Pencil,
-}
-
-/**
- * What colour each sheet's icon wears, in one place.
- *
- * The guide's illustration draws the same four icons as the real stack, and
- * the frames colour them identically (`559:815` emerald, `559:821` sky, the
- * other two muted). Written once so the two surfaces cannot drift apart.
- */
-export const LOOM_SHEET_ICON_CLASS = {
-  before: 'text-emerald-500',
-  now: 'text-sky-400',
-  next: '',
-  plan: '',
-}
 
 const icons = LOOM_SHEET_ICONS
 
@@ -65,9 +37,12 @@ export function LoomStackView({
             key={sheet}
             data-loom-paper={sheet}
             className={cn(
-              'relative flex min-h-0 min-w-0 flex-col rounded-xl border border-foreground/10 bg-muted shadow-[0_3px_12px_rgba(0,0,0,0.16)] transition-[flex-basis,flex-grow,padding] duration-200 ease-out motion-reduce:transition-none',
+              // Paper: the muted surface lifted by the sheet's own shadow, the
+              // open one on the full surface lifted further (R11: the
+              // handoff's shadows are the --elevation-sheet tokens).
+              'relative flex min-h-0 min-w-0 flex-col rounded-xl border border-ink/10 bg-surface-muted shadow-sheet transition-layout duration-panel ease-out motion-reduce:transition-none',
               wide && 'rounded-2xl',
-              open && 'bg-card shadow-[0_4px_20px_rgba(0,0,0,0.22)]',
+              open && 'bg-surface shadow-sheet-open',
             )}
             style={{
               zIndex: 4 - Math.abs(index - selected),
@@ -92,11 +67,11 @@ export function LoomStackView({
               onSelect={() => props.onSelectSheet(sheet)}
               titleRef={props.titleRef}
               className={cn(
-                'h-auto min-h-[44px] shrink-0 justify-start whitespace-normal rounded-xl border-0 px-3 py-3 text-xs',
+                'h-auto min-h-11 shrink-0 justify-start whitespace-normal rounded-xl border-0 px-3 py-3 text-xs',
                 wide && open && 'px-6 pt-5 text-sm',
                 wide &&
                   !open &&
-                  'h-full flex-col justify-start gap-3 px-1 pt-5 text-center text-[11px]',
+                  'h-full flex-col justify-start gap-3 px-1 pt-5 text-center text-2xs',
               )}
             >
               <Icon
@@ -106,7 +81,7 @@ export function LoomStackView({
               {wide && !open ? (
                 <>
                   <span>{LOOM_SHEET_NAMES[sheet]}</span>
-                  <span className="text-[10px] leading-relaxed text-muted-foreground">
+                  <span className="text-3xs leading-relaxed text-ink-muted">
                     {title.split(' · ').slice(1).join(' · ')}
                   </span>
                 </>

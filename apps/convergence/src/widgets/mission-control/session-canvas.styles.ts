@@ -19,38 +19,65 @@ import type { CSSProperties } from 'react'
  */
 export const CANVAS_THEME_VARS = {
   // The zoom/fit panel, the loudest offender.
-  '--xy-controls-button-background-color': 'var(--popover)',
-  '--xy-controls-button-background-color-hover': 'var(--accent)',
-  '--xy-controls-button-color': 'var(--muted-foreground)',
-  '--xy-controls-button-color-hover': 'var(--foreground)',
-  '--xy-controls-button-border-color': 'var(--border)',
+  '--xy-controls-button-background-color': 'var(--raised)',
+  '--xy-controls-button-background-color-hover': 'var(--highlight)',
+  '--xy-controls-button-color': 'var(--ink-muted)',
+  '--xy-controls-button-color-hover': 'var(--ink)',
+  '--xy-controls-button-border-color': 'var(--line)',
   '--xy-controls-box-shadow': 'none',
 
-  // The dot grid: our own border tone, so it sits under the wires rather than
+  // The dot grid: our own line tone, so it sits under the wires rather than
   // competing with them.
-  '--xy-background-pattern-dots-color': 'var(--border)',
+  '--xy-background-pattern-dots-color': 'var(--line)',
 
   // Kept visible for the licence, but as quiet chrome rather than a white tab.
   '--xy-attribution-background-color': 'transparent',
 
   // Defaults behind anything we do not style per element. Our edges set their
   // own stroke, but an unstyled one must still not arrive as library blue.
-  '--xy-edge-stroke': 'var(--border)',
-  '--xy-edge-stroke-selected': 'var(--foreground)',
-  '--xy-edge-label-background-color': 'var(--popover)',
-  '--xy-edge-label-color': 'var(--foreground)',
+  '--xy-edge-stroke': 'var(--line)',
+  '--xy-edge-stroke-selected': 'var(--ink)',
+  '--xy-edge-label-background-color': 'var(--raised)',
+  '--xy-edge-label-color': 'var(--ink)',
 
   // We render every node ourselves, so these only matter if a node type is ever
   // added without its own skin. Pointing them at the room means that mistake
   // shows up as unstyled-but-ours, never as a white box.
-  '--xy-node-background-color': 'var(--card)',
-  '--xy-node-color': 'var(--foreground)',
-  '--xy-node-border': '1px solid var(--border)',
+  '--xy-node-background-color': 'var(--surface)',
+  '--xy-node-color': 'var(--ink)',
+  '--xy-node-border': '1px solid var(--line)',
   '--xy-node-boxshadow-selected': 'none',
   '--xy-node-boxshadow-hover': 'none',
   '--xy-node-group-background-color': 'transparent',
 
   '--xy-selection-background-color':
-    'color-mix(in srgb, var(--accent) 25%, transparent)',
-  '--xy-selection-border': '1px solid var(--border)',
+    'color-mix(in srgb, var(--highlight) 25%, transparent)',
+  '--xy-selection-border': '1px solid var(--line)',
 } as CSSProperties
+
+/** A full-height column: the room, the crew canvas and its empty state. */
+export const ROOM_COLUMN_CLASS = 'flex h-full min-h-0 flex-col'
+
+/**
+ * The column a canvas inspector opens in, beside the diagram: 340 px on the
+ * spacing scale, one constant for the four panels (MC-11), which wrote it out
+ * as an arbitrary width each.
+ */
+export const INSPECTOR_COLUMN_CLASS = 'w-85 shrink-0'
+
+/**
+ * Wires attach to every node's ports, but a canvas you cannot draw on must
+ * never show them (MC-35: one constant for the session, chair and spawn
+ * nodes, which wrote it out eight times).
+ */
+export const CANVAS_HIDDEN_HANDLE =
+  '!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent'
+
+/**
+ * The magnetic edge handle (R10), visible only while the canvas is authorable,
+ * in the connect tone (info, the colour a draft wire is drawn in). Generous
+ * rather than pixel-exact: the canvas sets `connectionRadius` so a release NEAR
+ * a handle lands on it.
+ */
+export const CANVAS_DRAW_HANDLE =
+  '!size-2.5 !rounded-full !border !border-canvas !bg-info-solid !opacity-80 hover:!opacity-100'

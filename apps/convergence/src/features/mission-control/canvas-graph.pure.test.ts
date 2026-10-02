@@ -463,9 +463,9 @@ describe('resolveWireColor', () => {
     { crewId: 'c2', accentColor: null },
   ]
 
-  it('lends a crew its accent for live wires', () => {
+  it('lends a crew its accent for live wires, as its hue token (MAR-3617)', () => {
     expect(resolveWireColor({ armed: true, crewId: 'c1' }, clusters)).toBe(
-      '#7c3aed',
+      'var(--crew-violet)',
     )
   })
 
@@ -496,7 +496,7 @@ describe('resolveWireColor', () => {
    * disarmed colour has to resolve against the theme rather than assume dark.
    */
   it('gives the disarmed wire a colour that survives both themes', () => {
-    expect(DISARMED_WIRE_COLOR).toContain('var(--muted-foreground)')
+    expect(DISARMED_WIRE_COLOR).toContain('var(--ink-muted)')
     expect(DISARMED_WIRE_COLOR).not.toMatch(/#|rgba?\(/)
   })
 })

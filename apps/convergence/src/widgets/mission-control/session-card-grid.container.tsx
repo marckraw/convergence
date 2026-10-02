@@ -81,10 +81,7 @@ export const SessionCardGrid: FC<SessionCardGridProps> = ({
   }, [hailIndex, cards.length])
 
   return (
-    <div
-      ref={gridRef}
-      className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3"
-    >
+    <div ref={gridRef} className="grid grid-cols-fill-65 gap-3">
       {cards.map((card, index) => (
         <Fragment key={card.session.id}>
           <SessionCardView

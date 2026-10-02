@@ -173,8 +173,10 @@ describe('RelayHopTrail', () => {
 
     const label = screen.getByText('unknown outcome')
     expect(label).toBeVisible()
+    // Its tooltip says where the word came from (R2: our Tooltip, never a
+    // native title).
     expect(label).toHaveAttribute(
-      'title',
+      'data-tooltip',
       'Recorded by another version as "skipped-disarmed"',
     )
   })

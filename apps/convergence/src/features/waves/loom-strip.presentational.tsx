@@ -1,15 +1,8 @@
 import type { DispatchPlan } from '@/shared/types/tracker.types'
 import type { FC } from 'react'
-import type { LucideIcon } from 'lucide-react'
-import {
-  CircleDot,
-  History,
-  ListOrdered,
-  Maximize2,
-  NotebookPen,
-  PanelLeftOpen,
-} from 'lucide-react'
+import { Maximize2, PanelLeftOpen } from 'lucide-react'
 import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
+import { LOOM_SHEET_ICONS, LOOM_SHEET_ICON_CLASS } from './loom-sheet.styles'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
 import {
@@ -76,17 +69,6 @@ function stripCount(
   if (sheet === 'now') return counts.open + counts.awaitingQa
   if (sheet === 'next') return counts.next
   return counts.plan
-}
-
-/**
- * One glyph per sheet, in the sheets' own reading order (MAR-3292 R2): what
- * was, what is, what is queued, what is still being shaped.
- */
-const LOOM_STRIP_ICONS: Readonly<Record<LoomSheet, LucideIcon>> = {
-  before: History,
-  now: CircleDot,
-  next: ListOrdered,
-  plan: NotebookPen,
 }
 
 /**
@@ -170,7 +152,9 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
       />
     ) : null}
     {LOOM_SHEETS.map((sheet) => {
-      const Icon = LOOM_STRIP_ICONS[sheet]
+      // The stack's own glyph and colour (MC-24): folding the column changes
+      // the shape, never the icons.
+      const Icon = LOOM_SHEET_ICONS[sheet]
       // Read once and shown twice -- the glyph's name and the number under
       // it are one fact, so they are one call to the one counts function.
       const count = stripCount(sheets, sheet, now, horses, dispatchPlan)
@@ -186,7 +170,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
             onClick={() => onSelectSheet(sheet)}
             className={LOOM_STRIP_SHEET_CLASS}
           >
-            <Icon className="size-3.5" />
+            <Icon className={cn('size-3.5', LOOM_SHEET_ICON_CLASS[sheet])} />
             <span data-wave-count={sheet} className={LOOM_STRIP_COUNT_CLASS}>
               {count}
             </span>

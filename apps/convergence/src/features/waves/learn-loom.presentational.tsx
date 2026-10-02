@@ -81,6 +81,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
     <DialogContent
       data-learn-loom
       showClose={false}
+      size="xl"
       className={LEARN_LOOM_DIALOG_CLASS}
       // Said outright (R7): the dialog traps focus and hides the rest of the
       // page from assistive tech, and the rule asks for the word on the
@@ -100,6 +101,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
         <Button
           type="button"
           variant="ghost"
+          size="lg"
           onClick={onClose}
           className={LEARN_LOOM_CLOSE_CLASS}
         >
@@ -163,6 +165,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               variant="ghost"
+              size="lg"
               onClick={onRestart}
               className={LEARN_LOOM_REFERENCE_CONTROL_CLASS}
             >
@@ -170,6 +173,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             </Button>
             <Button
               type="button"
+              size="lg"
               onClick={onClose}
               className={LEARN_LOOM_REFERENCE_PRIMARY_CLASS}
             >
@@ -181,6 +185,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               variant="ghost"
+              size="lg"
               onClick={onOpenReference}
               className={LEARN_LOOM_CONTROL_CLASS}
             >
@@ -192,6 +197,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               variant="ghost"
+              size="lg"
               aria-disabled={step.backDisabled || undefined}
               className={
                 step.backDisabled
@@ -209,6 +215,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
                 control leaves the guide instead (R5). */}
             <Button
               type="button"
+              size="lg"
               onClick={step.isLast ? onClose : onNext}
               className={LEARN_LOOM_PRIMARY_CLASS}
             >

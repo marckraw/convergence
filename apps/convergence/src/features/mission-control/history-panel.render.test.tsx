@@ -10,6 +10,7 @@ import type {
   HistoryPanelState,
   HistoryRunRow,
 } from './run-history.pure'
+import { formatTimestamp, fullDateLabel } from '@convergence/ui'
 
 /**
  * History, rendered (the MAR-2280 law).
@@ -303,16 +304,19 @@ describe('the recorded-event panel, rendered', () => {
     },
   )
 
-  it.each(['local time', 'ISO hover'] as const)(
+  it.each(['local time', 'the whole moment on hover'] as const)(
     'F5 shows %s (mutation: restore raw timestamp)',
     (proof) => {
       renderInspector()
       const time = document.querySelector('[data-history-event-inspector] time')
-      if (proof === 'local time')
-        expect(time).toHaveTextContent(
-          new Date('2026-09-06T14:38:22.000Z').toLocaleString(),
-        )
-      else expect(time).toHaveAttribute('title', '2026-09-06T14:38:22.000Z')
+      const moment = new Date('2026-09-06T14:38:22.000Z')
+      // The Timestamp part writes the moment (MC-27): the local date and
+      // time on the line, the exact instant in dateTime, and the whole moment
+      // in our Tooltip, never a native title (R2).
+      if (proof === 'local time') {
+        expect(time).toHaveTextContent(formatTimestamp(moment, 'datetime'))
+        expect(time).toHaveAttribute('dateTime', '2026-09-06T14:38:22.000Z')
+      } else expect(time).toHaveAttribute('data-tooltip', fullDateLabel(moment))
     },
   )
 

@@ -1,8 +1,10 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { Button, Card, cn, focusRing, Tooltip } from '@convergence/ui'
 import { LOOM_OUTSIDE_NAME, type LoomOutsideView } from './loom-outside.pure'
 import {
+  LOOM_CHIP_CLASS,
+  LOOM_ROW_CARD_CLASS,
   LOOM_SHEET_NOTE_CLASS,
   WAVE_ROW_CLASS,
   WAVE_ROW_OPENABLE_CLASS,
@@ -40,7 +42,7 @@ export const LoomOutsideGroupView: FC<{
         onClick={onToggle}
         className={cn(
           WAVE_SECTION_TITLE_CLASS,
-          'h-auto justify-start gap-1 rounded-md hover:bg-white/5',
+          'h-auto justify-start gap-1 rounded-md hover:bg-fill-hover',
         )}
       >
         <ChevronRight
@@ -63,43 +65,44 @@ export const LoomOutsideGroupView: FC<{
     {view.foldable && open ? (
       <div id={LIST_ID} className="flex flex-col">
         {view.rows.map((issue) => (
-          <a
+          // The whole card is the link to Linear: a Card drawn as an <a>
+          // (its `render`), in Loom's own card look with its own chips
+          // (MC-35), so an outside row cannot drift from an inside one.
+          <Card
             key={issue.id}
+            interactive
+            padding="none"
             data-loom-outside-row={issue.identifier}
-            href={issue.url}
-            target="_blank"
-            rel="noreferrer"
+            render={<a href={issue.url} target="_blank" rel="noreferrer" />}
             className={cn(
               WAVE_ROW_CLASS,
               WAVE_ROW_OPENABLE_CLASS,
-              'mb-2 gap-2 rounded-lg border border-foreground/5 bg-foreground/[0.02] p-3',
+              'mb-2',
+              LOOM_ROW_CARD_CLASS,
+              focusRing,
             )}
           >
             <span className="flex w-full flex-wrap items-baseline gap-1.5">
-              <span className="shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+              <span className="shrink-0 whitespace-nowrap font-mono text-2xs text-ink-muted">
                 {issue.identifier}
               </span>
-              <span
-                className="line-clamp-2 w-full min-w-0 text-xs font-medium leading-relaxed"
-                title={issue.title}
-              >
-                {issue.title}
-              </span>
+              <Tooltip label={issue.title} when="truncated">
+                <span className="line-clamp-2 w-full min-w-0 text-xs font-medium leading-relaxed">
+                  {issue.title}
+                </span>
+              </Tooltip>
             </span>
-            <span className="flex max-w-full flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-              <span className="rounded bg-foreground/5 px-1.5 py-0.5">
+            <span className="flex max-w-full flex-wrap gap-1.5">
+              <span className={LOOM_CHIP_CLASS}>
                 Linear: {issue.status || 'not seen'}
               </span>
               {issue.labels.map((label) => (
-                <span
-                  key={label}
-                  className="rounded bg-foreground/5 px-1.5 py-0.5"
-                >
+                <span key={label} className={LOOM_CHIP_CLASS}>
                   {label}
                 </span>
               ))}
             </span>
-          </a>
+          </Card>
         ))}
         {view.moreLine ? (
           <p className={LOOM_SHEET_NOTE_CLASS}>{view.moreLine}</p>

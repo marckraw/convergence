@@ -90,7 +90,7 @@ export function dispatchWordSentence(
     case 'seat-failed':
       return "seat's last turn failed — open it before it takes work"
     case 'sent':
-      return `dispatched ${new Date(word.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} · waiting for the seat`
+      return `dispatched ${loomDispatchClock(word.at)} · waiting for the seat`
     case 'send-failed':
       return `dispatch failed: ${word.reason} — remove the dispatch label and set it again to retry`
     case 'seat-busy':

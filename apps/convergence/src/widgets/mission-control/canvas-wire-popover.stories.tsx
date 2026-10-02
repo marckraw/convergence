@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn } from 'storybook/test'
+import { type ComponentProps, useState } from 'react'
+import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import type { RelayHop } from '@/entities/session-relay'
 import {
   buildRelayHopLine,
@@ -35,9 +36,37 @@ const names: Record<string, string> = { fable: 'Fable', opus: 'opus-mac' }
 const lineOf = (overrides: Partial<RelayHop>) =>
   buildRelayHopLine(hop(overrides), (id) => names[id] ?? null, NOW)
 
+/**
+ * The popover as the canvas holds it: open until it asks to close, then gone,
+ * as the canvas drops the wire it had open.
+ */
+function OpenWire(props: ComponentProps<typeof CanvasWirePopover>) {
+  const [open, setOpen] = useState(true)
+  return open ? (
+    <CanvasWirePopover
+      {...props}
+      at={{ x: 24, y: 24 }}
+      onClose={() => {
+        props.onClose()
+        setOpen(false)
+      }}
+    />
+  ) : (
+    <p className="text-xs text-ink-muted">Closed</p>
+  )
+}
+
+/** The popup has arrived: open, and done growing in. */
+const arrivedPopover = async (name?: string) => {
+  const popover = await screen.findByRole('dialog', name ? { name } : {})
+  await waitFor(() => expect(popover).toBeVisible())
+  return popover
+}
+
 const meta = {
   title: 'Widgets/MissionControl/CanvasWirePopover',
   component: CanvasWirePopover,
+  render: (args) => <OpenWire {...args} />,
   args: {
     sentence: buildRelaySentence(
       {
@@ -72,26 +101,30 @@ type Story = StoryObj<typeof meta>
 
 /**
  * One wire, opened: its sentence, whether it is on, and its recent hops,
- * read-only. The popover is named by the sentence.
+ * read-only. The popover is named by the sentence, and it is a real popover
+ * (MC-5): the focus moves into it, and its ✕ closes it.
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    const popover = canvas.getByRole('dialog', { name: args.sentence.text })
-    await expect(popover).toBeVisible()
-    await expect(canvas.getAllByRole('listitem')).toHaveLength(2)
+    const popover = await arrivedPopover(args.sentence.text)
+    await waitFor(() =>
+      expect(popover.contains(document.activeElement)).toBe(true),
+    )
+    await expect(within(popover).getAllByRole('listitem')).toHaveLength(2)
     await expect(
-      canvas.getByText(
+      within(popover).getByText(
         'opus-mac did not accept the message: the turn was still running',
       ),
     ).toBeVisible()
     // Read, never expanded: the crew's own trail opens a payload.
     await expect(
-      canvas.queryByRole('button', { name: /message carried/ }),
+      within(popover).queryByRole('button', { name: /message carried/ }),
     ).toBeNull()
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Close wire details' }),
+      within(popover).getByRole('button', { name: 'Close wire details' }),
     )
     await expect(args.onClose).toHaveBeenCalledOnce()
+    await expect(await canvas.findByText('Closed')).toBeVisible()
   },
 }
 
@@ -100,11 +133,27 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
 }
 
+/** Escape closes it, as every popover does (MC-5). */
+export const Escape: Story = {
+  play: async ({ args, canvas, userEvent }) => {
+    const popover = await arrivedPopover(args.sentence.text)
+    await waitFor(() =>
+      expect(popover.contains(document.activeElement)).toBe(true),
+    )
+    await userEvent.keyboard('{Escape}')
+    await expect(args.onClose).toHaveBeenCalledOnce()
+    await expect(await canvas.findByText('Closed')).toBeVisible()
+  },
+}
+
 /** A wire that is off and has never fired. */
 export const Empty: Story = {
   args: { armed: false, hopLines: [] },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText('This wire has not fired yet.')).toBeVisible()
-    await expect(canvas.queryByRole('list')).toBeNull()
+  play: async () => {
+    const popover = await arrivedPopover()
+    await expect(
+      within(popover).getByText('This wire has not fired yet.'),
+    ).toBeVisible()
+    await expect(within(popover).queryByRole('list')).toBeNull()
   },
 }

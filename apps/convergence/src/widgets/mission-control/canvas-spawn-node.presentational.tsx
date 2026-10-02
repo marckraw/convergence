@@ -7,6 +7,7 @@ import {
   formatSpawnNodeSpec,
 } from '@/features/mission-control'
 import { cn } from '@convergence/ui'
+import { CANVAS_HIDDEN_HANDLE } from './session-canvas.styles'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasSpawnNodeData } from './session-canvas.types'
 
@@ -28,9 +29,11 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
       style={{ width: CANVAS_NODE_WIDTH, height: CANVAS_SPAWN_NODE_HEIGHT }}
       className={cn(
         'flex flex-col justify-center gap-0.5 rounded-lg border border-dashed px-3 py-2',
+        // Armed, it will open a session: the success tone, as a delivered
+        // hop wears it (R1).
         spawn.armed
-          ? 'border-emerald-500/40 bg-emerald-500/[0.04]'
-          : 'border-border bg-foreground/[0.03] opacity-70',
+          ? 'border-success-line bg-success-soft'
+          : 'border-line bg-fill-quiet opacity-70',
       )}
     >
       <Handle
@@ -38,7 +41,7 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
         type="target"
         position={Position.Left}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
       {/* The other three sides (R11): a spawned session a route reaches
           from above or below is entered there, not dragged round to the left. */}
@@ -47,21 +50,21 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
         type="target"
         position={Position.Right}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
       <Handle
         id={CANVAS_SIDE_HANDLE.target.top}
         type="target"
         position={Position.Top}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
       <Handle
         id={CANVAS_SIDE_HANDLE.target.bottom}
         type="target"
         position={Position.Bottom}
         isConnectable={false}
-        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+        className={CANVAS_HIDDEN_HANDLE}
       />
 
       <div className="flex items-center gap-1.5">
@@ -69,15 +72,15 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
           aria-hidden
           className={cn(
             'size-3 shrink-0',
-            spawn.armed ? 'text-emerald-400/80' : 'text-muted-foreground',
+            spawn.armed ? 'text-success-ink' : 'text-ink-muted',
           )}
         />
-        <span className="truncate text-xs font-medium text-foreground">
+        <span className="truncate text-xs font-medium text-ink">
           {spawn.name}
         </span>
       </div>
 
-      <p className="truncate pl-[18px] text-[11px] text-muted-foreground">
+      <p className="truncate pl-4.5 text-2xs text-ink-muted">
         starts a new session · {formatSpawnNodeSpec(spawn)}
       </p>
     </div>

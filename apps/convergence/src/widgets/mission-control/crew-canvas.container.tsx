@@ -102,7 +102,11 @@ import type {
   SessionCard,
   SessionCrewGroup,
 } from '@/features/mission-control'
-import { Button, useConfirm } from '@convergence/ui'
+import { Button, ConfirmDialog, EmptyState, useConfirm } from '@convergence/ui'
+import {
+  INSPECTOR_COLUMN_CLASS,
+  ROOM_COLUMN_CLASS,
+} from './session-canvas.styles'
 import { SessionCanvas } from './session-canvas.container'
 import type { SessionCanvasAuthoring } from './session-canvas.container'
 
@@ -1563,7 +1567,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 })
               }
               size="sm"
-              className="text-[11px]"
+              className="text-2xs"
             >
               Import crew…
             </Button>
@@ -1587,18 +1591,25 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
 
   if (!crew || !selectedGroup) {
     return (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className={ROOM_COLUMN_CLASS}>
         {toolbar}
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <Waypoints className="size-6 text-muted-foreground" />
-          <p className="text-sm font-medium">Start with a conversation</p>
-          <p className="max-w-sm text-xs text-muted-foreground">
-            Add existing conversations to a crew, then connect their replies.
-          </p>
-          <p className="max-w-sm text-xs text-muted-foreground/70">
-            Conversations outside crews remain available in Flat.
-          </p>
-        </div>
+        <EmptyState
+          variant="plain"
+          layout="centred"
+          icon={Waypoints}
+          title="Start with a conversation"
+          detail={
+            <>
+              <span className="block">
+                Add existing conversations to a crew, then connect their
+                replies.
+              </span>
+              <span className="block">
+                Conversations outside crews remain available in Flat.
+              </span>
+            </>
+          }
+        />
       </div>
     )
   }
@@ -1606,7 +1617,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   return (
     <div
       data-crew-canvas
-      className="flex h-full min-h-0 flex-col"
+      className={ROOM_COLUMN_CLASS}
       onClickCapture={(event) => {
         // Selecting a crew is touching anything in it. Capture rather than
         // bubble so the crew is chosen even when the click also opens a card.
@@ -1694,14 +1705,14 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           panel rather than only in one inspector, because "run", "lap" and
           "delivery" are the three words the whole surface is written in. */}
           {historyOpen && selectedRun?.status.word === 'handed-back' ? (
-            <p className="border-t border-white/10 px-5 py-1.5 text-[10px] text-muted-foreground/70">
+            <p className="border-t border-hairline px-5 py-1.5 text-3xs text-ink-muted">
               {RUN_LAP_DELIVERY_GLOSSARY.join(' ')}
             </p>
           ) : null}
         </div>
 
         {panel.kind === 'connection' && draft ? (
-          <div className="w-[340px] shrink-0">
+          <div className={INSPECTOR_COLUMN_CLASS}>
             <ConnectionInspector
               sourceName={
                 resolveName(draft.sourceSessionId) ?? 'This conversation'
@@ -1950,7 +1961,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         ) : null}
 
         {panel.kind === 'crew-settings' ? (
-          <div className="w-[340px] shrink-0">
+          <div className={INSPECTOR_COLUMN_CLASS}>
             <CrewSettingsPanel
               trackerSection={
                 <TrackerBindingFormContainer key={crew.id} crew={crew} />
@@ -2072,7 +2083,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         ) : null}
 
         {panel.kind === 'history-event' && openedRecord ? (
-          <div className="w-[340px] shrink-0">
+          <div className={INSPECTOR_COLUMN_CLASS}>
             <HistoryEventInspector
               title={eventsById.get(panel.eventId)?.title ?? 'Recorded event'}
               tone={eventsById.get(panel.eventId)?.tone ?? 'unknown'}
@@ -2173,7 +2184,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         ) : null}
 
         {panel.kind === 'add-conversations' ? (
-          <div className="w-[340px] shrink-0">
+          <div className={INSPECTOR_COLUMN_CLASS}>
             <AddConversationsPanel
               crewName={crew.name}
               query={addQuery}
@@ -2204,52 +2215,33 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         ) : null}
       </div>
 
-      {/* Frame 10-02. Leaving an unfinished draft asks before losing it. */}
-      {confirmDiscard ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70">
-          <div
-            role="alertdialog"
-            aria-label="Discard this draft?"
-            className="flex w-80 flex-col gap-2 rounded-lg border border-white/15 bg-card px-4 py-3"
-          >
-            <p className="text-sm font-medium">Discard this draft?</p>
-            <p className="text-[11px] text-muted-foreground">
-              This connection has not been saved. Leaving it will discard the
-              draft.
-            </p>
-            <div className="flex items-center gap-1.5">
-              <Button
-                type="button"
-                variant="tonal"
-                onClick={() => setConfirmDiscard(null)}
-                className="text-[11px]"
-              >
-                Keep editing
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  const leaving = confirmDiscard
-                  setConfirmDiscard(null)
-                  setDraft(null)
-                  setSavedDraft(null)
-                  setSaveError(null)
-                  setRecipientNote(null)
-                  clearRelayError()
-                  // The action decides where they land -- another draft, a
-                  // stored wire, a recorded event, a run, or nothing. The
-                  // guard only asked.
-                  leaving.run()
-                }}
-                className="text-[11px]"
-              >
-                Discard draft
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Frame 10-02. Leaving an unfinished draft asks before losing it,
+          in the app's own confirmation (MC-5, R5): the focus moves into it
+          and starts on Keep editing, Tab stays inside, and Escape keeps the
+          draft. */}
+      <ConfirmDialog
+        open={confirmDiscard !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDiscard(null)
+        }}
+        variant="danger"
+        title="Discard this draft?"
+        description="This connection has not been saved. Leaving it will discard the draft."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard draft"
+        onConfirm={() => {
+          const leaving = confirmDiscard
+          setConfirmDiscard(null)
+          setDraft(null)
+          setSavedDraft(null)
+          setSaveError(null)
+          setRecipientNote(null)
+          clearRelayError()
+          // The action decides where they land -- another draft, a stored
+          // wire, a recorded event, a run, or nothing. The guard only asked.
+          leaving?.run()
+        }}
+      />
     </div>
   )
 }

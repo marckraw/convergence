@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn, Tooltip } from '@convergence/ui'
+import { cn, focusRingInset, Tooltip } from '@convergence/ui'
 
 export function NeedsYouCardIcon({
   label,
@@ -17,7 +17,8 @@ export function NeedsYouCardIcon({
         aria-label={label}
         tabIndex={0}
         className={cn(
-          'flex items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'flex items-center justify-center rounded-md text-ink-muted',
+          focusRingInset,
           compact ? 'relative z-10 size-3 shrink-0' : 'h-7 w-10',
         )}
       >

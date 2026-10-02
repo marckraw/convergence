@@ -14,7 +14,7 @@ export function MergeReviewedRow({
 }) {
   const mergeable = row.verdict === 'mergeable'
   return (
-    <label className="flex min-h-10 items-start gap-3 rounded-lg bg-foreground/5 p-3 text-sm">
+    <label className="flex min-h-10 items-start gap-3 rounded-lg bg-ink/5 p-3 text-sm">
       <Checkbox
         className="mt-1"
         checked={mergeable && selected}
@@ -27,7 +27,7 @@ export function MergeReviewedRow({
           #{row.prNumber} · {row.title}
         </span>
         {!row.verdict.startsWith('merged ') ? (
-          <span className="block font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="block font-mono text-xs tabular-nums text-ink-muted">
             {row.headSha.slice(0, 7) || '—'} · {row.mergeStateStatus} · verify{' '}
             {row.verify}
           </span>
