@@ -119,23 +119,26 @@ describe('SpaceSessionLinkDialogContainer', () => {
     })
   })
 
-  it('creates a Space from the current session as a primary seed Attempt', async () => {
+  it('creates a Space from the current session in the New Space dialog, as its seed (ruling 4)', async () => {
     render(<SpaceSessionLinkDialogContainer />)
 
-    await screen.findByDisplayValue('Explore Space linking')
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create Space…' }),
+    )
 
-    await waitFor(() => {
-      expect(mockElectronAPI.space.create).toHaveBeenCalledWith({
-        title: 'Explore Space linking',
-      })
-      expect(mockElectronAPI.space.linkAttempt).toHaveBeenCalledWith({
-        spaceId: 'i1',
-        sessionId: 's1',
-        role: 'seed',
-        isPrimary: true,
-      })
+    // The New Space dialog makes it, links the seed and hands back here
+    // (space-create.container.test.tsx); this dialog only asks for it.
+    expect(useDialogStore.getState()).toMatchObject({
+      openDialog: 'space-create',
+      payload: {
+        newSpace: {
+          title: 'Explore Space linking',
+          seedSessionId: 's1',
+          returnTo: 'space-session-link',
+        },
+      },
     })
+    expect(mockElectronAPI.space.create).not.toHaveBeenCalled()
   })
 
   it('attaches the current session to an existing Space with a role', async () => {

@@ -128,18 +128,16 @@ interface SpaceWorkboardProps {
   synthesisPreview: SpaceSynthesisPreview | null
   artifactDraft: SpaceArtifactDraft
   artifactDialogOpen: boolean
-  createTitle: string
   attemptCounts: Record<string, number>
   artifactCounts: Record<string, number>
   isLoading: boolean
-  isCreating: boolean
   isCreatingArtifact: boolean
   isDiscoveringArtifacts: boolean
   isSynthesizing: boolean
   error: string | null
   onOpenChange: (open: boolean) => void
-  onCreateTitleChange: (value: string) => void
-  onCreate: () => void
+  /** Opens the New Space dialog, the one way to create a Space (ruling 4). */
+  onCreateSpace: () => void
   onSelectSpace: (id: string) => void
   /** A change to the Space's own fields; it is kept as it is made (R6). */
   onDraftChange: (draft: SpaceDraft) => void
@@ -185,18 +183,15 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   synthesisPreview,
   artifactDraft,
   artifactDialogOpen,
-  createTitle,
   attemptCounts,
   artifactCounts,
   isLoading,
-  isCreating,
   isCreatingArtifact,
   isDiscoveringArtifacts,
   isSynthesizing,
   error,
   onOpenChange,
-  onCreateTitleChange,
-  onCreate,
+  onCreateSpace,
   onSelectSpace,
   onDraftChange,
   onArtifactDraftChange,
@@ -222,7 +217,6 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   onSetPrimaryAttempt,
   onDetachAttempt,
 }) => {
-  const createDisabled = createTitle.trim().length === 0 || isCreating
   const titleMissing = selectedDraft.title.trim().length === 0
 
   return (
@@ -243,31 +237,16 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <section className="flex min-h-0 flex-col border-b border-line-soft md:w-80 md:shrink-0 md:border-r md:border-b-0">
           <div className="border-b border-line-soft p-4">
-            <form
-              className="flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (!createDisabled) onCreate()
-              }}
+            {/* One way to create a Space: the New Space dialog (ruling 4). */}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onCreateSpace}
+              className="w-full"
             >
-              <Input
-                size="lg"
-                value={createTitle}
-                onChange={(event) => onCreateTitleChange(event.target.value)}
-                placeholder="New Space"
-                disabled={isCreating}
-                aria-label="New Space title"
-              />
-              <IconButton
-                label="Create Space"
-                type="submit"
-                variant="secondary"
-                disabled={createDisabled}
-                size="lg"
-              >
-                <Plus className="size-4" />
-              </IconButton>
-            </form>
+              <Plus className="size-4" />
+              Create Space…
+            </Button>
           </div>
 
           <div className="app-scrollbar max-h-64 min-h-0 overflow-y-auto p-2 md:max-h-none md:flex-1">
@@ -281,7 +260,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
               <EmptyState
                 variant="plain"
                 title="No Spaces yet"
-                detail="Name one above to start."
+                detail="Create one above to start."
               />
             ) : (
               <div className="space-y-1">

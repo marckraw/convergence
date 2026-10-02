@@ -324,7 +324,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
             className="w-full justify-start"
           >
             <FolderPlus className="h-4 w-4" />
-            New Space
+            Create Space…
           </Button>
         </div>
       ) : null}

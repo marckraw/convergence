@@ -4,12 +4,12 @@ import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore, type SpaceAttemptRole } from '@/entities/space'
 import { useSessionStore } from '@/entities/session'
 import { SpaceSessionLinkDialog } from './space-session-link.presentational'
-import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 export const SpaceSessionLinkDialogContainer: FC = () => {
   const open = useDialogStore((s) => s.openDialog === 'space-session-link')
   const payload = useDialogStore((s) => s.payload)
   const closeDialog = useDialogStore((s) => s.close)
+  const openDialog = useDialogStore((s) => s.open)
   const sessionId = payload && 'sessionId' in payload ? payload.sessionId : null
   const sessions = useSessionStore((s) => s.sessions)
   const globalSessions = useSessionStore((s) => s.globalSessions)
@@ -20,15 +20,12 @@ export const SpaceSessionLinkDialogContainer: FC = () => {
   const loadSpaces = useSpaceStore((s) => s.loadSpaces)
   const loadAttempts = useSpaceStore((s) => s.loadAttempts)
   const loadAttemptsForSession = useSpaceStore((s) => s.loadAttemptsForSession)
-  const createSpace = useSpaceStore((s) => s.createSpace)
   const linkAttempt = useSpaceStore((s) => s.linkAttempt)
   const unlinkAttempt = useSpaceStore((s) => s.unlinkAttempt)
   const clearError = useSpaceStore((s) => s.clearError)
-  const [createTitle, setCreateTitle] = useState('')
   const [selectedSpaceId, setSelectedSpaceId] = useState('')
   const [selectedRole, setSelectedRole] =
     useState<SpaceAttemptRole>('implementation')
-  const [isCreating, setIsCreating] = useState(false)
   const [isLinking, setIsLinking] = useState(false)
   const [isDetaching, setIsDetaching] = useState(false)
 
@@ -67,10 +64,9 @@ export const SpaceSessionLinkDialogContainer: FC = () => {
 
   useEffect(() => {
     if (!open) return
-    setCreateTitle(session?.name ?? '')
     setSelectedSpaceId('')
     setSelectedRole('implementation')
-  }, [open, session?.name])
+  }, [open])
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -79,32 +75,21 @@ export const SpaceSessionLinkDialogContainer: FC = () => {
     [closeDialog],
   )
 
-  const handleCreateFromSession = useCallback(async () => {
+  /**
+   * The New Space dialog is the one way to create a Space (ruling 4): it
+   * starts from this session's name, makes the session the new Space's seed
+   * attempt, and hands back here.
+   */
+  const handleCreateFromSession = useCallback(() => {
     if (!session) return
-    const title = createTitle.trim()
-    if (!title) return
-    setIsCreating(true)
-    const space = await createSpace({ title })
-    if (space) {
-      await linkAttempt({
-        spaceId: space.id,
-        sessionId: session.id,
-        role: 'seed',
-        isPrimary: true,
-      })
-      await loadAttempts(space.id)
-      await loadAttemptsForSession(session.id)
-      setSelectedSpaceId('')
-    }
-    setIsCreating(false)
-  }, [
-    createSpace,
-    createTitle,
-    linkAttempt,
-    loadAttempts,
-    loadAttemptsForSession,
-    session,
-  ])
+    openDialog('space-create', {
+      newSpace: {
+        title: session.name,
+        seedSessionId: session.id,
+        returnTo: 'space-session-link',
+      },
+    })
+  }, [openDialog, session])
 
   const handleAttachToSpace = useCallback(async () => {
     if (!session || !selectedSpaceId) return
@@ -140,28 +125,19 @@ export const SpaceSessionLinkDialogContainer: FC = () => {
     [loadAttemptsForSession, session, unlinkAttempt],
   )
 
-  // Enable cmd+Enter to submit the Create from Session form
-  useFormSubmitShortcut(
-    open && !!session && !!createTitle.trim(),
-    handleCreateFromSession,
-  )
-
   return (
     <SpaceSessionLinkDialog
       open={open}
       sessionName={session?.name ?? 'Unknown session'}
       spaces={spaces}
       linkedSpaces={linkedSpaces}
-      createTitle={createTitle}
       selectedSpaceId={selectedSpaceId}
       selectedRole={selectedRole}
       isLoading={loading}
-      isCreating={isCreating}
       isLinking={isLinking}
       isDetaching={isDetaching}
       error={error}
       onOpenChange={handleOpenChange}
-      onCreateTitleChange={setCreateTitle}
       onSelectedSpaceChange={setSelectedSpaceId}
       onSelectedRoleChange={setSelectedRole}
       onCreateFromSession={handleCreateFromSession}

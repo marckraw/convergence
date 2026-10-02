@@ -137,7 +137,7 @@ export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'New chat' }))
     await expect(args.onNewSession).toHaveBeenCalledOnce()
-    await userEvent.click(canvas.getByRole('button', { name: 'New Space' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Create Space…' }))
     await expect(args.onNewSpace).toHaveBeenCalledOnce()
 
     await userEvent.click(

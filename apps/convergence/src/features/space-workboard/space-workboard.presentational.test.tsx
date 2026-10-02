@@ -88,18 +88,15 @@ function renderDialog(
     synthesisPreview: null,
     artifactDraft,
     artifactDialogOpen: false,
-    createTitle: '',
     attemptCounts: {},
     artifactCounts: {},
     isLoading: false,
-    isCreating: false,
     isCreatingArtifact: false,
     isDiscoveringArtifacts: false,
     isSynthesizing: false,
     error: null,
     onOpenChange: vi.fn(),
-    onCreateTitleChange: vi.fn(),
-    onCreate: vi.fn(),
+    onCreateSpace: vi.fn(),
     onSelectSpace: vi.fn(),
     onDraftChange: vi.fn(),
     onArtifactDraftChange: vi.fn(),
@@ -139,12 +136,15 @@ describe('SpaceWorkboardDialog', () => {
     expect(screen.getByText('Select or create a Space.')).toBeInTheDocument()
   })
 
-  it('creates a Space with a title', () => {
-    const props = renderDialog({ createTitle: 'New artifact flow' })
+  it('creates a Space through the New Space dialog (ruling 4)', () => {
+    const props = renderDialog()
 
-    fireEvent.click(screen.getByRole('button', { name: /create space/i }))
+    expect(
+      screen.queryByRole('textbox', { name: /new space title/i }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Create Space…' }))
 
-    expect(props.onCreate).toHaveBeenCalled()
+    expect(props.onCreateSpace).toHaveBeenCalledOnce()
   })
 
   it('selects and edits a Space', () => {

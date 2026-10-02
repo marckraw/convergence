@@ -4,6 +4,8 @@ import { Field, FieldLabel, FormDialog, Input, Textarea } from '@convergence/ui'
 interface SpaceCreateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Opened from a session, which becomes the new Space's seed attempt. */
+  seeded?: boolean
   title: string
   brief: string
   isSubmitting: boolean
@@ -16,6 +18,7 @@ interface SpaceCreateDialogProps {
 export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
   open,
   onOpenChange,
+  seeded = false,
   title,
   brief,
   isSubmitting,
@@ -28,7 +31,11 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
     open={open}
     onOpenChange={onOpenChange}
     title="New Space"
-    description="Create a durable Chat context for related attempts."
+    description={
+      seeded
+        ? 'Create a durable Chat context, with this session as its seed attempt.'
+        : 'Create a durable Chat context for related attempts.'
+    }
     saves="on-save"
     onSave={onSubmit}
     saveLabel="Create Space"

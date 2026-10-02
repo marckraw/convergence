@@ -132,7 +132,6 @@ export const SpaceWorkboardDialogContainer: FC<{
   const loading = useSpaceStore((s) => s.loading)
   const error = useSpaceStore((s) => s.error)
   const loadSpaces = useSpaceStore((s) => s.loadSpaces)
-  const createSpace = useSpaceStore((s) => s.createSpace)
   const updateSpace = useSpaceStore((s) => s.updateSpace)
   const loadAttempts = useSpaceStore((s) => s.loadAttempts)
   const loadArtifacts = useSpaceStore((s) => s.loadArtifacts)
@@ -148,7 +147,6 @@ export const SpaceWorkboardDialogContainer: FC<{
   const sessions = useSessionStore((s) => s.globalSessions)
   const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [createTitle, setCreateTitle] = useState('')
   const [draft, setDraft] = useState<SpaceDraft>(emptyDraft)
   const [artifactDraft, setArtifactDraft] =
     useState<SpaceArtifactDraft>(emptyArtifactDraft)
@@ -158,7 +156,6 @@ export const SpaceWorkboardDialogContainer: FC<{
   >([])
   const [synthesisPreview, setSynthesisPreview] =
     useState<SpaceSynthesisPreview | null>(null)
-  const [isCreating, setIsCreating] = useState(false)
   const [isCreatingArtifact, setIsCreatingArtifact] = useState(false)
   const [isDiscoveringArtifacts, setIsDiscoveringArtifacts] = useState(false)
   const [isSynthesizing, setIsSynthesizing] = useState(false)
@@ -283,21 +280,15 @@ export const SpaceWorkboardDialogContainer: FC<{
     setSynthesisPreview(null)
   }, [selectedSpaceId])
 
-  const handleCreate = useCallback(async () => {
-    const title = createTitle.trim()
-    if (!title) return
+  /**
+   * The New Space dialog is the one way to create a Space (ruling 4): it
+   * opens over this board's place, and hands back to it with the new Space
+   * chosen. Typing still waiting is kept first.
+   */
+  const handleCreateSpace = useCallback(() => {
     flushSave()
-    setIsCreating(true)
-    const space = await createSpace({ title })
-    setIsCreating(false)
-    if (!space) return
-    setCreateTitle('')
-    setSelectedId(space.id)
-    setDraft(draftFromSpace(space))
-  }, [createSpace, createTitle, flushSave])
-
-  // Enable cmd+Enter to submit the New Space form
-  useFormSubmitShortcut(!!createTitle.trim(), handleCreate)
+    openDialog('space-create', { newSpace: { returnTo: 'space-workboard' } })
+  }, [flushSave, openDialog])
 
   useEffect(() => {
     if (open) clearError()
@@ -632,18 +623,15 @@ export const SpaceWorkboardDialogContainer: FC<{
       synthesisPreview={synthesisPreview}
       artifactDraft={artifactDraft}
       artifactDialogOpen={artifactDialogOpen}
-      createTitle={createTitle}
       attemptCounts={attemptCounts}
       artifactCounts={artifactCounts}
       isLoading={loading}
-      isCreating={isCreating}
       isCreatingArtifact={isCreatingArtifact}
       isDiscoveringArtifacts={isDiscoveringArtifacts}
       isSynthesizing={isSynthesizing}
       error={error}
       onOpenChange={handleOpenChange}
-      onCreateTitleChange={setCreateTitle}
-      onCreate={handleCreate}
+      onCreateSpace={handleCreateSpace}
       onSelectSpace={handleSelectSpace}
       onDraftChange={handleDraftChange}
       onArtifactDraftChange={setArtifactDraft}
