@@ -329,7 +329,11 @@ export const Busy: Story = {
   },
 }
 
-/** Codex: the speed, and the advanced permission controls opened. */
+/**
+ * Codex: the speed, and the advanced permission controls opened. Fast is not
+ * the default, and the speed says so in its words alone: no tint of its own,
+ * like every other picker in the row (ruling 11).
+ */
 export const Codex: Story = {
   args: {
     selection: resolveProviderSelection(
@@ -350,6 +354,11 @@ export const Codex: Story = {
     const speed = canvas.getByRole('combobox', { name: 'Speed' })
     await expect(speed).toBeVisible()
     await expect(speed).toHaveTextContent('Fast')
+    await expect(getComputedStyle(speed).backgroundColor).toBe(
+      getComputedStyle(
+        canvas.getByRole('combobox', { name: 'Reasoning effort' }),
+      ).backgroundColor,
+    )
     const advanced = canvas.getByRole('button', {
       name: 'Advanced permission controls',
     })

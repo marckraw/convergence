@@ -41,7 +41,6 @@ import {
   Chip,
   ComposerCard,
   Kbd,
-  cn,
   IconButton,
   listboxOptionId,
   listboxStep,
@@ -960,6 +959,10 @@ export const Composer: FC<ComposerProps> = ({
                     provider: a speed change reaches the conversation's next
                     turn, so it is only held while a turn is in flight
                     (MAR-3572). Its rows are the account's own offer (MAR-3574).
+                    It shows its value like every other picker, without a tint
+                    of its own for "not Standard": that was the old "on" look
+                    typed by hand, and R7's chosen look belongs to toggles
+                    (ruling 11, CONV-14).
                   */}
                   {codexBillingControlsAvailable ? (
                     <ComposerCombobox
@@ -977,11 +980,7 @@ export const Composer: FC<ComposerProps> = ({
                       icon={<Zap className="h-3.5 w-3.5" />}
                       onChange={onCodexSpeedChange}
                       disabled={disabled || modelSelectionDisabled}
-                      className={cn(
-                        composerToolbarControl,
-                        codexSpeedId !== 'default' &&
-                          'bg-surface-muted text-ink',
-                      )}
+                      className={composerToolbarControl}
                     />
                   ) : null}
                   {/*
