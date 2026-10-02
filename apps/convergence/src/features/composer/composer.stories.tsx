@@ -240,11 +240,15 @@ export const Default: Story = {
     message.focus()
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}')
     await expect(args.onSubmit).toHaveBeenCalledTimes(2)
-    // The provider, model and effort are named controls in the row.
+    // The provider, model and effort are controls in the row, each named by
+    // what it picks and showing its value (CONV N2).
+    const provider = canvas.getByRole('combobox', { name: 'Provider' })
+    await expect(provider).toBeVisible()
+    await expect(provider).toHaveTextContent('Anthropic')
+    await expect(canvas.getByRole('combobox', { name: 'Model' })).toBeVisible()
     await expect(
-      canvas.getByRole('combobox', { name: 'Anthropic' }),
-    ).toBeVisible()
-    await expect(canvas.getByRole('combobox', { name: 'High' })).toBeVisible()
+      canvas.getByRole('combobox', { name: 'Reasoning effort' }),
+    ).toHaveTextContent('High')
   },
 }
 
@@ -325,7 +329,11 @@ export const Busy: Story = {
   },
 }
 
-/** Codex: the speed, and the advanced permission controls opened. */
+/**
+ * Codex: the speed, and the advanced permission controls opened. Fast is not
+ * the default, and the speed says so in its words alone: no tint of its own,
+ * like every other picker in the row (ruling 11).
+ */
 export const Codex: Story = {
   args: {
     selection: resolveProviderSelection(
@@ -343,9 +351,14 @@ export const Codex: Story = {
     permissionAdvancedOpen: true,
   },
   play: async ({ args, canvas, userEvent }) => {
-    await expect(
-      canvas.getByRole('combobox', { name: 'Speed: Fast' }),
-    ).toBeVisible()
+    const speed = canvas.getByRole('combobox', { name: 'Speed' })
+    await expect(speed).toBeVisible()
+    await expect(speed).toHaveTextContent('Fast')
+    await expect(getComputedStyle(speed).backgroundColor).toBe(
+      getComputedStyle(
+        canvas.getByRole('combobox', { name: 'Reasoning effort' }),
+      ).backgroundColor,
+    )
     const advanced = canvas.getByRole('button', {
       name: 'Advanced permission controls',
     })
@@ -383,7 +396,7 @@ export const Remote: Story = {
       canvas.getByText('Asking grok-mac which providers it runs…'),
     ).toBeVisible()
     await expect(
-      canvas.queryByRole('combobox', { name: 'Anthropic' }),
+      canvas.queryByRole('combobox', { name: 'Provider' }),
     ).toBeNull()
     await expect(
       canvas.getByRole('button', { name: 'Send message' }),

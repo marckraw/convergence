@@ -25,7 +25,6 @@ interface ComposerContextMentionPickerProps {
   highlightedIndex: number
   onSelect: (item: ProjectContextItem) => void
   onHover: (index: number) => void
-  onDismiss: () => void
 }
 
 /**
@@ -36,23 +35,11 @@ interface ComposerContextMentionPickerProps {
  */
 export const ComposerContextMentionPicker: FC<
   ComposerContextMentionPickerProps
-> = ({
-  open,
-  listId,
-  items,
-  highlightedIndex,
-  onSelect,
-  onHover,
-  onDismiss,
-}) => {
+> = ({ open, listId, items, highlightedIndex, onSelect, onHover }) => {
   if (!open) return null
 
   return (
-    <InlinePicker
-      testId="composer-context-mention-picker"
-      closeLabel="Close context mention picker"
-      onDismiss={onDismiss}
-    >
+    <InlinePicker testId="composer-context-mention-picker">
       {items.length === 0 ? (
         <InlinePickerState
           state="empty"

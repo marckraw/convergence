@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react'
 import { cn } from '#lib/cn.pure'
+import { focusRingAroundField } from '#lib/focus-ring.styles'
 
 export type ComposerCardProps = Omit<ComponentProps<'div'>, 'className'> & {
   /** Its place: a depth over what sits beneath it, never a new look. */
@@ -19,7 +20,9 @@ export type ComposerCardProps = Omit<ComponentProps<'div'>, 'className'> & {
  *
  * The field inside is a bare Textarea that grows (`variant="bare"`,
  * `autoGrow`, `maxRows`): the card is what reads as the field, so the card
- * has the edge and the field has none. Drop handlers go on the card, or on
+ * has the edge and the field has none, and the card rings over its edge while
+ * the keyboard is in the field (ruling 5, DS-7), not while it is on a button
+ * in the card, which rings for itself. Drop handlers go on the card, or on
  * whatever holds it and more (the composer's card and the strip under it are
  * one drop target).
  */
@@ -35,6 +38,7 @@ export function ComposerCard({
       data-dragging={dragging ? '' : undefined}
       className={cn(
         'rounded-xl border bg-surface p-3 transition-colors',
+        focusRingAroundField,
         dragging ? 'border-strong border-dashed' : 'border-line',
         className,
       )}

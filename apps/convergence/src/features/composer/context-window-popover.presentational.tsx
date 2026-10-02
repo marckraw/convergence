@@ -5,11 +5,11 @@ import {
   cn,
   DescriptionItem,
   DescriptionList,
-  IconButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
   StatusDot,
+  StatusPillButton,
 } from '@convergence/ui'
 import type { ContextCompactionActionState } from './context-compaction.pure'
 import {
@@ -22,11 +22,7 @@ import {
   renderUsageNote,
   UsageMeterRow,
 } from './usage-popover.presentational'
-import {
-  contextDotHalo,
-  usagePillTone,
-  usageSection,
-} from './usage-pill.styles'
+import { contextDotHalo, usageSection } from './usage-pill.styles'
 
 /** A quiet line under an action: why it waits, how it went. */
 const usageFootnote = 'text-2xs leading-relaxed text-ink-muted'
@@ -97,23 +93,30 @@ export function ContextWindowPopover({
       }}
     >
       <span onPointerEnter={openPanel} onPointerLeave={closePanelSoon}>
+        {/* A state you press to open what it is about: the round pill of the
+            row's size, in its tone (DS-9), named by its label (R2). */}
         <PopoverTrigger
           render={
-            <IconButton
+            <StatusPillButton
+              size="sm"
+              tone={tone}
               label={contextWindowLabel(contextWindow)}
+              leading={
+                <StatusDot
+                  tone={tone}
+                  size="lg"
+                  className={contextDotHalo[tone]}
+                />
+              }
               type="button"
-              variant="ghost"
               onClick={(event) => {
                 event.stopPropagation()
                 openPanel()
               }}
-              size="sm"
-              className={cn('shrink-0', usagePillTone[tone])}
+              className="shrink-0"
             />
           }
-        >
-          <StatusDot tone={tone} size="lg" className={contextDotHalo[tone]} />
-        </PopoverTrigger>
+        />
       </span>
       <PopoverContent
         aria-label="Context window"

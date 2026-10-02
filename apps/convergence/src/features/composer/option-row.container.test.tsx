@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
+import { findPicker, picker, queryPicker } from '../../../test/composer-harness'
 import { useSessionStore, type ProviderInfo } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
@@ -257,7 +258,7 @@ function getAllCalls(): unknown[] {
 
 /** Moves the strip to a named machine, the way a person does. */
 async function chooseHost(from: RegExp, label: string) {
-  fireEvent.click(screen.getByRole('combobox', { name: from }))
+  fireEvent.click(picker('Runs on', from))
   fireEvent.click(await screen.findByText(label))
 }
 
@@ -418,25 +419,17 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     }
 
     renderComposer()
-    expect(
-      await screen.findByRole('combobox', { name: 'Anthropic' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Provider', 'Anthropic')).toBeInTheDocument()
 
     await chooseHost(/Local/, 'kuba-vps')
 
-    expect(
-      await screen.findByRole('combobox', { name: 'Claude Code' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('combobox', { name: 'Daemon Sonnet' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Provider', 'Claude Code')).toBeInTheDocument()
+    expect(picker('Model', 'Daemon Sonnet')).toBeInTheDocument()
     // Nothing of this machine's catalog survives the move.
-    expect(screen.queryByRole('combobox', { name: 'Anthropic' })).toBeNull()
-    expect(
-      screen.queryByRole('combobox', { name: 'Claude Sonnet 4.5' }),
-    ).toBeNull()
+    expect(queryPicker('Provider', 'Anthropic')).toBeNull()
+    expect(queryPicker('Model', 'Claude Sonnet 4.5')).toBeNull()
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Claude Code' }))
+    fireEvent.click(picker('Provider', 'Claude Code'))
     expect(
       await screen.findByRole('option', { name: /Claude Code/ }),
     ).toBeInTheDocument()
@@ -465,15 +458,11 @@ describe('the option row obeys the strip (MAR-2682)', () => {
 
     renderComposer()
     await chooseHost(/Local/, 'kuba-vps')
-    expect(
-      await screen.findByRole('combobox', { name: 'A Sonnet' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Model', 'A Sonnet')).toBeInTheDocument()
 
     await chooseHost(/kuba-vps/, 'backpack')
-    expect(
-      await screen.findByRole('combobox', { name: 'B GPT' }),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'A Sonnet' })).toBeNull()
+    expect(await findPicker('Model', 'B GPT')).toBeInTheDocument()
+    expect(queryPicker('Model', 'A Sonnet')).toBeNull()
   })
 
   it('refuses a catalog that lands about the address its endpoint has left', async () => {
@@ -491,7 +480,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     deferredHosts.add('daemon-a')
 
     renderComposer()
-    await screen.findByRole('combobox', { name: 'Anthropic' })
+    await findPicker('Provider', 'Anthropic')
     await chooseHost(/Local/, 'kuba-vps')
     await waitFor(() => expect(deferred).toHaveLength(1))
 
@@ -512,9 +501,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
       })
     })
 
-    expect(
-      screen.queryByRole('combobox', { name: 'Old Machine Sonnet' }),
-    ).toBeNull()
+    expect(queryPicker('Model', 'Old Machine Sonnet')).toBeNull()
     expect(screen.getByTestId('composer-catalog-notice')).toHaveTextContent(
       'Asking kuba-vps which providers it runs',
     )
@@ -531,9 +518,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
         unreachableReason: null,
       })
     })
-    expect(
-      await screen.findByRole('combobox', { name: 'New Machine GPT' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Model', 'New Machine GPT')).toBeInTheDocument()
   })
   it('refuses a catalog that lands under a credential its endpoint has replaced', async () => {
     // The same defect through the one door S3 could not see: rotating a daemon
@@ -551,7 +536,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     deferredHosts.add('daemon-a')
 
     renderComposer()
-    await screen.findByRole('combobox', { name: 'Anthropic' })
+    await findPicker('Provider', 'Anthropic')
     await chooseHost(/Local/, 'kuba-vps')
     await waitFor(() => expect(deferred).toHaveLength(1))
 
@@ -573,9 +558,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
       })
     })
 
-    expect(
-      screen.queryByRole('combobox', { name: 'Old Credential Sonnet' }),
-    ).toBeNull()
+    expect(queryPicker('Model', 'Old Credential Sonnet')).toBeNull()
     expect(screen.getByTestId('composer-catalog-notice')).toHaveTextContent(
       'Asking kuba-vps which providers it runs',
     )
@@ -592,9 +575,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
         unreachableReason: null,
       })
     })
-    expect(
-      await screen.findByRole('combobox', { name: 'New Credential GPT' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Model', 'New Credential GPT')).toBeInTheDocument()
   })
 
   it('says it is asking while a remote catalog is in flight, and shows nothing local', async () => {
@@ -602,28 +583,24 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     hangingHosts.add('daemon-a')
 
     renderComposer()
-    await screen.findByRole('combobox', { name: 'Anthropic' })
+    await findPicker('Provider', 'Anthropic')
     await chooseHost(/Local/, 'kuba-vps')
 
     const notice = await screen.findByTestId('composer-catalog-notice')
     expect(notice).toHaveTextContent('Asking kuba-vps which providers it runs')
     // Not yet known and local are different states, and they look different:
     // there are no provider controls at all while the question is out.
-    expect(screen.queryByRole('combobox', { name: 'Anthropic' })).toBeNull()
-    expect(
-      screen.queryByRole('combobox', { name: 'Claude Sonnet 4.5' }),
-    ).toBeNull()
+    expect(queryPicker('Provider', 'Anthropic')).toBeNull()
+    expect(queryPicker('Model', 'Claude Sonnet 4.5')).toBeNull()
     expect(screen.queryByText('a@example.com')).toBeNull()
     // Not "the controls, emptied" — no controls. An empty provider select
     // beside the sentence is a door with nothing behind it, and it reads as a
     // machine that runs nothing rather than one that has not answered. The
     // strip's own picker is the only combobox left standing.
-    expect(
-      screen.queryByRole('combobox', { name: 'Select provider' }),
-    ).toBeNull()
-    expect(screen.queryByRole('combobox', { name: 'Select model' })).toBeNull()
+    expect(queryPicker('Provider', 'Select provider')).toBeNull()
+    expect(queryPicker('Model', 'Select model')).toBeNull()
     // And the strip is still live, so he is never trapped on a silent machine.
-    expect(screen.getByRole('combobox', { name: /kuba-vps/ })).toBeEnabled()
+    expect(picker('Runs on', /kuba-vps/)).toBeEnabled()
   })
 
   it('says which machine could not be asked when the catalog fails', async () => {
@@ -672,15 +649,13 @@ describe('the option row obeys the strip (MAR-2682)', () => {
 
     renderComposer()
     await chooseHost(/Local/, 'kuba-vps')
-    await screen.findByRole('combobox', { name: 'Codex' })
+    await findPicker('Provider', 'Codex')
 
     // The row settled on the one provider that machine will actually run.
-    expect(
-      screen.getByRole('combobox', { name: 'Daemon GPT' }),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'Cursor Model' })).toBeNull()
+    expect(picker('Model', 'Daemon GPT')).toBeInTheDocument()
+    expect(queryPicker('Model', 'Cursor Model')).toBeNull()
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Codex' }))
+    fireEvent.click(picker('Provider', 'Codex'))
     const blocked = await screen.findByRole('option', { name: /Cursor/ })
     expect(blocked).toHaveAttribute('aria-disabled', 'true')
     expect(blocked).toHaveTextContent(
@@ -690,13 +665,9 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     // Nor can it be reached by clicking it.
     fireEvent.click(blocked)
     await waitFor(() => {
-      expect(
-        screen.getByRole('combobox', { name: 'Codex' }),
-      ).toBeInTheDocument()
+      expect(picker('Provider', 'Codex')).toBeInTheDocument()
     })
-    expect(
-      screen.getByRole('combobox', { name: 'Daemon GPT' }),
-    ).toBeInTheDocument()
+    expect(picker('Model', 'Daemon GPT')).toBeInTheDocument()
   })
 
   it('drops the account picker on a remote and keeps it on this machine', async () => {
@@ -715,7 +686,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     expect(await screen.findByText('Default account')).toBeInTheDocument()
 
     await chooseHost(/Local/, 'kuba-vps')
-    await screen.findByRole('combobox', { name: 'Claude Code' })
+    await findPicker('Provider', 'Claude Code')
 
     // Remote: gone. Not disabled, not empty, not explained — a daemon has no
     // per-account concept, so there is no control (MAR-2682, "the account
@@ -750,7 +721,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
 
     renderComposer()
     await chooseHost(/Local/, 'kuba-vps')
-    const trigger = await screen.findByRole('combobox', { name: 'Claude Code' })
+    const trigger = await findPicker('Provider', 'Claude Code')
 
     fireEvent.click(trigger)
     const labels = ['Claude Code', 'Codex', 'Cursor']
@@ -782,9 +753,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
 
     // The options are still there — a blip must not empty a row that was right
     // a second ago.
-    expect(
-      await screen.findByRole('combobox', { name: 'Daemon GPT' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Model', 'Daemon GPT')).toBeInTheDocument()
     // And the row says the machine could not be re-asked, loudly: the same
     // treatment the strip gives a session whose machine is gone.
     const notice = screen.getByTestId('composer-catalog-notice')
@@ -829,27 +798,21 @@ describe('the option row obeys the strip (MAR-2682)', () => {
 
     renderComposer()
     // Local Codex: both controls are real, because this app owns that CLI.
-    expect(
-      await screen.findByRole('combobox', { name: 'Speed: Standard' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Speed', 'Standard')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /Codex usage/ }),
     ).toBeInTheDocument()
 
     await chooseHost(/Local/, 'kuba-vps')
-    await screen.findByRole('combobox', { name: 'Daemon GPT' })
+    await findPicker('Model', 'Daemon GPT')
 
     // Same provider, different machine: gone. Not disabled — absent.
-    expect(
-      screen.queryByRole('combobox', { name: 'Speed: Standard' }),
-    ).toBeNull()
+    expect(queryPicker('Speed', 'Standard')).toBeNull()
     expect(screen.queryByRole('button', { name: /Codex usage/ })).toBeNull()
 
     // Back here, and both return.
     await chooseHost(/kuba-vps/, 'Local')
-    expect(
-      await screen.findByRole('combobox', { name: 'Speed: Standard' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Speed', 'Standard')).toBeInTheDocument()
   })
 
   it('leaves a Local row exactly as it was, endpoints configured or not', async () => {
@@ -860,17 +823,13 @@ describe('the option row obeys the strip (MAR-2682)', () => {
 
     renderComposer()
 
-    expect(
-      await screen.findByRole('combobox', { name: 'Anthropic' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('combobox', { name: 'Claude Sonnet 4.5' }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Medium' })).toBeInTheDocument()
+    expect(await findPicker('Provider', 'Anthropic')).toBeInTheDocument()
+    expect(picker('Model', 'Claude Sonnet 4.5')).toBeInTheDocument()
+    expect(picker('Reasoning effort', 'Medium')).toBeInTheDocument()
     expect(screen.getByText('Default account')).toBeInTheDocument()
     expect(screen.queryByTestId('composer-catalog-notice')).toBeNull()
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
+    fireEvent.click(picker('Provider', 'Anthropic'))
     expect(
       await screen.findByRole('option', { name: /Claude Code/ }),
     ).toBeInTheDocument()
@@ -889,15 +848,13 @@ describe('the option row obeys the strip (MAR-2682)', () => {
 
     renderComposer()
 
-    expect(
-      await screen.findByRole('combobox', { name: 'Select provider' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Provider', 'Select provider')).toBeInTheDocument()
     expect(screen.queryByTestId('composer-catalog-notice')).toBeNull()
   })
 
   it('asks this machine when no endpoint is configured at all', async () => {
     renderComposer()
-    await screen.findByRole('combobox', { name: 'Anthropic' })
+    await findPicker('Provider', 'Anthropic')
 
     expect(getAllCalls()).toEqual(['local'])
   })
@@ -914,15 +871,13 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     hangingHosts.add('daemon-a')
 
     renderComposer()
-    await screen.findByRole('combobox', { name: 'Anthropic' })
+    await findPicker('Provider', 'Anthropic')
     // Opened here, on a row that has every right to it, so what follows is the
     // switch taking it away rather than it never having been there.
     fireEvent.click(
       screen.getByRole('button', { name: 'Advanced permission controls' }),
     )
-    expect(
-      screen.getByRole('combobox', { name: 'Ask before edits' }),
-    ).toBeInTheDocument()
+    expect(picker('Permission mode', 'Ask before edits')).toBeInTheDocument()
 
     await chooseHost(/Local/, 'kuba-vps')
     await screen.findByTestId('composer-catalog-notice')
@@ -933,17 +888,16 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     // listing is no reason for it to disappear (MAR-2689).
     const comboboxes = screen.getAllByRole('combobox')
     expect(comboboxes).toHaveLength(2)
-    expect(comboboxes[0]).toHaveAccessibleName(/kuba-vps/)
+    expect(comboboxes[0]).toHaveAccessibleName('Runs on')
+    expect(comboboxes[0]).toHaveTextContent('kuba-vps')
     expect(comboboxes[1]).toHaveAccessibleName(/marckraw\/new-blok/)
     // The permission preset and both doors to its advanced panel, gone with the
     // cluster they belong to.
-    expect(screen.queryByRole('combobox', { name: 'Ask' })).toBeNull()
+    expect(queryPicker('Permissions', 'Ask')).toBeNull()
     expect(
       screen.queryByRole('button', { name: 'Advanced permission controls' }),
     ).toBeNull()
-    expect(
-      screen.queryByRole('combobox', { name: 'Ask before edits' }),
-    ).toBeNull()
+    expect(queryPicker('Permission mode', 'Ask before edits')).toBeNull()
   })
 
   it('closes a permission panel that was open before the machine went silent', async () => {
@@ -958,13 +912,11 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     hangingHosts.add('daemon-a')
 
     const { rerender } = renderComposer()
-    await screen.findByRole('combobox', { name: 'Anthropic' })
+    await findPicker('Provider', 'Anthropic')
     fireEvent.click(
       screen.getByRole('button', { name: 'Advanced permission controls' }),
     )
-    expect(
-      screen.getByRole('combobox', { name: 'Ask before edits' }),
-    ).toBeInTheDocument()
+    expect(picker('Permission mode', 'Ask before edits')).toBeInTheDocument()
 
     // The same composer, now behind a live session on a machine that is not
     // answering: the panel's own open flag survives, the row must not.
@@ -983,9 +935,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     expect(
       await screen.findByTestId('composer-catalog-notice'),
     ).toHaveTextContent('Asking kuba-vps which providers it runs')
-    expect(
-      screen.queryByRole('combobox', { name: 'Ask before edits' }),
-    ).toBeNull()
+    expect(queryPicker('Permission mode', 'Ask before edits')).toBeNull()
     expect(screen.queryAllByRole('combobox')).toHaveLength(0)
   })
 
@@ -1010,9 +960,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     await waitFor(() => expect(getAllCalls()).toContain('local'))
     expect(getAllCalls()).not.toContain('   ')
     // And the row is this machine's, with no notice about an unreachable one.
-    expect(
-      await screen.findByRole('combobox', { name: 'Anthropic' }),
-    ).toBeInTheDocument()
+    expect(await findPicker('Provider', 'Anthropic')).toBeInTheDocument()
     expect(screen.queryByTestId('composer-catalog-notice')).toBeNull()
   })
 
@@ -1046,6 +994,6 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     expect(
       await screen.findByTestId('composer-catalog-notice'),
     ).toHaveTextContent('could not be asked')
-    expect(screen.queryByRole('combobox', { name: 'Daemon GPT' })).toBeNull()
+    expect(queryPicker('Model', 'Daemon GPT')).toBeNull()
   })
 })
