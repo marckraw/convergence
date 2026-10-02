@@ -1,11 +1,9 @@
-import type { FC } from 'react'
+import { useId, type FC } from 'react'
 import {
   ChevronDown,
   FileText,
   FlaskConical,
   MessageSquare,
-  Minus,
-  Plus,
   Trash2,
   Unlink,
 } from 'lucide-react'
@@ -13,10 +11,15 @@ import type { SessionCrewMember } from '@/entities/session-crew'
 import {
   Button,
   Checkbox,
+  ChoiceField,
   cn,
+  Field,
+  FieldDescription,
+  FieldLabel,
   IconButton,
   Input,
   Notice,
+  NumberField,
   SectionLabel,
   SegmentedControl,
   SegmentedControlItem,
@@ -28,7 +31,6 @@ import {
   Switch,
   Textarea,
 } from '@convergence/ui'
-import { INSPECTOR_CHOICE_CLASS } from './inspector.styles'
 import {
   LOCAL_HOST_ID,
   ROLE_CARD_LIMIT,
@@ -60,6 +62,14 @@ const LANES: readonly { value: SeatLane; label: string }[] = [
 
 /** A segment's value can't be null, so the default lane is this word. */
 const DEFAULT_LANE = 'default'
+
+/** What changes the WIP field's draft: typing, pasting, its arrow keys. A step press is saved at once instead. */
+const TYPED_REASONS: ReadonlySet<string> = new Set([
+  'input-change',
+  'input-clear',
+  'input-paste',
+  'keyboard',
+])
 
 interface SeatEditorProps {
   member: SessionCrewMember
@@ -134,18 +144,30 @@ export const SeatEditor: FC<SeatEditorProps> = ({
   const recipe = member.sessionId === null
   const orphan = member.conversationMissing
   const KindGlyph = orphan ? Unlink : recipe ? FlaskConical : MessageSquare
+  // A refusal describes the field it refuses (MC-4): its id is the field's
+  // aria-describedby while it shows.
+  const refusalIds = useId()
+  const refusalId = (field: SeatRefusalField) =>
+    problems[field] === undefined ? undefined : `${refusalIds}-${field}`
   const refusalFor = (field: SeatRefusalField) => {
     const message = problems[field]
     return message === undefined ? null : (
-      <SeatRefusal message={message} kept={refusalKeptLine(field, member)} />
+      <SeatRefusal
+        id={refusalId(field)}
+        message={message}
+        kept={refusalKeptLine(field, member)}
+      />
     )
   }
   // The stepper steps from what the field SHOWS -- the draft when there is one
   // (lap 2, E): stepping from the record sent `record + 1` after the typed
   // value, and the last write won.
-  const shownWip = Number(wipValue)
+  const typedWip = wipValue.trim() === '' ? Number.NaN : Number(wipValue)
+  const shownWip = Number.isFinite(typedWip) ? typedWip : null
   const stepBase =
-    Number.isInteger(shownWip) && shownWip >= 1 ? shownWip : member.wipLimit
+    shownWip !== null && Number.isInteger(shownWip) && shownWip >= 1
+      ? shownWip
+      : member.wipLimit
   const cardText = cardDraft ?? member.roleCard ?? ''
   const writingCard = cardDraft !== undefined || Boolean(member.roleCard)
   const cardOver =
@@ -203,6 +225,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             placeholder="unnamed"
             aria-label={`Baton name for ${label}`}
             aria-invalid={problems.batonName !== undefined || undefined}
+            aria-describedby={refusalId('batonName')}
             disabled={busy}
             onChange={(event) => onNameChange(event.target.value)}
             onBlur={onNameCommit}
@@ -241,6 +264,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             raised chip (R7). */}
         <SegmentedControl
           aria-label={`Role for ${label}`}
+          aria-describedby={refusalId('role')}
           size="xs"
           value={member.role}
           disabled={busy}
@@ -280,6 +304,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             value={cardText}
             aria-label={`Role card for ${label}`}
             aria-invalid={cardOver || undefined}
+            aria-describedby={refusalId('roleCard')}
             rows={8}
             onChange={(event) => onCardChange(event.target.value)}
             onBlur={onCardCommit}
@@ -318,10 +343,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           Policy
         </SectionLabel>
         {recipe ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-2xs text-ink-muted">
-              Host — where each spawn runs
-            </span>
+          <Field invalid={problems.hostPolicy !== undefined} className="gap-1">
+            <FieldLabel variant="caption" nativeLabel={false} render={<div />}>
+              Host <span className="sr-only">for {label}</span> — where each
+              spawn runs
+            </FieldLabel>
             {/* A short fixed list (MC-10, R9): the app's Select, not the
                 system's popup menu. */}
             <Select
@@ -335,7 +361,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             >
               <SelectTrigger
                 size="md"
-                aria-label={`Host for ${label}`}
+                aria-describedby={refusalId('hostPolicy')}
                 className="w-full text-xs"
               >
                 <SelectValue />
@@ -349,15 +375,17 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               </SelectContent>
             </Select>
             {refusalFor('hostPolicy')}
-          </div>
+          </Field>
         ) : null}
-        <div className="flex flex-col gap-1">
-          <span className="text-2xs text-ink-muted">Lane</span>
+        <Field invalid={problems.lanePolicy !== undefined} className="gap-1">
+          <FieldLabel variant="caption" nativeLabel={false} render={<div />}>
+            Lane <span className="sr-only">for {label}</span>
+          </FieldLabel>
           <SegmentedControl
-            aria-label={`Lane for ${label}`}
             size="xs"
             value={member.lanePolicy ?? DEFAULT_LANE}
             disabled={busy}
+            aria-describedby={refusalId('lanePolicy')}
             onValueChange={(value) => {
               const lanePolicy =
                 value === DEFAULT_LANE ? null : (value as SeatLane)
@@ -374,103 +402,95 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               </SegmentedControlItem>
             ))}
           </SegmentedControl>
-          <p className="text-3xs text-ink-muted">
+          <FieldDescription className="text-3xs">
             Applied when a recipe is spawned.
-          </p>
+          </FieldDescription>
           {refusalFor('lanePolicy')}
-        </div>
+        </Field>
         {member.lanePolicy === 'own-worktree' ? (
-          <div className="flex flex-col gap-1" data-seat-lane-path>
-            <label className="flex flex-col gap-1 text-2xs text-ink-muted">
-              Worktree path
-              <Input
-                size="md"
-                value={lanePathValue}
-                placeholder="/Users/…/my-repo-lane-name"
-                aria-invalid={problems.lanePath !== undefined || undefined}
-                onChange={(event) => onLanePathChange(event.target.value)}
-                onBlur={onLanePathCommit}
-                className="text-xs"
-              />
-            </label>
+          <Field
+            invalid={problems.lanePath !== undefined}
+            className="gap-1"
+            data-seat-lane-path
+          >
+            <FieldLabel variant="caption">Worktree path</FieldLabel>
+            <Input
+              size="md"
+              value={lanePathValue}
+              placeholder="/Users/…/my-repo-lane-name"
+              aria-describedby={refusalId('lanePath')}
+              onChange={(event) => onLanePathChange(event.target.value)}
+              onBlur={onLanePathCommit}
+              className="text-xs"
+            />
             {refusalFor('lanePath')}
-          </div>
+          </Field>
         ) : null}
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <Field
+            invalid={problems.wipLimit !== undefined}
+            className="flex-row items-center gap-2"
+          >
             <div className="flex flex-1 flex-col">
-              <span className="text-2xs text-ink-muted">WIP limit</span>
-              <span className="text-3xs text-ink-muted">
+              <FieldLabel variant="caption">
+                WIP limit <span className="sr-only">for {label}</span>
+              </FieldLabel>
+              <FieldDescription className="text-3xs">
                 Issues this seat may hold at once
-              </span>
+              </FieldDescription>
             </div>
-            <div
-              className={cn(
-                'flex h-control-md items-center rounded-md border',
-                problems.wipLimit !== undefined
-                  ? 'border-danger-solid'
-                  : 'border-hairline-strong',
-              )}
-            >
-              <IconButton
-                label={`Lower the WIP limit for ${label}`}
-                type="button"
-                variant="quiet"
-                disabled={busy || stepBase <= 1}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onSeatEdit({ wipLimit: stepBase - 1 })}
-                size="sm"
-                className="px-2 disabled:opacity-40"
-              >
-                <Minus aria-hidden className="size-3" />
-              </IconButton>
-              <Input
-                size="sm"
-                type="number"
-                min={1}
-                value={wipValue}
-                aria-label={`WIP limit for ${label}`}
-                aria-invalid={problems.wipLimit !== undefined || undefined}
-                onChange={(event) => onWipChange(event.target.value)}
-                onBlur={onWipCommit}
-                className="w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:outline-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <IconButton
-                label={`Raise the WIP limit for ${label}`}
-                type="button"
-                variant="quiet"
-                disabled={busy}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onSeatEdit({ wipLimit: stepBase + 1 })}
-                size="sm"
-                className="px-2 disabled:opacity-40"
-              >
-                <Plus aria-hidden className="size-3" />
-              </IconButton>
-            </div>
-          </div>
+            {/* Typing is a draft, saved when the field is left; a step is
+                saved at once, from what the field SHOWS (lap 2, E). */}
+            <NumberField
+              min={1}
+              allowOutOfRange
+              value={shownWip}
+              stepsDisabled={busy}
+              decrementLabel={`Lower the WIP limit for ${label}`}
+              incrementLabel={`Raise the WIP limit for ${label}`}
+              aria-describedby={refusalId('wipLimit')}
+              onValueChange={(value, details) => {
+                if (TYPED_REASONS.has(details.reason))
+                  onWipChange(value === null ? '' : String(value))
+              }}
+              onValueCommitted={(_value, details) => {
+                if (details.reason === 'increment-press')
+                  onSeatEdit({ wipLimit: stepBase + 1 })
+                else if (details.reason === 'decrement-press' && stepBase > 1)
+                  onSeatEdit({ wipLimit: stepBase - 1 })
+              }}
+              onBlur={onWipCommit}
+            />
+          </Field>
           {refusalFor('wipLimit')}
-          <label className={cn(INSPECTOR_CHOICE_CLASS, 'min-h-10')}>
+          <ChoiceField
+            density="compact"
+            disabled={busy}
+            label="Pause automatic dispatch to this seat"
+            className="min-h-10"
+          >
             <Switch
               checked={member.paused}
-              disabled={busy}
+              aria-describedby={refusalId('paused')}
               onCheckedChange={(checked) => onSeatEdit({ paused: checked })}
             />
-            Pause automatic dispatch to this seat
-          </label>
+          </ChoiceField>
           {refusalFor('paused')}
           {member.role === 'mastermind' && (
             <>
-              <label className={INSPECTOR_CHOICE_CLASS}>
+              <ChoiceField
+                density="compact"
+                disabled={busy}
+                label="Run the drill by itself when the context passes the alert"
+              >
                 <Checkbox
                   checked={member.drillAuto}
-                  disabled={busy}
+                  aria-describedby={refusalId('drillAuto')}
                   onCheckedChange={(checked) =>
                     onSeatEdit({ drillAuto: checked })
                   }
                 />
-                Run the drill by itself when the context passes the alert
-              </label>
+              </ChoiceField>
               {refusalFor('drillAuto')}
             </>
           )}

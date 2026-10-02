@@ -15,10 +15,13 @@ import {
 import {
   Button,
   Checkbox,
+  ChoiceField,
   Collapsible,
   CollapsiblePanel,
   CollapsibleTrigger,
   EmptyState,
+  Field,
+  FieldLabel,
   FormError,
   Input,
   Menu,
@@ -34,11 +37,7 @@ import {
 import { flowRunCeilingNote } from './crew-loop.pure'
 import { CrewMark } from './crew-mark.presentational'
 import { InspectorHeader } from './inspector-header.presentational'
-import {
-  INSPECTOR_CHOICE_CLASS,
-  INSPECTOR_NOTE_CLASS,
-  INSPECTOR_SHELL_CLASS,
-} from './inspector.styles'
+import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 import {
@@ -476,19 +475,16 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           Crew details — name, decoration, loop limits, tracker, export
         </CollapsibleTrigger>
         <CollapsiblePanel keepMounted className="mt-3 flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="crew-name" className={sectionLabel}>
-              Crew name
-            </label>
+          <Field className="gap-1">
+            <FieldLabel className={sectionLabel}>Crew name</FieldLabel>
             <Input
               size="md"
-              id="crew-name"
               value={crewName}
               disabled={busy}
               onChange={(event) => onCrewNameChange(event.target.value)}
               className="text-xs"
             />
-          </div>
+          </Field>
 
           <section aria-label="Decoration" className="flex flex-col gap-1.5">
             <SectionLabel as="h4">Decoration</SectionLabel>
@@ -502,21 +498,17 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
 
           <div className="flex flex-col gap-1.5">
             <SectionLabel as="h4">Loop limits</SectionLabel>
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor="crew-delivery-limit"
-                className="flex-1 text-2xs text-ink-muted"
-              >
-                Delivery limit
-              </label>
+            <Field className="flex-row items-center gap-2">
+              <FieldLabel variant="caption" className="flex-1">
+                Delivery limit{' '}
+                <span className="sr-only">per run for this crew</span>
+              </FieldLabel>
               <Input
                 size="sm"
-                id="crew-delivery-limit"
                 type="number"
                 min={1}
                 value={deliveryLimit ?? ''}
                 placeholder={String(defaultDeliveryLimit)}
-                aria-label="Delivery limit per run for this crew"
                 disabled={busy}
                 onChange={(event) =>
                   onDeliveryLimitChange(readLimit(event.target.value))
@@ -524,25 +516,20 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 className="w-16 text-xs"
               />
               <span className="text-2xs text-ink-muted">per run</span>
-            </div>
+            </Field>
             <p className={INSPECTOR_NOTE_CLASS}>
               {flowRunCeilingNote(deliveryLimit ?? defaultDeliveryLimit)}
             </p>
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor="crew-attention-minutes"
-                className="flex-1 text-2xs text-ink-muted"
-              >
+            <Field className="flex-row items-center gap-2">
+              <FieldLabel variant="caption" className="flex-1">
                 Ask for attention after
-              </label>
+              </FieldLabel>
               <Input
                 size="sm"
-                id="crew-attention-minutes"
                 type="number"
                 min={1}
                 value={attentionMinutes ?? ''}
                 placeholder={String(defaultAttentionMinutes)}
-                aria-label="Minutes without a reply before this crew asks for attention"
                 disabled={busy}
                 onChange={(event) =>
                   onAttentionMinutesChange(readLimit(event.target.value))
@@ -550,26 +537,21 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 className="w-16 text-xs"
               />
               <span className="text-2xs text-ink-muted">minutes</span>
-            </div>
+            </Field>
             <p className={INSPECTOR_NOTE_CLASS}>
               The timer watches for a reply still owed. It is not a total
               run-duration limit.
             </p>
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor="crew-lap-cap"
-                className="flex-1 text-2xs text-ink-muted"
-              >
-                Lap cap
-              </label>
+            <Field className="flex-row items-center gap-2">
+              <FieldLabel variant="caption" className="flex-1">
+                Lap cap <span className="sr-only">for this crew</span>
+              </FieldLabel>
               <Input
                 size="sm"
-                id="crew-lap-cap"
                 type="number"
                 min={1}
                 value={lapCap ?? ''}
                 placeholder="6"
-                aria-label="Lap cap for this crew"
                 disabled={busy}
                 onChange={(event) =>
                   onLapCapChange(readLimit(event.target.value))
@@ -577,7 +559,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 className="w-16 text-xs"
               />
               <span className="text-2xs text-ink-muted">per issue</span>
-            </div>
+            </Field>
             <p className={INSPECTOR_NOTE_CLASS}>
               Shown on Loom as &ldquo;lap N of C&rdquo;. Empty means no cap on
               the row. Distinct from the delivery limit (hop budget).
@@ -591,14 +573,16 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             className="flex flex-col gap-2 border-t border-hairline pt-2"
           >
             <SectionLabel as="h4">Recipe</SectionLabel>
-            <label className={INSPECTOR_CHOICE_CLASS}>
+            <ChoiceField
+              density="compact"
+              disabled={exporting}
+              label="Include positions"
+            >
               <Checkbox
                 checked={includePositions}
-                disabled={exporting}
                 onCheckedChange={(checked) => onIncludePositionsChange(checked)}
               />
-              Include positions
-            </label>
+            </ChoiceField>
             <Button
               type="button"
               variant="tonal"

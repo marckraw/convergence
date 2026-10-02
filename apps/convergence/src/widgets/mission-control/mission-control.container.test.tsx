@@ -36,6 +36,19 @@ import { EMPTY_SPAWN_SPEC } from '@/features/mission-control'
 import { MissionControl } from './mission-control.container'
 
 import type { ReactFlowProps, ReactFlowInstance } from '@xyflow/react'
+/**
+ * The connection's Execution host picker, showing `host`: its Field names it
+ * (MC-4), and the choice is what it says.
+ */
+const hostPicker = (
+  scope: ReturnType<typeof within>,
+  host: string,
+): HTMLElement => {
+  const picker = scope.getByRole('combobox', { name: 'Execution host' })
+  expect(picker).toHaveTextContent(host)
+  return picker
+}
+
 const flow = vi.hoisted(() => ({ props: null as ReactFlowProps | null }))
 vi.mock('@xyflow/react', async (original) => {
   const actual = await original<typeof import('@xyflow/react')>()
@@ -889,9 +902,7 @@ describe('MissionControl', () => {
           fireEvent.click(report)
           fireEvent.click(report)
         }
-        fireEvent.click(
-          panel.getByRole('combobox', { name: 'Execution host: Local' }),
-        )
+        fireEvent.click(hostPicker(panel, 'Local'))
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
@@ -936,23 +947,13 @@ describe('MissionControl', () => {
               name: 'Report back to Fable when it finishes',
             }),
           )
-        fireEvent.click(
-          panel.getByRole('combobox', {
-            name: 'Execution host: little-monster',
-          }),
-        )
+        fireEvent.click(hostPicker(panel, 'little-monster'))
         fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
-        fireEvent.click(
-          panel.getByRole('combobox', { name: 'Execution host: Local' }),
-        )
+        fireEvent.click(hostPicker(panel, 'Local'))
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
-        fireEvent.click(
-          panel.getByRole('combobox', {
-            name: 'Execution host: little-monster',
-          }),
-        )
+        fireEvent.click(hostPicker(panel, 'little-monster'))
         fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
         expect(
           panel.getByRole('switch', {
@@ -963,9 +964,7 @@ describe('MissionControl', () => {
           expect(panel.getByLabelText('Return instructions')).toHaveValue(
             'Keep this report instruction.',
           )
-        fireEvent.click(
-          panel.getByRole('combobox', { name: 'Execution host: Local' }),
-        )
+        fireEvent.click(hostPicker(panel, 'Local'))
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
@@ -1062,9 +1061,7 @@ describe('MissionControl', () => {
           panel.getByRole('combobox', { name: 'Recipient: Opus' }),
         )
         fireEvent.click(await screen.findByText('Start a new session…'))
-        fireEvent.click(
-          panel.getByRole('combobox', { name: 'Execution host: Local' }),
-        )
+        fireEvent.click(hostPicker(panel, 'Local'))
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
@@ -2270,7 +2267,7 @@ describe('MissionControl', () => {
       // The removed seat took its drafts too (lap 4, B): the re-added seat
       // shows the record's WIP, not the refused 0. Mutation: keep the drafts
       // on removal -> 0, red.
-      expect(screen.getByLabelText('WIP limit for opus')).toHaveValue(1)
+      expect(screen.getByLabelText('WIP limit for opus')).toHaveValue('1')
     })
 
     it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {

@@ -208,7 +208,7 @@ describe('the member editor shows what the seat holds', () => {
     expect(screen.getByLabelText('Role card for horse opus')).toHaveValue(
       'You read blind.',
     )
-    expect(screen.getByLabelText('WIP limit for horse opus')).toHaveValue(1)
+    expect(screen.getByLabelText('WIP limit for horse opus')).toHaveValue('1')
   })
 
   /**
@@ -261,7 +261,7 @@ describe('the member editor shows what the seat holds', () => {
     })
 
     // The app's Select (MC-10): open it from the keyboard and pick the host.
-    const host = screen.getByRole('combobox', { name: 'Host for errand' })
+    const host = screen.getByRole('combobox', { name: /^Host for errand/ })
     host.focus()
     fireEvent.keyDown(host, { key: 'ArrowDown' })
     fireEvent.keyDown(await screen.findByRole('option', { name: 'This Mac' }), {
@@ -490,7 +490,7 @@ describe('R4 — facts are text, policy is controls', () => {
     // A short fixed list is the app's Select (MC-10): its trigger shows the
     // chosen host's label.
     expect(
-      within(policy).getByRole('combobox', { name: 'Host for glm' }),
+      within(policy).getByRole('combobox', { name: /^Host for glm/ }),
     ).toHaveTextContent('little-monster')
     expect(
       within(policy).getByRole('radiogroup', { name: 'Lane for glm' }),
@@ -502,7 +502,7 @@ describe('R4 — facts are text, policy is controls', () => {
       openSeatKey: 's1',
       onOpenConversation,
     })
-    expect(screen.queryByLabelText('Host for opus')).toBeNull()
+    expect(screen.queryByLabelText(/^Host for opus/)).toBeNull()
     fireEvent.click(
       screen.getByRole('button', { name: 'Open -- Horse Executor Opus --' }),
     )
@@ -559,7 +559,7 @@ describe('R7 — refusals under the field, typed text kept', () => {
       'WIP limit must be a whole number of at least 1',
       { seatDrafts: { s1: { wipLimit: '0' } } },
       'WIP limit for opus',
-      0,
+      '0',
       /WIP stays 1/,
     ],
     [
@@ -584,6 +584,11 @@ describe('R7 — refusals under the field, typed text kept', () => {
 
       expect(refusal).toHaveTextContent(message)
       expect(within(refusal).getByText(kept)).toBeInTheDocument()
+      // The refusal describes its field (MC-4). Mutation: drop the field's
+      // aria-describedby -> no description, red.
+      expect(input).toHaveAccessibleDescription(
+        expect.stringContaining(message),
+      )
       // The typed text stays. Mutation: show the stored value on refusal.
       expect(input).toHaveValue(typed)
       // Under the field: after it, and before the next section. Mutation:

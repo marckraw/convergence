@@ -78,15 +78,15 @@ describe('MAR-3084 R9: the binding form shows facts, not the key', () => {
     expect(screen.getByText('12 labeled issues in convergence')).toBeTruthy()
     expect(screen.getByText('Stored in Keychain')).toBeTruthy()
     expect(screen.getByText('Linear')).toBeTruthy()
-    expect(screen.getByLabelText('Tracker project')).toHaveProperty(
+    expect(screen.getByLabelText('Project (URL, name or id)')).toHaveProperty(
       'value',
       'project-1',
     )
-    expect(screen.getByLabelText('Tracker label prefix')).toHaveProperty(
+    expect(screen.getByLabelText('Label prefix')).toHaveProperty(
       'value',
       'horse:',
     )
-    expect(screen.getByLabelText('Tracker wave prefix')).toHaveProperty(
+    expect(screen.getByLabelText('Wave prefix')).toHaveProperty(
       'value',
       'wave:',
     )
@@ -269,7 +269,7 @@ describe('MAR-3156 R3: what happens when Bind is pressed', () => {
     render(<TrackerBindingFormContainer crew={crew} />)
     await waitFor(() => expect(doors.resolveProject).toBeDefined())
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Tracker project'), {
+      fireEvent.change(screen.getByLabelText('Project (URL, name or id)'), {
         target: { value: typed },
       })
     })
@@ -325,7 +325,7 @@ describe('MAR-3156 R3: what happens when Bind is pressed', () => {
       expect.objectContaining({ projectId: 'project-9' }),
     )
     // And the field now holds that id, which says nothing to a person...
-    expect(screen.getByLabelText('Tracker project')).toHaveProperty(
+    expect(screen.getByLabelText('Project (URL, name or id)')).toHaveProperty(
       'value',
       'project-9',
     )

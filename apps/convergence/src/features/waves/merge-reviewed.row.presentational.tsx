@@ -1,5 +1,5 @@
 import type { ReleaseCandidate } from '@/entities/release'
-import { Checkbox } from '@convergence/ui'
+import { Checkbox, ChoiceField } from '@convergence/ui'
 
 export function MergeReviewedRow({
   row,
@@ -14,26 +14,31 @@ export function MergeReviewedRow({
 }) {
   const mergeable = row.verdict === 'mergeable'
   return (
-    <label className="flex min-h-10 items-start gap-3 rounded-lg bg-ink/5 p-3 text-sm">
-      <Checkbox
-        className="mt-1"
-        checked={mergeable && selected}
-        disabled={running || !mergeable}
-        onCheckedChange={() => onToggle(row.issueId)}
-        aria-label={`Select PR #${row.prNumber}`}
-      />
-      <span className="min-w-0 space-y-1">
+    <ChoiceField
+      className="min-h-10 rounded-lg bg-ink/5 p-3"
+      disabled={running || !mergeable}
+      label={
         <span className="block break-words">
-          #{row.prNumber} · {row.title}
+          <span className="sr-only">Select PR</span> #{row.prNumber} ·{' '}
+          {row.title}
         </span>
-        {!row.verdict.startsWith('merged ') ? (
-          <span className="block font-mono text-xs tabular-nums text-ink-muted">
-            {row.headSha.slice(0, 7) || '—'} · {row.mergeStateStatus} · verify{' '}
-            {row.verify}
-          </span>
-        ) : null}
-        <span className="block text-xs">{row.verdict}</span>
-      </span>
-    </label>
+      }
+      hint={
+        <span className="block space-y-1">
+          {!row.verdict.startsWith('merged ') ? (
+            <span className="block font-mono tabular-nums">
+              {row.headSha.slice(0, 7) || '—'} · {row.mergeStateStatus} · verify{' '}
+              {row.verify}
+            </span>
+          ) : null}
+          <span className="block text-ink">{row.verdict}</span>
+        </span>
+      }
+    >
+      <Checkbox
+        checked={mergeable && selected}
+        onCheckedChange={() => onToggle(row.issueId)}
+      />
+    </ChoiceField>
   )
 }

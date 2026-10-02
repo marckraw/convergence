@@ -2,6 +2,8 @@ import type { FC } from 'react'
 import { FormError } from '@convergence/ui'
 
 interface SeatRefusalProps {
+  /** Its id: the refused field's aria-describedby points here (MC-4). */
+  id?: string
   /** The door's own sentence, verbatim. */
   message: string
   /** What did not change, in one muted line. */
@@ -17,8 +19,8 @@ interface SeatRefusalProps {
  * FormError, in the danger ink, announced at once, its field marked
  * aria-invalid beside it.
  */
-export const SeatRefusal: FC<SeatRefusalProps> = ({ message, kept }) => (
-  <FormError data-seat-refusal detail={kept || undefined}>
+export const SeatRefusal: FC<SeatRefusalProps> = ({ id, message, kept }) => (
+  <FormError id={id} data-seat-refusal detail={kept || undefined}>
     {message}
   </FormError>
 )
