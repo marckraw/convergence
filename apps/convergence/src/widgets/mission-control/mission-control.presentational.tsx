@@ -72,7 +72,14 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3">
+      {/* The room's top strip drags the window (NAV-4): `app-drag` on the
+          strip, and every control in it is a part that carries `app-no-drag`
+          itself (SegmentedControl, SearchField, SelectTrigger, Toggle,
+          Button, Combobox), so each still takes its click. */}
+      <div
+        data-mission-control-header
+        className="app-drag flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3"
+      >
         <div className="flex items-baseline gap-3">
           <h1 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <Satellite className="size-4" />

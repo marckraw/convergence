@@ -68,10 +68,19 @@ type Story = StoryObj<typeof meta>
  * search, the order, the filter row, and the cards.
  */
 export const Default: Story = {
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
     await expect(
       canvas.getByRole('heading', { name: 'Mission Control' }),
     ).toBeVisible()
+    // The top strip drags the window (NAV-4); its controls keep their clicks.
+    const region = (element: Element) =>
+      getComputedStyle(element).getPropertyValue('-webkit-app-region')
+    await expect(
+      region(canvasElement.querySelector('[data-mission-control-header]')!),
+    ).toBe('drag')
+    await expect(region(canvas.getByRole('radio', { name: 'Canvas' }))).toBe(
+      'no-drag',
+    )
     await expect(
       canvas.getByText('15 sessions · 2 need you · 3 running'),
     ).toBeVisible()
