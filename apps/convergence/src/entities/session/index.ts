@@ -63,6 +63,7 @@ export {
   useLiveConversationUpdatedAt,
 } from './conversation-live-text.model'
 export type { SessionStore } from './session.model'
+export { useAnswerInput } from './use-answer-input'
 export {
   landedProviderCatalog,
   LOCAL_PROVIDER_CATALOG_SOURCE,

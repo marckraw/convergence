@@ -62,6 +62,13 @@
   --ink: light-dark(oklch(0.145 0 0), oklch(0.88 0 0));
   /* Secondary text, names, times; was --muted-foreground: 6.6 / 5.3 */
   --ink-muted: light-dark(oklch(0.46 0 0), oklch(0.66 0 0));
+  /*
+   * Secondary text on a tone's -soft tint (MAR-3618): over surface-muted, and warning's or
+   * success's over surface, dark --ink-muted falls under 4.5:1 (4.0 at worst). A step lighter in
+   * dark, it clears every tint over canvas, surface and surface-muted; light is --ink-muted's own
+   * value. Worst pair 5.2 / 4.7, and still quieter than --ink.
+   */
+  --ink-muted-on-tint: light-dark(oklch(0.46 0 0), oklch(0.7 0 0));
 
   /* Strong and highlight ------------------------------------------------------------------- */
 

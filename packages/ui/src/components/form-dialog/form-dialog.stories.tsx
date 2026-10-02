@@ -3,7 +3,9 @@ import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import { arrived } from '../../../.storybook/motion-testing'
+import { cn } from '#lib/cn.pure'
 import { Button } from '../button/button'
+import { dialogRail, dialogSplit } from '../dialog/dialog.styles'
 import { IconButton } from '../icon-button/icon-button'
 import { Input } from '../input/input'
 import { FormDialog, type FormDialogSaves } from './form-dialog'
@@ -190,7 +192,8 @@ export const Long: Story = {
 
 /**
  * Settings: opened by its own trigger, tall, and flush, so a side list and a
- * scrolling page sit side by side; every change is kept, so it ends in Done.
+ * scrolling page sit side by side (`dialogSplit`, `dialogRail`); every change
+ * is kept, so it ends in Done.
  */
 function SettingsDialog() {
   const [open, setOpen] = useState(false)
@@ -205,10 +208,10 @@ function SettingsDialog() {
       flush
       saves="as-you-go"
     >
-      <div className="flex min-h-0 flex-1">
+      <div className={dialogSplit}>
         <nav
           aria-label="Settings sections"
-          className="w-48 shrink-0 border-r border-line-soft p-3 text-sm"
+          className={cn(dialogRail, 'p-3 text-sm sm:w-48')}
         >
           Notifications
         </nav>

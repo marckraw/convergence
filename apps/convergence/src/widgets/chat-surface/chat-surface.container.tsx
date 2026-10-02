@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import type { FC } from 'react'
-import { flushSync } from 'react-dom'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
   spaceApi,
@@ -8,8 +7,8 @@ import {
   type SpaceArtifact,
   type SpaceSource,
 } from '@/entities/space'
-import type { InteractionResponse, SessionSummary } from '@/entities/session'
-import { useSessionStore } from '@/entities/session'
+import type { SessionSummary } from '@/entities/session'
+import { useAnswerInput, useSessionStore } from '@/entities/session'
 import {
   resolveSessionActivityLabel,
   useContextDrillStore,
@@ -22,12 +21,11 @@ import {
   DraftStart,
   HeaderStatus,
   ConversationViewMenu,
-  headerFocusTarget,
   leadingStatusSlots,
   parallelWorkInRow,
   SessionConversationSurface,
   ParallelWork,
-  useParallelWork,
+  useParallelWorkPanel,
 } from '@/widgets/session-view'
 import {
   Card,
@@ -130,9 +128,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   )
   const approveSession = useSessionStore((state) => state.approveSession)
   const denySession = useSessionStore((state) => state.denySession)
-  const sendMessageToSession = useSessionStore(
-    (state) => state.sendMessageToSession,
-  )
   const stopSession = useSessionStore((state) => state.stopSession)
   const deleteSession = useSessionStore((state) => state.deleteSession)
   const loadGlobalSessions = useSessionStore(
@@ -159,62 +154,14 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       selectedSourceIds: [],
     })
 
-  const [parallelOpen, setParallelOpen] = useState(false)
-  const [parallelSelection, setParallelSelection] = useState<{
-    sessionId: string
-    id: string | null
-  } | null>(null)
-  const [parallelNavigation, setParallelNavigation] = useState<{
-    id: string
-    nonce: number
-  } | null>(null)
-  const parallelButton = useRef<HTMLButtonElement>(null)
-  const parallelInvoker = useRef<HTMLElement | null>(null)
   // The View group's menu, opened from its trigger or from More (MAR-3429
   // CH4 R1).
   const [viewOpen, setViewOpen] = useState(false)
   const viewTrigger = useRef<HTMLButtonElement>(null)
-  const parallel = useParallelWork(activeSessionId)
-  // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
-  // keeps its identity until what it does changes.
-  const selectParallel = useCallback(
-    (id: string | null) => {
-      if (!parallelOpen && document.activeElement instanceof HTMLElement)
-        parallelInvoker.current = document.activeElement
-      if (activeSessionId)
-        setParallelSelection({ sessionId: activeSessionId, id })
-      setParallelOpen(true)
-    },
-    [parallelOpen, activeSessionId],
-  )
-  const answerInput = useCallback(
-    (sessionId: string, response: InteractionResponse, displayText: string) => {
-      void sendMessageToSession({
-        sessionId,
-        text: displayText,
-        deliveryMode: 'answer',
-        interactionResponse: response,
-      })
-    },
-    [sendMessageToSession],
-  )
+  // Parallel work's panel, wired as the session view wires it (MAR-3618).
+  const parallel = useParallelWorkPanel(activeSessionId, viewTrigger)
+  const answerInput = useAnswerInput()
   const parallelRow = useRef<HTMLDivElement>(null)
-  // The panel hands focus back to what opened it: the row's Parallel work
-  // button, or View -- and More in View's place when View has yielded
-  // (MAR-3427 D, MAR-3429 CH4 R1).
-  const focusParallelInvoker = () =>
-    headerFocusTarget(
-      parallelInvoker.current?.isConnected
-        ? parallelInvoker.current
-        : (parallelButton.current ?? viewTrigger.current),
-    )?.focus()
-  // The close is committed before focus is decided: the row's button may
-  // have left while the panel was open (nothing runs any more), so the target
-  // is read from the header as it is once the panel has closed.
-  const closeParallel = () => {
-    flushSync(() => setParallelOpen(false))
-    focusParallelInvoker()
-  }
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
   const selectedSpace =
     spaces.find((entry) => entry.id === selectedSpaceId) ?? null
@@ -679,17 +626,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     )
   }
 
-  const toggleParallel = () => {
-    if (parallelOpen) closeParallel()
-    else {
-      parallelInvoker.current = parallelButton.current
-      setParallelOpen(true)
-    }
-  }
-  const openParallelHistory = () => {
-    parallelInvoker.current = viewTrigger.current
-    setParallelOpen(true)
-  }
   const parallelLabel = parallelWorkInRow(session.parallelWork)
 
   return (
@@ -705,7 +641,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         conversationName={session.name}
         // Parallel work docks beside the header: its close hands focus to
         // View at the header's real width (MAR-3429 CH4 lap 2 A).
-        docked={parallelOpen ? 'parallel-work' : ''}
+        docked={parallel.open ? 'parallel-work' : ''}
         leading={{
           node: (
             <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -720,9 +656,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             parallel: parallelLabel
               ? {
                   label: parallelLabel,
-                  expanded: parallelOpen,
-                  onToggle: toggleParallel,
-                  ref: parallelButton,
+                  expanded: parallel.open,
+                  onToggle: parallel.toggle,
+                  ref: parallel.button,
                 }
               : null,
           }),
@@ -751,7 +687,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                 sessionId={session.id}
                 open={viewOpen}
                 onOpenChange={setViewOpen}
-                onOpenParallelWork={openParallelHistory}
+                onOpenParallelWork={parallel.openFromView}
                 triggerRef={viewTrigger}
                 contentFocus={focus}
               />
@@ -794,12 +730,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           onLoadOlder={handleLoadOlder}
           conversationPrefix={conversationPrefix}
           conversationItems={conversationItems}
-          parallelRows={parallel.rows}
-          parallelLoading={!parallel.hasRecord}
-          parallelError={parallel.error}
-          onParallelRetry={parallel.retry}
-          onParallelSelect={selectParallel}
-          navigationTarget={parallelNavigation}
+          parallelRows={parallel.work.rows}
+          parallelLoading={!parallel.work.hasRecord}
+          parallelError={parallel.work.error}
+          onParallelRetry={parallel.work.retry}
+          onParallelSelect={parallel.select}
+          navigationTarget={parallel.navigation}
           composerContext={{ kind: 'global', activeSessionId: session.id }}
           onApprove={approveSession}
           onDeny={denySession}
@@ -808,27 +744,18 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         <ParallelWork
           key={session.id}
           session={session}
-          rows={parallel.rows}
+          rows={parallel.work.rows}
           items={conversationItems}
-          open={parallelOpen}
-          selectedId={
-            parallelSelection?.sessionId === session.id
-              ? parallelSelection.id
-              : null
-          }
-          onSelect={selectParallel}
-          onClose={closeParallel}
-          onNavigate={(id) =>
-            setParallelNavigation((previous) => ({
-              id,
-              nonce: (previous?.nonce ?? 0) + 1,
-            }))
-          }
-          loading={parallel.loading}
-          error={parallel.error}
+          open={parallel.open}
+          selectedId={parallel.selectedIdIn(session.id)}
+          onSelect={parallel.select}
+          onClose={parallel.close}
+          onNavigate={parallel.navigate}
+          loading={parallel.work.loading}
+          error={parallel.work.error}
           rowRef={parallelRow}
           otherDockedWidths={NO_OTHER_DOCKED_PANELS}
-          onReturnFocus={focusParallelInvoker}
+          onReturnFocus={parallel.returnFocus}
         />
       </div>
     </div>

@@ -236,15 +236,31 @@ Electron backend modules should prefer focused files such as:
 
 ### Building UI
 
-The design system is its own package, `@convergence/ui` (`packages/ui`, rules
-in `packages/ui/AGENTS.md`). Before building a part, search `@convergence/ui`
-and Storybook (`npm run storybook`) for one that exists. Every new part ships
-with stories, and every story is a test with an accessibility check
-(`npm run test:stories`). Look at it in Storybook in light, dark and reduced
-motion (the toolbar) before calling it done. The design-system drift checks
-([docs/checks/design-system-drift.md](docs/checks/design-system-drift.md))
-flag what a feature builds by hand that `@convergence/ui` already has, and
-name the token or part to use instead.
+The design system is its own package, `@convergence/ui` (`packages/ui`). Its
+rules, R0–R12 (Marcin's UI rules of 1 Oct 2026), the motion table and the
+checklist for a new part are in
+[packages/ui/AGENTS.md](packages/ui/AGENTS.md); they hold in the app as much as
+in the package.
+
+- **Reuse before you build.** Search `@convergence/ui` (`src/index.ts`) and
+  Storybook (`npm run storybook`) first. Compose parts before making one, and
+  give a part a variant (with stories) rather than typing its recipe again.
+- **Tokens only.** A colour, size, radius, shadow or duration is a token's
+  utility: no hex, no Tailwind palette class, no arbitrary value (`w-[37px]`),
+  no `dark:` in app code. A missing token goes into `packages/ui` first.
+- **Duplicate twice, extract on the third copy.** The third copy of a class
+  string or a block is a `@convergence/ui` part or a shared constant; a
+  likeness that is a coincidence goes on the guard's allowlist with its reason.
+- **Every part has stories**, beside it, and every story is a test with an
+  accessibility check (`npm run test:stories`). A sub-part drawn only inside a
+  bigger part's stories is listed as one (see the drift doc).
+- **Check light, dark and reduced motion** in Storybook (the toolbars) before
+  calling it done; a colour that is wrong in one theme is fixed in its token.
+- **The gates.** The post-task commands above, `npm run test:stories` and
+  `npm run chaperone -- check` among them. The design-system drift checks
+  ([docs/checks/design-system-drift.md](docs/checks/design-system-drift.md))
+  are errors: each fires where a feature builds by hand what
+  `@convergence/ui` already has, and names the token or part to use instead.
 
 ### Presentational vs container rules
 

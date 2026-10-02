@@ -86,6 +86,10 @@ const chatHeaderDocked = vi.hoisted(() => ({
   current: undefined as string | undefined,
 }))
 
+vi.mock('@/widgets/session-view/use-parallel-work', () => ({
+  useParallelWork: () => ({ rows: [], error: null, loading: false }),
+}))
+
 vi.mock('@/widgets/session-view', async (importOriginal) => {
   // The real header and its layout function: R6 is proven through them.
   const actual = await importOriginal<typeof import('@/widgets/session-view')>()
@@ -105,7 +109,9 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
     HeaderStatus: actual.HeaderStatus,
     leadingStatusSlots: actual.leadingStatusSlots,
     DraftStart: actual.DraftStart,
-    useParallelWork: () => ({ rows: [], error: null, loading: false }),
+    // The real panel wiring (MAR-3618), over a stubbed reading of the rows
+    // (`use-parallel-work`, below).
+    useParallelWorkPanel: actual.useParallelWorkPanel,
     ParallelWork: ({
       open,
       onNavigate,

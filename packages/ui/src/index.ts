@@ -100,6 +100,7 @@ export {
   DialogTrigger,
   type DialogTriggerProps,
 } from './components/dialog/dialog'
+export { dialogRail, dialogSplit } from './components/dialog/dialog.styles'
 export { Divider, type DividerProps } from './components/divider/divider'
 export {
   FormDialog,
@@ -364,6 +365,7 @@ export type {
   PopupFinalFocus,
   PopupOpenChangeDetails,
 } from './lib/popup-focus.types'
+export { textStack } from './lib/text-stack.styles'
 export {
   applyTheme,
   readAppliedTheme,
