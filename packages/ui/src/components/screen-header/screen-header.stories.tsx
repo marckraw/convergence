@@ -133,6 +133,59 @@ export const WithRows: Story = {
   },
 }
 
+/**
+ * WithBar: a row its owner lays out, as the conversation header does, with
+ * its controls on both sides. The header still draws the strip and owns the
+ * drag: the row's empty space moves the window, its groups don't.
+ */
+export const WithBar: Story = {
+  render: () => (
+    <div className="w-160 max-w-full bg-canvas">
+      <ScreenHeader
+        bar={
+          <>
+            <div
+              data-testid="identity"
+              className="app-no-drag flex min-w-0 items-center gap-1.5 text-sm"
+            >
+              <span className="truncate text-ink-muted">convergence</span>
+              <span aria-hidden className="text-ink-muted">
+                /
+              </span>
+              <span className="truncate font-medium">Rewrite the importer</span>
+            </div>
+            <div className="app-no-drag ml-auto flex shrink-0 items-center gap-1.5">
+              <IconButton label="Session settings" size="sm" variant="quiet">
+                <Settings />
+              </IconButton>
+            </div>
+          </>
+        }
+      />
+    </div>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    const header = canvasElement.querySelector(
+      '[data-slot="screen-header"]',
+    ) as HTMLElement
+    const row = header.firstElementChild as HTMLElement
+    await expect(row.getBoundingClientRect().height).toBe(48)
+    await expect(appRegion(header)).toBe('drag')
+    await expect(appRegion(row)).not.toBe('no-drag')
+    await expect(appRegion(canvas.getByTestId('identity'))).toBe('no-drag')
+    await expect(
+      appRegion(canvas.getByRole('button', { name: 'Session settings' })),
+    ).toBe('no-drag')
+    // The owner's row stands in for the slots: no heading of the part's own.
+    await expect(canvas.queryByRole('heading')).toBeNull()
+  },
+}
+
+export const WithBarDark: Story = {
+  ...WithBar,
+  globals: { theme: 'dark' },
+}
+
 /** DragRegion: the bare strip for a screen with no header. */
 export const BareDragRegion: Story = {
   render: () => (

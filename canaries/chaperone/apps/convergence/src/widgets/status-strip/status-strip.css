@@ -1,0 +1,9 @@
+/* canary: motion-from-tokens */
+/*
+ * A strip's pulse with its timing typed out, as global.css's notifications pulse was before
+ * DS-33: 600ms and the ease-out keyword, where var(--motion-pulse) and var(--motion-ease-enter)
+ * say the same. A stylesheet's motion is on the tokens too.
+ */
+.status-strip[data-pulse='true'] {
+  animation: status-strip-pulse 600ms ease-out 1;
+}

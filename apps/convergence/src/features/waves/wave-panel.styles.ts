@@ -1,8 +1,10 @@
-import { durationsMs, focusRingInset } from '@convergence/ui'
+import {
+  durationsMs,
+  focusRingInset,
+  resizeHandleStyles,
+} from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
 import { sectionLabelVariants } from '@convergence/ui'
-
-export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from '@convergence/ui'
 
 /**
  * Every visual knob of the wave panel (MAR-3097), so "narrower" or "quieter"
@@ -11,13 +13,13 @@ export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from '@convergence/ui'
 
 /**
  * The column's drag handle (MAR-3155 R4), in the kit's ResizeHandle look
- * (MC-32): a 1 px line in a 13 px hit area that shows a hairline under the
- * pointer, a stronger one while dragged, and the focus colour for the
- * keyboard -- visible in light as in dark, where the white tint it wore was
- * not. Its gesture stays Loom's own (`use-wave-column-resize`).
+ * (MC-32), taken from the kit itself rather than copied (MC-18): a 1 px line
+ * in a 13 px hit area that shows a hairline under the pointer, a stronger one
+ * while dragged, and the focus colour for the keyboard. `app-resize-handle`
+ * is the sidebar's line's sheen, which both wear. Its gesture stays Loom's
+ * own (`use-wave-column-resize`): the width is committed when the drag ends.
  */
-export const WAVE_RESIZE_HANDLE_CLASS =
-  'app-resize-handle app-no-drag relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-6 border-x-transparent bg-clip-content outline-none transition-colors hover:bg-hairline active:bg-hairline-strong focus-visible:bg-focus'
+export const WAVE_RESIZE_HANDLE_CLASS = `app-resize-handle ${resizeHandleStyles.base} ${resizeHandleStyles.vertical}`
 
 /**
  * The ONE element Loom's two narrow shapes share (MAR-3312 R1).
@@ -43,7 +45,7 @@ export const WAVE_RESIZE_HANDLE_CLASS =
  * (`learn-loom.styles.ts`).
  */
 export const LOOM_SHELL_CLASS =
-  'flex h-full shrink-0 overflow-hidden transition-layout duration-panel ease-out motion-reduce:transition-none data-[loom-motion=still]:transition-none'
+  'app-no-drag flex h-full shrink-0 overflow-hidden transition-layout duration-panel ease-out motion-reduce:transition-none data-[loom-motion=still]:transition-none'
 
 /**
  * How long the fold takes, in the currency each half speaks (MAR-3312 R1/R3).
@@ -171,12 +173,10 @@ export const LOOM_EXPANDED_CLASS =
  * `session-view`'s title strip. So the cover declares `no-drag` over its
  * whole area, its header re-declares `drag`, and each control in that header
  * declares `no-drag` again. Later in the tree wins, which is the same
- * drag-outside / no-drag-inside nesting `session-view.container.tsx:299/303`
- * already uses.
+ * drag-outside / no-drag-inside nesting every title strip uses.
  *
- * Inline styles live in `@convergence/ui` (`NO_DRAG_STYLE`, re-exported
- * above) so the sidebar's tooltips and Loom's share one constant a pin can
- * count (MAR-3314).
+ * Said with the theme's classes, `app-drag` and `app-no-drag` (NAV-11), the
+ * one spelling the design system's parts and popups use too: no inline style.
  */
 
 /**
@@ -191,7 +191,7 @@ export const LOOM_SHEET_TITLE_OPEN_CLASS = 'text-ink'
 
 /** The open sheet's body: the only scroller in the stack. */
 export const LOOM_SHEET_BODY_CLASS =
-  'app-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-3'
+  'min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-3'
 
 /**
  * A section's one-line explanation of itself (MAR-3194 R3). Sits under the
@@ -307,3 +307,19 @@ export const LOOM_SEARCH_ELSEWHERE_CLASS =
 
 /** Expanded Before: keep spare cells and let each card keep its own height. */
 export const LOOM_BEFORE_WIDE_CLASS = 'grid grid-cols-fill-90 items-start gap-3'
+
+/**
+ * The seat card's meta line, by its runtime (DS6): on a card washed in its
+ * runtime's tone (working, failed), --ink-muted falls under 4.5:1 in dark over
+ * the open sheet's surface-muted paper. --ink-muted-on-tint is the token for
+ * muted words on a tint, and holds there; an unwashed card keeps the plain
+ * muted ink.
+ */
+export const LOOM_HORSE_META_INK: Readonly<
+  Record<LoomHorseRuntime, string | undefined>
+> = {
+  working: 'text-ink-muted-on-tint',
+  failed: 'text-ink-muted-on-tint',
+  idle: undefined,
+  'not-seen': undefined,
+}

@@ -56,7 +56,8 @@ export interface PromptLibraryFormDraft {
 interface PromptLibraryBrowserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   projectName: string | null
   catalog: PromptLibraryCatalog | null
   prompts: PromptLibraryEntry[]
@@ -316,7 +317,7 @@ function renderDetailsPane({
               <pre
                 tabIndex={0}
                 aria-label="Prompt text"
-                className="app-scrollbar max-h-60 overflow-auto rounded-md border border-line-soft bg-canvas/60 p-3 text-xs leading-5 whitespace-pre-wrap text-ink"
+                className="max-h-60 overflow-auto rounded-md border border-line-soft bg-canvas/60 p-3 text-xs leading-5 whitespace-pre-wrap text-ink"
               >
                 {selectedDetails.promptText}
               </pre>
@@ -648,7 +649,7 @@ export const PromptLibraryBrowserDialog: FC<
             </div>
           </div>
 
-          <div className="app-scrollbar h-130 overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
+          <div className="h-130 overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
             {!projectName ? (
               <EmptyState
                 title="No project open"

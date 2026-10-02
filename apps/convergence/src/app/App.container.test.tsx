@@ -353,6 +353,9 @@ const mockElectronAPI = {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // The sidebar keeps its width and fold between launches (NAV-16): each
+    // test starts from a fresh window, not from the fold the last one left.
+    localStorage.removeItem('convergence-sidebar-layout')
     mockElectronAPI.project.getActive.mockResolvedValue(null)
     mockElectronAPI.project.getAll.mockResolvedValue([])
     mockElectronAPI.workspace.getByProjectId.mockResolvedValue([])

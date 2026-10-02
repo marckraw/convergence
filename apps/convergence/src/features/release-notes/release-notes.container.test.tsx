@@ -11,7 +11,9 @@ describe('ReleaseNotesDialogContainer', () => {
   it('opens the bundled release notes dialog', () => {
     render(<ReleaseNotesDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /^Release notes/ }))
+    act(() => {
+      useDialogStore.getState().open('release-notes')
+    })
 
     expect(
       screen.getByRole('dialog', { name: 'Release notes' }),
@@ -24,7 +26,9 @@ describe('ReleaseNotesDialogContainer', () => {
   it('closes the dialog from its close button, with no footer', () => {
     render(<ReleaseNotesDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /^Release notes/ }))
+    act(() => {
+      useDialogStore.getState().open('release-notes')
+    })
     expect(document.querySelector('[data-slot="dialog-footer"]')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
@@ -36,7 +40,9 @@ describe('ReleaseNotesDialogContainer', () => {
   it('pages the release history under the history it pages', () => {
     render(<ReleaseNotesDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /^Release notes/ }))
+    act(() => {
+      useDialogStore.getState().open('release-notes')
+    })
 
     const notes = within(screen.getByRole('region', { name: 'Release notes' }))
     expect(
@@ -44,6 +50,15 @@ describe('ReleaseNotesDialogContainer', () => {
     ).toBeInTheDocument()
     expect(notes.getByRole('button', { name: /previous/i })).toBeDisabled()
     expect(notes.getByRole('button', { name: /next/i })).toBeInTheDocument()
+  })
+
+  // The sidebar's menus open it through the store, so it draws no trigger of
+  // its own, hidden or not (NAV-34). Mutation: bring back a default trigger
+  // -> red.
+  it('draws no trigger of its own', () => {
+    render(<ReleaseNotesDialogContainer />)
+
+    expect(screen.queryAllByRole('button', { hidden: true })).toEqual([])
   })
 
   it('opens when useDialogStore.open() is called with the release-notes kind', () => {

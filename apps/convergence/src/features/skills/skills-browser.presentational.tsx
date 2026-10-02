@@ -54,7 +54,8 @@ export type SkillsViewMode = 'overview' | 'grid' | 'list'
 interface SkillsBrowserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   projectName: string | null
   catalog: ProjectSkillCatalog | null
   viewMode: SkillsViewMode
@@ -389,7 +390,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
 
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogTrigger render={trigger} />
+      {trigger ? <DialogTrigger render={trigger} /> : null}
       {/*
         A catalogue you look at and leave (R6): its view and Refresh in the
         header, no footer.
@@ -509,7 +510,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
             </>
           ) : (
             <div className="flex h-full min-h-0 flex-col lg:flex-row">
-              <div className="app-scrollbar min-h-0 overflow-y-auto border-b border-line-soft p-4 lg:w-95 lg:shrink-0 lg:border-r lg:border-b-0">
+              <div className="min-h-0 overflow-y-auto border-b border-line-soft p-4 lg:w-95 lg:shrink-0 lg:border-r lg:border-b-0">
                 <SkillsListPane
                   groups={groups}
                   selectedSkillId={selectedSkillId}

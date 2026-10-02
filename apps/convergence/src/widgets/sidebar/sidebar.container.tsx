@@ -830,31 +830,20 @@ export const Sidebar: FC<SidebarProps> = ({
     [peek, pinPeek, collapse],
   )
 
-  const hiddenDialogTrigger = () => (
-    <Button
-      type="button"
-      variant="ghost"
-      tabIndex={-1}
-      aria-hidden="true"
-      className="hidden"
-    />
-  )
-
   const dialogHosts = (
     <>
-      <SpaceWorkboardDialogContainer trigger={hiddenDialogTrigger()} />
+      <SpaceWorkboardDialogContainer />
       <ProjectSettingsDialogContainer
         contextSection={(projectId) => (
           <ProjectContextSettings projectId={projectId} />
         )}
-        trigger={hiddenDialogTrigger()}
       />
-      <ProviderStatusDialogContainer trigger={hiddenDialogTrigger()} />
-      <McpServersDialogContainer trigger={hiddenDialogTrigger()} />
-      <SkillsBrowserDialogContainer trigger={hiddenDialogTrigger()} />
-      <PromptLibraryBrowserDialogContainer trigger={hiddenDialogTrigger()} />
-      <ReleaseNotesDialogContainer trigger={hiddenDialogTrigger()} />
-      <AppSettingsDialogContainer trigger={hiddenDialogTrigger()} />
+      <ProviderStatusDialogContainer />
+      <McpServersDialogContainer />
+      <SkillsBrowserDialogContainer />
+      <PromptLibraryBrowserDialogContainer />
+      <ReleaseNotesDialogContainer />
+      <AppSettingsDialogContainer />
       <ProjectCreateDialogContainer />
       <LaneCreateDialogContainer />
     </>

@@ -197,9 +197,9 @@ export const ProjectActionsMenuPresentational: FC<
                       <Pencil className="h-3.5 w-3.5" />
                     </IconButton>
                     <IconButton
-                      label="Delete action"
+                      label="Delete action…"
                       type="button"
-                      variant="ghost"
+                      variant="danger-quiet"
                       onClick={() => onDelete(script)}
                       size="sm"
                     >

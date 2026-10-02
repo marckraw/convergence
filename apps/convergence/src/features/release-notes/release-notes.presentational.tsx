@@ -29,7 +29,8 @@ interface ReleaseNotesProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   bundle: ReleaseNotesBundle
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   historyItems: ReleaseHistoryPageItem[]
   historyPage: number
   historyTotalPages: number
@@ -51,7 +52,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogTrigger render={trigger} />
+      {trigger ? <DialogTrigger render={trigger} /> : null}
       {/* A dialog you read and leave: no footer, its ✕ the way out (R6). */}
       <DialogContent>
         <DialogHeader>
@@ -68,12 +69,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
           The notes scroll, so the keyboard can reach them too: the region
           takes the focus and the arrow keys scroll it.
         */}
-        <DialogBody
-          tabIndex={0}
-          role="region"
-          aria-label="Release notes"
-          className="app-scrollbar"
-        >
+        <DialogBody tabIndex={0} role="region" aria-label="Release notes">
           {latest ? (
             <section className="mb-8">
               <SectionLabel as="h3" className="mb-2">

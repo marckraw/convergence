@@ -9,7 +9,6 @@ import {
   SelectValue,
 } from '@convergence/ui'
 import { LOOM_FOLLOW_LABEL } from './loom-follow.pure'
-import { NO_DRAG_STYLE } from './wave-panel.styles'
 import type { LoomSubline } from './loom-stack.types'
 
 /**
@@ -76,7 +75,6 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
         type="button"
         variant="ghost"
         pressed={follow.on}
-        style={NO_DRAG_STYLE}
         onClick={() => follow.onToggle(!follow.on)}
         size="sm"
         // R7: on, it is the raised chip, which IconButton's pressed draws

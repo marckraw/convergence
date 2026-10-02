@@ -7,8 +7,8 @@
         "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:w|h|size|p[xytrbl]?|m[xytrbl]?|gap|text|bg|border|rounded|shadow|leading|tracking|duration|z|inset|top|right|bottom|left|basis|grid-cols|grid-rows|outline|ring|opacity|delay|ease|animate|transition)-\\[",
-        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f]): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)] (MAR-3617; docs/checks/design-system-drift.md)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:w|h|size|p[xytrbl]?|m[xytrbl]?|gap|text|bg|border|rounded|shadow|leading|tracking|duration|z|inset|top|right|bottom|left|basis|grid-cols|grid-rows|outline|ring|opacity|delay|ease|animate|transition)-\\[|(?<![\\w@-])(?:min|max)-\\[)",
+        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f], a min-[860px]: breakpoint): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)]; a breakpoint is Tailwind's (md:, lg:) or a --breakpoint-* of the theme's, since a media query can't read var() (MAR-3617; DS6, MAR-3608; docs/checks/design-system-drift.md)."
       },
       {
         "id": "no-raw-colors",
@@ -64,10 +64,10 @@
         "id": "motion-from-tokens",
         "type": "regex",
         "severity": "error",
-        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx,css}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:duration|delay)-\\d+\\b|\\btransition-all\\b)",
-        "message": "Motion by hand (duration-150, delay-75, transition-all): durations are the motion tokens, duration-exit, duration-fast, duration-panel and duration-slow (a bare transition is already duration-fast), and a transition names what moves (transition-colors, transition-opacity, transition-transform), never all (MAR-3617)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:duration|delay)-\\d+\\b|\\btransition-all\\b|(?<![\\w-])(?:animation|transition)(?:-duration|-delay|-timing-function)?\\s*:[^;{}]*?(?:(?<![\\w.-])\\d*\\.?\\d+m?s\\b|(?<![\\w-])(?:ease(?:-in|-out|-in-out)?|linear|step-start|step-end)(?![\\w-])|\\b(?:cubic-bezier|steps|linear)\\())",
+        "message": "Motion by hand (duration-150, delay-75, transition-all, or in CSS an animation or transition with 600ms or ease-out typed out): durations are the motion tokens, duration-exit, duration-fast, duration-panel and duration-slow (a bare transition is already duration-fast), a transition names what moves (transition-colors, transition-opacity, transition-transform), never all, and a stylesheet writes var(--motion-pulse) and var(--motion-ease-enter) (MAR-3617; DS-33)."
       },
       {
         "id": "use-focus-ring",
@@ -262,6 +262,40 @@
         ],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\bIntl\\.(?:DateTimeFormat|RelativeTimeFormat)\\b|\\.toLocale(?:Date|Time)String\\(|\\bnew\\s+Date\\([^()\\n]*(?:\\([^()\\n]*\\)[^()\\n]*)*\\)\\s*\\.toLocaleString\\(|\\.toLocaleString\\([^)]*?\\{[^}]*?\\b(?:year|month|day|weekday|hour|minute|second|dateStyle|timeStyle|era|timeZoneName|hour12|hourCycle)\\s*:)",
         "message": "A time written by hand (Intl.DateTimeFormat, toLocaleTimeString, a Date's toLocaleString): render it with <Timestamp date={…} format=\"relative\" | \"clock\" | \"date\" | \"datetime\" | \"log\" /> from @convergence/ui, a <time> with the whole moment in our Tooltip, or write it with formatTimestamp (and fullDateLabel, exactDateLabel) where it must be a string. One vocabulary for every time in the app (MAR-3608; CONV-22; MC-13)."
+      },
+      {
+        "id": "no-inline-drag-region",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\bWebkitAppRegion\\b|\\bdata-app-region\\b|(?<![\\w-])-webkit-app-region[\"'`]?\\s*:)",
+        "message": "A window drag region written by hand (style={{ WebkitAppRegion }}, data-app-region): the drag region has one spelling, the theme's classes, app-drag on a strip and app-no-drag on what sits on it, or ScreenHeader and DragRegion, which own the drag. Every design-system control and popup carries app-no-drag itself (NAV-11; DS-19; MAR-3608)."
+      },
+      {
+        "id": "no-removed-libraries",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "{apps/*/src,packages/*/src}/**/*.{ts,tsx}",
+        "restrictions": [
+          {
+            "source": "^(@radix-ui/|radix-ui$)",
+            "allowedIn": [],
+            "message": "Radix is gone: @convergence/ui is built on Base UI (MAR-3610). Use its part, or give the part a variant there (DS6; MAR-3608)."
+          },
+          {
+            "source": "^cmdk$",
+            "allowedIn": [],
+            "message": "cmdk is gone: the Command Center and the pickers are @convergence/ui's Combobox and Listbox (DS6; MAR-3608)."
+          },
+          {
+            "source": "^(motion|framer-motion)(/|$)",
+            "allowedIn": [],
+            "message": "Motion is gone (DS-33): motion is CSS on the motion tokens, through @convergence/ui's parts and primitives; a new kind of motion is a primitive in packages/ui/src/motion (DS6; MAR-3608)."
+          }
+        ],
+        "checkPatterns": [],
+        "includeTypeImports": true
       }
     ]
   }

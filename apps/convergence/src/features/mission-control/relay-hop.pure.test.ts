@@ -410,16 +410,16 @@ describe('counts and summaries', () => {
 describe('clearing the trail says what it is about to do', () => {
   it('names the scope, so "clear" cannot be read as "unwire"', () => {
     expect(formatClearTrailConfirm(0)).toBe(
-      'Clear every hop? The wires and sessions stay.',
+      'Every hop goes from the trail. The wires and sessions stay.',
     )
   })
 
   it('counts the alerts it is about to dismiss with it', () => {
     expect(formatClearTrailConfirm(1)).toBe(
-      'Clear every hop? The wires and sessions stay. This also dismisses 1 alert.',
+      'Every hop goes from the trail. The wires and sessions stay. This also dismisses 1 alert.',
     )
     expect(formatClearTrailConfirm(4)).toBe(
-      'Clear every hop? The wires and sessions stay. This also dismisses 4 alerts.',
+      'Every hop goes from the trail. The wires and sessions stay. This also dismisses 4 alerts.',
     )
   })
 

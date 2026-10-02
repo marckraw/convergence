@@ -63,7 +63,7 @@ export function Textarea({
       data-variant={variant}
       render={<textarea />}
       className={cn(
-        'app-scrollbar flex min-h-9 px-3 py-2',
+        'flex min-h-9 px-3 py-2',
         controlFrame,
         autoGrow && 'field-sizing-content',
         variant === 'bare' ? bare : focusRingField,

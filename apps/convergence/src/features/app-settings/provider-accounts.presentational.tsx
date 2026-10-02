@@ -378,12 +378,12 @@ export function ProviderAccountsFields({
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="danger-quiet"
                       disabled={isBusy}
                       onClick={() => onRequestRemove(row.id)}
                     >
                       <Trash2 className="size-3.5" />
-                      Remove
+                      Remove…
                     </Button>
                   </div>
                 </div>

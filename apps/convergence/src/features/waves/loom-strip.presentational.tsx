@@ -12,7 +12,6 @@ import {
   type LoomSheet,
 } from './wave-panel-sheet.pure'
 import {
-  NO_DRAG_STYLE,
   LOOM_STRIP_BUTTON_CLASS,
   LOOM_STRIP_COUNT_CLASS,
   LOOM_STRIP_SHEET_CLASS,
@@ -127,15 +126,13 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
   <aside
     aria-label="Loom strip"
     data-loom="strip"
-    className={cn(WAVE_RAIL_CLASS, className)}
-    style={NO_DRAG_STYLE}
+    className={cn(WAVE_RAIL_CLASS, 'app-no-drag', className)}
   >
     <IconButton
       label={OPEN_LOOM}
       ref={openRef}
       type="button"
       variant="ghost"
-      style={NO_DRAG_STYLE}
       onClick={onOpen}
       tooltipSide="right"
       size="sm"
@@ -164,7 +161,6 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
             variant="ghost"
             data-loom-strip-sheet={sheet}
             aria-label={name}
-            style={NO_DRAG_STYLE}
             onClick={() => onSelectSheet(sheet)}
             className={LOOM_STRIP_SHEET_CLASS}
           >
@@ -189,7 +185,6 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
       variant="ghost"
       size="sm"
       className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
-      style={NO_DRAG_STYLE}
       onClick={onExpand}
     >
       <Maximize2 className="size-3.5" />

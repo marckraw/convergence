@@ -302,7 +302,7 @@ export function formatAlarmSummary(count: number): string {
 }
 
 /**
- * What the second press of "Clear trail" is agreeing to.
+ * What "Clear trail…"'s question says it is about to do (R5).
  *
  * Says the scope out loud -- history goes, wires and sessions stay -- because
  * a crew's Flow section puts the two a few pixels apart, and "clear" is a word
@@ -311,7 +311,7 @@ export function formatAlarmSummary(count: number): string {
  * without the user having read it.
  */
 export function formatClearTrailConfirm(alarmingCount: number): string {
-  const base = 'Clear every hop? The wires and sessions stay.'
+  const base = 'Every hop goes from the trail. The wires and sessions stay.'
   if (alarmingCount === 0) return base
   return alarmingCount === 1
     ? `${base} This also dismisses 1 alert.`

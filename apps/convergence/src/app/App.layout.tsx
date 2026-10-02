@@ -1,5 +1,5 @@
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { FC, KeyboardEvent } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
 import { ChatSurface } from '@/widgets/chat-surface'
@@ -13,6 +13,13 @@ import type { SessionSummary } from '@/entities/session'
 import { cn, DragRegion, EmptyState, ResizeHandle } from '@convergence/ui'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
 import { RouteFallbackView } from './route-fallback.presentational'
+import { loadSidebarLayout, saveSidebarLayout } from './sidebar-layout.api'
+import {
+  COLLAPSED_SIDEBAR,
+  DEFAULT_SIDEBAR,
+  MAX_SIDEBAR,
+  MIN_SIDEBAR,
+} from './sidebar-layout.pure'
 import type { MainViewRouteFallback } from './routes/main-view-route-resolution.pure'
 
 interface AppShellProps {
@@ -46,11 +53,6 @@ interface AppShellProps {
   showDevelopmentRibbon: boolean
 }
 
-const MIN_SIDEBAR = 220
-const MAX_SIDEBAR = 400
-const DEFAULT_SIDEBAR = 260
-const COLLAPSED_SIDEBAR = 56
-
 export const AppShell: FC<AppShellProps> = ({
   activeSessionId,
   activeGlobalSessionId,
@@ -76,8 +78,16 @@ export const AppShell: FC<AppShellProps> = ({
   hasProject,
   showDevelopmentRibbon,
 }) => {
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // The sidebar comes back as it was left: its width and its fold (NAV-16).
+  const [sidebarWidth, setSidebarWidth] = useState(
+    () => loadSidebarLayout().width,
+  )
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => loadSidebarLayout().collapsed,
+  )
+  useEffect(() => {
+    saveSidebarLayout({ width: sidebarWidth, collapsed: sidebarCollapsed })
+  }, [sidebarWidth, sidebarCollapsed])
   const [sidebarPeekOpen, setSidebarPeekOpen] = useState(false)
   /**
    * Loom has the content area (MAR-3189 R5).

@@ -181,7 +181,7 @@ export const SidebarConversations = memo(function SidebarConversations({
 
       {search.field}
 
-      <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto py-3">
         <NeedsYou
           groups={cardGroups}
           nameSearchQuery={search.query}

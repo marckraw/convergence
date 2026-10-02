@@ -12,6 +12,7 @@ import {
   LOOM_CARD_HEAD_CLASS,
   LOOM_HORSE_CARD_CLASS,
   LOOM_HORSE_META_CLASS,
+  LOOM_HORSE_META_INK,
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TICKET_DOOR_CLASS,
   LOOM_HORSE_TINT_CLASS,
@@ -89,6 +90,10 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
     .join(' · ')
   const ids = loomSeatCardIds('horse', horse.key)
   const doorLabel = horse.runtime === 'failed' ? 'View run error →' : 'Open →'
+  const metaClass = cn(
+    LOOM_HORSE_META_CLASS,
+    LOOM_HORSE_META_INK[horse.runtime],
+  )
 
   return (
     <div className="px-3 py-0.5" data-loom-horse={horse.key}>
@@ -161,18 +166,18 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           </span>
         )}
         {meta ? (
-          <span id={`${ids}-meta`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-meta`} className={metaClass}>
             {meta}
           </span>
         ) : null}
         {openable ? (
-          <span id={`${ids}-open`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-open`} className={metaClass}>
             {doorLabel}
           </span>
         ) : (
           // The same words a row uses when it cannot be opened, so the two
           // surfaces refuse in one vocabulary.
-          <span className={LOOM_HORSE_META_CLASS}>
+          <span className={metaClass}>
             {horse.kind === 'dynamic'
               ? 'no conversation for this seat'
               : horse.conversationMissing

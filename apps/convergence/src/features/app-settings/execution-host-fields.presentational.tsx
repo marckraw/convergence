@@ -149,14 +149,14 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
       </Field>
       <Button
         type="button"
-        variant="ghost"
+        variant="danger-quiet"
         aria-label={`Remove endpoint ${displayName}`}
         onClick={onRequestRemove}
         disabledReason={removalBlock ?? undefined}
         className="mt-6 shrink-0"
       >
         <Trash2 className="size-4" />
-        Remove
+        Remove…
       </Button>
     </div>
 
@@ -202,7 +202,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="danger-quiet"
             aria-label={`Remove token for ${displayName}`}
             onClick={onDeleteDaemonToken}
             disabled={

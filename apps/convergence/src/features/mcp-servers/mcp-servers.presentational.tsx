@@ -38,7 +38,8 @@ import { mcpStatusTone } from './mcp-servers.pure'
 interface McpServersDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   projectName: string | null
   snapshot: ProjectMcpVisibility | null
   isLoading: boolean
@@ -228,7 +229,7 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
 }) => {
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogTrigger render={trigger} />
+      {trigger ? <DialogTrigger render={trigger} /> : null}
       {/* A dialog you look at and leave: Refresh in its header, no footer (R6). */}
       <DialogContent>
         <DialogHeader
@@ -253,7 +254,7 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="app-scrollbar">
+        <DialogBody>
           {!projectName ? (
             <EmptyState
               title="No project open"

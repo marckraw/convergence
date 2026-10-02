@@ -274,7 +274,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
             </form>
           </div>
 
-          <div className="app-scrollbar max-h-64 min-h-0 overflow-y-auto p-2 md:max-h-none md:flex-1">
+          <div className="max-h-64 min-h-0 overflow-y-auto p-2 md:max-h-none md:flex-1">
             {isLoading && spaces.length === 0 ? (
               <EmptyState
                 variant="plain"

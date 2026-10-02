@@ -40,7 +40,7 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
       <DialogContent size="2xl" className="max-h-full">
-        <DialogHeader className="border-b border-line px-4 py-3 pr-10">
+        <DialogHeader>
           <DialogTitle className="truncate">
             {attachment?.filename ?? 'Preview'}
           </DialogTitle>

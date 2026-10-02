@@ -7,11 +7,10 @@ import {
   type ReactElement,
 } from 'react'
 import type { FC } from 'react'
-import { BookOpenText } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import { usePromptLibraryStore } from '@/entities/prompt-library'
-import { Button, useConfirm } from '@convergence/ui'
+import { useConfirm } from '@convergence/ui'
 import {
   collectPromptTags,
   filterPromptLibraryCatalog,
@@ -364,24 +363,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
       onSubmitForm={() => void handleSubmitForm()}
       submitShortcut={submitShortcut}
       onDeletePrompt={handleDeletePrompt}
-      trigger={
-        trigger ?? (
-          <Button
-            type="button"
-            variant="quiet"
-            disabled={!projectId}
-            className="w-full justify-between"
-          >
-            <span className="flex items-center gap-2">
-              <BookOpenText className="h-3.5 w-3.5" />
-              Prompts
-            </span>
-            <span className="text-2xs text-ink-muted/80">
-              {catalog ? totalPromptCount : 'View'}
-            </span>
-          </Button>
-        )
-      }
+      trigger={trigger}
     />
   )
 }

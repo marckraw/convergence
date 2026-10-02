@@ -42,7 +42,8 @@ export const TabGroup: FC<TabGroupProps> = ({
       className="flex items-center gap-1 border-b border-line-soft bg-terminal-strip pl-1 pr-2"
     >
       <Tabs
-        variant="strip"
+        // The strip on the terminal's own tab tokens (R12).
+        variant="terminal"
         value={activeTabId}
         onValueChange={(value) => onSelect(String(value))}
         className="min-w-0 flex-1 flex-row items-center gap-0.5"

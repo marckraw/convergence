@@ -93,7 +93,6 @@
   --color-line: var(--line);
   --color-line-soft: var(--line-soft);
   --color-control-line: var(--control-line);
-  --color-control-fill: var(--control-fill);
   --color-focus: var(--focus);
 
   /* Overlays, chosen and selected (R7) */

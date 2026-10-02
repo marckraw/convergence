@@ -129,18 +129,6 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
     [sessionId, closeTab],
   )
 
-  const handleCloseActiveTab = useCallback(
-    (leafId: string) => {
-      if (!sessionId) return
-      const current = useTerminalStore.getState().getTree(sessionId)
-      if (!current) return
-      const found = findLeaf(current, leafId)
-      if (!found) return
-      void closeTab(sessionId, leafId, found.leaf.activeTabId)
-    },
-    [sessionId, closeTab],
-  )
-
   const handleSelectTab = useCallback(
     (leafId: string, tabId: string) => {
       if (!sessionId) return
@@ -371,7 +359,6 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
               onSelectTab={handleSelectTab}
               onNewTab={handleNewTab}
               onSplit={handleSplit}
-              onCloseActiveTab={handleCloseActiveTab}
               onCloseTab={handleCloseTab}
               onFocusLeaf={handleFocusLeaf}
               onResizeSplit={handleResizeSplit}
@@ -415,7 +402,6 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
         onSelectTab={handleSelectTab}
         onNewTab={handleNewTab}
         onSplit={handleSplit}
-        onCloseActiveTab={handleCloseActiveTab}
         onCloseTab={handleCloseTab}
         onFocusLeaf={handleFocusLeaf}
         onResizeSplit={handleResizeSplit}

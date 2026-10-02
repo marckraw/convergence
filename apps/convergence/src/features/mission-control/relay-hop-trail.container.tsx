@@ -12,6 +12,7 @@ import {
   CollapsiblePanel,
   CollapsibleTrigger,
   Tooltip,
+  useConfirm,
 } from '@convergence/ui'
 import { RelayHopRow } from './relay-hop-row.presentational'
 import {
@@ -46,10 +47,10 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
   const loadHops = useSessionRelayStore((state) => state.loadHops)
   const loadOlderHops = useSessionRelayStore((state) => state.loadOlderHops)
   const clearHops = useSessionRelayStore((state) => state.clearHops)
+  const confirm = useConfirm()
 
   const [open, setOpen] = useState(false)
   const [expandedHopId, setExpandedHopId] = useState<string | null>(null)
-  const [confirmingClear, setConfirmingClear] = useState(false)
   const [busy, setBusy] = useState(false)
   // Local because it is about the press that just happened, not about the
   // trail: a note that outlived the room it was written in would be a puzzle.
@@ -77,14 +78,23 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
     setBusy(false)
   }, [crewId, loadOlderHops])
 
-  const confirmClear = useCallback(async () => {
+  // Clearing the trail can't be undone, so it asks first (R5): the question
+  // names the scope, and the alerts the ⚠ badge counts, before anything goes.
+  const clear = useCallback(async () => {
+    setKeptNote(null)
+    const confirmed = await confirm({
+      title: 'Clear the trail?',
+      description: formatClearTrailConfirm(alarming),
+      confirmLabel: 'Clear trail',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     setBusy(true)
     const result = await clearHops(crewId)
     setBusy(false)
-    setConfirmingClear(false)
     setExpandedHopId(null)
     setKeptNote(result ? formatKeptHopsNote(result.kept) : null)
-  }, [clearHops, crewId])
+  }, [alarming, clearHops, confirm, crewId])
 
   if (hops.length === 0) {
     // The note survives the trail it described: clearing the last hop empties
@@ -123,34 +133,18 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
           </Tooltip>
         ) : null}
 
-        {confirmingClear ? (
-          <Button
-            type="button"
-            variant="danger-quiet"
-            disabled={busy}
-            onClick={() => {
-              void confirmClear()
-            }}
-            size="xs"
-            className="ml-auto shrink-0"
-          >
-            {formatClearTrailConfirm(alarming)}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="quiet"
-            disabled={busy}
-            onClick={() => {
-              setKeptNote(null)
-              setConfirmingClear(true)
-            }}
-            size="xs"
-            className="ml-auto shrink-0"
-          >
-            Clear trail
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="quiet"
+          disabled={busy}
+          onClick={() => {
+            void clear()
+          }}
+          size="xs"
+          className="ml-auto shrink-0"
+        >
+          Clear trail…
+        </Button>
       </div>
 
       {keptNote ? <p className="text-2xs text-ink-muted">{keptNote}</p> : null}

@@ -49,20 +49,31 @@ const PLACEMENT_CYCLE: readonly DockPlacement[] = [
   'left',
 ] as const
 
+/**
+ * The dock's size limits in a window this big (NAV-16): a floor of its own,
+ * and at most 60% of the window, never under the floor. A height for a dock
+ * at the bottom, a width for one at a side. One answer for the store's clamp
+ * and for the resize handle, which says its range to a screen reader.
+ */
+export function dockSizeBounds(
+  placement: DockPlacement,
+  windowSize: number,
+): { min: number; max: number } {
+  const [min, ratio] =
+    placement === 'bottom'
+      ? [MIN_DOCK_HEIGHT, DOCK_MAX_HEIGHT_RATIO]
+      : [MIN_DOCK_WIDTH, DOCK_MAX_WIDTH_RATIO]
+  return { min, max: Math.max(min, Math.floor(windowSize * ratio)) }
+}
+
 function clampDockHeight(height: number, maxWindowHeight: number): number {
-  const max = Math.max(
-    MIN_DOCK_HEIGHT,
-    Math.floor(maxWindowHeight * DOCK_MAX_HEIGHT_RATIO),
-  )
-  return Math.min(Math.max(height, MIN_DOCK_HEIGHT), max)
+  const { min, max } = dockSizeBounds('bottom', maxWindowHeight)
+  return Math.min(Math.max(height, min), max)
 }
 
 function clampDockWidth(width: number, maxWindowWidth: number): number {
-  const max = Math.max(
-    MIN_DOCK_WIDTH,
-    Math.floor(maxWindowWidth * DOCK_MAX_WIDTH_RATIO),
-  )
-  return Math.min(Math.max(width, MIN_DOCK_WIDTH), max)
+  const { min, max } = dockSizeBounds('right', maxWindowWidth)
+  return Math.min(Math.max(width, min), max)
 }
 
 interface OpenFirstPaneArgs {

@@ -233,6 +233,7 @@ export {
   ResizeHandle,
   type ResizeHandleProps,
 } from './components/resize-handle/resize-handle'
+export { resizeHandleStyles } from './components/resize-handle/resize-handle.styles'
 export {
   DragRegion,
   type DragRegionProps,
@@ -359,7 +360,6 @@ export {
   focusRingInset,
   focusRingWithin,
 } from './lib/focus-ring.styles'
-export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from './lib/no-drag.styles'
 export type {
   PopupCloseType,
   PopupFinalFocus,

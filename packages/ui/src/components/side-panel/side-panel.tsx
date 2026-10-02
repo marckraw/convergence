@@ -142,7 +142,7 @@ function SidePanelBody({ className, ...props }: SidePanelBodyProps) {
       tabIndex={0}
       data-slot="side-panel-body"
       className={cn(
-        'app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4',
+        'min-h-0 flex-1 space-y-4 overflow-y-auto p-4',
         focusRingInset,
         className,
       )}

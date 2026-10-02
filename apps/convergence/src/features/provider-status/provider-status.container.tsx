@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { FC } from 'react'
-import { Bot } from 'lucide-react'
 import {
   providerApi,
   type ProviderRuntimeInfo,
@@ -12,7 +11,6 @@ import {
   type ProviderAccountHealth,
 } from '@/entities/provider-account'
 import { useDialogStore } from '@/entities/dialog'
-import { Button } from '@convergence/ui'
 import { ProviderStatusDialog } from './provider-status.presentational'
 
 interface ProviderStatusDialogContainerProps {
@@ -111,10 +109,6 @@ export const ProviderStatusDialogContainer: FC<
     void load()
   }, [load])
 
-  const availableCount = statuses.filter(
-    (provider) => provider.availability === 'available',
-  ).length
-
   return (
     <ProviderStatusDialog
       open={open}
@@ -129,25 +123,7 @@ export const ProviderStatusDialogContainer: FC<
       message={message}
       onRefresh={load}
       onUpdateProvider={handleUpdateProvider}
-      trigger={
-        trigger ?? (
-          <Button
-            type="button"
-            variant="quiet"
-            className="w-full justify-between"
-          >
-            <span className="flex items-center gap-2">
-              <Bot className="h-3.5 w-3.5" />
-              Providers
-            </span>
-            <span className="text-2xs text-ink-muted">
-              {statuses.length > 0
-                ? `${availableCount}/${statuses.length}`
-                : 'View'}
-            </span>
-          </Button>
-        )
-      }
+      trigger={trigger}
     />
   )
 }
