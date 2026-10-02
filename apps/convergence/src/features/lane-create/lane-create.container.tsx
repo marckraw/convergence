@@ -107,7 +107,7 @@ export const LaneCreateDialogContainer: FC = () => {
       setError(
         nextError instanceof Error
           ? nextError.message
-          : 'Failed to create lane',
+          : 'Couldn’t create the lane.',
       )
     }
   }, [root, laneName, branchName, createLane])

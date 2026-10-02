@@ -47,7 +47,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-80 rounded-xl bg-card p-2">
+      <div className="w-80 rounded-xl bg-surface p-2">
         <Story />
       </div>
     ),
@@ -101,14 +101,6 @@ export const Open: Story = {
 export const OpenDark: Story = {
   ...Open,
   globals: { theme: 'dark' },
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the rows' muted status and label chips are 4.48:1 on the dark card (color-contrast) — fixed by the sweep (DS4)
-        rules: [{ id: 'color-contrast', enabled: false }],
-      },
-    },
-  },
 }
 
 /** More than one read holds: the list says it was cut short. */

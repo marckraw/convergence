@@ -1,11 +1,17 @@
 import type { FC } from 'react'
 import { X } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
 import {
-  HISTORY_TONE_BORDER,
-  HISTORY_TONE_TEXT,
-  HistoryEventRowView,
-} from './history-event-row.presentational'
+  Button,
+  cn,
+  EmptyState,
+  FormError,
+  SectionLabel,
+  SegmentedControl,
+  SegmentedControlItem,
+  toneInk,
+} from '@convergence/ui'
+import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
+import { HistoryEventRowView } from './history-event-row.presentational'
 import { HISTORY_FILTERS } from './run-history.pure'
 import type {
   HistoryEventRow,
@@ -78,36 +84,27 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
   <section
     data-history-panel
     aria-label="History"
-    className="flex h-[46%] min-h-0 shrink-0 flex-col border-t border-white/10"
+    // 23/50 of the column: the canvas keeps the larger half above it.
+    className="flex h-23/50 min-h-0 shrink-0 flex-col border-t border-hairline"
   >
     <div className="flex items-center gap-3 px-5 py-2">
       <h3 className="text-sm font-medium">History</h3>
-      <p className="text-[11px] text-muted-foreground">{crewName}</p>
+      <p className="text-2xs text-ink-muted">{crewName}</p>
 
-      <div
-        role="group"
+      {/* One filter of a few (MC-7): a segmented radio group. */}
+      <SegmentedControl
         aria-label="Which runs to show"
-        className="ml-auto flex items-center gap-0.5 rounded-full border border-white/10 p-0.5"
+        size="xs"
+        value={filter}
+        onValueChange={(value) => onFilterChange(value as HistoryFilter)}
+        className="ml-auto"
       >
         {HISTORY_FILTERS.map((entry) => (
-          <Button
-            key={entry.value}
-            type="button"
-            variant="ghost"
-            aria-pressed={filter === entry.value}
-            onClick={() => onFilterChange(entry.value)}
-            size="xs"
-            className={cn(
-              'rounded-full px-2.5 font-normal',
-              filter === entry.value
-                ? 'bg-white/10 text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
+          <SegmentedControlItem key={entry.value} value={entry.value}>
             {entry.label}
-          </Button>
+          </SegmentedControlItem>
         ))}
-      </div>
+      </SegmentedControl>
 
       <Button
         type="button"
@@ -115,73 +112,94 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
         aria-label="Close history"
         onClick={onClose}
         size="sm"
-        className="text-[11px] gap-2"
+        className="text-2xs gap-2"
       >
         <X className="size-3.5" />
         Close
       </Button>
     </div>
 
-    {/* Four states, and they are four sentences (promise 7). */}
+    {/* Four states, and they are four sentences (promise 7). Loading keeps
+        its own two lines: the second is a promise, and it shows at once,
+        where EmptyState's loading waits 300 ms before it says anything. */}
     {state === 'loading' ? (
-      <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
-        <p className="text-[12px]">Loading history…</p>
-        <p className="text-[11px] text-muted-foreground">
+      <div
+        role="status"
+        className="flex flex-1 flex-col items-center justify-center gap-1 text-center"
+      >
+        <p className="text-xs">Loading history…</p>
+        <p className="text-2xs text-ink-muted">
           Keep the selected run while records load.
         </p>
       </div>
     ) : state === 'error' ? (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-        <p className="text-[12px] text-red-400">Couldn’t load history</p>
-        <p className="text-[11px] text-muted-foreground">
-          {loadError ?? 'Try loading this crew’s history again.'}
-        </p>
-        <Button
-          type="button"
-          variant="tonal"
-          onClick={onRetry}
-          size="sm"
-          className="px-3 text-[11px]"
-        >
-          Try again
-        </Button>
-        <p className="text-[10px] text-muted-foreground/70">
-          Reloads records only. Does not retry a delivery.
-        </p>
-      </div>
+      <EmptyState
+        state="failed"
+        variant="plain"
+        size="compact"
+        layout="centred"
+        title="Couldn’t load history"
+        detail={
+          <>
+            <span className="block">
+              {loadError ?? 'Try loading this crew’s history again.'}
+            </span>
+            <span className="block text-3xs">
+              Reloads records only. Does not retry a delivery.
+            </span>
+          </>
+        }
+        onRetry={onRetry}
+      />
     ) : state === 'empty' ? (
-      <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
-        <p className="text-[12px]">No history available yet</p>
-        <p className="max-w-sm text-[11px] text-muted-foreground">
-          There are no recorded events for this crew. Activity will appear here
-          when a connection is evaluated.
-        </p>
-        <p className="text-[10px] text-muted-foreground/70">
-          No records does not imply this crew has never run.
-        </p>
-      </div>
+      <EmptyState
+        variant="plain"
+        size="compact"
+        layout="centred"
+        title="No history available yet"
+        detail={
+          <>
+            <span className="block">
+              There are no recorded events for this crew. Activity will appear
+              here when a connection is evaluated.
+            </span>
+            <span className="block text-3xs">
+              No records does not imply this crew has never run.
+            </span>
+          </>
+        }
+      />
     ) : state === 'no-match' ? (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-        <p className="text-[12px]">No matching events</p>
-        <p className="text-[11px] text-muted-foreground">
-          There are recorded events, but none match these filters.
-        </p>
-        <Button
-          type="button"
-          variant="tonal"
-          onClick={() => onFilterChange('all')}
-          size="sm"
-          className="px-3 text-[11px]"
-        >
-          Clear history filters
-        </Button>
-        <p className="text-[10px] text-muted-foreground/70">
-          Filters change the view, not the record.
-        </p>
-      </div>
+      <EmptyState
+        variant="plain"
+        size="compact"
+        layout="centred"
+        title="No matching events"
+        detail={
+          <>
+            <span className="block">
+              There are recorded events, but none match these filters.
+            </span>
+            <span className="block text-3xs">
+              Filters change the view, not the record.
+            </span>
+          </>
+        }
+        action={
+          <Button
+            type="button"
+            variant="tonal"
+            onClick={() => onFilterChange('all')}
+            size="sm"
+            className="px-3 text-2xs"
+          >
+            Clear history filters
+          </Button>
+        }
+      />
     ) : (
       <div className="flex min-h-0 flex-1">
-        <ul className="w-64 shrink-0 space-y-1 overflow-y-auto border-r border-white/10 px-3 pb-3">
+        <ul className="w-64 shrink-0 space-y-1 overflow-y-auto border-r border-hairline px-3 pb-3">
           {runs.map((run) => (
             <li key={run.flowRunId}>
               <Button
@@ -192,20 +210,21 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
                 size="lg"
                 className={cn(
                   'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 text-left font-normal',
-                  HISTORY_TONE_BORDER[run.tone],
-                  run.flowRunId === selectedRunId && 'bg-white/[0.06]',
+                  TONE_FRAME[HISTORY_TONE[run.tone]],
+                  // R7: the picked run wears the selected fill.
+                  run.flowRunId === selectedRunId && 'bg-fill-selected',
                 )}
               >
-                <span className="text-[12px]">
+                <span className="text-xs">
                   {run.timeLabel}
                   {run.startingStation ? ` · ${run.startingStation}` : ''}
                 </span>
                 <span
-                  className={cn('text-[10px]', HISTORY_TONE_TEXT[run.tone])}
+                  className={cn('text-3xs', toneInk[HISTORY_TONE[run.tone]])}
                 >
                   {run.statusLine}
                 </span>
-                <span className="text-[10px]">{run.activityLine}</span>
+                <span className="text-3xs">{run.activityLine}</span>
               </Button>
             </li>
           ))}
@@ -214,18 +233,14 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
               explicitly so scrolling alone never starts another read. */}
           {hasMore ? (
             <li className="pt-1">
-              {olderError ? (
-                <p role="alert" className="px-3 text-[11px] text-red-400">
-                  {olderError}
-                </p>
-              ) : null}
+              <FormError className="px-3">{olderError}</FormError>
               <Button
                 type="button"
                 variant="ghost"
                 disabled={loadingOlder}
                 onClick={onLoadOlder}
                 size="sm"
-                className="w-full px-3 text-[11px] text-muted-foreground"
+                className="w-full px-3 text-2xs text-ink-muted"
               >
                 {loadingOlder
                   ? 'Loading older runs…'
@@ -241,9 +256,9 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
               {/* A station with no outgoing wire has no hop to attribute a
                   row to, so its call belongs to no run — and saying so is the
                   only honest place to put it. */}
-              <p className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <SectionLabel className="px-1 pb-1">
                 Calls without a run
-              </p>
+              </SectionLabel>
               <ul className="space-y-1">
                 {unattributedCalls.map((call) => (
                   <HistoryEventRowView
@@ -259,16 +274,14 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
         </ul>
 
         <div className="min-w-0 flex-1 space-y-2 overflow-y-auto px-4 pb-3">
-          {summary ? (
-            <p className="text-[12px] text-muted-foreground">{summary}</p>
-          ) : null}
+          {summary ? <p className="text-xs text-ink-muted">{summary}</p> : null}
 
           {laps.map((lap) => (
             <div key={lap.lap} className="space-y-1">
               {/* Only when the run went round more than once: a single-lap
                   run with a "Lap 1" header would invent a ceremony. */}
               {laps.length > 1 ? (
-                <p className="text-[11px] font-medium">
+                <p className="text-2xs font-medium">
                   {lap.label} ·{' '}
                   {lap.deliveries === 1
                     ? '1 delivery'
@@ -302,11 +315,11 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
           ) : null}
 
           {selectedRunId ? (
-            <p className="pt-1 text-[10px] text-muted-foreground/70">
+            <p className="pt-1 text-3xs text-ink-muted">
               No later events recorded for this run.
             </p>
           ) : (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-ink-muted">
               Pick a run to see what happened in it.
             </p>
           )}

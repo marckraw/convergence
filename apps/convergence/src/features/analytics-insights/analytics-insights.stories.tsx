@@ -181,7 +181,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-[960px]">
+      <div className="w-240">
         <Story />
       </div>
     ),
@@ -194,35 +194,39 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 /**
- * Your Usage: the totals, then each chart panel. A chart draws with WebGPU
+ * Your usage: the totals, then each chart panel. A chart draws with WebGPU
  * where the browser has it, or says it cannot; either way the panels and
- * their legends stand.
+ * their legends stand. The views are tabs with their panels (DLG-14); the
+ * range is a SegmentedControl, a radio group (R9).
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const tabs = canvas.getByRole('tablist', { name: 'Insights view' })
-    await expect(
-      within(tabs).getByRole('tab', { name: 'Your Usage' }),
-    ).toHaveAttribute('aria-selected', 'true')
+    const usage = within(tabs).getByRole('tab', { name: 'Your usage' })
+    await expect(usage).toHaveAttribute('aria-selected', 'true')
+    await expect(canvas.getByRole('tabpanel')).toHaveAccessibleName(
+      'Your usage',
+    )
     await expect(
       canvas.getByRole('heading', { name: 'Daily activity' }),
     ).toBeVisible()
     await expect(
       canvas.getByRole('heading', { name: 'Conversation balance' }),
     ).toBeVisible()
+    const range = canvas.getByRole('radiogroup', { name: 'Analytics range' })
     await expect(
-      canvas.getByRole('button', { name: '7 days' }),
-    ).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(canvas.getByRole('button', { name: '90 days' }))
+      within(range).getByRole('radio', { name: '7 days' }),
+    ).toBeChecked()
+    await userEvent.click(within(range).getByRole('radio', { name: '90 days' }))
     await expect(args.onRangeChange).toHaveBeenCalledWith('90d')
     await userEvent.click(
-      within(tabs).getByRole('tab', { name: 'Your Work Style' }),
+      within(tabs).getByRole('tab', { name: 'Your work style' }),
     )
     await expect(args.onTabChange).toHaveBeenCalledWith('work-style')
   },
 }
 
-/** Your Work Style: the local profile, its facts, and Generate. */
+/** Your work style: the local profile, its facts, and Generate. */
 export const WorkStyle: Story = {
   name: 'Work style',
   args: { activeTab: 'work-style' },
@@ -299,22 +303,16 @@ export const GenerateDialog: Story = {
   },
 }
 
-/** Busy: the first read, and the range waits. */
+/** Busy: the first read is a status with its skeleton, and the range waits. */
 export const Busy: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the loading skeleton is a div with an aria-label and no role (a status region would carry it) — fixed by the sweep (DS4)
-        rules: [{ id: 'aria-prohibited-attr', enabled: false }],
-      },
-    },
-  },
   args: { overview: null, isLoading: true },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByLabelText('Loading local analytics'),
+      canvas.getByRole('status', { name: 'Loading local analytics' }),
     ).toHaveAttribute('aria-busy', 'true')
-    await expect(canvas.getByRole('button', { name: '30 days' })).toBeDisabled()
+    await expect(
+      canvas.getByRole('radio', { name: '30 days' }),
+    ).toHaveAttribute('aria-disabled', 'true')
   },
 }
 

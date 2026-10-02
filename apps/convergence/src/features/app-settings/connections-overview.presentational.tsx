@@ -72,7 +72,7 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
     ) : null}
     {rows.length > 0 ? (
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[36rem] border-collapse text-left text-xs">
+        <table className="w-full min-w-144 border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-border text-muted-foreground">
               <th scope="col" className="py-2 pr-3 font-medium">

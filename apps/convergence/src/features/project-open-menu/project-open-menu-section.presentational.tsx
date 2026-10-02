@@ -27,11 +27,9 @@ export function ProjectOpenMenuSection({
 }: ProjectOpenMenuSectionProps) {
   return (
     <div role="group" aria-label="Open in" className="flex flex-col">
-      <div className="px-2 pb-1 pt-1.5 text-[11px] text-muted-foreground">
-        Open in
-      </div>
+      <div className="px-2 pt-1.5 pb-1 text-2xs text-ink-muted">Open in</div>
       {disabledReason || loading ? (
-        <p className="px-2 py-1.5 text-sm text-muted-foreground">
+        <p className="px-2 py-1.5 text-sm text-ink-muted">
           {disabledReason ?? 'Detecting apps…'}
         </p>
       ) : (
@@ -42,9 +40,9 @@ export function ProjectOpenMenuSection({
               key={app.id}
               variant="ghost"
               onClick={() => onOpen(app)}
-              className="w-full justify-start gap-2 px-2 font-normal"
+              className="w-full justify-start px-2 font-normal"
             >
-              <Icon className="h-3.5 w-3.5" />
+              <Icon className="size-3.5" />
               Open in {app.label}
             </Button>
           )

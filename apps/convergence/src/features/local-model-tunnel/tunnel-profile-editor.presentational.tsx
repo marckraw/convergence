@@ -11,9 +11,15 @@ import {
 } from '@/entities/local-model-tunnel'
 import {
   Button,
-  IconButton,
+  Card,
   ChoiceField,
+  EmptyState,
+  Field,
+  FieldLabel,
+  IconButton,
   Input,
+  Notice,
+  SectionLabel,
   Select,
   SelectContent,
   SelectItem,
@@ -133,14 +139,14 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
         <p className="flex items-center gap-2 text-sm font-semibold">
           <StatusDot state={item.status.state} />
           <span>{item.profile.name}</span>
-          <span className="text-xs font-normal text-muted-foreground">
+          <span className="text-xs font-normal text-ink-muted">
             {item.status.state}
           </span>
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-muted">
           {formatLocalModelTunnelEndpoint(item)}
         </p>
-        <p className="text-xs text-muted-foreground/85">
+        <p className="text-xs text-ink-muted">
           {formatLocalModelTunnelConnectionLabel(item)} ·{' '}
           {formatLocalModelTunnelStatusDetail(item)}
         </p>
@@ -149,20 +155,18 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
       <section className="space-y-3">
         {renderSectionLabel('Profile')}
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              Display name
-            </span>
+          <Field>
+            <FieldLabel>Display name</FieldLabel>
             <Input
               size="lg"
               value={draft.name ?? ''}
               onChange={updateString('name')}
             />
-          </label>
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
+          </Field>
+          <Field>
+            <FieldLabel nativeLabel={false} render={<div />}>
               Runtime
-            </span>
+            </FieldLabel>
             <Select
               items={CONNECTION_KIND_ITEMS}
               value={connectionKind}
@@ -176,20 +180,18 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                 <SelectItem value="ssh-tunnel">SSH tunnel</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </Field>
         </div>
         {isSshTunnel ? (
           <>
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                SSH target
-              </span>
+            <Field>
+              <FieldLabel>SSH target</FieldLabel>
               <Input
                 size="lg"
                 value={draft.sshTarget ?? ''}
                 onChange={updateString('sshTarget')}
               />
-            </label>
+            </Field>
             <ChoiceField label="Start when Convergence opens">
               <Switch
                 id="local-model-tunnel-autostart"
@@ -216,21 +218,17 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
           />
         </ChoiceField>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              Local bind IP
-            </span>
+          <Field>
+            <FieldLabel>Local bind IP</FieldLabel>
             <Input
               size="lg"
               value={draft.localBindHost ?? '127.0.0.1'}
               disabled={!draft.useCustomLocalBindHost}
               onChange={updateString('localBindHost')}
             />
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              Local port
-            </span>
+          </Field>
+          <Field>
+            <FieldLabel>Local port</FieldLabel>
             <Input
               size="lg"
               type="number"
@@ -239,23 +237,19 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
               value={draft.localPort ?? 11434}
               onChange={updatePort('localPort')}
             />
-          </label>
+          </Field>
           {isSshTunnel ? (
             <>
-              <label className="space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Remote IP or hostname
-                </span>
+              <Field>
+                <FieldLabel>Remote IP or hostname</FieldLabel>
                 <Input
                   size="lg"
                   value={draft.remoteHost ?? ''}
                   onChange={updateString('remoteHost')}
                 />
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Remote port
-                </span>
+              </Field>
+              <Field>
+                <FieldLabel>Remote port</FieldLabel>
                 <Input
                   size="lg"
                   type="number"
@@ -264,7 +258,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                   value={draft.remotePort ?? 11434}
                   onChange={updatePort('remotePort')}
                 />
-              </label>
+              </Field>
             </>
           ) : null}
         </div>
@@ -283,30 +277,23 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
         {isSshTunnel ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-medium text-muted-foreground">
-                Route candidates
-              </p>
+              <h4 className="text-sm font-medium">Route candidates</h4>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={addRouteCandidate}
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="size-3.5" />
                 Add route
               </Button>
             </div>
             <div className="grid gap-2">
               {(draft.routeCandidates ?? []).map((route) => (
-                <div
-                  key={route.id}
-                  className="space-y-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-3 text-xs"
-                >
+                <Card key={route.id} className="space-y-3 text-xs">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium text-foreground">
-                        {route.label}
-                      </p>
-                      <p className="mt-1 text-muted-foreground">
+                      <p className="font-medium text-ink">{route.label}</p>
+                      <p className="mt-1 text-ink-muted">
                         {formatRouteCandidate(route)}
                       </p>
                     </div>
@@ -318,34 +305,28 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                       size="sm"
                       className="shrink-0"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="size-3.5" />
                     </IconButton>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Route label
-                      </span>
+                    <Field>
+                      <FieldLabel>Route label</FieldLabel>
                       <Input
                         size="lg"
                         value={route.label}
                         onChange={updateRouteString(route.id, 'label')}
                       />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        SSH target
-                      </span>
+                    </Field>
+                    <Field>
+                      <FieldLabel>SSH target</FieldLabel>
                       <Input
                         size="lg"
                         value={route.sshTarget}
                         onChange={updateRouteString(route.id, 'sshTarget')}
                       />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Local port
-                      </span>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Local port</FieldLabel>
                       <Input
                         size="lg"
                         type="number"
@@ -354,21 +335,17 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         value={route.localPort}
                         onChange={updateRoutePort(route.id, 'localPort')}
                       />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Remote host
-                      </span>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Remote host</FieldLabel>
                       <Input
                         size="lg"
                         value={route.remoteHost}
                         onChange={updateRouteString(route.id, 'remoteHost')}
                       />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Remote port
-                      </span>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Remote port</FieldLabel>
                       <Input
                         size="lg"
                         type="number"
@@ -377,11 +354,9 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         value={route.remotePort}
                         onChange={updateRoutePort(route.id, 'remotePort')}
                       />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Connect timeout seconds
-                      </span>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Connect timeout seconds</FieldLabel>
                       <Input
                         size="lg"
                         type="number"
@@ -390,24 +365,24 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         value={route.connectTimeoutSeconds ?? ''}
                         onChange={updateRouteTimeout(route.id)}
                       />
-                    </label>
-                    <label className="space-y-1.5 sm:col-span-2">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Health URL
-                      </span>
+                    </Field>
+                    <Field className="sm:col-span-2">
+                      <FieldLabel>Health URL</FieldLabel>
                       <Input
                         size="lg"
                         value={route.healthCheckUrl}
                         onChange={updateRouteString(route.id, 'healthCheckUrl')}
                       />
-                    </label>
+                    </Field>
                   </div>
-                </div>
+                </Card>
               ))}
               {draft.routeCandidates?.length ? null : (
-                <p className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
-                  Add route candidates to try multiple SSH targets in order.
-                </p>
+                <EmptyState
+                  size="compact"
+                  title="No route candidates"
+                  detail="Add some to try several SSH targets in order."
+                />
               )}
             </div>
           </div>
@@ -423,29 +398,26 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             onCheckedChange={(next) => patchDraft({ healthCheckEnabled: next })}
           />
         </ChoiceField>
-        <label className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            Health URL
-          </span>
+        <Field>
+          <FieldLabel>Health URL</FieldLabel>
           <Input
             size="lg"
             value={draft.healthCheckUrl ?? ''}
             disabled={!draft.healthCheckEnabled}
             onChange={updateString('healthCheckUrl')}
           />
-        </label>
+        </Field>
       </section>
 
       {warnings.length > 0 ? (
         <section className="space-y-2">
           {warnings.map((warning) => (
-            <p
+            <Notice
               key={warning.code}
-              className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground"
-            >
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{warning.message}</span>
-            </p>
+              tone="warning"
+              icon={<AlertTriangle />}
+              title={warning.message}
+            />
           ))}
         </section>
       ) : null}
@@ -453,32 +425,24 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
       {isSshTunnel ? (
         <section className="space-y-3">
           {renderSectionLabel('Command preview')}
-          <code className="block overflow-x-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground/85">
+          <code className="block overflow-x-auto rounded-lg border border-line-soft bg-surface-muted/30 px-3 py-2 text-xs text-ink/85">
             {item.status.commandPreview}
           </code>
         </section>
       ) : null}
 
       {item.status.error ? (
-        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {item.status.error}
-        </p>
+        <Notice tone="danger" title={item.status.error} />
       ) : null}
-      {error ? (
-        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
+      {error ? <Notice tone="danger" title={error} /> : null}
       {item.status.diagnostics.length > 0 ? (
         <section className="space-y-2">
           {renderSectionLabel('Diagnostics')}
-          <dl className="space-y-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
+          <dl className="space-y-2 rounded-lg border border-line-soft bg-surface-muted/20 px-3 py-2 text-xs">
             {item.status.diagnostics.map((diagnostic) => (
               <div key={`${diagnostic.label}:${diagnostic.value}`}>
-                <dt className="font-medium text-foreground">
-                  {diagnostic.label}
-                </dt>
-                <dd className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">
+                <dt className="font-medium text-ink">{diagnostic.label}</dt>
+                <dd className="mt-0.5 wrap-break-word whitespace-pre-wrap text-ink-muted">
                   {diagnostic.value}
                 </dd>
               </div>
@@ -502,7 +466,8 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
           <Button
             type="button"
             onClick={onSave}
-            disabled={isMutating}
+            pending={isMutating}
+            pendingLabel="Saving…"
             size="lg"
           >
             Save profile
@@ -515,8 +480,8 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
           disabled={isMutating}
           size="lg"
         >
-          <Trash2 className="h-4 w-4" />
-          Delete
+          <Trash2 className="size-4" />
+          Delete…
         </Button>
       </div>
     </div>
@@ -530,11 +495,7 @@ const CONNECTION_KIND_ITEMS = {
 }
 
 function renderSectionLabel(label: string) {
-  return (
-    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-      {label}
-    </p>
-  )
+  return <SectionLabel as="h3">{label}</SectionLabel>
 }
 
 function formatRouteCandidate(route: LocalModelTunnelRouteCandidate): string {

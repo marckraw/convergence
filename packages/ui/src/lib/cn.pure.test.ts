@@ -88,6 +88,16 @@ describe('cn with the Convergence theme', () => {
     expect(cn('ease-enter', 'ease-out')).toBe('ease-out')
     expect(cn('ease-in', 'ease-exit')).toBe('ease-exit')
     expect(cn('ease-guide', 'ease-linear')).toBe('ease-linear')
+    expect(cn('transition-colors', 'transition-layout')).toBe(
+      'transition-layout',
+    )
+    expect(cn('transition-layout', 'transition-none')).toBe('transition-none')
+  })
+
+  it('knows the card grids are column templates', () => {
+    expect(cn('grid-cols-2', 'grid-cols-fill-65')).toBe('grid-cols-fill-65')
+    expect(cn('grid-cols-fit-80', 'grid-cols-1')).toBe('grid-cols-1')
+    expect(cn('grid-cols-fill-65', 'grid-cols-fit-90')).toBe('grid-cols-fit-90')
   })
 
   it('knows the named transitions: what moves', () => {
@@ -114,6 +124,8 @@ describe('cn with the Convergence theme', () => {
     expect(cn('w-80', 'w-side-panel')).toBe('w-side-panel')
     expect(cn('w-side-panel', 'w-work-panel')).toBe('w-work-panel')
     expect(cn('max-h-[80vh]', 'max-h-dialog')).toBe('max-h-dialog')
+    expect(cn('max-h-dialog', 'max-h-dialog-tall')).toBe('max-h-dialog-tall')
+    expect(cn('h-full', 'h-dialog-tall')).toBe('h-dialog-tall')
     expect(cn('max-w-dialog', 'max-w-dialog-sm')).toBe('max-w-dialog-sm')
     expect(cn('max-w-dialog-2xl', 'max-w-none')).toBe('max-w-none')
     expect(cn('max-w-sm', 'max-w-picker')).toBe('max-w-picker')

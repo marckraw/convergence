@@ -256,6 +256,42 @@ export const ExtraLarge: Story = {
   },
 }
 
+/**
+ * Tall: one height whatever it holds (92% of the window, at most 960 px), so a
+ * dialog with tabs or a list that streams in doesn't jump as they change.
+ */
+function ProviderLog() {
+  return (
+    <Dialog defaultOpen>
+      <DialogContent size="xl" height="tall">
+        <DialogHeader>
+          <DialogTitle>Provider debug log</DialogTitle>
+          <DialogDescription>Every event, as it arrives.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <p className="text-sm">No events captured yet.</p>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export const Tall: Story = {
+  render: () => <ProviderLog />,
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Provider debug log',
+    })
+    await arrived(dialog)
+    await expect(dialog).toHaveAttribute('data-height', 'tall')
+    // Nearly empty, it still stands at the tall height.
+    await expect(dialog.getBoundingClientRect().height).toBeCloseTo(
+      Math.min(window.innerHeight * 0.92, 960),
+      0,
+    )
+  },
+}
+
 /** A refresh in the header, before the ✕ (R6), and no footer: a dialog you look at and leave. */
 function ProviderStatus({ onRefresh }: { onRefresh: () => void }) {
   return (

@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { SessionCard } from './mission-control.types'
 
 /**
@@ -94,4 +95,34 @@ export function classifySessionCardState(card: SessionCard): SessionCardState {
   if (attention === 'failed' || status === 'failed') return 'failed'
   if (attention === 'finished' || status === 'completed') return 'finished'
   return 'idle'
+}
+
+/**
+ * What a session's card shows in its corner, read once for every view that
+ * draws the card (MC-4): the Flat grid and the canvas node. The host guard
+ * comes first: a session on a host the room cannot see is neither running nor
+ * asking, whatever its last record says, so it never pulses and never wears
+ * an attention badge. It shows the warning dot and says so in words.
+ */
+export interface SessionCardSignal {
+  state: SessionCardState
+  hostUnreachable: boolean
+  /** Running, on a host the room can see: the dot pulses and the card breathes. */
+  running: boolean
+  /** Its attention (or its parallel work) is named in the corner instead of a dot. */
+  needsYou: boolean
+}
+
+export function readSessionCardSignal(card: SessionCard): SessionCardSignal {
+  const { session } = card
+  const state = classifySessionCardState(card)
+  const hostUnreachable = state === 'host-unreachable'
+  return {
+    state,
+    hostUnreachable,
+    running: !hostUnreachable && session.status === 'running',
+    needsYou:
+      !hostUnreachable &&
+      (session.attention !== 'none' || Boolean(parallelWorkStatus(session))),
+  }
 }

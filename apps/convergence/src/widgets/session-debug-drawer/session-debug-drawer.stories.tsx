@@ -121,14 +121,6 @@ export const Empty: Story = {
 
 /** Long: a busy session's log scrolls inside the drawer. */
 export const Long: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the event list's scroll area takes no keyboard focus, so it cannot be scrolled without a pointer — fixed by the sweep (DS4)
-        rules: [{ id: 'scrollable-region-focusable', enabled: false }],
-      },
-    },
-  },
   args: {
     entries: Array.from({ length: 60 }, (_, index) => ({
       sessionId,
@@ -147,6 +139,19 @@ export const Long: Story = {
     await expect(
       within(dialog).getByRole('button', { name: 'Copy all' }),
     ).toBeVisible()
+    // The events scroll, and the keyboard can reach them to scroll them.
+    const events = within(dialog).getByRole('region', {
+      name: 'Provider events',
+    })
+    await expect(events).toHaveAttribute('tabindex', '0')
+    await expect(events.scrollHeight).toBeGreaterThan(events.clientHeight)
+    // The newest event, at the bottom, is in reach rather than cut off (DLG-26).
+    events.scrollTop = events.scrollHeight
+    const rows = within(events).getAllByRole('listitem')
+    const last = rows[rows.length - 1].getBoundingClientRect()
+    await expect(last.bottom).toBeLessThanOrEqual(
+      events.getBoundingClientRect().bottom + 1,
+    )
   },
 }
 

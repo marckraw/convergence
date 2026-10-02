@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn } from 'storybook/test'
 import { SessionCrewChips } from './session-crew-chips.presentational'
+import { crewTokens } from '@convergence/ui'
 
 const meta = {
   title: 'Features/MissionControl/SessionCrewChips',
@@ -12,14 +13,14 @@ const meta = {
         label: 'convergence development',
         count: 4,
         emoji: '🐎',
-        accentColor: '#7c3aed',
+        accentColor: crewTokens.violet,
       },
       {
         id: 'crew-2',
         label: 'backpack studio',
         count: 2,
         emoji: null,
-        accentColor: '#10b981',
+        accentColor: crewTokens.green,
       },
       {
         id: 'crew-3',
@@ -78,7 +79,7 @@ export const Long: Story = {
           'convergence development — the Loom wave and everything after it',
         count: 12,
         emoji: '🛰️',
-        accentColor: '#2563eb',
+        accentColor: crewTokens.blue,
       },
     ],
   },

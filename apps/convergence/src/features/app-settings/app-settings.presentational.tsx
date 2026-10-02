@@ -20,19 +20,15 @@ import {
   Button,
   ChoiceField,
   cn,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  EmptyState,
+  FormDialog,
+  ListRow,
+  SectionLabel,
+  SettingsSection,
   Switch,
 } from '@convergence/ui'
-import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
-import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
-import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
+import { ModelDefaultsFields } from './model-defaults-fields.presentational'
 import { ExecutionHostEndpointsFields } from './execution-host-endpoints.presentational'
 import type {
   ExecutionHostEndpointDraft,
@@ -76,8 +72,7 @@ interface AppSettingsDialogProps {
   updatesVersion: string | null
   updatesIsDev: boolean
   platform: string | null
-  isSaving: boolean
-  isSaveBlocked: boolean
+  /** The last save that failed, in R10's words; each change saves itself. */
   error: string | null
   activeSection: AppSettingsSectionId
   onProviderChange: (id: string) => void
@@ -108,8 +103,6 @@ interface AppSettingsDialogProps {
   onStartRecordShortcut: () => void
   onRestoreCommandCenterShortcut: () => void
   onSectionChange: (section: AppSettingsSectionId) => void
-  onSave: () => void
-  onCancel: () => void
   onRestoreDefaults: () => void
 }
 
@@ -144,8 +137,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   updatesVersion,
   updatesIsDev,
   platform,
-  isSaving,
-  isSaveBlocked,
   error,
   activeSection,
   onProviderChange,
@@ -176,8 +167,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onStartRecordShortcut,
   onRestoreCommandCenterShortcut,
   onSectionChange,
-  onSave,
-  onCancel,
   onRestoreDefaults,
 }) => {
   const sections: SettingsSection[] = [
@@ -269,25 +258,18 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
 
   const currentSection =
     sections.find((section) => section.id === activeSection) ?? sections[0]
-  const usesIndependentSave =
-    currentSection.id === 'insights' ||
-    currentSection.id === 'credentials' ||
-    currentSection.id === 'provider-accounts' ||
-    currentSection.id === 'usage'
 
   const renderCurrentSection = () => {
     switch (currentSection.id) {
       case 'session-defaults':
         return providers.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-card/35 px-4 py-5">
-            <p className="text-sm text-muted-foreground">
-              No providers are available yet. Install a provider CLI to
-              configure defaults.
-            </p>
-          </div>
+          <EmptyState
+            title="No providers yet"
+            detail="Install a provider CLI to configure defaults."
+          />
         ) : (
           <div className="space-y-6">
-            <SettingsSubsection
+            <SettingsSection
               title="New session"
               description="Provider, model, and reasoning effort prefilled whenever you start a new session."
             >
@@ -298,38 +280,49 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 onModelChange={onModelChange}
                 onEffortChange={onEffortChange}
               />
-            </SettingsSubsection>
-            <SettingsSubsection
-              withDivider
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onRestoreDefaults}
+              >
+                Restore defaults
+              </Button>
+            </SettingsSection>
+            <SettingsSection
+              divided
               title="Session naming"
               description="Lightweight model each provider uses to auto-generate session names."
             >
-              <NamingModelDefaultsFields
+              <ModelDefaultsFields
                 providers={providers}
-                namingDraft={namingDraft}
-                onNamingModelChange={onNamingModelChange}
+                chosen={namingDraft}
+                fallback="fast"
+                purpose="Session naming"
+                onModelChange={onNamingModelChange}
               />
-            </SettingsSubsection>
-            <SettingsSubsection
-              withDivider
+            </SettingsSection>
+            <SettingsSection
+              divided
               title="Session forking"
               description="Model that summarises prior conversation state before a session is forked."
             >
-              <ExtractionModelDefaultsFields
+              <ModelDefaultsFields
                 providers={providers}
-                extractionDraft={extractionDraft}
-                onExtractionModelChange={onExtractionModelChange}
+                chosen={extractionDraft}
+                fallback="default"
+                purpose="Session forking"
+                onModelChange={onExtractionModelChange}
               />
-            </SettingsSubsection>
-            <SettingsSubsection
-              withDivider
+            </SettingsSection>
+            <SettingsSection
+              divided
               title="Work blocks"
               description="One short line under each folded block of tool steps, written after the turn ends."
             >
               <ChoiceField
                 label="Describe work blocks"
                 hint="Uses GPT-6 Luna on your default Codex account, one request per block of three or more steps, after each turn. Each line is checked against the block before it is shown."
-                disabled={isSaving}
               >
                 <Switch
                   id="describe-work-blocks"
@@ -337,20 +330,19 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                   onCheckedChange={(next) => onToggleDescribeWorkBlocks(next)}
                 />
               </ChoiceField>
-            </SettingsSubsection>
-            <SettingsSubsection
-              withDivider
+            </SettingsSection>
+            <SettingsSection
+              divided
               title="Context alert"
               description="When to warn you that a conversation is filling its context window, so you can seal and compact before it runs out."
             >
               <ContextAlertFields
                 alert={contextAlertDraft}
-                isSaving={isSaving}
                 onChange={onContextAlertChange}
               />
-            </SettingsSubsection>
-            <SettingsSubsection
-              withDivider
+            </SettingsSection>
+            <SettingsSection
+              divided
               title="Execution host endpoints"
               description="Machines other than this one that can run provider sessions, each with its own address and token. Choosing where a session runs comes per session."
             >
@@ -366,7 +358,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 onBaseUrlChange={onExecutionHostBaseUrlChange}
                 onRemove={onRemoveExecutionHostEndpoint}
               />
-            </SettingsSubsection>
+            </SettingsSection>
           </div>
         )
       case 'credentials':
@@ -385,7 +377,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
           <NotificationsFields
             prefs={notificationsDraft}
             platform={platform}
-            isSaving={isSaving}
             onChange={onNotificationsChange}
             onTestFire={onTestFireNotification}
           />
@@ -405,7 +396,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             currentVersion={updatesVersion}
             prefs={updatesDraft}
             isDev={updatesIsDev}
-            isSaving={isSaving}
             now={new Date()}
             onToggleBackground={onToggleBackgroundUpdates}
             onCheckNow={onCheckUpdates}
@@ -423,7 +413,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             commandCenterLabel={commandCenterShortcutLabel}
             conflictError={shortcutsConflict}
             isRecording={isRecordingShortcut}
-            isSaving={isSaving}
             onStartRecord={onStartRecordShortcut}
             onRestoreDefault={onRestoreCommandCenterShortcut}
           />
@@ -432,7 +421,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         return (
           <DebugLoggingFields
             prefs={debugLoggingDraft}
-            isSaving={isSaving}
             onToggleEnabled={onToggleDebugLogging}
             onOpenLogFolder={onOpenDebugLogFolder}
           />
@@ -445,145 +433,85 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
     currentSection.navLabel.trim().toLowerCase()
 
   return (
-    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogTrigger render={trigger} />
-      <DialogContent
-        size="2xl"
-        className="h-[min(92vh,960px)] max-h-[min(92vh,960px)]"
-      >
-        <>
-          <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
-            <DialogDescription>
-              App-wide defaults used every time you start a new session.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-            <aside className="shrink-0 border-b border-border/70 bg-card/30 sm:w-64 sm:border-r sm:border-b-0">
-              <nav
-                aria-label="Settings sections"
-                className="app-scrollbar flex gap-2 overflow-x-auto px-3 py-3 sm:h-full sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden"
-              >
-                {sections.map((section) => {
-                  const isActive = currentSection.id === section.id
-
-                  return (
-                    <Button
-                      key={section.id}
-                      type="button"
-                      variant={isActive ? 'tonal' : 'ghost'}
-                      aria-current={isActive ? 'page' : undefined}
-                      onClick={() => onSectionChange(section.id)}
-                      className={cn(
-                        'h-auto min-w-48 items-start justify-start rounded-xl py-3 text-left sm:min-w-0',
-                        isActive && 'ring-1 ring-ring',
-                      )}
-                    >
-                      <span className="flex flex-col gap-1">
-                        <span className="text-sm font-medium">
-                          {section.navLabel}
-                        </span>
-                        <span className="whitespace-normal text-[11px] leading-relaxed text-muted-foreground">
-                          {section.navSummary}
-                        </span>
-                      </span>
-                    </Button>
-                  )
-                })}
-              </nav>
-            </aside>
-
-            <div className="min-h-0 flex-1">
-              <div
-                data-testid="app-settings-scroll-region"
-                className={cn(
-                  'app-scrollbar min-h-0 h-full overflow-y-auto py-5',
-                  currentSection.id === 'insights' ? 'px-5 lg:px-8' : 'px-6',
-                )}
-              >
-                <div
-                  className={cn(
-                    'mx-auto space-y-5',
-                    currentSection.id === 'insights'
-                      ? 'max-w-6xl'
-                      : 'max-w-2xl',
-                  )}
-                >
-                  <section className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      {currentSection.navLabel}
-                    </p>
-                    <div>
-                      {showsSectionTitle ? (
-                        <h3 className="text-lg font-semibold">
-                          {currentSection.title}
-                        </h3>
-                      ) : null}
-                      <p
-                        className={cn(
-                          'max-w-xl text-sm leading-relaxed text-muted-foreground',
-                          showsSectionTitle && 'mt-1',
-                        )}
-                      >
-                        {currentSection.description}
-                      </p>
-                    </div>
-                  </section>
-
-                  {renderCurrentSection()}
-
-                  {error && (
-                    <p
-                      className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-                      role="alert"
-                    >
-                      {error}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border/70 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              {currentSection.id === 'session-defaults' ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={onRestoreDefaults}
-                  disabled={providers.length === 0 || isSaving}
-                >
-                  Restore defaults
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <DialogClose
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={trigger}
+      title="Settings"
+      description="Each change is saved as you make it."
+      size="2xl"
+      height="tall"
+      flush
+      saves="as-you-go"
+      error={error}
+    >
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+        <aside className="shrink-0 border-b border-line-soft bg-surface/30 sm:w-64 sm:border-r sm:border-b-0">
+          <nav
+            aria-label="Settings sections"
+            className="app-scrollbar flex gap-1 overflow-x-auto p-3 sm:h-full sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto"
+          >
+            {sections.map((section) => (
+              <ListRow
+                key={section.id}
                 render={
-                  <Button
+                  <button
                     type="button"
-                    variant={usesIndependentSave ? 'primary' : 'secondary'}
-                    onClick={onCancel}
-                    disabled={isSaving}
-                  >
-                    {usesIndependentSave ? 'Done' : 'Cancel'}
-                  </Button>
+                    onClick={() => onSectionChange(section.id)}
+                  />
                 }
+                selected={currentSection.id === section.id}
+                title={section.navLabel}
+                meta={section.navSummary}
+                className="min-w-48 sm:min-w-0"
               />
-              {usesIndependentSave ? null : (
-                <Button
-                  type="button"
-                  onClick={onSave}
-                  disabled={providers.length === 0 || isSaving || isSaveBlocked}
+            ))}
+          </nav>
+        </aside>
+
+        <div
+          data-testid="app-settings-scroll-region"
+          className={cn(
+            'app-scrollbar min-h-0 flex-1 overflow-y-auto py-5',
+            currentSection.id === 'insights' ? 'px-5 lg:px-8' : 'px-6',
+          )}
+        >
+          <div
+            className={cn(
+              'mx-auto space-y-5',
+              currentSection.id === 'insights' ? 'max-w-6xl' : 'max-w-2xl',
+            )}
+          >
+            <section className="space-y-2">
+              {/*
+                One h3 under the dialog's h2, so the sections' h4s follow in
+                order: the title when it says more than the label, else the
+                label itself.
+              */}
+              <SectionLabel as={showsSectionTitle ? 'p' : 'h3'}>
+                {currentSection.navLabel}
+              </SectionLabel>
+              <div>
+                {showsSectionTitle ? (
+                  <h3 className="text-lg font-semibold">
+                    {currentSection.title}
+                  </h3>
+                ) : null}
+                <p
+                  className={cn(
+                    'max-w-xl text-sm leading-relaxed text-ink-muted',
+                    showsSectionTitle && 'mt-1',
+                  )}
                 >
-                  Save
-                </Button>
-              )}
-            </div>
+                  {currentSection.description}
+                </p>
+              </div>
+            </section>
+
+            {renderCurrentSection()}
           </div>
-        </>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </FormDialog>
   )
 }

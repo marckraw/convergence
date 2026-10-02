@@ -29,8 +29,6 @@ const meta = {
     credentialMessage: null,
     credentialError: null,
     connectionResult: null,
-    removalWarning: null,
-    isRemovalPending: false,
     onLabelChange: fn(),
     onRemoteBaseUrlChange: fn(),
     onDaemonTokenChange: fn(),
@@ -39,12 +37,10 @@ const meta = {
     onDeleteDaemonToken: fn(),
     onTestDaemonConnection: fn(),
     onRequestRemove: fn(),
-    onConfirmRemove: fn(),
-    onCancelRemove: fn(),
   },
   decorators: [
     (Story) => (
-      <div className="w-[640px]">
+      <div className="w-xl">
         <Story />
       </div>
     ),
@@ -137,7 +133,13 @@ export const Connected: Story = {
     },
   },
   play: async ({ canvas }) => {
-    const result = canvas.getByRole('status')
+    // Two statuses: the token's save, and the test's answer, named by its title.
+    await expect(
+      canvas.getByRole('status', { name: 'Token saved to the Keychain.' }),
+    ).toBeVisible()
+    const result = canvas.getByRole('status', {
+      name: 'Connected to kuba-vps.',
+    })
     await expect(result).toHaveTextContent('Connected to kuba-vps.')
     await expect(result).toHaveTextContent('agents-daemon 0.41.0 · API 3')
     await expect(result).toHaveTextContent(
@@ -177,7 +179,7 @@ export const Busy: Story = {
   play: async ({ canvas }) => {
     await expect(
       canvas.getByRole('button', { name: 'Test connection for kuba-vps' }),
-    ).toHaveTextContent('Testing...')
+    ).toHaveTextContent('Testing…')
     await expect(
       canvas.getByRole('button', { name: 'Test connection for kuba-vps' }),
     ).toBeDisabled()
@@ -193,15 +195,17 @@ export const Disabled: Story = {
   args: {
     credentialStatus: null,
     actionBlocks: {
-      token: 'Save settings first — this endpoint does not exist yet.',
-      connection: 'Save settings first — this endpoint does not exist yet.',
+      token:
+        'Enter a valid URL first — this endpoint is saved once its address is.',
+      connection:
+        'Enter a valid URL first — this endpoint is saved once its address is.',
     },
     removalBlock: '3 sessions still run on this endpoint.',
   },
   play: async ({ canvas }) => {
     await expect(
       canvas.getByText(
-        'Save settings first — this endpoint does not exist yet.',
+        'Enter a valid URL first — this endpoint is saved once its address is.',
       ),
     ).toBeVisible()
     // Remove and Test connection are unavailable with a reason (R2,
@@ -216,36 +220,11 @@ export const Disabled: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Test connection for kuba-vps' }),
     ).toHaveAccessibleDescription(
-      'Save settings first — this endpoint does not exist yet.',
+      'Enter a valid URL first — this endpoint is saved once its address is.',
     )
     await expect(
       canvas.getByRole('button', { name: 'Save token for kuba-vps' }),
     ).toBeDisabled()
-  },
-}
-
-/** Removing: the warning, then Remove anyway or Keep it. */
-export const ConfirmRemoval: Story = {
-  name: 'Confirm removal',
-  args: {
-    isRemovalPending: true,
-    removalWarning:
-      'Removing kuba-vps also forgets its token. Sessions that ran there keep their history.',
-  },
-  play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'also forgets its token',
-    )
-    await userEvent.click(
-      canvas.getByRole('button', { name: 'Keep endpoint kuba-vps' }),
-    )
-    await expect(args.onCancelRemove).toHaveBeenCalledOnce()
-    await userEvent.click(
-      canvas.getByRole('button', {
-        name: 'Confirm removing endpoint kuba-vps',
-      }),
-    )
-    await expect(args.onConfirmRemove).toHaveBeenCalledOnce()
   },
 }
 

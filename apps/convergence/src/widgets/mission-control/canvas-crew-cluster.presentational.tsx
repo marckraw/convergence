@@ -1,6 +1,6 @@
 import type { CSSProperties, FC } from 'react'
-import { Users } from 'lucide-react'
 import type { NodeProps } from '@xyflow/react'
+import { CrewMark, crewColor } from '@/features/mission-control'
 import { cn } from '@convergence/ui'
 import type { CanvasCrewClusterData } from './session-canvas.types'
 
@@ -14,13 +14,13 @@ import type { CanvasCrewClusterData } from './session-canvas.types'
  */
 export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
   const cluster = data as unknown as CanvasCrewClusterData
-  // The amber outranks the crew's own accent, deliberately: a parked loop is
+  // The warning outranks the crew's own accent, deliberately: a parked loop is
   // the one thing on this frame that needs a human, and a colour the user
   // chose for decoration must not be able to hide it.
-  const accentStyle: CSSProperties | undefined =
-    cluster.accentColor && !cluster.parked
-      ? { borderColor: cluster.accentColor }
-      : undefined
+  const accent = cluster.parked ? null : crewColor(cluster.accentColor)
+  const accentStyle: CSSProperties | undefined = accent
+    ? { borderColor: accent }
+    : undefined
 
   return (
     <div
@@ -29,30 +29,21 @@ export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
       data-crew-parked={cluster.parked ? 'true' : 'false'}
       style={{ width: cluster.width, height: cluster.height, ...accentStyle }}
       className={cn(
-        'rounded-xl border bg-foreground/[0.03]',
+        'rounded-xl border bg-fill-quiet',
+        // Parked waits on you: the warning tone (R1), its edge at the solid.
         cluster.parked
-          ? 'border-amber-400/70 bg-amber-400/[0.04]'
-          : 'border-border',
+          ? 'border-warning-solid/70 bg-warning-soft'
+          : 'border-line',
         'pointer-events-none',
       )}
     >
       <div className="pointer-events-auto flex items-center gap-2 px-4 py-3">
-        {cluster.emoji ? (
-          <span aria-hidden className="text-sm leading-none">
-            {cluster.emoji}
-          </span>
-        ) : (
-          <Users aria-hidden className="size-3.5 text-muted-foreground" />
-        )}
-
-        {cluster.accentColor ? (
-          <span
-            aria-hidden
-            style={{ backgroundColor: cluster.accentColor }}
-            className="size-2 rounded-full"
-          />
-        ) : null}
-
+        <CrewMark
+          crew={cluster}
+          variant="glyph"
+          className={cluster.emoji ? 'text-sm' : 'size-3.5 text-ink-muted'}
+        />
+        <CrewMark crew={cluster} variant="dot" />
         <h2 className="truncate text-xs font-medium">{cluster.name}</h2>
       </div>
     </div>

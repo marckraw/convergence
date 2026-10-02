@@ -11,13 +11,17 @@ import type {
 import {
   Button,
   cn,
-  Input,
+  EmptyState,
+  SearchField,
+  SegmentedControl,
+  SegmentedControlItem,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@convergence/ui'
+import { ROOM_COLUMN_CLASS } from './session-canvas.styles'
 
 interface MissionControlViewProps {
   totalCount: number
@@ -68,14 +72,21 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   ]
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
+    <div className={ROOM_COLUMN_CLASS}>
+      {/* The room's top strip drags the window (NAV-4): `app-drag` on the
+          strip, and every control in it is a part that carries `app-no-drag`
+          itself (SegmentedControl, SearchField, SelectTrigger, Toggle,
+          Button, Combobox), so each still takes its click. */}
+      <div
+        data-mission-control-header
+        className="app-drag flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3"
+      >
         <div className="flex items-baseline gap-3">
           <h1 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <Satellite className="size-4" />
             Mission Control
           </h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             {totalCount === 0
               ? 'no sessions'
               : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${attentionCount} need${attentionCount === 1 ? 's' : ''} you · ${runningCount} running`}
@@ -83,40 +94,30 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
         </div>
 
         <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-          <div
-            role="group"
+          <SegmentedControl
             aria-label="Mission Control layout"
-            className="flex items-center gap-0.5 rounded-full border border-white/10 p-0.5"
+            size="sm"
+            value={mode}
+            onValueChange={(value) =>
+              onModeChange(value as MissionControlViewMode)
+            }
           >
             {modes.map((entry) => (
-              <Button
-                key={entry.value}
-                type="button"
-                variant="ghost"
-                aria-pressed={mode === entry.value}
-                onClick={() => onModeChange(entry.value)}
-                size="sm"
-                className={cn(
-                  'rounded-full px-3 text-[11px] font-normal',
-                  mode === entry.value
-                    ? 'bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
+              <SegmentedControlItem key={entry.value} value={entry.value}>
                 {entry.label}
-              </Button>
+              </SegmentedControlItem>
             ))}
-          </div>
+          </SegmentedControl>
 
           <>
-            <Input
+            <SearchField
               size="md"
-              type="search"
               value={query}
               placeholder="Search cards by name, project, provider, model, status…"
               aria-label="Search session cards"
-              className="w-full max-w-xs text-xs"
+              className="w-full max-w-xs"
               onChange={(event) => onQueryChange(event.target.value)}
+              onClear={() => onQueryChange('')}
             />
 
             <Select
@@ -166,38 +167,37 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
         {mode === 'canvas' && totalCount === 0 ? (
           children
         ) : totalCount === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <Satellite className="size-6 text-muted-foreground" />
-            <p className="text-sm font-medium">No sessions yet</p>
-            <p className="max-w-sm text-xs text-muted-foreground">
-              Start a session in any project and its card will appear here,
-              live.
-            </p>
-          </div>
+          <EmptyState
+            variant="plain"
+            layout="centred"
+            icon={Satellite}
+            title="No sessions yet"
+            detail="Start a session in any project and its card will appear here, live."
+          />
         ) : visibleCount === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <SearchX className="size-6 text-muted-foreground" />
-            <p className="text-sm font-medium">
-              {query.trim()
+          <EmptyState
+            variant="plain"
+            layout="centred"
+            icon={SearchX}
+            title={
+              query.trim()
                 ? `No cards match “${query}”`
-                : 'No cards in the states you picked'}
-            </p>
-            <p className="max-w-sm text-xs text-muted-foreground">
-              Card search covers name, project, provider, model, status and
-              activity — not conversation content.
-            </p>
-            {filterIsEmpty ? null : (
-              <Button
-                type="button"
-                variant="link"
-                onClick={onClearFilter}
-                size="sm"
-                className="h-7 text-xs text-muted-foreground hover:text-foreground px-3"
-              >
-                Show the whole room
-              </Button>
-            )}
-          </div>
+                : 'No cards in the states you picked'
+            }
+            detail="Card search covers name, project, provider, model, status and activity — not conversation content."
+            action={
+              filterIsEmpty ? null : (
+                <Button
+                  type="button"
+                  variant="link"
+                  onClick={onClearFilter}
+                  className="text-xs text-ink-muted hover:text-ink"
+                >
+                  Show the whole room
+                </Button>
+              )
+            }
+          />
         ) : (
           children
         )}

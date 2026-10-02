@@ -6,11 +6,12 @@ import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
-  LOOM_COLLAPSE_BUTTON_CLASS,
   DRAG_REGION_STYLE,
+  LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_EXPANDED_CLASS,
-  NO_DRAG_STYLE,
+  LOOM_GUIDE_ENTRY_CLASS,
   LOOM_SEARCH_EXPANDED_CLASS,
+  NO_DRAG_STYLE,
 } from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 import { LoomSearchFieldView } from './loom-search.presentational'
@@ -62,10 +63,7 @@ export const LoomExpandedView: FC<
           It keeps its flex-1 whether or not it has a word to say, so the
           header's spacing does not move with the crew -- and the empty part
           of it is where the window can be picked up. */}
-      <div
-        data-loom-subline
-        className="min-w-0 flex-1 text-xs text-muted-foreground"
-      >
+      <div data-loom-subline className="min-w-0 flex-1 text-xs text-ink-muted">
         <LoomSublineContent subline={props.subline} />
       </div>
       {/* Between the subline and the guide (MAR-3234 R7). */}
@@ -83,7 +81,7 @@ export const LoomExpandedView: FC<
         style={NO_DRAG_STYLE}
         onClick={props.onOpenGuide}
         size="lg"
-        className="w-[148px] shrink-0 px-3 text-xs py-0"
+        className={LOOM_GUIDE_ENTRY_CLASS}
       >
         {LEARN_LOOM_ENTRY}
       </Button>

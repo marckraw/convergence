@@ -134,7 +134,7 @@ export const Default: Story = {
     ).toBeVisible()
     await userEvent.click(canvas.getByRole('button', { name: 'Save profile' }))
     await expect(args.onSave).toHaveBeenCalledOnce()
-    await userEvent.click(canvas.getByRole('button', { name: 'Delete' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete…' }))
     await expect(args.onDelete).toHaveBeenCalledOnce()
   },
 }
@@ -275,14 +275,14 @@ export const Failed: Story = {
   },
 }
 
-/** Busy: while a change is in flight, Save and Delete wait. */
+/** Busy: while a change is in flight, Save says so and Delete waits. */
 export const Busy: Story = {
   args: { isMutating: true },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('button', { name: 'Save profile' }),
-    ).toBeDisabled()
-    await expect(canvas.getByRole('button', { name: 'Delete' })).toBeDisabled()
+      canvas.getByRole('button', { name: 'Saving…' }),
+    ).toHaveAttribute('aria-busy', 'true')
+    await expect(canvas.getByRole('button', { name: 'Delete…' })).toBeDisabled()
     await expect(canvas.getByRole('button', { name: 'Restart' })).toBeDisabled()
   },
 }

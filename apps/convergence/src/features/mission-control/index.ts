@@ -25,6 +25,7 @@ export type {
   MissionControlCardsInput,
 } from './use-mission-control-cards'
 export { SessionCardView } from './session-card.presentational'
+export type { SessionCardDensity } from './session-card.presentational'
 export { SessionCrewPicker } from './session-crew-picker.container'
 export { SessionCrewChips } from './session-crew-chips.presentational'
 export { CrewDecorationPicker } from './crew-decoration-picker.presentational'
@@ -110,11 +111,8 @@ export type { RoutePoint, RouteRect, RouteSide } from './canvas-route.pure'
 
 // History under the canvas (R3, R12): the words, the panel, the event panel.
 export { HistoryPanel } from './history-panel.presentational'
-export {
-  HISTORY_TONE_BORDER,
-  HISTORY_TONE_TEXT,
-  HistoryEventRowView,
-} from './history-event-row.presentational'
+export { HistoryEventRowView } from './history-event-row.presentational'
+export { HISTORY_TONE, RELAY_HOP_TONE, TONE_FRAME } from './hop-tone.styles'
 export { HistoryFact } from './history-fact.presentational'
 export {
   HistoryEventInspector,
@@ -199,12 +197,16 @@ export {
   CREW_ACCENT_COLORS,
   CREW_EMOJI_CHOICES,
   CREW_SEARCH_THRESHOLD,
+  crewColor,
+  crewHue,
   crewsHoldingSession,
   filterCrewsByQuery,
   formatCrewTriggerLabel,
   isValidCrewName,
 } from './session-crew-picker.pure'
-export type { CrewAccentChoice } from './session-crew-picker.pure'
+export type { CrewAccentChoice, CrewHue } from './session-crew-picker.pure'
+export { CrewMark } from './crew-mark.presentational'
+export type { CrewMarkCrew, CrewMarkVariant } from './crew-mark.presentational'
 export { buildSessionCards } from './mission-control-cards.pure'
 export { SessionStateChips } from './session-state-chips.presentational'
 export { SessionFacetPicker } from './session-facet-picker.container'
@@ -251,7 +253,6 @@ export type {
   SessionCardStateCounts,
 } from './session-card-state.pure'
 export { formatSessionCardActivity } from './session-card-activity.pure'
-export { CARD_ATTENTION_STYLES, STATUS_DOT_STYLES } from './session-card.styles'
 export {
   CANVAS_CHAIR_NODE_HEIGHT,
   CANVAS_CLUSTER_PADDING_TOP,

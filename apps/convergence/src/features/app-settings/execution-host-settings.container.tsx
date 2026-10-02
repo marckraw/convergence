@@ -70,7 +70,6 @@ export const ExecutionHostSettingsContainer: FC<
   // against — never the token, which has no business leaving the main process.
   const [tokenGeneration, setTokenGeneration] = useState(0)
   const [isConnectionTesting, setIsConnectionTesting] = useState(false)
-  const [isRemovalPending, setIsRemovalPending] = useState(false)
 
   const endpointId = draft.id
   const displayName = executionHostEndpointDisplayName(draft)
@@ -114,7 +113,7 @@ export const ExecutionHostSettingsContainer: FC<
       setCredentialError(
         err instanceof Error
           ? err.message
-          : 'Failed to load daemon token status',
+          : 'Couldn’t read the daemon’s token status.',
       )
     }
   }, [endpointId])
@@ -147,7 +146,9 @@ export const ExecutionHostSettingsContainer: FC<
       setCredentialMessage('Daemon API token saved.')
     } catch (err) {
       setCredentialError(
-        err instanceof Error ? err.message : 'Failed to save daemon API token',
+        err instanceof Error
+          ? err.message
+          : 'Couldn’t save the daemon’s API token.',
       )
     } finally {
       setIsCredentialSaving(false)
@@ -177,7 +178,7 @@ export const ExecutionHostSettingsContainer: FC<
       setCredentialError(
         err instanceof Error
           ? err.message
-          : 'Failed to remove daemon API token',
+          : 'Couldn’t remove the daemon’s API token.',
       )
     } finally {
       setIsCredentialSaving(false)
@@ -210,7 +211,7 @@ export const ExecutionHostSettingsContainer: FC<
           message:
             err instanceof Error
               ? err.message
-              : 'Failed to test daemon connection',
+              : 'Couldn’t test the daemon connection.',
           providers: null,
           daemon: null,
         },
@@ -220,20 +221,26 @@ export const ExecutionHostSettingsContainer: FC<
     }
   }, [draft.baseUrl, endpointId, tokenGeneration])
 
-  const handleRequestRemove = useCallback(() => {
-    // Nothing names it and nothing is stored: removing costs nothing, so
-    // asking would be ceremony rather than honesty.
-    if (!removalWarning) {
+  const handleRequestRemove = useCallback(async () => {
+    // Only typed, never stored: nothing is lost, so asking would be ceremony
+    // rather than honesty.
+    if (!saved) {
       onRemove()
       return
     }
-    setIsRemovalPending(true)
-  }, [onRemove, removalWarning])
-
-  const handleConfirmRemove = useCallback(() => {
-    setIsRemovalPending(false)
-    onRemove()
-  }, [onRemove])
+    // Settings saves as you go (R6), so a stored endpoint's removal is kept
+    // at once: its address and its token go, and no Cancel brings them back.
+    // It asks first (R5), with its price when sessions name it.
+    const confirmed = await confirm({
+      title: `Remove the endpoint “${displayName}”?`,
+      description:
+        removalWarning ??
+        'Its address and its saved token are deleted. No session runs on it.',
+      confirmLabel: 'Remove endpoint',
+      variant: 'danger',
+    })
+    if (confirmed) onRemove()
+  }, [confirm, displayName, onRemove, removalWarning, saved])
 
   return (
     <ExecutionHostFields
@@ -252,8 +259,6 @@ export const ExecutionHostSettingsContainer: FC<
       credentialMessage={credentialMessage}
       credentialError={credentialError}
       connectionResult={connectionResult}
-      removalWarning={removalWarning}
-      isRemovalPending={isRemovalPending}
       onLabelChange={onLabelChange}
       onRemoteBaseUrlChange={onRemoteBaseUrlChange}
       onDaemonTokenChange={setDaemonTokenDraft}
@@ -263,9 +268,7 @@ export const ExecutionHostSettingsContainer: FC<
       onSaveDaemonToken={handleSaveToken}
       onDeleteDaemonToken={handleDeleteToken}
       onTestDaemonConnection={handleTestConnection}
-      onRequestRemove={handleRequestRemove}
-      onConfirmRemove={handleConfirmRemove}
-      onCancelRemove={() => setIsRemovalPending(false)}
+      onRequestRemove={() => void handleRequestRemove()}
     />
   )
 }

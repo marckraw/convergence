@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
 } from 'react'
@@ -25,6 +26,8 @@ import {
   executionHostApi,
   executionHostDaemonCredentialsApi,
   useAppSettingsStore,
+  type AppSettings,
+  type AppSettingsInput,
   type CommandCenterShortcutPrefs,
   type ContextAlertSettings,
   type DebugLoggingPrefs,
@@ -48,8 +51,8 @@ import {
   describeOrphanedExecutionHostEnvironmentOverride,
   executionHostEndpointDrafts,
   executionHostSessionCounts,
-  hasExecutionHostEndpointErrors,
   nextExecutionHostEndpointId,
+  persistableExecutionHostEndpoints,
   type ExecutionHostEndpointDraft,
   type ExecutionHostSessionCounts,
 } from './execution-host-settings.pure'
@@ -68,6 +71,71 @@ const EMPTY_DRAFT: Draft = { providerId: '', modelId: '', effortId: '' }
 const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 const EMPTY_EXTRACTION_DRAFT: Record<string, string> = {}
 const DEFAULT_SECTION: AppSettingsSectionId = 'session-defaults'
+
+/**
+ * Settings saves as you go (DS4, R6): a switch or a choice is kept at once; a
+ * typed value once the typing has paused this long, and at once when the
+ * dialog closes.
+ */
+const SAVE_NOW_MS = 0
+const SAVE_AFTER_TYPING_MS = 400
+
+/** Everything Settings is editing, as it stands: what each save is built from. */
+interface SettingsDrafts {
+  selection: ReturnType<typeof resolveProviderSelection>
+  naming: Record<string, string>
+  extraction: Record<string, string>
+  endpoints: readonly ExecutionHostEndpointDraft[]
+  notifications: NotificationPrefs | null
+  updates: UpdatePrefs | null
+  debugLogging: DebugLoggingPrefs | null
+  contextAlert: ContextAlertSettings | null
+  describeWorkBlocks: boolean | null
+  piModels: string[] | null
+  shortcut: CommandCenterShortcutPrefs | null
+}
+
+/**
+ * The whole settings record a save writes: each draft, else what is stored.
+ * A shortcut that collides with another binding, and an endpoint whose address
+ * isn't valid yet, keep their stored values, so a half-made change never
+ * replaces a working one.
+ */
+function settingsInput(
+  drafts: SettingsDrafts,
+  stored: AppSettings,
+): AppSettingsInput {
+  const shortcut = drafts.shortcut ?? stored.commandCenterShortcut
+  return {
+    defaultProviderId: drafts.selection.providerId || null,
+    defaultModelId: drafts.selection.modelId || null,
+    defaultEffortId: drafts.selection.effort?.id ?? null,
+    namingModelByProvider: drafts.naming,
+    extractionModelByProvider: drafts.extraction,
+    commandCenterShortcut: findShortcutConflict(shortcut)
+      ? stored.commandCenterShortcut
+      : shortcut,
+    // The list is the whole fact (MAR-2642). Each row keeps the id it was
+    // seeded with, so editing a name or an address is an edit to the machine
+    // sessions already point at rather than a new one; a row is only gone
+    // because it was explicitly removed.
+    executionHostEndpoints: persistableExecutionHostEndpoints(
+      drafts.endpoints,
+      stored.executionHostEndpoints,
+    ),
+    notifications: drafts.notifications ?? stored.notifications,
+    onboarding: stored.onboarding,
+    updates: drafts.updates ?? stored.updates,
+    debugLogging: drafts.debugLogging ?? stored.debugLogging,
+    contextAlert: drafts.contextAlert ?? stored.contextAlert,
+    describeWorkBlocks: drafts.describeWorkBlocks ?? stored.describeWorkBlocks,
+    piModelVisibility: {
+      additionalModelIds:
+        drafts.piModels ?? stored.piModelVisibility.additionalModelIds,
+    },
+    favoriteModels: stored.favoriteModels,
+  }
+}
 
 function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
   return (
@@ -93,13 +161,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const payload = useDialogStore((s) => s.payload)
   const openDialog = useDialogStore((s) => s.open)
   const closeDialog = useDialogStore((s) => s.close)
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (next) openDialog('app-settings')
-      else closeDialog()
-    },
-    [openDialog, closeDialog],
-  )
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
   const [namingDraft, setNamingDraft] =
     useState<Record<string, string>>(EMPTY_NAMING_DRAFT)
@@ -137,7 +198,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const settings = useAppSettingsStore((s) => s.settings)
   const isLoaded = useAppSettingsStore((s) => s.isLoaded)
-  const isSaving = useAppSettingsStore((s) => s.isSaving)
   const error = useAppSettingsStore((s) => s.error)
   const loadSettings = useAppSettingsStore((s) => s.load)
   const saveSettings = useAppSettingsStore((s) => s.save)
@@ -240,27 +300,49 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         ? payload.appSettingsSection
         : DEFAULT_SECTION
     setActiveSection(requestedSection)
+  }, [open, payload])
+
+  /**
+   * Whether the drafts hold what is stored yet: nothing is saved before they
+   * do, or a change made while the settings were still loading would write
+   * empty drafts over them.
+   */
+  const seeded = useRef(false)
+
+  /**
+   * Seeds every draft from what is stored, once per open (and once the
+   * settings have loaded). Not again on each save: Settings saves as you go,
+   * and a reseed from a save's answer would overwrite what is being typed.
+   */
+  useEffect(() => {
+    if (!open) {
+      seeded.current = false
+      return
+    }
+    if (!isLoaded) return
+    const stored = useAppSettingsStore.getState().settings
     setDraft({
-      providerId: settings.defaultProviderId ?? '',
-      modelId: settings.defaultModelId ?? '',
-      effortId: settings.defaultEffortId ?? '',
+      providerId: stored.defaultProviderId ?? '',
+      modelId: stored.defaultModelId ?? '',
+      effortId: stored.defaultEffortId ?? '',
     })
-    setNamingDraft({ ...settings.namingModelByProvider })
-    setExtractionDraft({ ...settings.extractionModelByProvider })
+    setNamingDraft({ ...stored.namingModelByProvider })
+    setExtractionDraft({ ...stored.extractionModelByProvider })
     setExecutionHostEndpointsDraft(
-      executionHostEndpointDrafts(settings.executionHostEndpoints),
+      executionHostEndpointDrafts(stored.executionHostEndpoints),
     )
-    setNotificationsDraft(settings.notifications)
-    setUpdatesDraft(settings.updates)
-    setDebugLoggingDraft(settings.debugLogging)
-    setContextAlertDraft(settings.contextAlert)
-    setDescribeWorkBlocksDraft(settings.describeWorkBlocks)
-    setPiModelDraft(settings.piModelVisibility.additionalModelIds)
-    setShortcutsDraft(settings.commandCenterShortcut)
+    setNotificationsDraft(stored.notifications)
+    setUpdatesDraft(stored.updates)
+    setDebugLoggingDraft(stored.debugLogging)
+    setContextAlertDraft(stored.contextAlert)
+    setDescribeWorkBlocksDraft(stored.describeWorkBlocks)
+    setPiModelDraft(stored.piModelVisibility.additionalModelIds)
+    setShortcutsDraft(stored.commandCenterShortcut)
     setShortcutsConflict(null)
     setIsRecordingShortcut(false)
     clearError()
-  }, [open, payload, settings, clearError])
+    seeded.current = true
+  }, [open, isLoaded, clearError])
 
   const selection = useMemo(
     () =>
@@ -271,6 +353,79 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         draft.effortId || null,
       ),
     [providers, draft],
+  )
+
+  // What every save is built from, as of the latest render: a save that runs
+  // after a change reads the change, and one queued behind another reads
+  // whatever came after it.
+  const drafts = useRef<SettingsDrafts | null>(null)
+  drafts.current = {
+    selection,
+    naming: namingDraft,
+    extraction: extractionDraft,
+    endpoints: executionHostEndpointsDraft,
+    notifications: notificationsDraft,
+    updates: updatesDraft,
+    debugLogging: debugLoggingDraft,
+    contextAlert: contextAlertDraft,
+    describeWorkBlocks: describeWorkBlocksDraft,
+    piModels: piModelDraft,
+    shortcut: shortcutsDraft,
+  }
+  const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saves = useRef<Promise<void>>(Promise.resolve())
+
+  /** Saves what Settings holds now, after any save still under way. */
+  const saveNow = useCallback(() => {
+    if (pendingSave.current !== null) {
+      clearTimeout(pendingSave.current)
+      pendingSave.current = null
+    }
+    // Read now, not when its turn comes: closing unseeds the drafts, and the
+    // save that closing flushes may wait behind one still under way.
+    const ready = seeded.current
+    saves.current = saves.current.then(async () => {
+      const current = drafts.current
+      if (!ready || !current) return
+      try {
+        await saveSettings(
+          settingsInput(current, useAppSettingsStore.getState().settings),
+        )
+        // The Pi model list and the defaults decide what providers offer.
+        await loadProviders()
+      } catch {
+        // The store keeps the error, and the dialog shows it.
+      }
+    })
+  }, [saveSettings, loadProviders])
+
+  /** Saves after `delayMs`; a later change in the meantime saves both. */
+  const scheduleSave = useCallback(
+    (delayMs: number) => {
+      if (pendingSave.current !== null) clearTimeout(pendingSave.current)
+      pendingSave.current = setTimeout(saveNow, delayMs)
+    },
+    [saveNow],
+  )
+
+  // Leaving with a typed value still waiting keeps it.
+  useEffect(() => {
+    const pending = pendingSave
+    return () => {
+      if (pending.current !== null) saveNow()
+    }
+  }, [saveNow])
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) {
+        openDialog('app-settings')
+        return
+      }
+      if (pendingSave.current !== null) saveNow()
+      closeDialog()
+    },
+    [openDialog, closeDialog, saveNow],
   )
 
   const handleProviderChange = useCallback(
@@ -286,8 +441,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         modelId: next.modelId,
         effortId: next.effortId,
       })
+      scheduleSave(SAVE_NOW_MS)
     },
-    [providers],
+    [providers, scheduleSave],
   )
 
   const handleModelChange = useCallback(
@@ -304,29 +460,33 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         modelId: next.modelId,
         effortId: next.effortId,
       }))
+      scheduleSave(SAVE_NOW_MS)
     },
-    [providers, draft.providerId],
+    [providers, draft.providerId, scheduleSave],
   )
 
   const handleEffortChange = useCallback(
     (nextEffortId: ReasoningEffort | '') => {
       setDraft((current) => ({ ...current, effortId: nextEffortId }))
+      scheduleSave(SAVE_NOW_MS)
     },
-    [],
+    [scheduleSave],
   )
 
   const handleNamingModelChange = useCallback(
     (providerId: string, modelId: string) => {
       setNamingDraft((current) => ({ ...current, [providerId]: modelId }))
+      scheduleSave(SAVE_NOW_MS)
     },
-    [],
+    [scheduleSave],
   )
 
   const handleExtractionModelChange = useCallback(
     (providerId: string, modelId: string) => {
       setExtractionDraft((current) => ({ ...current, [providerId]: modelId }))
+      scheduleSave(SAVE_NOW_MS)
     },
-    [],
+    [scheduleSave],
   )
 
   const handleExecutionHostLabelChange = useCallback(
@@ -336,8 +496,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
           draft.id === endpointId ? { ...draft, label: value } : draft,
         ),
       )
+      scheduleSave(SAVE_AFTER_TYPING_MS)
     },
-    [],
+    [scheduleSave],
   )
 
   const handleExecutionHostBaseUrlChange = useCallback(
@@ -347,8 +508,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
           draft.id === endpointId ? { ...draft, baseUrl: value } : draft,
         ),
       )
+      scheduleSave(SAVE_AFTER_TYPING_MS)
     },
-    [],
+    [scheduleSave],
   )
 
   const handleAddExecutionHostEndpoint = useCallback(() => {
@@ -367,8 +529,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       setExecutionHostEndpointsDraft((current) =>
         current.filter((draft) => draft.id !== endpointId),
       )
+      scheduleSave(SAVE_NOW_MS)
     },
-    [],
+    [scheduleSave],
   )
 
   const handleRestoreDefaults = useCallback(() => {
@@ -378,19 +541,28 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       modelId: fallback.modelId,
       effortId: fallback.effortId,
     })
-  }, [providers])
+    scheduleSave(SAVE_NOW_MS)
+  }, [providers, scheduleSave])
 
-  const handleNotificationsChange = useCallback((next: NotificationPrefs) => {
-    setNotificationsDraft(next)
-  }, [])
+  const handleNotificationsChange = useCallback(
+    (next: NotificationPrefs) => {
+      setNotificationsDraft(next)
+      scheduleSave(SAVE_NOW_MS)
+    },
+    [scheduleSave],
+  )
 
   const handleTestFire = useCallback((severity: NotificationSeverity) => {
     void notificationsApi.testFire(severity)
   }, [])
 
-  const handleToggleBackgroundUpdates = useCallback((next: boolean) => {
-    setUpdatesDraft({ backgroundCheckEnabled: next })
-  }, [])
+  const handleToggleBackgroundUpdates = useCallback(
+    (next: boolean) => {
+      setUpdatesDraft({ backgroundCheckEnabled: next })
+      scheduleSave(SAVE_NOW_MS)
+    },
+    [scheduleSave],
+  )
 
   const handleCheckNow = useCallback(() => {
     void checkForUpdates()
@@ -408,26 +580,43 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     void openReleaseNotes()
   }, [openReleaseNotes])
 
-  const handleToggleDebugLogging = useCallback((next: boolean) => {
-    setDebugLoggingDraft({ enabled: next })
-  }, [])
+  const handleToggleDebugLogging = useCallback(
+    (next: boolean) => {
+      setDebugLoggingDraft({ enabled: next })
+      scheduleSave(SAVE_NOW_MS)
+    },
+    [scheduleSave],
+  )
 
-  const handleToggleDescribeWorkBlocks = useCallback((next: boolean) => {
-    setDescribeWorkBlocksDraft(next)
-  }, [])
+  const handleToggleDescribeWorkBlocks = useCallback(
+    (next: boolean) => {
+      setDescribeWorkBlocksDraft(next)
+      scheduleSave(SAVE_NOW_MS)
+    },
+    [scheduleSave],
+  )
 
-  const handleContextAlertChange = useCallback((next: ContextAlertSettings) => {
-    setContextAlertDraft(next)
-  }, [])
+  // Its numbers are typed, so they wait for the typing to pause.
+  const handleContextAlertChange = useCallback(
+    (next: ContextAlertSettings) => {
+      setContextAlertDraft(next)
+      scheduleSave(SAVE_AFTER_TYPING_MS)
+    },
+    [scheduleSave],
+  )
 
-  const handleTogglePiModel = useCallback((modelId: string, next: boolean) => {
-    setPiModelDraft((current) => {
-      const ids = new Set(current ?? [])
-      if (next) ids.add(modelId)
-      else ids.delete(modelId)
-      return [...ids]
-    })
-  }, [])
+  const handleTogglePiModel = useCallback(
+    (modelId: string, next: boolean) => {
+      setPiModelDraft((current) => {
+        const ids = new Set(current ?? [])
+        if (next) ids.add(modelId)
+        else ids.delete(modelId)
+        return [...ids]
+      })
+      scheduleSave(SAVE_NOW_MS)
+    },
+    [scheduleSave],
+  )
 
   const handleOpenDebugLogFolder = useCallback(() => {
     void providerDebugApi.openFolder()
@@ -441,7 +630,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const handleRestoreCommandCenterShortcut = useCallback(() => {
     setShortcutsDraft(DEFAULT_COMMAND_CENTER_SHORTCUT)
     setShortcutsConflict(null)
-  }, [])
+    scheduleSave(SAVE_NOW_MS)
+  }, [scheduleSave])
 
   useEffect(() => {
     if (!isRecordingShortcut) return
@@ -477,11 +667,12 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       setShortcutsDraft(result.binding)
       setShortcutsConflict(null)
       setIsRecordingShortcut(false)
+      scheduleSave(SAVE_NOW_MS)
     }
 
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [isRecordingShortcut])
+  }, [isRecordingShortcut, scheduleSave])
 
   const platform = useMemo<string | null>(() => {
     const datasetPlatform = document.documentElement.dataset.platform
@@ -498,95 +689,12 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     [environmentOverride, settings.executionHostEndpoints],
   )
 
-  const executionHostEndpointsBlocked = useMemo(
-    () => hasExecutionHostEndpointErrors(executionHostEndpointsDraft),
-    [executionHostEndpointsDraft],
-  )
-
-  const handleCancel = useCallback(() => {
-    closeDialog()
-  }, [closeDialog])
-
   const commandCenterShortcutDraft =
     shortcutsDraft ?? settings.commandCenterShortcut
   const commandCenterShortcutLabel = formatShortcutLabel(
     commandCenterShortcutDraft,
     shortcutPlatformFromOs(platform),
   )
-
-  const handleSave = useCallback(async () => {
-    if (shortcutsConflict) return
-    if (executionHostEndpointsBlocked) return
-
-    const shortcutToSave = shortcutsDraft ?? settings.commandCenterShortcut
-    const conflict = findShortcutConflict(shortcutToSave)
-    if (conflict) {
-      setShortcutsConflict(conflict)
-      return
-    }
-
-    try {
-      await saveSettings({
-        defaultProviderId: selection.providerId || null,
-        defaultModelId: selection.modelId || null,
-        defaultEffortId: selection.effort?.id ?? null,
-        namingModelByProvider: namingDraft,
-        extractionModelByProvider: extractionDraft,
-        commandCenterShortcut: shortcutToSave,
-        // The list is the whole fact (MAR-2642). Each row keeps the id it was
-        // seeded with, so editing a name or an address is an edit to the
-        // machine sessions already point at rather than a new one; a row is
-        // only gone because it was explicitly removed.
-        executionHostEndpoints: executionHostEndpointsDraft.map((endpoint) => ({
-          id: endpoint.id,
-          label: endpoint.label.trim(),
-          baseUrl: endpoint.baseUrl.trim(),
-        })),
-        notifications: notificationsDraft ?? settings.notifications,
-        onboarding: settings.onboarding,
-        updates: updatesDraft ?? settings.updates,
-        debugLogging: debugLoggingDraft ?? settings.debugLogging,
-        contextAlert: contextAlertDraft ?? settings.contextAlert,
-        describeWorkBlocks:
-          describeWorkBlocksDraft ?? settings.describeWorkBlocks,
-        piModelVisibility: {
-          additionalModelIds:
-            piModelDraft ?? settings.piModelVisibility.additionalModelIds,
-        },
-        favoriteModels: settings.favoriteModels,
-      })
-      await loadProviders()
-      closeDialog()
-    } catch {
-      // error already surfaced on store
-    }
-  }, [
-    saveSettings,
-    selection,
-    namingDraft,
-    extractionDraft,
-    shortcutsDraft,
-    shortcutsConflict,
-    settings.commandCenterShortcut,
-    executionHostEndpointsDraft,
-    executionHostEndpointsBlocked,
-    notificationsDraft,
-    updatesDraft,
-    debugLoggingDraft,
-    contextAlertDraft,
-    describeWorkBlocksDraft,
-    piModelDraft,
-    settings.notifications,
-    settings.onboarding,
-    settings.updates,
-    settings.debugLogging,
-    settings.contextAlert,
-    settings.describeWorkBlocks,
-    settings.piModelVisibility.additionalModelIds,
-    settings.favoriteModels,
-    loadProviders,
-    closeDialog,
-  ])
 
   return (
     <AppSettingsDialog
@@ -618,8 +726,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       updatesVersion={updatesVersion}
       updatesIsDev={updatesIsDev}
       platform={platform}
-      isSaving={isSaving}
-      isSaveBlocked={executionHostEndpointsBlocked}
       error={error}
       activeSection={activeSection}
       onProviderChange={handleProviderChange}
@@ -650,8 +756,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onStartRecordShortcut={handleStartRecordShortcut}
       onRestoreCommandCenterShortcut={handleRestoreCommandCenterShortcut}
       onSectionChange={setActiveSection}
-      onSave={handleSave}
-      onCancel={handleCancel}
       onRestoreDefaults={handleRestoreDefaults}
     />
   )

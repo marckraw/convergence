@@ -51,6 +51,12 @@ function Motion() {
           <Loader2 data-spinner aria-hidden className="h-4 w-4 animate-spin" />
           Working
         </span>
+        <span
+          data-layout
+          className="w-24 rounded-md border border-line px-3 py-2 transition-layout duration-panel"
+        >
+          A box that resizes
+        </span>
       </section>
     </div>
   )
@@ -76,6 +82,12 @@ export const Default: Story = {
     await expect(getComputedStyle(spinner).animationIterationCount).toBe(
       'infinite',
     )
+    // transition-layout: size, place, edge and fill move together, on the
+    // duration a duration-* names (here --motion-panel).
+    const box = getComputedStyle(canvasElement.querySelector('[data-layout]')!)
+    await expect(box.transitionProperty).toContain('width')
+    await expect(box.transitionProperty).toContain('flex-basis')
+    await expect(box.transitionDuration).toBe('0.2s')
   },
 }
 

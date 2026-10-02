@@ -3,7 +3,7 @@ import { Cloud, TerminalSquare } from 'lucide-react'
 import { SessionStateBadge, type SessionSummary } from '@/entities/session'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
-import { ListRow, Spinner, Tooltip } from '@convergence/ui'
+import { ListRow, Spinner, Tooltip, cn, toneInk } from '@convergence/ui'
 
 interface TreeSessionRowProps {
   session: SessionSummary
@@ -64,7 +64,7 @@ export function TreeSessionRow({
             <>
               {remote ? (
                 <Cloud
-                  className="size-3 text-info-ink"
+                  className={cn('size-3', toneInk.info)}
                   aria-label="Runs on remote execution host"
                 />
               ) : null}

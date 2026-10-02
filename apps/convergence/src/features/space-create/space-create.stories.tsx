@@ -58,41 +58,44 @@ export const Default: Story = {
   },
 }
 
-/** Empty: nothing is made until the Space has a title. */
+/** Empty: nothing is made until the Space has a title, and Create Space says so (R2). */
 export const Empty: Story = {
   args: { title: '', brief: '' },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create Space' }),
-    ).toBeDisabled()
+    const create = within(dialog).getByRole('button', { name: 'Create Space' })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription(
+      'Give the Space a title first.',
+    )
     await userEvent.type(within(dialog).getByLabelText('Title'), '{Enter}')
     await expect(args.onSubmit).not.toHaveBeenCalled()
   },
 }
 
-/** Busy: the fields lock and the button says it is creating. */
+/** Busy: the fields lock and, after a moment, the button says it is creating. */
 export const Busy: Story = {
   args: { isSubmitting: true },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: 'New Space' })
-    await expect(
-      within(dialog).getByRole('button', { name: 'Creating...' }),
-    ).toBeDisabled()
+    const create = within(dialog).getByRole('button', { name: 'Create Space' })
+    await waitFor(() => expect(create).toHaveAttribute('aria-busy', 'true'), {
+      timeout: 1_000,
+    })
+    await expect(create).toHaveTextContent('Creating…')
     await expect(within(dialog).getByLabelText('Title')).toBeDisabled()
     await expect(within(dialog).getByLabelText('Initial brief')).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Cancel' }),
-    ).toBeDisabled()
   },
 }
 
-/** Failed: the error sits under the fields, and the form can be sent again. */
+/** Failed: the error is announced over the buttons, and the form can be sent again. */
 export const Failed: Story = {
   args: { error: 'A Space called “Launch plan” already exists.' },
   play: async () => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText(/already exists/)).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /already exists/,
+    )
     await expect(
       within(dialog).getByRole('button', { name: 'Create Space' }),
     ).toBeEnabled()

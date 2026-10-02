@@ -75,9 +75,13 @@ export function probeAsksForKey(reading: TrackerProbeReading | null): boolean {
   )
 }
 
-/** `08:04` from an ISO time, in the viewer's zone. */
+/** `08:04` from an ISO time, in the viewer's zone, 24-hour as Loom's clocks are (MC-27). */
 export function probeTimeLabel(at: string): string {
   const date = new Date(at)
   if (Number.isNaN(date.getTime())) return at
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }

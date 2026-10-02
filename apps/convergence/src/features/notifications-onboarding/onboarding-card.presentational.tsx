@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button } from '@convergence/ui'
+import { Button, Card } from '@convergence/ui'
 
 interface OnboardingCardProps {
   onOpenSettings: () => void
@@ -10,12 +10,13 @@ export const NotificationsOnboardingCard: FC<OnboardingCardProps> = ({
   onOpenSettings,
   onDismiss,
 }) => (
-  <div
+  <Card
     role="region"
     aria-label="Notifications onboarding"
-    className="mx-4 mt-3 flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between"
+    surface="raised"
+    className="mx-4 mt-3 flex flex-col gap-2 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between"
   >
-    <p className="text-foreground">
+    <p>
       Convergence can notify you when agents finish or need input. Try a test
       notification in Settings &rarr; Notifications.
     </p>
@@ -27,5 +28,5 @@ export const NotificationsOnboardingCard: FC<OnboardingCardProps> = ({
         Don&rsquo;t show again
       </Button>
     </div>
-  </div>
+  </Card>
 )

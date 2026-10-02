@@ -7,10 +7,11 @@ import type { SessionCrew } from '@/entities/session-crew'
 import type { SessionCard } from './mission-control.types'
 import { SessionCardView } from './session-card.presentational'
 import {
-  CARD_ATTENTION_STYLES,
+  CARD_ATTENTION_TONE,
   CARD_BREATHE,
   CARD_HAIL_OPEN_CLASS,
   CARD_OPEN_CLASS,
+  CARD_TONE_FRAME,
 } from './session-card.styles'
 
 /**
@@ -135,12 +136,13 @@ describe('the card of the open conversation is marked', () => {
   const HAIL = CARD_HAIL_OPEN_CLASS.split(' ')
   // Pinned as written, not read from the constant: the open mark must stay a
   // bright ring standing off the card. A quiet `ring-1 ring-ring` -- the old
-  // Hail mark -- is the failure this ticket was filed for.
+  // Hail mark -- is the failure this ticket was filed for. In token names
+  // since MAR-3617: the ink at 70%, offset on the canvas.
   const OPEN_RING = [
     'ring-2',
-    'ring-foreground/70',
+    'ring-ink/70',
     'ring-offset-2',
-    'ring-offset-background',
+    'ring-offset-canvas',
   ]
 
   it('wears the open ring, the lift and aria-current when it is on screen', () => {
@@ -160,7 +162,10 @@ describe('the card of the open conversation is marked', () => {
   })
 
   it('shows both marks when it is open and hailed, over its attention frame', () => {
-    const attention = CARD_ATTENTION_STYLES['needs-input'].split(' ')
+    // Waiting on you is warning, whether it asks a question or an approval (R1).
+    const tone = CARD_ATTENTION_TONE['needs-input']
+    expect(tone).toBe('warning')
+    const attention = CARD_TONE_FRAME[tone!].split(' ')
     const root = renderCard(withAttention(makeCard('idle'), 'needs-input'), {
       open: true,
       hailOpen: true,
@@ -342,8 +347,11 @@ describe('the breath actually moves', () => {
  */
 const GLARE_SHADOW =
   '0 0 var(--breathe-blur) var(--breathe-spread) var(--breathe-color)'
+// The breath plays --motion-loops times: infinite, and 0 under either
+// reduced-motion switch (the system's, or data-motion="reduced"), which
+// tokens.css sets (MAR-3617).
 const GLARE_BREATH =
-  'session-card-breathe var(--breathe-period) ease-in-out infinite'
+  'session-card-breathe var(--breathe-period) ease-in-out var(--motion-loops)'
 
 describe('the breathing glow under prefers-reduced-motion', () => {
   it('renders the glare without the breath', () => {

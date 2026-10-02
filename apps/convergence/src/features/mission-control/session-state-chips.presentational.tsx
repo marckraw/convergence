@@ -1,6 +1,10 @@
 import type { FC } from 'react'
-import { Button, cn } from '@convergence/ui'
-import { STATE_CHIP_STYLES } from './session-card.styles'
+import { Button, cn, Toggle } from '@convergence/ui'
+import {
+  FILTER_CHIP_ROW_CLASS,
+  FILTER_CLEAR_CLASS,
+  STATE_CHIP_PRESSED,
+} from './session-filter.styles'
 import {
   SESSION_CARD_STATES,
   formatSessionCardState,
@@ -28,30 +32,26 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
   onClear,
 }) => {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className={FILTER_CHIP_ROW_CLASS}>
       {SESSION_CARD_STATES.map((state) => {
         const active = selected.includes(state)
         const count = counts[state]
 
         return (
-          <Button
+          <Toggle
             key={state}
-            type="button"
-            variant="ghost"
-            aria-pressed={active}
-            onClick={() => onToggle(state)}
+            variant="chip"
             size="sm"
+            pressed={active}
+            onPressedChange={() => onToggle(state)}
             className={cn(
-              'rounded-full border px-2.5 text-[11px] font-normal',
-              active
-                ? STATE_CHIP_STYLES[state]
-                : 'border-white/10 text-muted-foreground hover:border-white/20',
+              STATE_CHIP_PRESSED[state],
               count === 0 && !active && 'opacity-50',
             )}
           >
             {formatSessionCardState(state)}
             <span className="tabular-nums opacity-70">{count}</span>
-          </Button>
+          </Toggle>
         )
       })}
 
@@ -60,8 +60,7 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
           type="button"
           variant="link"
           onClick={onClear}
-          size="sm"
-          className="h-7 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
+          className={FILTER_CLEAR_CLASS}
         >
           Clear
         </Button>

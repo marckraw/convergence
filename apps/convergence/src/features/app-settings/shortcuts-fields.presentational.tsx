@@ -1,14 +1,14 @@
 import type { FC } from 'react'
 import type { CommandCenterShortcutPrefs } from '@/entities/app-settings'
-import { Button } from '@convergence/ui'
-import { SettingsControlField } from './settings-control-field.presentational'
+import { Button, FormError, SettingsSection } from '@convergence/ui'
 
 interface ShortcutsFieldsProps {
   commandCenterShortcut: CommandCenterShortcutPrefs
   commandCenterLabel: string
   conflictError: string | null
   isRecording: boolean
-  isSaving: boolean
+  /** Locks the buttons while something else saves. */
+  isSaving?: boolean
   onStartRecord: () => void
   onRestoreDefault: () => void
 }
@@ -18,12 +18,13 @@ export const ShortcutsFields: FC<ShortcutsFieldsProps> = ({
   commandCenterLabel,
   conflictError,
   isRecording,
-  isSaving,
+  isSaving = false,
   onStartRecord,
   onRestoreDefault,
 }) => (
   <div className="space-y-4">
-    <SettingsControlField
+    <SettingsSection
+      compact
       title="Open Command Center"
       description="Global shortcut for the command palette. Uses the primary modifier for your platform (⌘ on macOS, Ctrl elsewhere)."
     >
@@ -34,11 +35,7 @@ export const ShortcutsFields: FC<ShortcutsFieldsProps> = ({
         >
           {isRecording ? 'Press a shortcut…' : commandCenterLabel}
         </div>
-        {conflictError ? (
-          <p className="text-xs text-destructive" role="alert">
-            {conflictError}
-          </p>
-        ) : null}
+        <FormError>{conflictError}</FormError>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -64,6 +61,6 @@ export const ShortcutsFields: FC<ShortcutsFieldsProps> = ({
           </Button>
         </div>
       </div>
-    </SettingsControlField>
+    </SettingsSection>
   </div>
 )

@@ -1,0 +1,11 @@
+/*
+ * A lit wire marches while a hop lands on it: xyflow's `animated` edge, a
+ * dash drawn on a loop that knows nothing of the motion preference. Here it
+ * plays --motion-loops times, which tokens.css sets to 0 under the system's
+ * prefers-reduced-motion and under data-motion="reduced" (MC-25): the wire is
+ * still lit in its colour, only the march stops -- as the breathing card's
+ * glow and the pulsing status dot already do.
+ */
+[data-session-canvas] .react-flow__edge.animated path {
+  animation-iteration-count: var(--motion-loops);
+}

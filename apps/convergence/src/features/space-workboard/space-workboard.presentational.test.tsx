@@ -93,7 +93,6 @@ function renderDialog(
     artifactCounts: {},
     isLoading: false,
     isCreating: false,
-    isSaving: false,
     isCreatingArtifact: false,
     isDiscoveringArtifacts: false,
     isSynthesizing: false,
@@ -103,7 +102,6 @@ function renderDialog(
     onCreate: vi.fn(),
     onSelectSpace: vi.fn(),
     onDraftChange: vi.fn(),
-    onSave: vi.fn(),
     onArtifactDraftChange: vi.fn(),
     onArtifactDialogOpenChange: vi.fn(),
     onCreateArtifact: vi.fn(),
@@ -137,7 +135,7 @@ describe('SpaceWorkboardDialog', () => {
   it('renders the empty state', () => {
     renderDialog()
 
-    expect(screen.getByText('No Spaces yet.')).toBeInTheDocument()
+    expect(screen.getByText('No Spaces yet')).toBeInTheDocument()
     expect(screen.getByText('Select or create a Space.')).toBeInTheDocument()
   })
 
@@ -172,7 +170,8 @@ describe('SpaceWorkboardDialog', () => {
         target: { value: 'Build the visible workboard first.' },
       },
     )
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    // Each change is kept as it is made (R6): there is no Save to press.
+    expect(screen.queryByRole('button', { name: /^save$/i })).toBeNull()
 
     expect(props.onSelectSpace).toHaveBeenCalledWith('i1')
     expect(props.onDraftChange).toHaveBeenCalledWith({
@@ -191,7 +190,6 @@ describe('SpaceWorkboardDialog', () => {
       ...draft,
       brief: 'Build the visible workboard first.',
     })
-    expect(props.onSave).toHaveBeenCalled()
     expect(screen.getAllByText('2')).toHaveLength(2)
     expect(screen.getAllByText('1')).toHaveLength(2)
   })
@@ -239,7 +237,7 @@ describe('SpaceWorkboardDialog', () => {
       artifactCounts: { i1: 0 },
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /create artifact/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Artifact' }))
 
     expect(props.onCreateArtifact).toHaveBeenCalled()
   })

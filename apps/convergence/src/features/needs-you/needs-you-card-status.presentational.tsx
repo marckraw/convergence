@@ -5,7 +5,7 @@ import {
   LoaderCircle,
   MessageCircle,
 } from 'lucide-react'
-import { cn } from '@convergence/ui'
+import { cn, Spinner, Tooltip } from '@convergence/ui'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
 import { cardStateTone } from './needs-you-card-state.styles'
 
@@ -28,36 +28,39 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
             ? CircleHelp
             : CircleCheck
   return (
-    <span
-      className={cn(
-        'flex items-center gap-1 text-[11px]',
-        waiting || failed || card.working
-          ? 'text-foreground'
-          : 'text-muted-foreground',
-      )}
-      title={card.timing.tooltip}
-    >
-      <Icon
-        aria-hidden="true"
-        className={cn('size-3 shrink-0', {
-          [cardStateTone.finished]: Icon === CircleCheck,
-          [cardStateTone.waiting]: waiting,
-          [cardStateTone.failed]: failed,
-          [`animate-spin ${cardStateTone.working} motion-reduce:animate-none`]:
-            card.working,
-        })}
-      />
-      <span>
-        {card.summary}
-        {card.timing.label && (
-          <>
-            {' '}
-            <span className="tabular-nums text-muted-foreground">
-              {card.timing.label}
-            </span>
-          </>
+    <Tooltip label={card.timing.tooltip}>
+      <span
+        className={cn(
+          'flex items-center gap-1 text-2xs',
+          waiting || failed || card.working ? 'text-ink' : 'text-ink-muted',
         )}
+      >
+        {/* At work, the kit's Spinner (it stands still under reduced
+            motion, MC-25) in the working tone; otherwise the state's glyph. */}
+        {card.working && Icon === LoaderCircle ? (
+          <Spinner size="xs" className={cardStateTone.working} />
+        ) : (
+          <Icon
+            aria-hidden="true"
+            className={cn('size-3 shrink-0', {
+              [cardStateTone.finished]: Icon === CircleCheck,
+              [cardStateTone.waiting]: waiting,
+              [cardStateTone.failed]: failed,
+            })}
+          />
+        )}
+        <span>
+          {card.summary}
+          {card.timing.label && (
+            <>
+              {' '}
+              <span className="tabular-nums text-ink-muted">
+                {card.timing.label}
+              </span>
+            </>
+          )}
+        </span>
       </span>
-    </span>
+    </Tooltip>
   )
 }

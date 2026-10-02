@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { SkillCatalogEntry } from '@/entities/skill'
-import { Button, cn } from '@convergence/ui'
+import { Badge, Card, CardAction, EmptyState, StatusDot } from '@convergence/ui'
 import type { SkillGridGroup } from './skills-browser.pure'
 import {
   renderProviderChip,
@@ -24,38 +24,38 @@ function renderSkillCard(
   onSelectSkill: (skillId: string) => void,
 ) {
   return (
-    <Button
+    <Card
       key={skill.id}
-      type="button"
-      variant="ghost"
-      onClick={() => onSelectSkill(skill.id)}
-      size="lg"
-      className={cn(
-        'flex h-full min-w-0 flex-col items-stretch justify-start gap-0 whitespace-normal rounded-xl border p-3 text-left transition-[transform,background-color,border-color] active:scale-[0.96]',
-        selected
-          ? 'border-primary/40 bg-primary/10'
-          : 'border-border/70 hover:border-border hover:bg-muted/30',
-      )}
+      interactive
+      selected={selected}
+      className="flex h-full min-w-0 flex-col rounded-xl"
     >
       <span className="flex min-w-0 items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span
-            className={cn(
-              'h-1.5 w-1.5 shrink-0 rounded-full',
-              skill.enabled ? 'bg-emerald-400' : 'bg-muted-foreground/60',
-            )}
-            title={skill.enabled ? 'Enabled' : 'Disabled'}
+          <StatusDot
+            size="sm"
+            tone={skill.enabled ? 'success' : 'neutral'}
+            className="shrink-0"
           />
-          <span className="truncate text-sm font-medium">
+          <CardAction
+            onClick={() => onSelectSkill(skill.id)}
+            className="truncate text-sm font-medium after:rounded-xl"
+          >
             {skill.displayName}
-          </span>
+            <span className="sr-only">
+              {skill.enabled ? ', enabled' : ', disabled'}
+            </span>
+          </CardAction>
         </span>
         {skillIsDuplicate(skill) ? (
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-foreground" />
+          <span className="flex shrink-0 text-warning-ink">
+            <AlertTriangle aria-hidden className="size-3.5" />
+            <span className="sr-only">Duplicate name</span>
+          </span>
         ) : null}
       </span>
 
-      <span className="mt-1.5 line-clamp-3 block text-xs leading-5 text-pretty text-muted-foreground">
+      <span className="mt-1.5 line-clamp-3 block text-xs leading-5 text-pretty text-ink-muted">
         {skill.shortDescription || skill.description || 'No description.'}
       </span>
 
@@ -64,7 +64,7 @@ function renderSkillCard(
         {renderProviderChip(skill.providerName)}
         {renderWarningBadge(skill.warnings.length)}
       </span>
-    </Button>
+    </Card>
   )
 }
 
@@ -76,9 +76,10 @@ export const SkillsGrid: FC<SkillsGridProps> = ({
 }) => {
   if (groups.length === 0) {
     return (
-      <p className="px-1 text-sm text-muted-foreground">
-        No skills matched these filters.
-      </p>
+      <EmptyState
+        title="No skills match these filters"
+        detail="Clear the search or widen a filter."
+      />
     )
   }
 
@@ -88,10 +89,8 @@ export const SkillsGrid: FC<SkillsGridProps> = ({
         <section key={group.key}>
           {showGroupHeaders ? (
             <div className="mb-2.5 flex items-center gap-2">
-              <h4 className="text-sm font-semibold">{group.label}</h4>
-              <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-                {group.skills.length}
-              </span>
+              <h3 className="text-sm font-semibold">{group.label}</h3>
+              <Badge shape="count">{group.skills.length}</Badge>
             </div>
           ) : null}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

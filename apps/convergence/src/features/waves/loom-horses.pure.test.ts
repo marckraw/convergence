@@ -10,6 +10,7 @@ import {
   loomMasterminds,
   loomMastermindVerdictLine,
   loomHorsesLine,
+  loomSeatCardIds,
   LOOM_NO_HORSES_LINE,
   LOOM_RECIPE_LINE,
   type LoomHorseSession,
@@ -955,5 +956,16 @@ describe('MAR-3457 mastermind derivation', () => {
     [2, '2 returns wait for its verdict'],
   ])('R3: %s returns have the right verdict words', (count, line) => {
     expect(loomMastermindVerdictLine(count as number)).toBe(line)
+  })
+})
+
+describe('loomSeatCardIds', () => {
+  it('turns a key into an id base, each card under its own prefix', () => {
+    expect(loomSeatCardIds('horse', 'crew-1:seat 2')).toBe(
+      'loom-horse-crew-1_seat_2',
+    )
+    expect(loomSeatCardIds('mastermind', 'fable/main')).toBe(
+      'loom-mastermind-fable_main',
+    )
   })
 })

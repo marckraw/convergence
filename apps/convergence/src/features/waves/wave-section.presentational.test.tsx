@@ -52,9 +52,9 @@ describe('MAR-3301 section layout', () => {
       const grid = rows()[0]!.parentElement!
       expect(grid.tagName).toBe('DIV')
       expect(grid.className).toBe(LOOM_BEFORE_WIDE_CLASS)
-      expect(grid.className).toBe(
-        'grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] items-start gap-3',
-      )
+      // Columns of 360 px or more, the spare ones kept (the kit's card-grid
+      // utility since MAR-3617).
+      expect(grid.className).toBe('grid grid-cols-fill-90 items-start gap-3')
       expect(grid.children).toHaveLength(2)
       expect(grid.contains(screen.getByText('Finished · 2'))).toBe(false)
       expect(grid.contains(screen.getByText('A hint'))).toBe(false)

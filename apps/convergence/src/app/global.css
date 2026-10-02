@@ -178,14 +178,15 @@
  * `motion-reduce:animate-none` sit beside it as a class (R2's law: an inline
  * animation would out-specify the media query).
  *
- * `both` fill: the delay is the shell's own 200 ms, and backwards fill is
- * what keeps the arriving shape invisible while it elapses. The three places
- * that encode those numbers -- this delay, `LOOM_SHELL_CLASS`'s
- * `duration-200`, and the timer in `wave-panel.container.tsx` -- are pinned
- * together by `loom-motion.render.test.tsx`.
+ * `both` fill: the delay is the shell's own --motion-panel, and backwards
+ * fill is what keeps the arriving shape invisible while it elapses. The three
+ * places that name those tokens -- this delay, `LOOM_SHELL_CLASS`'s
+ * `duration-panel`, and the timer in `wave-panel.container.tsx`
+ * (`durationsMs.panel`) -- are pinned together by `loom-motion.styles.test.ts`.
  */
 @theme {
-  --animate-loom-enter: loom-enter 150ms ease-out 200ms both;
+  --animate-loom-enter: loom-enter var(--motion-fast) var(--motion-ease-enter)
+    var(--motion-panel) both;
 }
 
 @keyframes loom-enter {
@@ -252,13 +253,19 @@
   pointer-events: none;
   box-shadow: 0 0 var(--breathe-blur) var(--breathe-spread) var(--breathe-color);
   opacity: var(--breathe-max);
-  animation: session-card-breathe var(--breathe-period) ease-in-out infinite;
+  animation: session-card-breathe var(--breathe-period) ease-in-out
+    var(--motion-loops);
 }
 
 /*
  * Reduced motion keeps the glare and drops the breath: the card still says it
  * is working, and in whose colour -- only the movement goes. Note the shadow
  * is left untouched, so the still card glows at the top of the breath.
+ *
+ * The breath plays --motion-loops times, which tokens.css sets to 0 under
+ * both switches: the system's prefers-reduced-motion, and data-motion="reduced"
+ * on <html> or any subtree (Storybook's toolbar, an in-app setting later). The
+ * media block below says the same for the system switch in so many words.
  */
 @media (prefers-reduced-motion: reduce) {
   [data-breathing='true']::after {

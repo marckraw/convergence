@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import type { ProviderInfo, ProviderModelOption } from '@/entities/session'
 import { TooltipProvider } from '@convergence/ui'
-import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
+import { ModelDefaultsFields } from './model-defaults-fields.presentational'
 
 const model = (id: string, label: string): ProviderModelOption => ({
   id,
@@ -11,7 +11,7 @@ const model = (id: string, label: string): ProviderModelOption => ({
   effortOptions: [],
 })
 
-/** A conversation provider as the main process reports it, trimmed to what naming reads. */
+/** A conversation provider as the main process reports it, trimmed to what the rows read. */
 const provider = (
   fields: Pick<ProviderInfo, 'id' | 'name' | 'vendorLabel' | 'defaultModelId'> &
     Partial<ProviderInfo>,
@@ -63,37 +63,51 @@ const providers: ProviderInfo[] = [
       model('gpt-5.5-mini', 'GPT-5.5 mini'),
     ],
   }),
+  provider({
+    id: 'pi',
+    name: 'Pi',
+    vendorLabel: '',
+    defaultModelId: 'qwen3-coder',
+    modelOptions: [
+      model('qwen3-coder', 'Qwen3 Coder'),
+      model('gpt-oss-120b', 'gpt-oss 120B'),
+    ],
+  }),
 ]
 
 const meta = {
-  title: 'Features/AppSettings/NamingModelDefaults',
-  component: NamingModelDefaultsFields,
+  title: 'Features/AppSettings/ModelDefaults',
+  component: ModelDefaultsFields,
   args: {
     providers,
-    namingDraft: { codex: 'gpt-5.5-mini' },
-    onNamingModelChange: fn(),
+    chosen: { codex: 'gpt-5.5-mini' },
+    fallback: 'fast',
+    purpose: 'Session naming',
+    onModelChange: fn(),
   },
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="w-[560px]">
+        <div className="w-xl">
           <Story />
         </div>
       </TooltipProvider>
     ),
   ],
-} satisfies Meta<typeof NamingModelDefaultsFields>
+} satisfies Meta<typeof ModelDefaultsFields>
 
 export default meta
 
 type Story = StoryObj<typeof meta>
 
 /**
- * One row per provider, its picker showing the draft, else the provider's
- * fast model, else its default. Choosing a model reports the provider too.
+ * Session naming: one row per provider, named for its vendor (or its own name
+ * when it has none), its picker showing the choice, else the provider's fast
+ * model, else its default. Choosing a model reports the provider too.
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByText('Pi')).toBeVisible()
     await expect(
       canvas.getByRole('combobox', { name: 'GPT-5.5 mini' }),
     ).toBeVisible()
@@ -104,11 +118,28 @@ export const Default: Story = {
     await userEvent.click(
       within(picker).getByRole('option', { name: /Claude Sonnet 5/ }),
     )
-    await expect(args.onNamingModelChange).toHaveBeenCalledWith(
+    await expect(args.onModelChange).toHaveBeenCalledWith(
       'claude-code',
       'claude-sonnet-5',
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  },
+}
+
+/** Session forking: with nothing chosen, the provider's default model, not its fast one. */
+export const Forking: Story = {
+  args: {
+    chosen: { pi: 'gpt-oss-120b' },
+    fallback: 'default',
+    purpose: 'Session forking',
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('combobox', { name: 'Claude Opus 5.5' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole('combobox', { name: 'gpt-oss 120B' }),
+    ).toBeVisible()
   },
 }
 

@@ -3,6 +3,7 @@ import type { RelayAction, SessionRelay } from '@/entities/session-relay'
 import type { SessionCrewGroup } from './session-crew-groups.pure'
 import type { SessionCard } from './mission-control.types'
 import { MIN_CARD_GAP } from './canvas-collision.pure'
+import { crewColor } from './session-crew-picker.pure'
 
 /**
  * Canvas geometry, in the same units React Flow uses.
@@ -529,14 +530,17 @@ export function buildCanvasGraph(
 }
 
 /**
- * The Flow strip's colour language, in the values a stroke needs.
+ * The Flow strip's colour language, in the values a stroke needs: tokens, as
+ * `var()` strings, which an SVG stroke reads like any CSS colour, so the wires
+ * follow the theme (MC-23).
  *
- * A crew that chose an accent lends it to its live wires, so a canvas holding
- * several crews reads as several flows rather than one green mesh. Crews with
- * no accent fall back to the strip's emerald, and a disarmed wire is always
- * grey -- "switched off" must never be mistakable for "this crew is grey".
+ * A crew that chose an accent lends it to its live wires, in its hue token, so
+ * a canvas holding several crews reads as several flows rather than one green
+ * mesh. Crews with no accent fall back to the strip's green (the success
+ * solid, as a delivered hop), and a disarmed wire is always grey -- "switched
+ * off" must never be mistakable for "this crew is grey".
  */
-export const ARMED_WIRE_FALLBACK_COLOR = '#34d399'
+export const ARMED_WIRE_FALLBACK_COLOR = 'var(--success-solid)'
 
 /**
  * Theme-aware on purpose. This was a flat white, which is a wire you cannot see
@@ -544,7 +548,7 @@ export const ARMED_WIRE_FALLBACK_COLOR = '#34d399'
  * still has to be findable in it.
  */
 export const DISARMED_WIRE_COLOR =
-  'color-mix(in srgb, var(--muted-foreground) 70%, transparent)'
+  'color-mix(in srgb, var(--ink-muted) 70%, transparent)'
 
 export function resolveWireColor(
   edge: Pick<CanvasEdge, 'armed' | 'crewId'>,
@@ -552,7 +556,7 @@ export function resolveWireColor(
 ): string {
   if (!edge.armed) return DISARMED_WIRE_COLOR
   const cluster = clusters.find((entry) => entry.crewId === edge.crewId)
-  return cluster?.accentColor ?? ARMED_WIRE_FALLBACK_COLOR
+  return crewColor(cluster?.accentColor) ?? ARMED_WIRE_FALLBACK_COLOR
 }
 
 /** The chip's own line: what kind of session this wire opens. */

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, screen, within } from 'storybook/test'
 import {
   DEFAULT_CREW_MEMBER_SEAT,
   type SessionCrewMember,
@@ -28,19 +28,6 @@ const residentFacts = [
   },
   { term: 'Host', value: 'This Mac' },
 ]
-
-/**
- * The role and lane choices are primary buttons wearing muted text, which
- * misses contrast on both themes. Every story that draws them enabled.
- */
-const lowContrastChoices = {
-  a11y: {
-    config: {
-      // a11y-known: the role and lane choices put muted text on the primary button (color-contrast) — fixed by the sweep (DS4)
-      rules: [{ id: 'color-contrast', enabled: false }],
-    },
-  },
-}
 
 const meta = {
   title: 'Features/MissionControl/SeatEditor',
@@ -91,7 +78,6 @@ type Story = StoryObj<typeof meta>
  * as controls and facts as text. Typed fields save when they are left.
  */
 export const Default: Story = {
-  parameters: lowContrastChoices,
   play: async ({ args, canvas, userEvent }) => {
     const editor = canvas.getByRole('region', { name: 'Seat opus-mac' })
     const name = within(editor).getByRole('textbox', {
@@ -101,21 +87,20 @@ export const Default: Story = {
     await expect(args.onNameChange).toHaveBeenCalledWith('opus-mac2')
     await userEvent.keyboard('{Enter}')
     await expect(args.onNameCommit).toHaveBeenCalled()
-    const role = within(editor).getByRole('group', {
+    // Role and lane: segmented radio groups (MC-7), the chosen one checked.
+    const role = within(editor).getByRole('radiogroup', {
       name: 'Role for opus-mac',
     })
     await expect(
-      within(role).getByRole('button', { name: 'horse' }),
-    ).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(
-      within(role).getByRole('button', { name: 'reviewer' }),
-    )
+      within(role).getByRole('radio', { name: 'horse' }),
+    ).toBeChecked()
+    await userEvent.click(within(role).getByRole('radio', { name: 'reviewer' }))
     await expect(args.onSeatEdit).toHaveBeenCalledWith({ role: 'reviewer' })
     await expect(
       within(editor).getByRole('textbox', { name: 'Role card for opus-mac' }),
     ).toHaveValue(args.member.roleCard)
     await userEvent.click(
-      within(editor).getByRole('button', { name: 'own worktree' }),
+      within(editor).getByRole('radio', { name: 'own worktree' }),
     )
     await expect(args.onSeatEdit).toHaveBeenCalledWith({
       lanePolicy: 'own-worktree',
@@ -160,7 +145,6 @@ export const Dark: Story = {
 
 /** No card yet: the seat says what that means, and offers to write one. */
 export const Empty: Story = {
-  parameters: lowContrastChoices,
   args: { member: seat({ roleCard: null }) },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('No card yet')).toBeVisible()
@@ -174,7 +158,6 @@ export const Empty: Story = {
  * and Delete recipe rather than Remove.
  */
 export const Long: Story = {
-  parameters: lowContrastChoices,
   args: {
     member: seat({
       sessionId: null,
@@ -198,11 +181,15 @@ export const Long: Story = {
     ],
   },
   play: async ({ args, canvas, userEvent }) => {
+    // The host is the app's Select (MC-10): its trigger shows the label.
     const host = canvas.getByRole('combobox', {
       name: 'Host for sonnet-recipe',
     })
-    await expect(host).toHaveValue('little-monster')
-    await userEvent.selectOptions(host, 'local')
+    await expect(host).toHaveTextContent('little-monster')
+    await userEvent.click(host)
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'This Mac' }),
+    )
     await expect(args.onSeatEdit).toHaveBeenCalledWith({ hostPolicy: 'local' })
     const path = canvas.getByRole('textbox', { name: /Worktree path/ })
     await expect(path).toHaveValue(args.lanePathValue)
@@ -220,7 +207,6 @@ export const Long: Story = {
 
 /** The door refused a name: its sentence under the field, and what still stands. */
 export const Failed: Story = {
-  parameters: lowContrastChoices,
   args: {
     nameValue: 'opus mac!',
     problems: {
@@ -242,7 +228,6 @@ export const FailedDark: Story = {
 
 /** The conversation is gone: the seat says so, keeps its card, and offers removal. */
 export const Orphan: Story = {
-  parameters: lowContrastChoices,
   args: { member: seat({ conversationMissing: true }) },
   play: async ({ args, canvas, userEvent }) => {
     await expect(
@@ -256,7 +241,6 @@ export const Orphan: Story = {
 
 /** The mastermind's seat can run the drill by itself. */
 export const Mastermind: Story = {
-  parameters: lowContrastChoices,
   args: {
     member: seat({ role: 'mastermind', batonName: 'fable' }),
     nameValue: 'fable',
@@ -279,8 +263,8 @@ export const Disabled: Story = {
       canvas.getByRole('textbox', { name: 'Baton name for opus-mac' }),
     ).toBeDisabled()
     await expect(
-      canvas.getByRole('button', { name: 'mastermind' }),
-    ).toBeDisabled()
+      canvas.getByRole('radio', { name: 'mastermind' }),
+    ).toHaveAttribute('aria-disabled', 'true')
     await expect(
       canvas.getByRole('button', { name: 'Remove from crew' }),
     ).toBeDisabled()

@@ -4,14 +4,15 @@ import { Button, ChoiceField, Switch } from '@convergence/ui'
 
 interface DebugLoggingFieldsProps {
   prefs: DebugLoggingPrefs
-  isSaving: boolean
+  /** Locks the controls while something else saves. */
+  isSaving?: boolean
   onToggleEnabled: (next: boolean) => void
   onOpenLogFolder: () => void
 }
 
 export const DebugLoggingFields: FC<DebugLoggingFieldsProps> = ({
   prefs,
-  isSaving,
+  isSaving = false,
   onToggleEnabled,
   onOpenLogFolder,
 }) => {

@@ -1,3 +1,4 @@
+import { crewTokens, type CrewTokenName } from '@convergence/ui'
 import type { SessionCrew } from '@/entities/session-crew'
 
 /**
@@ -20,20 +21,65 @@ export const CREW_EMOJI_CHOICES = [
 ] as const
 
 export interface CrewAccentChoice {
+  /** What a crew stores: the colour's hex, which is the key to its token. */
   value: string
   label: string
+  /** The category hue it paints with (R1): `hue="crew-violet"`, `var(--crew-violet)`. */
+  hue: CrewHue
 }
 
-export const CREW_ACCENT_COLORS: readonly CrewAccentChoice[] = [
-  { value: '#7c3aed', label: 'Violet' },
-  { value: '#2563eb', label: 'Blue' },
-  { value: '#06b6d4', label: 'Cyan' },
-  { value: '#10b981', label: 'Green' },
-  { value: '#f59e0b', label: 'Amber' },
-  { value: '#ef4444', label: 'Red' },
-  { value: '#ec4899', label: 'Pink' },
-  { value: '#94a3b8', label: 'Slate' },
-]
+/** A crew colour as a Badge hue. */
+export type CrewHue = `crew-${CrewTokenName}`
+
+const CREW_COLOR_LABELS: Record<CrewTokenName, string> = {
+  violet: 'Violet',
+  blue: 'Blue',
+  cyan: 'Cyan',
+  green: 'Green',
+  amber: 'Amber',
+  red: 'Red',
+  pink: 'Pink',
+  slate: 'Slate',
+}
+
+/**
+ * The palette a crew picks from. A crew stores the hex (`value`); every view
+ * paints with the hue's token, so the hex is data and never a colour on
+ * screen (MAR-3617).
+ */
+export const CREW_ACCENT_COLORS: readonly CrewAccentChoice[] = (
+  Object.keys(crewTokens) as CrewTokenName[]
+).map((name) => ({
+  value: crewTokens[name],
+  label: CREW_COLOR_LABELS[name],
+  hue: `crew-${name}`,
+}))
+
+/**
+ * The hue a stored crew colour paints with, or none for a crew with no colour
+ * (or a value the palette never offered). The stored hex is compared without
+ * regard to case, as the backend keeps whatever the picker sent.
+ */
+export function crewHue(
+  accentColor: string | null | undefined,
+): CrewHue | undefined {
+  if (!accentColor) return undefined
+  const key = accentColor.toLowerCase()
+  return CREW_ACCENT_COLORS.find((choice) => choice.value === key)?.hue
+}
+
+/**
+ * A stored crew colour as a CSS colour to paint with: the hue's token, or the
+ * stored value itself when it is not one of the palette's (a crew from an
+ * older build), and null for a crew with none.
+ */
+export function crewColor(
+  accentColor: string | null | undefined,
+): string | null {
+  if (!accentColor) return null
+  const hue = crewHue(accentColor)
+  return hue ? `var(--${hue})` : accentColor
+}
 
 /** Crews long enough to need searching get a search box; short ones do not. */
 export const CREW_SEARCH_THRESHOLD = 6

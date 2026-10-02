@@ -1,9 +1,6 @@
 import type { FC } from 'react'
 import { cn } from '@convergence/ui'
-import {
-  LOOM_SHEET_ICONS,
-  LOOM_SHEET_ICON_CLASS,
-} from './loom-stack.presentational'
+import { LOOM_SHEET_ICONS, LOOM_SHEET_ICON_CLASS } from './loom-sheet.styles'
 import { LEARN_LOOM_TICKET } from './learn-loom-copy.pure'
 import {
   learnLoomMotionStyle,
@@ -14,6 +11,7 @@ import {
 } from './learn-loom.pure'
 import {
   LEARN_LOOM_EMPHASIS_CLASS,
+  LEARN_LOOM_EMPHASIS_TONE,
   LEARN_LOOM_ILLUSTRATION_CLASS,
   LEARN_LOOM_MOTION_CLASS,
   LEARN_LOOM_SHEET_ACTIVE_CLASS,
@@ -65,6 +63,12 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
             data-learn-loom-sheet={sheet.sheet}
             aria-label={sheet.title}
             data-learn-loom-active={sheet.active ? 'true' : 'false'}
+            // The step's tone, which the active sheet's edge wears (R1).
+            data-emphasis={
+              sheet.active
+                ? LEARN_LOOM_EMPHASIS_TONE[view.step.emphasis]
+                : undefined
+            }
             style={{
               ...learnLoomMotionStyle(),
               // Both states are the SAME two numbers, which is the whole of
@@ -95,7 +99,7 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
                 (`559:815`, `559:821`): the person is meant to recognise the
                 panel behind the lesson. */}
             <Icon
-              className={cn('size-[18px]', LOOM_SHEET_ICON_CLASS[sheet.sheet])}
+              className={cn('size-4.5', LOOM_SHEET_ICON_CLASS[sheet.sheet])}
             />
             {/* Closed sheets keep their name, icon and count, horizontal --
                 the person is meant to recognise the panel behind them. */}
@@ -106,6 +110,7 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
       })}
       <div
         data-learn-loom-ticket={LEARN_LOOM_TICKET.identifier}
+        data-emphasis={LEARN_LOOM_EMPHASIS_TONE[view.step.emphasis]}
         style={{
           ...learnLoomMotionStyle(),
           // The one value that carries the journey. It is still the derived

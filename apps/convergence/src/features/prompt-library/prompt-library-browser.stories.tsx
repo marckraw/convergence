@@ -95,7 +95,7 @@ const draft: PromptLibraryFormDraft = {
 }
 
 const openDialog = async () => {
-  const dialog = await screen.findByRole('dialog', { name: 'Prompt Library' })
+  const dialog = await screen.findByRole('dialog', { name: 'Prompt library' })
   await waitFor(() =>
     expect(dialog).toContainElement(document.activeElement as HTMLElement),
   )
@@ -161,7 +161,7 @@ export const Default: Story = {
       within(dialog).getByRole('heading', { name: 'PR Review' }),
     ).toBeVisible()
     await userEvent.type(
-      within(dialog).getByPlaceholderText('Search prompts'),
+      within(dialog).getByRole('searchbox', { name: 'Search prompts' }),
       'q',
     )
     await expect(args.onFiltersChange).toHaveBeenCalledWith({ query: 'q' })
@@ -176,11 +176,14 @@ export const Default: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Edit' }))
     await expect(args.onStartEdit).toHaveBeenCalledWith(prReview)
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Delete' }),
+      within(dialog).getByRole('button', { name: 'Delete…' }),
     )
     await expect(args.onDeletePrompt).toHaveBeenCalledWith(prReview)
     await userEvent.click(within(dialog).getByRole('button', { name: 'New' }))
     await expect(args.onStartCreate).toHaveBeenCalledOnce()
+    // Each change is kept as it is made: one Done ends it (R6).
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    await expect(args.onOpenChange).toHaveBeenCalledWith(false)
   },
 }
 
@@ -190,7 +193,7 @@ export const Create: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
     await expect(
-      within(dialog).getByRole('heading', { name: 'Create Prompt' }),
+      within(dialog).getByRole('heading', { name: 'New prompt' }),
     ).toBeVisible()
     await userEvent.type(within(dialog).getByLabelText('Title'), 's')
     await expect(args.onFormChange).toHaveBeenCalledWith({
@@ -228,7 +231,7 @@ export const Edit: Story = {
   play: async () => {
     const dialog = await openDialog()
     await expect(
-      within(dialog).getByRole('heading', { name: 'Edit Prompt' }),
+      within(dialog).getByRole('heading', { name: 'Edit prompt' }),
     ).toBeVisible()
     // The list's Scope filter comes first; the form's Scope is the second.
     const [listScope, formScope] = within(dialog).getAllByRole('combobox', {
@@ -237,13 +240,13 @@ export const Edit: Story = {
     await expect(listScope).toBeEnabled()
     await expect(formScope).toBeDisabled()
     await expect(
-      within(dialog).getByRole('combobox', { name: /File Kind/ }),
+      within(dialog).getByRole('combobox', { name: /File kind/ }),
     ).toBeDisabled()
     await expect(within(dialog).queryByLabelText('Filename')).toBeNull()
   },
 }
 
-/** Failed: the form's save failed, and says why. */
+/** Failed: the form's save failed, and the alert says why. */
 export const Failed: Story = {
   args: {
     formDraft: draft,
@@ -252,18 +255,20 @@ export const Failed: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText(/already exists/)).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /already exists/,
+    )
   },
 }
 
-/** Busy: saving locks the form's buttons. */
+/** Busy: saving says so on Save, and locks Cancel and New. */
 export const Busy: Story = {
   args: { formDraft: draft, isMutating: true },
   play: async () => {
     const dialog = await openDialog()
     await expect(
-      within(dialog).getByRole('button', { name: 'Save' }),
-    ).toBeDisabled()
+      within(dialog).getByRole('button', { name: 'Saving…' }),
+    ).toHaveAttribute('aria-busy', 'true')
     await expect(
       within(dialog).getByRole('button', { name: 'Cancel' }),
     ).toBeDisabled()
@@ -285,11 +290,15 @@ export const Loading: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText('Loading prompts...')).toBeVisible()
-    await expect(within(dialog).getByText('Loading prompt...')).toBeVisible()
+    await waitFor(() =>
+      expect(within(dialog).getByText('Loading prompts…')).toBeVisible(),
+    )
+    await waitFor(() =>
+      expect(within(dialog).getByText('Loading the prompt…')).toBeVisible(),
+    )
     await expect(
       within(dialog).getByRole('button', { name: 'Refresh' }),
-    ).toBeDisabled()
+    ).toHaveAttribute('aria-busy', 'true')
   },
 }
 
@@ -305,10 +314,10 @@ export const Empty: Story = {
   },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText('No prompts found.')).toBeVisible()
-    await expect(within(dialog).getByText('No prompt selected.')).toBeVisible()
+    await expect(within(dialog).getByText('No prompts yet')).toBeVisible()
+    await expect(within(dialog).getByText('No prompt selected')).toBeVisible()
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Create prompt' }),
+      within(dialog).getByRole('button', { name: 'New prompt' }),
     )
     await expect(args.onStartCreate).toHaveBeenCalledOnce()
   },
@@ -322,9 +331,9 @@ export const Disabled: Story = {
     await expect(dialog).toHaveAccessibleDescription(
       'Select a project to browse saved prompts.',
     )
-    await expect(
-      within(dialog).getByRole('button', { name: 'New' }),
-    ).toBeDisabled()
+    const create = within(dialog).getByRole('button', { name: 'New' })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription('Open a project first.')
   },
 }
 

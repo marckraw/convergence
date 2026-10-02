@@ -1,22 +1,16 @@
 import type { CSSProperties, FC } from 'react'
-import { Search, X } from 'lucide-react'
-import { cn, IconButton, Input } from '@convergence/ui'
+import { cn, SearchField } from '@convergence/ui'
 import type { LoomSearchField } from './loom-stack.types'
 import { LOOM_SEARCH_NAME } from './loom-search.pure'
-import {
-  LOOM_SEARCH_CLEAR_CLASS,
-  LOOM_SEARCH_FIELD_CLASS,
-  LOOM_SEARCH_GLYPH_CLASS,
-  LOOM_SEARCH_ICON_CLASS,
-  LOOM_SEARCH_INPUT_CLASS,
-} from './wave-panel.styles'
+import { LOOM_SEARCH_FIELD_CLASS } from './wave-panel.styles'
 
 /**
  * Loom's search field (MAR-3234). Render-only: the text, the debounce and
  * the Escape order all belong to the container.
  *
- * The look is provisional -- no design brief exists for it -- and every class
- * is in the styles file so the Design Director can restyle it in one place.
+ * The kit's SearchField (MC-17): the magnifier, the input, and one clear
+ * button that empties it at once and puts the focus back in it -- the same
+ * field Mission Control searches its cards with.
  */
 export const LoomSearchFieldView: FC<{
   field: LoomSearchField
@@ -31,14 +25,10 @@ export const LoomSearchFieldView: FC<{
     className={cn(LOOM_SEARCH_FIELD_CLASS, className)}
     style={style}
   >
-    <Search aria-hidden="true" className={LOOM_SEARCH_ICON_CLASS} />
-    <Input
+    <SearchField
       size="md"
-      type="search"
       aria-label={LOOM_SEARCH_NAME}
       placeholder="Issue id or title"
-      autoComplete="off"
-      spellCheck={false}
       ref={field.inputRef}
       value={field.value}
       onChange={(event) => field.onChange(event.target.value)}
@@ -48,19 +38,8 @@ export const LoomSearchFieldView: FC<{
           field.onApply()
         }
       }}
-      className={LOOM_SEARCH_INPUT_CLASS}
+      onClear={field.onClear}
+      className="w-full"
     />
-    {field.value !== '' ? (
-      <IconButton
-        label="Clear search"
-        type="button"
-        variant="ghost"
-        onClick={field.onClear}
-        size="xs"
-        className={LOOM_SEARCH_CLEAR_CLASS}
-      >
-        <X aria-hidden="true" className={LOOM_SEARCH_GLYPH_CLASS} />
-      </IconButton>
-    ) : null}
   </div>
 )

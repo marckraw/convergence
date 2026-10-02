@@ -176,26 +176,28 @@ describe('the connection inspector, rendered', () => {
   it('offers Clear enabled for a provider that can reset', () => {
     renderInspector({ supportsReset: true, providerName: 'Claude Code' })
 
-    const clear = screen.getByRole('button', {
+    // One of a few, a radio group since MC-7.
+    const clear = screen.getByRole('radio', {
       name: /Clear Opus conversation/,
     })
     expect(clear).toBeInTheDocument()
-    expect(clear).not.toBeDisabled()
+    expect(clear).not.toHaveAttribute('aria-disabled', 'true')
   })
 
   it('offers Clear disabled, with the reason, for a provider that cannot', () => {
     renderInspector({ supportsReset: false, providerName: 'Codex' })
 
-    const clear = screen.getByRole('button', {
+    const clear = screen.getByRole('radio', {
       name: /Clear Opus conversation/,
     })
-    // Unavailable with its reason, which it announces (MAR-3616, R2).
+    // Unavailable with its reason, which it says under its words and
+    // announces as its description (R2).
     expect(clear).toHaveAttribute('aria-disabled', 'true')
     expect(clear).toHaveAccessibleDescription(expect.stringContaining('Codex'))
     // The custom first message survives on every provider (R8).
     expect(
-      screen.getByRole('button', { name: 'Send a custom first message…' }),
-    ).not.toBeDisabled()
+      screen.getByRole('radio', { name: 'Send a custom first message…' }),
+    ).not.toHaveAttribute('aria-disabled', 'true')
   })
 
   it('renders a stored reset as a custom first message, and says why', () => {
@@ -268,15 +270,13 @@ describe('the connection inspector, rendered', () => {
   it('offers both firing conditions, and the token only when one is chosen', () => {
     const handlers = renderInspector()
 
-    expect(
-      screen.getByRole('button', { name: 'Any finish' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Any finish' })).toBeChecked()
     expect(
       screen.queryByLabelText('The final line this connection waits for'),
     ).not.toBeInTheDocument()
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Only when a final line matches' }),
+      screen.getByRole('radio', { name: 'Only when a final line matches' }),
     )
     expect(handlers.onConditionKindChange).toHaveBeenCalledWith('token')
   })
@@ -337,7 +337,9 @@ it('offers the errand host without changing reporting (mutations: omit host pick
     spec: { ...EMPTY_SPAWN_SPEC, providerId: 'codex' },
   }
   const handlers = renderInspector({ draft })
-  fireEvent.click(screen.getByRole('combobox', { name: 'laptop' }))
+  fireEvent.click(
+    screen.getByRole('combobox', { name: 'Execution host: laptop' }),
+  )
   fireEvent.click(await screen.findByRole('option', { name: 'little-monster' }))
   expect(handlers.onSpawnChange).toHaveBeenCalledWith({
     executionHost: 'little-monster',

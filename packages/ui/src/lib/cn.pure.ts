@@ -39,9 +39,13 @@ const twMerge = extendTailwindMerge({
     },
     classGroups: {
       duration: [{ duration: ['exit', 'fast', 'panel', 'slow'] }],
-      transition: [{ transition: ['motion', 'size', 'fill'] }],
+      transition: [{ transition: ['layout', 'motion', 'size', 'fill'] }],
+      'grid-cols': [
+        { 'grid-cols': [(value: string) => /^(?:fill|fit)-\d+$/.test(value)] },
+      ],
       w: [{ w: ['side-panel', 'work-panel'] }],
-      'max-h': [{ 'max-h': ['dialog', 'picker'] }],
+      h: [{ h: ['dialog-tall'] }],
+      'max-h': [{ 'max-h': ['dialog', 'dialog-tall', 'picker'] }],
     },
   },
 })

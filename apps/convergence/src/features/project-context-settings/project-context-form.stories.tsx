@@ -20,7 +20,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-[520px]">
+      <div className="w-130">
         <Story />
       </div>
     ),
@@ -60,7 +60,9 @@ export const EveryTurn: Story = {
     await expect(
       canvas.getByRole('switch', { name: 'Re-inject every turn' }),
     ).toHaveAttribute('aria-checked', 'true')
-    await expect(canvas.getByText(/re-sent on every message/)).toBeVisible()
+    await expect(
+      canvas.getByRole('alert', { name: 'Re-sent with every message' }),
+    ).toBeVisible()
     await userEvent.click(canvas.getByRole('button', { name: 'Save changes' }))
     await expect(args.onSubmit).toHaveBeenCalledOnce()
   },
@@ -71,20 +73,20 @@ export const Empty: Story = {
   args: { label: '', body: '' },
   play: async ({ canvas }) => {
     await expect(canvas.getByLabelText('Body')).toBeRequired()
-    await expect(
-      canvas.getByRole('button', { name: 'Add context item' }),
-    ).toBeDisabled()
+    const add = canvas.getByRole('button', { name: 'Add context item' })
+    await expect(add).toHaveAttribute('aria-disabled', 'true')
+    await expect(add).toHaveAccessibleDescription('Write the body first.')
     await expect(canvas.getByText('0 characters')).toBeVisible()
   },
 }
 
-/** Busy: saving locks the form. */
+/** Busy: saving locks the form, and the button says it is saving. */
 export const Busy: Story = {
   args: { isSaving: true },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('button', { name: 'Saving...' }),
-    ).toBeDisabled()
+      canvas.getByRole('button', { name: 'Saving…' }),
+    ).toHaveAttribute('aria-busy', 'true')
     await expect(canvas.getByLabelText('Body')).toBeDisabled()
     await expect(
       canvas.getByRole('switch', { name: 'Re-inject every turn' }),
@@ -92,11 +94,11 @@ export const Busy: Story = {
   },
 }
 
-/** Failed: the error sits above the buttons. */
+/** Failed: the error is announced above the buttons. */
 export const Failed: Story = {
   args: { error: 'A context item with this label already exists.' },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText(/already exists/)).toBeVisible()
+    await expect(canvas.getByRole('alert')).toHaveTextContent(/already exists/)
   },
 }
 

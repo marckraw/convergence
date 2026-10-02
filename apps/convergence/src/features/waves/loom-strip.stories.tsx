@@ -41,7 +41,7 @@ const meta = {
     (Story) => (
       // The app's one tooltip provider, at the root above the shell.
       <TooltipProvider>
-        <div className="flex h-[480px]">
+        <div className="flex h-120">
           <Story />
         </div>
       </TooltipProvider>

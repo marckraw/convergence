@@ -148,7 +148,6 @@ const meta = {
     artifactCounts: { 'space-ds4': 1, 'space-loom': 3 },
     isLoading: false,
     isCreating: false,
-    isSaving: false,
     isCreatingArtifact: false,
     isDiscoveringArtifacts: false,
     isSynthesizing: false,
@@ -158,7 +157,6 @@ const meta = {
     onCreate: fn(),
     onSelectSpace: fn(),
     onDraftChange: fn(),
-    onSave: fn(),
     onArtifactDraftChange: fn(),
     onArtifactDialogOpenChange: fn(),
     onCreateArtifact: fn(),
@@ -190,11 +188,16 @@ type Story = StoryObj<typeof meta>
 
 /**
  * The Spaces on the left, the chosen one on the right: its title, status,
- * brief, Attempts and Artifacts. Save keeps the edits.
+ * brief, Attempts and Artifacts. Each edit is kept as it is made, so the
+ * dialog ends in Done (R6).
  */
 export const Default: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openWorkboard()
+    // The chosen Space is the selected row (R7).
+    await expect(
+      within(dialog).getByRole('button', { name: /^Design system sweep/ }),
+    ).toHaveAttribute('aria-current', 'true')
     await userEvent.click(
       within(dialog).getByRole('button', { name: /^The Loom/ }),
     )
@@ -226,8 +229,11 @@ export const Default: Story = {
       within(dialog).getByRole('button', { name: 'Remove Artifact PR #915' }),
     )
     await expect(args.onDeleteArtifact).toHaveBeenCalledWith('artifact-pr')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    await expect(args.onSave).toHaveBeenCalledOnce()
+    await expect(
+      within(dialog).queryByRole('button', { name: 'Save' }),
+    ).toBeNull()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    await expect(args.onOpenChange).toHaveBeenCalledWith(false)
   },
 }
 
@@ -273,7 +279,7 @@ export const AddArtifact: Story = {
       label: 'Public PRs',
     })
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Create Artifact' }),
+      within(dialog).getByRole('button', { name: 'Add Artifact' }),
     )
     await expect(args.onCreateArtifact).toHaveBeenCalledOnce()
     await userEvent.click(
@@ -283,15 +289,17 @@ export const AddArtifact: Story = {
   },
 }
 
-/** Adding an Artifact with nothing typed: Create waits. */
+/** Adding an Artifact with nothing typed: Add waits, and says why (R2). */
 export const AddArtifactEmpty: Story = {
   name: 'Add Artifact, empty',
   args: { artifactDialogOpen: true },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add Artifact' })
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create Artifact' }),
-    ).toBeDisabled()
+    const add = within(dialog).getByRole('button', { name: 'Add Artifact' })
+    await expect(add).toHaveAttribute('aria-disabled', 'true')
+    await expect(add).toHaveAccessibleDescription(
+      'Give the Artifact a label first.',
+    )
   },
 }
 
@@ -365,20 +373,17 @@ export const Suggestions: Story = {
   },
 }
 
-/** Busy: synthesizing, discovering and saving each say so and wait. */
+/** Busy: synthesizing and discovering each say so. */
 export const Busy: Story = {
-  args: { isSynthesizing: true, isDiscoveringArtifacts: true, isSaving: true },
+  args: { isSynthesizing: true, isDiscoveringArtifacts: true },
   play: async () => {
     const dialog = await openWorkboard()
     await expect(
       within(dialog).getByRole('button', { name: 'Synthesize Space brief' }),
-    ).toBeDisabled()
+    ).toHaveAttribute('aria-busy', 'true')
     await expect(
-      within(dialog).getByRole('button', { name: 'Checking...' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Saving...' }),
-    ).toBeDisabled()
+      within(dialog).getByRole('button', { name: 'Checking…' }),
+    ).toHaveAttribute('aria-busy', 'true')
   },
 }
 
@@ -388,18 +393,20 @@ export const Loading: Story = {
   args: { spaces: [], selectedSpace: null, isLoading: true },
   play: async () => {
     const dialog = await openWorkboard()
-    await expect(within(dialog).getByText('Loading Spaces...')).toBeVisible()
+    await waitFor(() =>
+      expect(within(dialog).getByText('Loading Spaces…')).toBeVisible(),
+    )
   },
 }
 
-/** Failed: the error sits above the footer. */
+/** Failed: the error is announced above the footer. */
 export const Failed: Story = {
-  args: { error: 'Could not save the Space: the title is already used.' },
+  args: { error: "Couldn't save the Space: the title is already used." },
   play: async () => {
     const dialog = await openWorkboard()
-    await expect(
-      within(dialog).getByText(/the title is already used/),
-    ).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /the title is already used/,
+    )
   },
 }
 
@@ -413,13 +420,10 @@ export const Empty: Story = {
   },
   play: async () => {
     const dialog = await openWorkboard()
-    await expect(within(dialog).getByText('No Spaces yet.')).toBeVisible()
+    await expect(within(dialog).getByText('No Spaces yet')).toBeVisible()
     await expect(
       within(dialog).getByText('Select or create a Space.'),
     ).toBeVisible()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Save' }),
-    ).toBeDisabled()
     await expect(
       within(dialog).getByRole('button', { name: 'Create Space' }),
     ).toBeDisabled()
@@ -433,12 +437,16 @@ export const NoAttempts: Story = {
   play: async () => {
     const dialog = await openWorkboard()
     await expect(
-      within(dialog).getByText('No linked Attempts yet.'),
+      within(dialog).getByText('No linked Attempts yet'),
     ).toBeVisible()
-    await expect(within(dialog).getByText('No Artifacts yet.')).toBeVisible()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Synthesize Space brief' }),
-    ).toBeDisabled()
+    await expect(within(dialog).getByText('No Artifacts yet')).toBeVisible()
+    const synthesize = within(dialog).getByRole('button', {
+      name: 'Synthesize Space brief',
+    })
+    await expect(synthesize).toHaveAttribute('aria-disabled', 'true')
+    await expect(synthesize).toHaveAccessibleDescription(
+      'Link an Attempt to synthesize from first.',
+    )
   },
 }
 

@@ -4,9 +4,7 @@ import {
   FlaskConical,
   MessageSquare,
   Plus,
-  Search,
   Trash2,
-  X,
 } from 'lucide-react'
 import {
   memberKey,
@@ -14,8 +12,29 @@ import {
   type SeatDraftField,
   type SessionCrewMember,
 } from '@/entities/session-crew'
-import { Button, Checkbox, IconButton, Input } from '@convergence/ui'
+import {
+  Button,
+  Checkbox,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+  EmptyState,
+  FormError,
+  Input,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
+  Notice,
+  SearchField,
+  SectionLabel,
+  sectionLabel,
+  Tooltip,
+} from '@convergence/ui'
 import { flowRunCeilingNote } from './crew-loop.pure'
+import { CrewMark } from './crew-mark.presentational'
+import { InspectorHeader } from './inspector-header.presentational'
+import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 import {
@@ -300,36 +319,33 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
     )
   }
 
-  // `inMenu`: only the menu's copy carries menu roles (lap 2, F1).
-  const addActions = (inMenu: boolean) => (
+  // An empty crew's own two add actions; with seats, the same two are the
+  // "Add ▾" menu's items (lap 2, F1).
+  const addActions = (
     <>
       <Button
         type="button"
         variant="secondary"
-        role={inMenu ? 'menuitem' : undefined}
         disabled={busy}
         onClick={onAddConversation}
         size="sm"
-        className="px-2.5 text-[11px]"
+        className="px-2.5 text-2xs"
       >
         <MessageSquare aria-hidden className="size-3.5" />
         Add conversation…
       </Button>
-      {/* R9: present, and honest that it is not built yet. */}
-      <span title="Coming with MAR-3099" className="inline-flex">
-        <Button
-          type="button"
-          variant="secondary"
-          role={inMenu ? 'menuitem' : undefined}
-          disabled
-          aria-description="Coming with MAR-3099"
-          size="sm"
-          className="px-2.5 text-[11px]"
-        >
-          <FlaskConical aria-hidden className="size-3.5" />
-          New recipe
-        </Button>
-      </span>
+      {/* R9: present, and honest that it is not built yet; the reason is its
+          tooltip and its description (R2), never a native title. */}
+      <Button
+        type="button"
+        variant="secondary"
+        disabledReason="Coming with MAR-3099"
+        size="sm"
+        className="px-2.5 text-2xs"
+      >
+        <FlaskConical aria-hidden className="size-3.5" />
+        New recipe
+      </Button>
     </>
   )
 
@@ -337,35 +353,25 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
     <section
       data-crew-settings-panel
       aria-label="Crew settings"
-      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/10 px-4 py-3"
+      className={INSPECTOR_SHELL_CLASS}
     >
-      <header data-crew-settings-header className="flex items-start gap-2">
-        <span
-          aria-hidden
-          className="mt-1 size-3 shrink-0 rounded-sm"
-          style={{ backgroundColor: accentColor ?? 'rgb(148 163 184)' }}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <h3 className="truncate text-sm font-medium">{savedName}</h3>
-          <p className="text-[11px] text-muted-foreground">Crew settings</p>
-        </div>
-        <IconButton
-          label="Close crew settings"
-          type="button"
-          variant="quiet"
-          onClick={onClose}
-          size="sm"
-          className="shrink-0"
-        >
-          <X className="size-3.5" />
-        </IconButton>
-      </header>
+      <InspectorHeader
+        data-crew-settings-header
+        leading={
+          <CrewMark
+            crew={{ name: savedName, emoji, accentColor }}
+            variant="swatch"
+            className="mt-1"
+          />
+        }
+        title={savedName}
+        titleClassName="truncate"
+        subtitle="Crew settings"
+        closeLabel="Close crew settings"
+        onClose={onClose}
+      />
 
-      {updateError ? (
-        <p role="alert" className="text-xs text-destructive">
-          {updateError}
-        </p>
-      ) : null}
+      <FormError>{updateError}</FormError>
 
       <section
         aria-label="Seats"
@@ -375,72 +381,72 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         <div className="flex items-center justify-between gap-2">
           <h4 className="text-xs font-medium">
             Seats{' '}
-            <span className="font-normal text-muted-foreground">
-              {members.length}
-            </span>
+            <span className="font-normal text-ink-muted">{members.length}</span>
           </h4>
           {/* An empty crew shows both add actions in its own state, so it
-              has no menu and no menu button (MAR-3118 lap 3, C2). */}
+              has no menu and no menu button (MAR-3118 lap 3, C2). With seats,
+              "Add ▾" is a real Menu (MC-5): arrow keys, Escape, a click
+              outside, the focus back on the button. */}
           {members.length > 0 ? (
-            <Button
-              type="button"
-              variant="secondary"
-              aria-haspopup="menu"
-              aria-expanded={addMenuOpen}
-              disabled={busy}
-              onClick={onAddMenuToggle}
-              size="sm"
-              className="gap-1 text-[11px]"
+            <Menu
+              open={addMenuOpen}
+              onOpenChange={(open) => {
+                if (open !== addMenuOpen) onAddMenuToggle()
+              }}
             >
-              <Plus aria-hidden className="size-3.5" />
-              Add
-              <ChevronDown aria-hidden className="size-3.5" />
-            </Button>
+              <MenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={busy}
+                    size="sm"
+                    className="gap-1 text-2xs"
+                  />
+                }
+              >
+                <Plus aria-hidden className="size-3.5" />
+                Add
+                <ChevronDown aria-hidden className="size-3.5" />
+              </MenuTrigger>
+              <MenuContent align="end">
+                <MenuItem onClick={onAddConversation}>
+                  <MessageSquare aria-hidden />
+                  Add conversation…
+                </MenuItem>
+                {/* R9: present, and honest that it is not built yet. */}
+                <Tooltip label="Coming with MAR-3099">
+                  <MenuItem disabled aria-description="Coming with MAR-3099">
+                    <FlaskConical aria-hidden />
+                    New recipe
+                  </MenuItem>
+                </Tooltip>
+              </MenuContent>
+            </Menu>
           ) : null}
         </div>
-        {/* One set of add actions (lap 2, F1): an empty crew already shows
-            both in its own state, so the menu does not repeat them. */}
-        {addMenuOpen && members.length > 0 ? (
-          <div
-            role="menu"
-            aria-label="Add a seat"
-            className="flex flex-wrap gap-1.5 rounded-md border border-white/10 bg-white/[0.02] p-1.5"
-          >
-            {addActions(true)}
-          </div>
-        ) : null}
 
         {offersSeatSearch(members.length) ? (
-          <div className="relative">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              size="md"
-              type="search"
-              value={seatQuery}
-              placeholder="Find a seat by name, role or host"
-              aria-label="Find a seat by name, role or host"
-              onChange={(event) => onSeatQueryChange(event.target.value)}
-              className="pl-7 text-xs"
-            />
-          </div>
+          <SearchField
+            size="md"
+            value={seatQuery}
+            placeholder="Find a seat by name, role or host"
+            aria-label="Find a seat by name, role or host"
+            onChange={(event) => onSeatQueryChange(event.target.value)}
+            onClear={() => onSeatQueryChange('')}
+          />
         ) : null}
 
         {members.length === 0 ? (
-          <div
+          <EmptyState
             data-crew-no-seats
-            className="flex flex-col gap-2 rounded-md border border-dashed border-white/15 p-3"
-          >
-            <p className="text-xs font-medium">No seats yet</p>
-            <p className="text-[11px] text-muted-foreground">
-              A seat is a conversation that lives in this crew, or a recipe the
-              crew spawns when a wire reaches it. Seat the mastermind first —
-              wires need somewhere to leave from.
-            </p>
-            <div className="flex flex-wrap gap-1.5">{addActions(false)}</div>
-          </div>
+            variant="dashed"
+            size="compact"
+            className="items-start text-left"
+            title="No seats yet"
+            detail="A seat is a conversation that lives in this crew, or a recipe the crew spawns when a wire reaches it. Seat the mastermind first — wires need somewhere to leave from."
+            action={addActions}
+          />
         ) : (
           groups.map((group) => (
             <section
@@ -449,9 +455,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               data-seat-group={group.role}
               className="flex flex-col gap-1"
             >
-              <h5 className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <SectionLabel as="h4" className="text-3xs">
                 {group.title} {group.count}
-              </h5>
+              </SectionLabel>
               <ul className="flex flex-col gap-1">
                 {group.members.map(renderSeat)}
               </ul>
@@ -460,19 +466,14 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         )}
       </section>
 
-      <details
-        data-crew-details
-        className="group border-t border-white/10 pt-2"
-      >
-        <summary className="cursor-pointer list-none text-[11px] text-muted-foreground hover:text-foreground">
+      {/* MC-31: one disclosure, with the chevron that says it opens. */}
+      <Collapsible data-crew-details className="border-t border-hairline pt-2">
+        <CollapsibleTrigger className="text-2xs text-ink-muted hover:text-ink">
           Crew details — name, decoration, loop limits, tracker, export
-        </summary>
-        <div className="mt-3 flex flex-col gap-3">
+        </CollapsibleTrigger>
+        <CollapsiblePanel keepMounted className="mt-3 flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="crew-name"
-              className="text-[11px] uppercase tracking-wide text-muted-foreground"
-            >
+            <label htmlFor="crew-name" className={sectionLabel}>
               Crew name
             </label>
             <Input
@@ -486,9 +487,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           </div>
 
           <section aria-label="Decoration" className="flex flex-col gap-1.5">
-            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Decoration
-            </h4>
+            <SectionLabel as="h4">Decoration</SectionLabel>
             <CrewDecorationPicker
               emoji={emoji}
               accentColor={accentColor}
@@ -498,13 +497,11 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           </section>
 
           <div className="flex flex-col gap-1.5">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Loop limits
-            </p>
+            <SectionLabel as="h4">Loop limits</SectionLabel>
             <div className="flex items-center gap-2">
               <label
                 htmlFor="crew-delivery-limit"
-                className="flex-1 text-[11px] text-muted-foreground"
+                className="flex-1 text-2xs text-ink-muted"
               >
                 Delivery limit
               </label>
@@ -522,15 +519,15 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 }
                 className="w-16 text-xs"
               />
-              <span className="text-[11px] text-muted-foreground">per run</span>
+              <span className="text-2xs text-ink-muted">per run</span>
             </div>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className={INSPECTOR_NOTE_CLASS}>
               {flowRunCeilingNote(deliveryLimit ?? defaultDeliveryLimit)}
             </p>
             <div className="flex items-center gap-2">
               <label
                 htmlFor="crew-attention-minutes"
-                className="flex-1 text-[11px] text-muted-foreground"
+                className="flex-1 text-2xs text-ink-muted"
               >
                 Ask for attention after
               </label>
@@ -548,16 +545,16 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 }
                 className="w-16 text-xs"
               />
-              <span className="text-[11px] text-muted-foreground">minutes</span>
+              <span className="text-2xs text-ink-muted">minutes</span>
             </div>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className={INSPECTOR_NOTE_CLASS}>
               The timer watches for a reply still owed. It is not a total
               run-duration limit.
             </p>
             <div className="flex items-center gap-2">
               <label
                 htmlFor="crew-lap-cap"
-                className="flex-1 text-[11px] text-muted-foreground"
+                className="flex-1 text-2xs text-ink-muted"
               >
                 Lap cap
               </label>
@@ -575,11 +572,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 }
                 className="w-16 text-xs"
               />
-              <span className="text-[11px] text-muted-foreground">
-                per issue
-              </span>
+              <span className="text-2xs text-ink-muted">per issue</span>
             </div>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className={INSPECTOR_NOTE_CLASS}>
               Shown on Loom as &ldquo;lap N of C&rdquo;. Empty means no cap on
               the row. Distinct from the delivery limit (hop budget).
             </p>
@@ -589,12 +584,10 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
 
           <section
             aria-label="Recipe"
-            className="flex flex-col gap-2 border-t border-white/10 pt-2"
+            className="flex flex-col gap-2 border-t border-hairline pt-2"
           >
-            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Recipe
-            </h4>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <SectionLabel as="h4">Recipe</SectionLabel>
+            <label className="flex items-center gap-2 text-xs text-ink-muted">
               <Checkbox
                 checked={includePositions}
                 disabled={exporting}
@@ -613,25 +606,26 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               {exporting ? 'Exporting…' : 'Export crew…'}
             </Button>
             {lastExportPath ? (
-              <p
-                className="truncate text-[11px] text-muted-foreground"
-                title={lastExportPath}
-              >
-                Last exported to …/
-                {lastExportPath.split('/').filter(Boolean).slice(-2).join('/')}
-              </p>
+              <Tooltip label={lastExportPath}>
+                <p className="truncate text-2xs text-ink-muted">
+                  Last exported to …/
+                  {lastExportPath
+                    .split('/')
+                    .filter(Boolean)
+                    .slice(-2)
+                    .join('/')}
+                </p>
+              </Tooltip>
             ) : null}
           </section>
           <section
             aria-label="Danger"
-            className="border-t border-white/10 pt-2"
+            className="border-t border-hairline pt-2"
           >
-            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Danger
-            </h4>
+            <SectionLabel as="h4">Danger</SectionLabel>
             {confirmingDelete ? (
               <div className="flex flex-col gap-2">
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-ink-muted">
                   Delete “{savedName}” with {formatCrewMemberCount(memberCount)}
                   ? Only the crew disappears; the conversations stay exactly
                   where they are.
@@ -673,28 +667,28 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             )}
           </section>
 
-          <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
-            <p className="text-[11px] font-medium">
-              A run can contain several laps
-            </p>
-            <p className="text-[10px] text-muted-foreground">
+          <Notice
+            title="A run can contain several laps"
+            className="text-2xs text-ink"
+          >
+            <span className="text-3xs text-ink-muted">
               Correction laps stay in the same run until a human handoff. The
               delivery limit spans all laps.
-            </p>
-          </div>
+            </span>
+          </Notice>
 
           {/* R7: says everything, enforces nothing. The engine reads a source's
             wires at settle time, so an edit saved now applies from the next
             delivery and cannot rewrite a hop already recorded. */}
-          <p className="text-[10px] text-muted-foreground/70">
+          <p className={INSPECTOR_NOTE_CLASS}>
             {running
               ? 'Crew is running — changes apply from the next delivery.'
               : 'Crew is idle · settings can be edited.'}
           </p>
-        </div>
-      </details>
+        </CollapsiblePanel>
+      </Collapsible>
 
-      <p className="text-[10px] text-muted-foreground/70">
+      <p className={INSPECTOR_NOTE_CLASS}>
         Removing a seat never deletes its conversation — it stays in Flat.
       </p>
     </section>

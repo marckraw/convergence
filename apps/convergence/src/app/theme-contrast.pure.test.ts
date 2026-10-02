@@ -45,6 +45,7 @@ const TEXT = 4.5
 const NON_TEXT = 3
 const PLAIN = ['canvas', 'surface', 'surface-muted', 'raised'] as const
 const TONES = ['info', 'success', 'warning', 'danger'] as const
+const PROVIDERS = ['openai', 'anthropic', 'pi', 'cursor', 'google'] as const
 const TAGS = [
   'cyan',
   'sky',
@@ -77,6 +78,30 @@ const PAIRS: ReadonlyArray<readonly [string, Backdrop, number]> = [
     [`${tone}-ink`, { layer: `${tone}-soft`, over: 'surface' }, TEXT] as const,
     [`${tone}-ink`, { layer: `${tone}-soft`, over: 'canvas' }, TEXT] as const,
   ]),
+  // A card washed in a tone keeps its muted words readable (MAR-3617): a
+  // canvas node's tint lies over the canvas (CARD_TONE_WASH), and Loom's horse
+  // at work or failed sits on the open sheet's surface. Over the surface,
+  // warning's and success's tints leave --ink-muted under 4.5:1 in dark, so no
+  // card in Mission Control or Loom lays those two there.
+  ...(['neutral', ...TONES] as const).map(
+    (tone) =>
+      ['ink-muted', { layer: `${tone}-soft`, over: 'canvas' }, TEXT] as const,
+  ),
+  ['ink-muted', { layer: 'info-soft', over: 'surface' }, TEXT],
+  ['ink-muted', { layer: 'danger-soft', over: 'surface' }, TEXT],
+  // A Needs-you card: its provider's hue at 6% over the surface, and the
+  // hover fill (R7) over that under the pointer (needs-you-card.css).
+  ...PROVIDERS.flatMap((provider) => {
+    const card = {
+      layer: `provider-${provider}`,
+      alpha: 0.06,
+      over: 'surface',
+    } as const
+    return [
+      ['ink-muted', card, TEXT] as const,
+      ['ink-muted', { layer: 'fill-hover', over: card }, TEXT] as const,
+    ]
+  }),
   // Each tone's dot or bar, where it sits. Neutral's is the idle dot, which
   // only recedes, so it isn't held to 3:1.
   ...TONES.flatMap((tone) =>
@@ -151,8 +176,8 @@ function colourTokens(): string[] {
 }
 
 describe('MAR-3460: theme color roles are readable in both themes', () => {
-  it('holds 85 pairs in each theme', () => {
-    expect(PAIRS).toHaveLength(85)
+  it('holds 102 pairs in each theme', () => {
+    expect(PAIRS).toHaveLength(102)
   })
 
   describe.each(['light', 'dark'] as const)('%s', (theme) => {

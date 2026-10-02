@@ -14,7 +14,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FormError,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@convergence/ui'
+
+/** A row with no decision yet: what the picker says, and the value it keeps. */
+const NO_CHOICE = ''
+const NO_CHOICE_LABEL = 'Choose…'
 
 interface Props {
   plan: CrewImportPlan
@@ -57,7 +67,9 @@ export function CrewImportView({
         if (!open && !busy) onClose()
       }}
     >
-      <DialogContent className="w-[min(1000px,calc(100vw-2rem))]">
+      {/* The widest dialog step (R11: 960 px, the nearest to the 1000 it
+          was): the review table needs the room. */}
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>
             {report ? 'Crew import report' : 'Import crew'}
@@ -67,11 +79,7 @@ export function CrewImportView({
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          {error && (
-            <p role="alert" className="mb-3 text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          <FormError className="mb-3">{error}</FormError>
           {report ? (
             <>
               <p className="mb-3 text-sm">
@@ -90,14 +98,14 @@ export function CrewImportView({
             </>
           ) : (
             <>
-              <p className="mb-3 text-sm text-muted-foreground">
+              <p className="mb-3 text-sm text-ink-muted">
                 Review the file against this machine. Local records absent from
                 the file are kept. Remote conversations can be bound, but cannot
                 be created here.
               </p>
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-border">
+                  <tr className="border-b border-line">
                     {['What', 'State', 'Detail', 'Decision'].map((title) => (
                       <th className="px-2 py-2" key={title}>
                         {title}
@@ -108,7 +116,7 @@ export function CrewImportView({
                 <tbody>
                   {rows.map((r) => (
                     <tr
-                      className="border-b border-border/50 align-top"
+                      className="border-b border-line-soft align-top"
                       key={r.key}
                     >
                       <th
@@ -120,7 +128,7 @@ export function CrewImportView({
                       <td className="px-2 py-3">
                         {r.state === 'create' ? 'will create' : r.state}
                       </td>
-                      <td className="max-w-72 break-words px-2 py-3 text-muted-foreground">
+                      <td className="max-w-72 break-words px-2 py-3 text-ink-muted">
                         {r.detail}
                         {r.warnings
                           ?.filter(
@@ -132,7 +140,7 @@ export function CrewImportView({
                           )
                           .map((warning) => (
                             <p
-                              className="mt-1 text-warning"
+                              className="mt-1 text-warning-ink"
                               key={warning.updateKey}
                             >
                               {warning.message}
@@ -143,25 +151,41 @@ export function CrewImportView({
                         {/* Options, not the state, say whether a row has a
                             decision to make: a `create` role can also carry one
                             once a member already holds its baton (MAR-2918). */}
+                        {/* A short fixed list (MC-10, R9): the app's Select,
+                            not the system's popup inside the app's dialog. */}
                         {r.options.length > 0 && (
-                          <select
-                            aria-label={`Choose ${r.label}`}
-                            className="max-w-60 rounded border border-border bg-background p-1"
+                          <Select
+                            items={[
+                              { value: NO_CHOICE, label: NO_CHOICE_LABEL },
+                              ...r.options,
+                            ]}
                             disabled={busy}
                             value={
-                              decisions.choices[r.choiceKey ?? r.key] ?? ''
+                              decisions.choices[r.choiceKey ?? r.key] ??
+                              NO_CHOICE
                             }
-                            onChange={(e) =>
-                              onChoice(r.choiceKey ?? r.key, e.target.value)
+                            onValueChange={(value) =>
+                              onChoice(r.choiceKey ?? r.key, value)
                             }
                           >
-                            <option value="">Choose…</option>
-                            {r.options.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger
+                              size="sm"
+                              aria-label={`Choose ${r.label}`}
+                              className="max-w-60"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_CHOICE}>
+                                {NO_CHOICE_LABEL}
+                              </SelectItem>
+                              {r.options.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>
+                                  {o.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         )}
                         {r.canUpdate && (
                           <label className="flex items-center gap-2">

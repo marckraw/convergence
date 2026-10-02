@@ -1,6 +1,14 @@
-import { ExternalLink, Loader2 } from 'lucide-react'
 import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
-import { Button, CopyButton, Input } from '@convergence/ui'
+import {
+  Button,
+  Card,
+  CopyButton,
+  Field,
+  FieldLabel,
+  Input,
+  Spinner,
+  TextLink,
+} from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 
 export function ProviderAccountLoginProgress({
@@ -22,38 +30,33 @@ export function ProviderAccountLoginProgress({
     attempt.state !== 'cancelling'
   const providerName = attempt.providerId === 'codex' ? 'OpenAI' : 'Anthropic'
   return (
-    <section
+    <Card
+      render={<section />}
       aria-label={`${providerName} sign-in`}
-      className="space-y-3 rounded-xl border border-border bg-muted/30 p-4"
+      padding="md"
+      className="space-y-3"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
         <ProviderIcon providerId={attempt.providerId} title="" />
         <span>{providerName} sign-in</span>
-        {attempt.active ? (
-          <Loader2
-            aria-hidden
-            className="ml-auto h-4 w-4 animate-spin text-muted-foreground"
-          />
-        ) : null}
+        {attempt.active ? <Spinner className="ml-auto text-ink-muted" /> : null}
       </div>
       <p
         role="status"
         aria-live="polite"
-        className="text-sm leading-relaxed text-muted-foreground"
+        className="text-sm leading-relaxed text-ink-muted"
       >
         {attempt.message}
       </p>
       {attempt.authorizationUrl && attempt.active ? (
         <div className="flex flex-wrap items-center gap-3">
-          <a
+          <TextLink
+            external
             href={attempt.authorizationUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex min-h-10 items-center gap-2 text-sm underline underline-offset-4"
+            className="text-sm"
           >
-            <ExternalLink aria-hidden className="h-4 w-4" />
             Open sign-in page
-          </a>
+          </TextLink>
           <CopyButton
             variant="button"
             text={attempt.authorizationUrl}
@@ -63,28 +66,24 @@ export function ProviderAccountLoginProgress({
       ) : null}
       {attempt.state === 'waiting-code' ? (
         <div className="space-y-2">
-          <label
-            htmlFor="provider-authorization-code"
-            className="text-sm font-medium"
-          >
-            Authorization code
-          </label>
-          <Input
-            size="lg"
-            id="provider-authorization-code"
-            type="password"
-            value={code}
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="Paste the code from your browser"
-            onChange={(event) => onCodeChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && code.trim()) {
-                event.preventDefault()
-                onSubmitCode()
-              }
-            }}
-          />
+          <Field>
+            <FieldLabel>Authorization code</FieldLabel>
+            <Input
+              size="lg"
+              type="password"
+              value={code}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="Paste the code from your browser"
+              onChange={(event) => onCodeChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && code.trim()) {
+                  event.preventDefault()
+                  onSubmitCode()
+                }
+              }}
+            />
+          </Field>
           <Button
             type="button"
             disabled={!code.trim()}
@@ -101,10 +100,10 @@ export function ProviderAccountLoginProgress({
         </Button>
       ) : null}
       {attempt.active ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-muted">
           You can close Settings and return to this sign-in.
         </p>
       ) : null}
-    </section>
+    </Card>
   )
 }

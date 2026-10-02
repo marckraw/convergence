@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css'
 import { expect, waitFor } from 'storybook/test'
 import { CanvasCrewCluster } from './canvas-crew-cluster.presentational'
 import type { CanvasCrewClusterData } from './session-canvas.types'
+import { crewTokens } from '@convergence/ui'
 
 const nodeTypes: NodeTypes = { cluster: CanvasCrewCluster }
 
@@ -18,7 +19,7 @@ function OnCanvas(data: CanvasCrewClusterData) {
     },
   ]
   return (
-    <div className="h-[260px] w-[520px]">
+    <div className="h-65 w-130">
       <ReactFlow
         nodes={nodes}
         edges={[]}
@@ -41,7 +42,7 @@ const meta = {
     crewId: 'crew-1',
     name: 'convergence development',
     emoji: '🐎',
-    accentColor: '#7c3aed',
+    accentColor: crewTokens.violet,
     parked: false,
     width: 480,
     height: 220,

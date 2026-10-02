@@ -9,19 +9,6 @@ import {
 
 const LAST = LEARN_LOOM_STEP_COUNT - 1
 
-/**
- * A step's blue eyebrow and the ticket's identifier miss contrast on both
- * themes. Every story that draws a step; the quick reference passes.
- */
-const lowContrastStep = {
-  a11y: {
-    config: {
-      // a11y-known: the step eyebrow and the ticket id in blue-500 miss 4.5:1 (color-contrast) — fixed by the sweep (DS4)
-      rules: [{ id: 'color-contrast', enabled: false }],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Waves/LearnLoom',
   component: LearnLoomGuideView,
@@ -47,7 +34,6 @@ type Story = StoryObj<typeof meta>
  * a footer that never moves. Back is refused here, without losing focus.
  */
 export const Default: Story = {
-  parameters: lowContrastStep,
   play: async ({ args, userEvent }) => {
     const dialog = await screen.findByRole('dialog', { name: 'How Loom works' })
     await expect(dialog).toHaveAttribute('aria-modal', 'true')
@@ -78,7 +64,6 @@ export const Dark: Story = {
 
 /** A middle step: Back works, and the live region says where the ticket is. */
 export const Step: Story = {
-  parameters: lowContrastStep,
   args: {
     step: learnLoomStepView(2),
     liveMessage: learnLoomLiveMessage('steps', 2),
@@ -97,7 +82,6 @@ export const Step: Story = {
 
 /** The last step's primary control leaves the guide instead of advancing. */
 export const Long: Story = {
-  parameters: lowContrastStep,
   args: {
     step: learnLoomStepView(LAST),
     liveMessage: learnLoomLiveMessage('steps', LAST),
@@ -141,7 +125,6 @@ export const ReferenceDark: Story = {
 
 /** Reduced motion: the ticket and the sheets change place without travelling. */
 export const ReducedMotion: Story = {
-  parameters: lowContrastStep,
   args: {
     step: learnLoomStepView(3),
     liveMessage: learnLoomLiveMessage('steps', 3),

@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
 } from 'react'
@@ -16,6 +17,20 @@ import {
 import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@convergence/ui'
 import { ProjectSettingsDialog } from './project-settings.presentational'
+
+/**
+ * Project settings save as you go (DS4, R6): a switch or a choice at once, a
+ * typed value once typing pauses this long, and at once on close.
+ */
+const SAVE_NOW_MS = 0
+const SAVE_AFTER_TYPING_MS = 400
+
+interface ProjectSettingsDrafts {
+  strategy: WorkspaceStartStrategy
+  baseBranchName: string
+  envCopyMode: WorkspaceEnvFileCopyMode
+  envPatternsText: string
+}
 
 interface ProjectSettingsDialogContainerProps {
   contextSection?: (projectId: string) => ReactNode
@@ -33,20 +48,12 @@ export const ProjectSettingsDialogContainer: FC<
   const open = useDialogStore((s) => s.openDialog === 'project-settings')
   const openDialog = useDialogStore((s) => s.open)
   const closeDialog = useDialogStore((s) => s.close)
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (next) openDialog('project-settings')
-      else closeDialog()
-    },
-    [openDialog, closeDialog],
-  )
   const [strategy, setStrategy] =
     useState<WorkspaceStartStrategy>('base-branch')
   const [baseBranchName, setBaseBranchName] = useState('')
   const [envCopyMode, setEnvCopyMode] =
     useState<WorkspaceEnvFileCopyMode>('copy-missing')
   const [envPatternsText, setEnvPatternsText] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const settings = useMemo(
@@ -54,17 +61,90 @@ export const ProjectSettingsDialogContainer: FC<
     [activeProject?.settings],
   )
 
+  // Seeded once per open, never from a save's answer: that would overwrite
+  // what is being typed.
+  const seededFor = useRef<string | null>(null)
+  const activeProjectId = activeProject?.id ?? null
   useEffect(() => {
     if (!open) {
+      seededFor.current = null
       return
     }
-
+    if (seededFor.current === activeProjectId) return
+    seededFor.current = activeProjectId
     setStrategy(settings.workspaceCreation.startStrategy)
     setBaseBranchName(settings.workspaceCreation.baseBranchName ?? '')
     setEnvCopyMode(settings.workspaceEnvFiles.copyMode)
     setEnvPatternsText(settings.workspaceEnvFiles.patterns.join(', '))
     setError(null)
-  }, [open, settings])
+  }, [open, activeProjectId, settings])
+
+  // What each save is built from, as of the latest render.
+  const drafts = useRef<ProjectSettingsDrafts>({
+    strategy,
+    baseBranchName,
+    envCopyMode,
+    envPatternsText,
+  })
+  drafts.current = { strategy, baseBranchName, envCopyMode, envPatternsText }
+  const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saves = useRef<Promise<void>>(Promise.resolve())
+
+  const saveNow = useCallback(() => {
+    if (pendingSave.current !== null) {
+      clearTimeout(pendingSave.current)
+      pendingSave.current = null
+    }
+    const projectId = activeProjectId
+    if (!projectId) return
+    saves.current = saves.current.then(async () => {
+      const current = drafts.current
+      setError(null)
+      try {
+        await updateProjectSettings(projectId, {
+          workspaceCreation: {
+            startStrategy: current.strategy,
+            baseBranchName:
+              current.strategy === 'base-branch' &&
+              current.baseBranchName.trim()
+                ? current.baseBranchName.trim()
+                : null,
+          },
+          workspaceEnvFiles: {
+            copyMode: current.envCopyMode,
+            patterns: current.envPatternsText
+              .split(',')
+              .map((pattern) => pattern.trim())
+              .filter(Boolean),
+          },
+        })
+      } catch (nextError) {
+        const reason = nextError instanceof Error ? ` ${nextError.message}` : ''
+        setError(`Couldn’t save the project settings.${reason}`)
+      }
+    })
+  }, [activeProjectId, updateProjectSettings])
+
+  const scheduleSave = useCallback(
+    (delayMs: number) => {
+      if (pendingSave.current !== null) clearTimeout(pendingSave.current)
+      pendingSave.current = setTimeout(saveNow, delayMs)
+    },
+    [saveNow],
+  )
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) {
+        openDialog('project-settings')
+        return
+      }
+      // Leaving with a typed value still waiting keeps it.
+      if (pendingSave.current !== null) saveNow()
+      closeDialog()
+    },
+    [openDialog, closeDialog, saveNow],
+  )
 
   useEffect(() => {
     if (!activeProject) {
@@ -82,41 +162,14 @@ export const ProjectSettingsDialogContainer: FC<
       ? (settings.workspaceCreation.baseBranchName ?? 'Auto')
       : 'HEAD'
 
-  const handleSave = async () => {
-    if (!activeProject) {
-      return
-    }
+  const handleStrategyChange = (next: WorkspaceStartStrategy) => {
+    setStrategy(next)
+    scheduleSave(SAVE_NOW_MS)
+  }
 
-    setIsSaving(true)
-    setError(null)
-
-    try {
-      await updateProjectSettings(activeProject.id, {
-        workspaceCreation: {
-          startStrategy: strategy,
-          baseBranchName:
-            strategy === 'base-branch' && baseBranchName.trim()
-              ? baseBranchName.trim()
-              : null,
-        },
-        workspaceEnvFiles: {
-          copyMode: envCopyMode,
-          patterns: envPatternsText
-            .split(',')
-            .map((pattern) => pattern.trim())
-            .filter(Boolean),
-        },
-      })
-      closeDialog()
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : 'Failed to save project settings',
-      )
-    } finally {
-      setIsSaving(false)
-    }
+  const handleBaseBranchNameChange = (value: string) => {
+    setBaseBranchName(value)
+    scheduleSave(SAVE_AFTER_TYPING_MS)
   }
 
   const handleEnvCopyEnabledChange = (enabled: boolean) => {
@@ -124,10 +177,17 @@ export const ProjectSettingsDialogContainer: FC<
       if (!enabled) return 'disabled'
       return current === 'disabled' ? 'copy-missing' : current
     })
+    scheduleSave(SAVE_NOW_MS)
   }
 
   const handleEnvOverwriteChange = (enabled: boolean) => {
     setEnvCopyMode(enabled ? 'overwrite' : 'copy-missing')
+    scheduleSave(SAVE_NOW_MS)
+  }
+
+  const handleEnvPatternsTextChange = (value: string) => {
+    setEnvPatternsText(value)
+    scheduleSave(SAVE_AFTER_TYPING_MS)
   }
 
   return (
@@ -140,14 +200,12 @@ export const ProjectSettingsDialogContainer: FC<
       envCopyEnabled={envCopyMode !== 'disabled'}
       envOverwrite={envCopyMode === 'overwrite'}
       envPatternsText={envPatternsText}
-      isSaving={isSaving}
       error={error}
-      onStrategyChange={setStrategy}
-      onBaseBranchNameChange={setBaseBranchName}
+      onStrategyChange={handleStrategyChange}
+      onBaseBranchNameChange={handleBaseBranchNameChange}
       onEnvCopyEnabledChange={handleEnvCopyEnabledChange}
       onEnvOverwriteChange={handleEnvOverwriteChange}
-      onEnvPatternsTextChange={setEnvPatternsText}
-      onSave={() => void handleSave()}
+      onEnvPatternsTextChange={handleEnvPatternsTextChange}
       contextSection={contextSection?.(activeProject.id)}
       trigger={
         trigger ?? (
@@ -157,11 +215,11 @@ export const ProjectSettingsDialogContainer: FC<
             className="w-full justify-between px-2"
           >
             <span className="flex items-center gap-2">
-              <Settings2 className="h-3.5 w-3.5" />
-              Project Settings
+              <Settings2 className="size-3.5" />
+              Project settings
             </span>
-            <span className="flex items-center gap-1 text-[11px] text-muted-foreground/80">
-              <GitBranch className="h-3 w-3" />
+            <span className="flex items-center gap-1 text-2xs text-ink-muted">
+              <GitBranch className="size-3" />
               {summary}
             </span>
           </Button>

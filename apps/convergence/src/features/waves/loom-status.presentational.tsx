@@ -19,10 +19,9 @@ export const LoomStatusView: FC<{
       <span
         role="status"
         className={cn(
-          'flex items-center gap-1.5 text-[11px]',
-          header.kind === 'outage'
-            ? 'text-amber-300/90'
-            : 'text-muted-foreground',
+          'flex items-center gap-1.5 text-2xs',
+          // The tracker not answering is a heads-up: the warning ink (R1).
+          header.kind === 'outage' ? 'text-warning-ink' : 'text-ink-muted',
         )}
       >
         {header.kind === 'outage' ? (

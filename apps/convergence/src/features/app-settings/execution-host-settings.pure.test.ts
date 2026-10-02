@@ -12,6 +12,7 @@ import {
   describeOrphanedExecutionHostEnvironmentOverride,
   nextExecutionHostEndpointId,
   normalizeExecutionHostBaseUrl,
+  persistableExecutionHostEndpoints,
   visibleExecutionHostConnectionResult,
   type CountedExecutionHostSessions,
   type ExecutionHostEndpointDraft,
@@ -169,6 +170,54 @@ describe('executionHostEndpointDrafts', () => {
   })
 })
 
+describe('persistableExecutionHostEndpoints', () => {
+  it('keeps each row with a valid address, trimmed, in order', () => {
+    expect(
+      persistableExecutionHostEndpoints(
+        [
+          draft({ label: ' kuba-vps ', baseUrl: ' https://k.test ' }),
+          draft({ id: 'new', label: 'pgx', baseUrl: 'https://pgx.test' }),
+        ],
+        [endpoint()],
+      ),
+    ).toEqual([
+      { id: 'default', label: 'kuba-vps', baseUrl: 'https://k.test' },
+      { id: 'new', label: 'pgx', baseUrl: 'https://pgx.test' },
+    ])
+  })
+
+  // Saving as you go must never remove a machine because its URL is half typed.
+  it('keeps a stored row as stored while its address is mid-edit', () => {
+    expect(
+      persistableExecutionHostEndpoints(
+        [draft({ label: 'renamed', baseUrl: 'https://' })],
+        [endpoint()],
+      ),
+    ).toEqual([
+      {
+        id: 'default',
+        label: 'kuba-vps',
+        baseUrl: 'https://daemon.example.com',
+      },
+    ])
+  })
+
+  it('leaves out a new row until it has a valid address', () => {
+    expect(
+      persistableExecutionHostEndpoints(
+        [draft(), draft({ id: 'new', label: 'pgx', baseUrl: '' })],
+        [endpoint()],
+      ),
+    ).toEqual([
+      {
+        id: 'default',
+        label: 'kuba-vps',
+        baseUrl: 'https://daemon.example.com',
+      },
+    ])
+  })
+})
+
 describe('describeExecutionHostEndpointActionBlocks', () => {
   it('lets a saved, unedited row do everything', () => {
     expect(
@@ -184,8 +233,8 @@ describe('describeExecutionHostEndpointActionBlocks', () => {
       draft: draft(),
       saved: null,
     })
-    expect(blocks.token).toMatch(/does not exist yet/)
-    expect(blocks.connection).toMatch(/does not exist yet/)
+    expect(blocks.token).toMatch(/saved once its address is/)
+    expect(blocks.connection).toMatch(/saved once its address is/)
   })
 
   // The Keychain account is the id; the connection test is the address. An
@@ -197,7 +246,7 @@ describe('describeExecutionHostEndpointActionBlocks', () => {
     })
     expect(blocks.token).toBeNull()
     expect(blocks.connection).toBe(
-      'Save to test the URL you typed — this endpoint still points at ' +
+      'Finish the URL to test it — this endpoint still points at ' +
         'https://daemon.example.com.',
     )
   })

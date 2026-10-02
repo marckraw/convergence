@@ -46,19 +46,6 @@ const working = rowOf(
   }),
 )
 
-/**
- * The openable card is a `role="button"` with the PR link inside it, so axe
- * sees a control nested in a control. Only the stories that draw the PR door.
- */
-const prDoorInsideCard = {
-  a11y: {
-    config: {
-      // a11y-known: the PR link sits inside the row's role="button" (nested-interactive) — fixed by the sweep (DS4)
-      rules: [{ id: 'nested-interactive', enabled: false }],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Waves/WaveRow',
   component: WaveRowView,
@@ -93,9 +80,10 @@ type Story = StoryObj<typeof meta>
  * opens its seat by click and by keyboard; the PR is its own door to GitHub.
  */
 export const Default: Story = {
-  parameters: prDoorInsideCard,
   play: async ({ args, canvas, userEvent }) => {
-    const card = canvas.getByRole('button', { name: /MAR-3085/ })
+    // The card's door is its title, named with the identifier (MC-26).
+    const door = canvas.getByRole('button', { name: /MAR-3085/ })
+    const card = door.closest('[data-wave-row]')!
     await expect(card).toHaveTextContent('Linear: In Progress')
     const pr = canvas.getByRole('link', {
       name: 'PR #905 open, opens on GitHub',
@@ -105,11 +93,11 @@ export const Default: Story = {
       'https://github.com/marckraw/convergence/pull/905',
     )
     await expect(pr).toHaveAttribute('target', '_blank')
-    await userEvent.click(card)
+    await userEvent.click(door)
     await expect(args.onOpen).toHaveBeenCalledWith(args.row.entry)
     await userEvent.tab({ shift: true })
     await userEvent.tab()
-    await expect(card).toHaveFocus()
+    await expect(door).toHaveFocus()
     await userEvent.keyboard('{Enter}')
     await expect(args.onOpen).toHaveBeenCalledTimes(2)
     // Enter on the PR link belongs to the link, not the card.
@@ -126,7 +114,6 @@ export const Dark: Story = {
 /** The panel's plain list row, outside Loom's card look. */
 export const List: Story = {
   args: { appearance: undefined },
-  parameters: prDoorInsideCard,
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: /MAR-3085/ })).toBeVisible()
     await expect(canvas.queryByText('Linear: In Progress')).toBeNull()
@@ -146,8 +133,12 @@ export const Long: Story = {
     ),
   },
   play: async ({ args, canvas }) => {
+    // The whole title is its Tooltip while it is cut short (R2).
     const title = canvas.getByText(args.row.entry.issueTitle)
-    await expect(title).toHaveAttribute('title', args.row.entry.issueTitle)
+    await expect(title).toHaveAttribute(
+      'data-tooltip',
+      args.row.entry.issueTitle,
+    )
     await expect(canvas.getByText('MAR-3155')).toBeVisible()
   },
 }
@@ -184,7 +175,9 @@ export const Failed: Story = {
     ),
   },
   play: async ({ canvas }) => {
-    const card = canvas.getByRole('button', { name: /MAR-3138/ })
+    const card = canvas
+      .getByRole('button', { name: /MAR-3138/ })
+      .closest('[data-wave-row]')!
     await expect(card).toHaveTextContent('blocked')
     await expect(card).toHaveTextContent('decide')
   },
