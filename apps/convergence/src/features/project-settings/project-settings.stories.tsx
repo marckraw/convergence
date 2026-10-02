@@ -56,7 +56,12 @@ export const Default: Story = {
       'Configure how new workspaces branch for convergence.',
     )
     await expect(
-      within(dialog).getByRole('radiogroup', { name: 'Workspace start point' }),
+      within(dialog).getByRole('radiogroup', {
+        name: 'Workspace start point',
+        // The group's hint is read with it (DLG-7).
+        description:
+          'This only affects new branches. Existing branches are checked out as-is.',
+      }),
     ).toBeVisible()
     await userEvent.click(
       within(dialog).getByRole('radio', { name: 'Current HEAD' }),
