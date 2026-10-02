@@ -1,7 +1,7 @@
 /**
  * The attention queue's one name, and how it counts (NAV-32; Marcin's ruling
- * 3, 2 Oct 2026). The sidebar's feed, its filter, the collapsed rail, the
- * status bar and Mission Control all say "Needs you", and a count reads
+ * 3, 2 Oct 2026). The sidebar's feed, the collapsed rail, the status bar
+ * and Mission Control all say "Needs you", and a count reads
  * "3 need you" or "1 needs you". Kept here, in the feature that owns the
  * queue, because a name is a constant (R10): it had been "Activity",
  * "Needs You (N)", "N need you" even for one, "Needs attention" and "Needs me".
