@@ -8,7 +8,6 @@ import {
   Badge,
   Button,
   Card,
-  cn,
   CodeBlock,
   DescriptionItem,
   DescriptionList,
@@ -47,7 +46,8 @@ import {
 interface ProviderStatusDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   statuses: ProviderStatusInfo[]
   runtimeInfo: ProviderRuntimeInfo | null
   providerAccounts: ProviderAccount[]
@@ -417,7 +417,7 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogTrigger render={trigger} />
+      {trigger ? <DialogTrigger render={trigger} /> : null}
       <DialogContent>
         <DialogHeader
           actions={
@@ -441,10 +441,7 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
         </DialogHeader>
 
         {/* The body takes the focus, so a keyboard can scroll it with nothing in it to reach. */}
-        <DialogBody
-          tabIndex={0}
-          className={cn('app-scrollbar', focusRingInset)}
-        >
+        <DialogBody tabIndex={0} className={focusRingInset}>
           {error ? (
             <Notice tone="danger" title="Couldn't check the providers">
               {error}

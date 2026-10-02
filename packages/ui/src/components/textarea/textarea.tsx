@@ -48,7 +48,7 @@ export function Textarea({
       data-auto-grow={autoGrow ? '' : undefined}
       render={<textarea />}
       className={cn(
-        'app-scrollbar flex min-h-9 px-3 py-2',
+        'flex min-h-9 px-3 py-2',
         controlFrame,
         autoGrow && 'field-sizing-content',
         focusRingField,

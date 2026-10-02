@@ -7,7 +7,6 @@ import {
   type ReactElement,
 } from 'react'
 import type { FC, ReactNode } from 'react'
-import { GitBranch, Settings2 } from 'lucide-react'
 import {
   normalizeProjectSettings,
   useProjectStore,
@@ -15,7 +14,6 @@ import {
   type WorkspaceStartStrategy,
 } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
-import { Button } from '@convergence/ui'
 import { ProjectSettingsDialog } from './project-settings.presentational'
 
 /**
@@ -157,11 +155,6 @@ export const ProjectSettingsDialogContainer: FC<
     return null
   }
 
-  const summary =
-    settings.workspaceCreation.startStrategy === 'base-branch'
-      ? (settings.workspaceCreation.baseBranchName ?? 'Auto')
-      : 'HEAD'
-
   const handleStrategyChange = (next: WorkspaceStartStrategy) => {
     setStrategy(next)
     scheduleSave(SAVE_NOW_MS)
@@ -207,24 +200,7 @@ export const ProjectSettingsDialogContainer: FC<
       onEnvOverwriteChange={handleEnvOverwriteChange}
       onEnvPatternsTextChange={handleEnvPatternsTextChange}
       contextSection={contextSection?.(activeProject.id)}
-      trigger={
-        trigger ?? (
-          <Button
-            type="button"
-            variant="quiet"
-            className="w-full justify-between px-2"
-          >
-            <span className="flex items-center gap-2">
-              <Settings2 className="size-3.5" />
-              Project settings
-            </span>
-            <span className="flex items-center gap-1 text-2xs text-ink-muted">
-              <GitBranch className="size-3" />
-              {summary}
-            </span>
-          </Button>
-        )
-      }
+      trigger={trigger}
     />
   )
 }

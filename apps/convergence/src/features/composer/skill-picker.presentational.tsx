@@ -141,7 +141,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
         />
       </div>
 
-      <div className="app-scrollbar max-h-80 overflow-y-auto p-2">
+      <div className="max-h-80 overflow-y-auto p-2">
         {notice ? (
           <p
             className="px-2 py-1.5 text-xs text-ink-muted"

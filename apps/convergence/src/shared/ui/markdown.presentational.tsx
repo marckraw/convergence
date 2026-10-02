@@ -198,7 +198,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
       />
     ),
     table: ({ className, children, ...props }) => (
-      <div className="app-scrollbar my-4 overflow-x-auto rounded-xl border border-line bg-canvas/50">
+      <div className="my-4 overflow-x-auto rounded-xl border border-line bg-canvas/50">
         <table
           className={cn(
             'min-w-full border-collapse text-left',

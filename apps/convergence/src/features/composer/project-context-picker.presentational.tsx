@@ -73,7 +73,7 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
         </p>
       </div>
 
-      <div className="app-scrollbar max-h-80 overflow-y-auto p-2">
+      <div className="max-h-80 overflow-y-auto p-2">
         <div className="space-y-1">
           {items.map((item) => {
             const selected = selectedIds.includes(item.id)

@@ -58,7 +58,8 @@ import {
 } from './execution-host-settings.pure'
 
 interface AppSettingsContainerProps {
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
 }
 
 interface Draft {

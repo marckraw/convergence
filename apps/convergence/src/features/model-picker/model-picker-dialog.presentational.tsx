@@ -189,7 +189,7 @@ export const ModelPickerDialogPresentational: FC<
 
         <div className={dialogSplit}>
           <aside className={cn(dialogRail, 'min-w-0 p-2 sm:w-44')}>
-            <div className="app-scrollbar flex gap-1 overflow-x-auto sm:block sm:max-h-full sm:space-y-1 sm:overflow-y-auto">
+            <div className="flex gap-1 overflow-x-auto sm:block sm:max-h-full sm:space-y-1 sm:overflow-y-auto">
               <ModelPickerProviderFilterButton
                 id="all"
                 label="All"
@@ -218,7 +218,7 @@ export const ModelPickerDialogPresentational: FC<
               id={listId}
               aria-label="Models"
               active={active}
-              className="app-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
+              className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
             >
               {models.map((item, index) => (
                 <ListboxOption

@@ -93,12 +93,7 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody
-          tabIndex={0}
-          role="region"
-          aria-label="Provider events"
-          className="app-scrollbar"
-        >
+        <DialogBody tabIndex={0} role="region" aria-label="Provider events">
           <p className={drawerStyles.count}>
             {entries.length} entries · session {sessionId.slice(0, 8)}
           </p>

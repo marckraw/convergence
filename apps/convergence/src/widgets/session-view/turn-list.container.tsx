@@ -204,7 +204,7 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
             </p>
           </div>
         ) : (
-          <div className="app-scrollbar h-full overflow-y-auto">
+          <div className="h-full overflow-y-auto">
             {ordered.map((turn) => (
               <TurnCard
                 key={turn.id}
