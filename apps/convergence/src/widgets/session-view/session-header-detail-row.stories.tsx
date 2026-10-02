@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Clock3 } from 'lucide-react'
 import { expect } from 'storybook/test'
+import { DescriptionList } from '@convergence/ui'
 import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
 
 const meta = {
@@ -14,7 +15,9 @@ const meta = {
   decorators: [
     (Story) => (
       <div className="w-72 rounded-md border border-line bg-raised">
-        <Story />
+        <DescriptionList layout="inline" density="compact">
+          <Story />
+        </DescriptionList>
       </div>
     ),
   ],
@@ -27,7 +30,9 @@ type Story = StoryObj<typeof meta>
 /** One fact in the header's Details: an icon, what it is, and its value. */
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Elapsed')).toBeVisible()
+    // A term and its value (CONV-24): a screen reader hears them together.
+    await expect(canvas.getByText('Elapsed').closest('dt')).not.toBeNull()
+    await expect(canvas.getByText('12m 40s').tagName).toBe('DD')
     await expect(canvas.getByText('12m 40s')).toBeVisible()
   },
 }

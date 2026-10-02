@@ -106,9 +106,12 @@ describe('ThemeToggleButton system appearance', () => {
     render(<ThemeToggleButton />)
 
     expect(media.netListeners()).toBe(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Theme: system' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Theme: dark' }))
-    expect(screen.getByRole('button', { name: 'Theme: light' })).toBeTruthy()
+    const toggle = () => screen.getByRole('button', { name: 'Change theme' })
+    expect(toggle()).toHaveAttribute('aria-description', 'Now: System')
+    fireEvent.click(toggle())
+    expect(toggle()).toHaveAttribute('aria-description', 'Now: Dark')
+    fireEvent.click(toggle())
+    expect(toggle()).toHaveAttribute('aria-description', 'Now: Light')
     // Mutation: a listener that stays after leaving System → the page turns
     // dark on the next OS change, red.
     media.fire(true)

@@ -425,3 +425,34 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export {
+  calendarDaysBefore,
+  exactDateLabel,
+} from './components/timestamp/timestamp.pure'
+// DS6 sweep E (MAR-3608): appended, so the parallel sweeps' additions merge as unions.
+export { type InputVariant } from './components/input/input'
+export { type TextareaVariant } from './components/textarea/textarea'
+export {
+  MenuButton,
+  type MenuButtonProps,
+} from './components/menu-button/menu-button'
+export {
+  RowActions,
+  type RowActionsProps,
+} from './components/row-actions/row-actions'
+export {
+  Toaster,
+  type ToasterOffset,
+  type ToasterProps,
+  toast,
+} from './components/toaster/toaster'
+export {
+  notify,
+  type NotifyAction,
+  type NotifyOptions,
+} from './components/toaster/notify'
+export { chipFrame } from './components/chip/chip'
+export {
+  type SectionLabelSize,
+  sectionLabelVariants,
+} from './components/section-label/section-label'

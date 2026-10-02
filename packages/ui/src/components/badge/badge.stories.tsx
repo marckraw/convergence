@@ -109,3 +109,82 @@ export const Long: Story = {
     )
   },
 }
+
+/**
+ * Caps: a kind or a short state in capitals, as lists of skills and servers
+ * show them; the same box, 20 px, in the same tones.
+ */
+export const Caps: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-canvas p-4">
+      <Badge caps>Project</Badge>
+      <Badge caps tone="success">
+        Enabled
+      </Badge>
+      <Badge caps shape="label" tone="warning">
+        Beta
+      </Badge>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const project = canvas.getByText('Project').closest('[data-slot="badge"]')
+    await expect(getComputedStyle(project as Element).textTransform).toBe(
+      'uppercase',
+    )
+    await expect((project as HTMLElement).getBoundingClientRect().height).toBe(
+      20,
+    )
+    // The words stay as written: a screen reader reads "Project", not letters.
+    await expect(canvas.getByText('Enabled')).toBeVisible()
+  },
+}
+
+/** A bare span's background, as computed styles say it: no fill at all. */
+const noFill = () => {
+  const probe = document.createElement('span')
+  document.body.append(probe)
+  const fill = getComputedStyle(probe).backgroundColor
+  probe.remove()
+  return fill
+}
+
+/**
+ * Outline: the tone's edge and ink with no wash, for a label on paper that is
+ * already tinted (Loom's cards), shown here on the muted surface.
+ */
+export const Outline: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-surface-muted p-4">
+      {TONES.map((tone) => (
+        <Badge key={tone} tone={tone} outline>
+          {tone}
+        </Badge>
+      ))}
+      <Badge outline shape="label">
+        modified
+      </Badge>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const neutral = canvas
+      .getByText('neutral')
+      .closest('[data-slot="badge"]') as HTMLElement
+    await expect(neutral).toHaveAttribute('data-outline')
+    // No wash: the paper under it shows through, as under a bare span.
+    await expect(getComputedStyle(neutral).backgroundColor).toBe(noFill())
+    await expect(getComputedStyle(neutral).color).toBe(
+      tokenColor('--neutral-ink'),
+    )
+    const danger = canvas
+      .getByText('danger')
+      .closest('[data-slot="badge"]') as HTMLElement
+    await expect(getComputedStyle(danger).color).toBe(
+      tokenColor('--danger-ink'),
+    )
+  },
+}
+
+export const OutlineDark: Story = {
+  ...Outline,
+  globals: { theme: 'dark' },
+}

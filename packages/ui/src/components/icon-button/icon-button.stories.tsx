@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import {
   Ellipsis,
+  Link2,
   PanelLeftClose,
   Pin,
   RotateCcw,
@@ -8,6 +9,7 @@ import {
   Settings,
 } from 'lucide-react'
 import { expect, fn, screen, waitFor } from 'storybook/test'
+import { tokenColor } from '../../../.storybook/color-testing'
 import { settled } from '../../../.storybook/motion-testing'
 import type { ButtonSize } from '../button/button'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../menu/menu'
@@ -143,6 +145,44 @@ export const Disabled: Story = {
     await expect(shown).toHaveTextContent('Archive conversation')
     await expect(shown).toHaveTextContent("A running turn can't be archived")
   },
+}
+
+/**
+ * Pressed: an icon that stays on, like a pinned search or a followed crew,
+ * says aria-pressed and wears R7's chosen look, the raised chip, which it
+ * keeps under the pointer. Off, it is the plain ghost.
+ */
+export const Pressed: Story = {
+  render: () => (
+    <div className="flex items-center gap-1 rounded-md bg-surface-muted p-1">
+      <IconButton label="Follow the crew" pressed size="sm">
+        <Link2 aria-hidden />
+      </IconButton>
+      <IconButton label="Search conversations" pressed={false} size="sm">
+        <Search aria-hidden />
+      </IconButton>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const on = canvas.getByRole('button', { name: 'Follow the crew' })
+    const off = canvas.getByRole('button', { name: 'Search conversations' })
+    await expect(on).toHaveAttribute('aria-pressed', 'true')
+    await expect(off).toHaveAttribute('aria-pressed', 'false')
+    await expect(getComputedStyle(on).backgroundColor).toBe(
+      tokenColor('--chip'),
+    )
+    await expect(getComputedStyle(on).boxShadow).not.toBe('none')
+    await expect(getComputedStyle(off).boxShadow).toBe('none')
+    await userEvent.hover(on)
+    await expect(getComputedStyle(on).backgroundColor).toBe(
+      tokenColor('--chip'),
+    )
+  },
+}
+
+export const PressedDark: Story = {
+  ...Pressed,
+  globals: { theme: 'dark' },
 }
 
 /** Busy: the spinner takes the icon's place, and the size holds. */

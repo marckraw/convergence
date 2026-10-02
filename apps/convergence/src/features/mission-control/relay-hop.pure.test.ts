@@ -243,17 +243,20 @@ describe('buildRelayHopLine — unreadable rows', () => {
 })
 
 describe('formatHopTime', () => {
-  it('reads a fresh hop as just now', () => {
-    expect(formatHopTime('2026-08-15T11:59:30.000Z', NOW)).toBe('just now')
+  // Timestamp's relative words (MC-13): a hop reads as every other moment does.
+  it('reads a fresh hop as now', () => {
+    expect(formatHopTime('2026-08-15T11:59:30.000Z', NOW)).toBe('now')
   })
 
   it('counts minutes then hours', () => {
-    expect(formatHopTime('2026-08-15T11:45:00.000Z', NOW)).toBe('15m ago')
-    expect(formatHopTime('2026-08-15T09:00:00.000Z', NOW)).toBe('3h ago')
+    expect(formatHopTime('2026-08-15T11:45:00.000Z', NOW)).toBe(
+      '15 minutes ago',
+    )
+    expect(formatHopTime('2026-08-15T09:00:00.000Z', NOW)).toBe('3 hours ago')
   })
 
-  it('drops to a date once a hop is more than a day old', () => {
-    expect(formatHopTime('2026-08-13T09:00:00.000Z', NOW)).not.toContain('ago')
+  it('tells an older hop in days, not a growing count of hours', () => {
+    expect(formatHopTime('2026-08-13T09:00:00.000Z', NOW)).toBe('2 days ago')
   })
 
   it('shows an unreadable timestamp rather than inventing one', () => {
@@ -269,7 +272,8 @@ describe('buildRelayHopLine', () => {
       outcomeLabel: 'delivered',
       rawOutcome: null,
       tone: 'delivered',
-      timeLabel: 'just now',
+      timeLabel: 'now',
+      firedAt: '2026-08-15T11:59:30.000Z',
       roundLabel: null,
       batonLabel: null,
       payloadPreview: 'Done. Ready for review.',

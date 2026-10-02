@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatSessionAttentionLabel,
+  readSessionAttentionSignal,
   summarizeAttentionRequests,
 } from './session-attention.pure'
 import type { SessionSummary } from './session.types'
@@ -91,4 +92,23 @@ describe('formatSessionAttentionLabel while compacting (MAR-3288 R5)', () => {
       'Finished',
     )
   })
+})
+
+describe('readSessionAttentionSignal (MC-2: one reading for both cards)', () => {
+  it.each([
+    ['host-unreachable', true, false],
+    ['needs-approval', false, true],
+    ['needs-input', false, true],
+    ['failed', false, false],
+    ['finished', false, false],
+    ['none', false, false],
+  ] as const)(
+    '%s: unreachable %s, waiting on you %s',
+    (attention, hostUnreachable, waitingOnYou) => {
+      expect(readSessionAttentionSignal(makeSession({ attention }))).toEqual({
+        hostUnreachable,
+        waitingOnYou,
+      })
+    },
+  )
 })

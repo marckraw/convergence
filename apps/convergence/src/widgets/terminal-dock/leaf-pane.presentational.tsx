@@ -1,5 +1,9 @@
 import { Fragment, type FC, type ReactNode } from 'react'
-import type { LeafNode, SplitDirection } from '@/entities/terminal'
+import type {
+  LeafNode,
+  SplitDirection,
+  TerminalShortcutLabels,
+} from '@/entities/terminal'
 import { PaneToolbar } from '@/features/terminal-pane'
 import { cn } from '@convergence/ui'
 import { TabGroup } from './tab-group.presentational'
@@ -19,6 +23,8 @@ export interface LeafPaneHandlers {
   onFocusLeaf: (leafId: string) => void
   /** Draws the open tab's terminal; a story passes a still picture of one. */
   renderTerminal: (pane: TerminalPaneSlot) => ReactNode
+  /** The keys for New tab, the splits and Close, in words, for their tooltips (NAV-23). */
+  shortcutLabels?: TerminalShortcutLabels
 }
 
 interface LeafPaneViewProps extends LeafPaneHandlers {
@@ -39,6 +45,7 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
   onCloseTab,
   onFocusLeaf,
   renderTerminal,
+  shortcutLabels,
 }) => {
   const activeTab = leaf.tabs.find((t) => t.id === leaf.activeTabId)
   const isFocused = focusedLeafId === leaf.id
@@ -57,10 +64,12 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
         onSelect={(tabId) => onSelectTab(leaf.id, tabId)}
         onCloseTab={(tabId) => onCloseTab(leaf.id, tabId)}
         onNewTab={() => onNewTab(leaf.id)}
+        newTabShortcut={shortcutLabels?.['new-tab']}
         trailingSlot={
           <PaneToolbar
             onSplitHorizontal={() => onSplit(leaf.id, 'horizontal')}
             onSplitVertical={() => onSplit(leaf.id, 'vertical')}
+            shortcuts={shortcutLabels}
           />
         }
       />

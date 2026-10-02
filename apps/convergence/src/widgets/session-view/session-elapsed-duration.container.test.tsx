@@ -50,7 +50,8 @@ function elapsedValue() {
   return (
     screen
       .queryByTestId('session-total-duration')
-      ?.querySelector('span:last-child')?.textContent ?? null
+      // The row is a DescriptionItem (CONV-24): its value is the dd.
+      ?.querySelector('dd')?.textContent ?? null
   )
 }
 

@@ -34,8 +34,9 @@ vi.mock('@/entities/workspace', () => ({
     }),
 }))
 
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn() },
+vi.mock('@convergence/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@convergence/ui')>()),
+  notify: { failure: vi.fn() },
 }))
 
 describe('SessionIntentDialogContainer', () => {

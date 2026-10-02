@@ -1,3 +1,8 @@
+import {
+  formatShortcutLabel,
+  type KeyboardShortcutBinding,
+} from '@/shared/lib/keyboard-shortcut.pure'
+
 export type TerminalShortcut =
   | { kind: 'new-tab' }
   | { kind: 'split'; direction: 'horizontal' | 'vertical' }
@@ -63,4 +68,52 @@ export function matchShortcut(
   if (key === '`' && !shiftKey) return { kind: 'toggle-dock' }
 
   return null
+}
+
+/** A shortcut the pane's buttons name: new tab, the two splits, close. */
+export type TerminalButtonShortcut =
+  | 'new-tab'
+  | 'split-vertical'
+  | 'split-horizontal'
+  | 'close-tab'
+
+/**
+ * The keys `matchShortcut` answers to for the pane's buttons, as bindings, so
+ * a button can say its key (NAV-23). A test runs each one back through
+ * `matchShortcut`, so the words and the keymap can't drift apart.
+ */
+export const TERMINAL_BUTTON_BINDINGS: Record<
+  TerminalButtonShortcut,
+  KeyboardShortcutBinding
+> = {
+  'new-tab': { key: 't', shiftKey: false, altKey: false },
+  'split-vertical': { key: 'd', shiftKey: false, altKey: false },
+  'split-horizontal': { key: 'd', shiftKey: true, altKey: false },
+  'close-tab': { key: 'w', shiftKey: false, altKey: false },
+}
+
+/** Each button's key in words for this platform: "⌘T", "Ctrl+Shift+D". */
+export type TerminalShortcutLabels = Record<TerminalButtonShortcut, string>
+
+export function terminalShortcutLabels(
+  platform: Platform,
+): TerminalShortcutLabels {
+  return {
+    'new-tab': formatShortcutLabel(
+      TERMINAL_BUTTON_BINDINGS['new-tab'],
+      platform,
+    ),
+    'split-vertical': formatShortcutLabel(
+      TERMINAL_BUTTON_BINDINGS['split-vertical'],
+      platform,
+    ),
+    'split-horizontal': formatShortcutLabel(
+      TERMINAL_BUTTON_BINDINGS['split-horizontal'],
+      platform,
+    ),
+    'close-tab': formatShortcutLabel(
+      TERMINAL_BUTTON_BINDINGS['close-tab'],
+      platform,
+    ),
+  }
 }

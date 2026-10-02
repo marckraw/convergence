@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { metaText } from '@/shared/testing/meta-line'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { expect, fn, within } from 'storybook/test'
@@ -115,7 +116,9 @@ export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const panel = canvas.getByRole('complementary', { name: 'Parallel work' })
     await expect(
-      within(panel).getByText('This session · 3 running · 1 completed'),
+      within(panel).getByText(
+        metaText('This session · 3 running · 1 completed'),
+      ),
     ).toBeVisible()
     // A parent folds its children.
     const fold = canvas.getByRole('button', {
@@ -206,7 +209,7 @@ export const Empty: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText(/No parallel work yet/)).toBeVisible()
     await expect(
-      canvas.getByText('This session · 0 running · 0 completed'),
+      canvas.getByText(metaText('This session · 0 running · 0 completed')),
     ).toBeVisible()
   },
 }

@@ -44,6 +44,14 @@ const STATES: Array<{ label: string; session: SessionStateBadgeSession }> = [
     label: 'Failed',
     session: { status: 'failed', attention: 'failed', activity: null },
   },
+  {
+    label: 'Host unreachable',
+    session: {
+      status: 'running',
+      attention: 'host-unreachable',
+      activity: null,
+    },
+  },
 ]
 
 /** The glyphs in a list, each beside the words a row would show it with. */
@@ -94,8 +102,10 @@ export const States: Story = {
     await expect(
       canvas.getByLabelText('finished · 1 tasks running'),
     ).toBeInTheDocument()
-    // R1: the settled states wear their tones; waiting on you is warning,
-    // for an answer as for an approval.
+    // R1: the states wear their tones; waiting on you is warning, for an
+    // answer as for an approval; work under way spins in info; a host out of
+    // reach is warning, with its own glyph (NAV-1, MC-1). Compacting and
+    // background work are busy, not a state of the run: no tone.
     const tones = canvas
       .getAllByRole('listitem')
       .map((item) =>
@@ -104,11 +114,12 @@ export const States: Story = {
     await expect(tones).toEqual([
       'warning',
       'warning',
-      undefined,
+      'info',
       undefined,
       undefined,
       'success',
       'danger',
+      'warning',
     ])
   },
 }

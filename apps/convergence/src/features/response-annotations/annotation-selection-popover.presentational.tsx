@@ -116,9 +116,12 @@ export const AnnotationSelectionPopover: FC<
               variant="ghost"
               onClick={() => onReact(emoji)}
               size="sm"
-              className="rounded-full text-base leading-none"
+              className="rounded-full"
             >
-              {emoji}
+              {/* The glyph's size is the glyph's, as an icon's is (R3). */}
+              <span aria-hidden="true" className="text-base leading-none">
+                {emoji}
+              </span>
             </IconButton>
           ))}
         </div>

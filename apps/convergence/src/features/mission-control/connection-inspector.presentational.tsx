@@ -553,7 +553,6 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             variant="tonal"
             disabled={busy || problem !== null || (!isNew && !dirty)}
             onClick={onSave}
-            className="text-2xs"
           >
             {saveError ? 'Try again' : 'Save changes'}
           </Button>
@@ -562,7 +561,6 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             variant="ghost"
             disabled={busy}
             onClick={onCancel}
-            className="text-2xs"
           >
             {saveError ? 'Discard changes' : 'Cancel'}
           </Button>
@@ -579,7 +577,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             disabled={busy}
             onClick={onDelete}
             size="sm"
-            className="self-start px-0 text-2xs"
+            className="self-start"
           >
             Delete connection…
           </Button>

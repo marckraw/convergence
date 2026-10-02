@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
+import { EmptyState } from '@convergence/ui'
 import { turnsApi } from '@/entities/turn'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { TurnCard } from './turn-card.presentational'
@@ -195,14 +196,21 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-hidden">
+        {/* Loading and empty read as every list's do (CONV-19). */}
         {loading && turns.length === 0 ? (
-          <div className="p-3 text-xs text-ink-muted">Loading turns…</div>
+          <EmptyState
+            state="loading"
+            size="compact"
+            variant="plain"
+            title="Loading turns…"
+          />
         ) : turns.length === 0 ? (
-          <div className="p-3">
-            <p className="text-xs text-ink-muted">
-              No turns yet. Changes will appear as the agent works.
-            </p>
-          </div>
+          <EmptyState
+            size="compact"
+            variant="plain"
+            title="No turns yet"
+            detail="Changes will appear as the agent works."
+          />
         ) : (
           <div className="h-full overflow-y-auto">
             {ordered.map((turn) => (

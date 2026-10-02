@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useDialogStore } from '@/entities/dialog'
 import {
   laneApi,
@@ -115,7 +115,7 @@ export const LaneCreateDialogContainer: FC = () => {
   const handleSwitchToLane = useCallback(async () => {
     if (!createdLaneId) return
     await setActiveProject(createdLaneId)
-    toast.success(`Switched to lane ${laneName.trim()}`)
+    notify.success(`Switched to lane ${laneName.trim()}`)
     closeDialog()
   }, [createdLaneId, laneName, setActiveProject, closeDialog])
 

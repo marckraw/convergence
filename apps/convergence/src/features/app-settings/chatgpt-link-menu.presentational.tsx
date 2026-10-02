@@ -29,7 +29,7 @@ export const ChatGptLinkMenu: FC<ChatGptLinkMenuProps> = ({
   <Menu>
     <MenuTrigger
       render={
-        <Button type="button" variant="secondary" className="min-h-10">
+        <Button type="button" variant="secondary">
           {label}
           <ChevronDown className="size-3.5" aria-hidden="true" />
         </Button>

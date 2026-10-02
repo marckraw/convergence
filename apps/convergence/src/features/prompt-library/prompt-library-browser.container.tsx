@@ -295,8 +295,11 @@ export const PromptLibraryBrowserDialogContainer: FC<
     updatePrompt,
   ])
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(formDraft !== null, handleSubmitForm)
+  // Enable cmd+Enter to submit the form; Save says so in its tooltip (DS-34)
+  const submitShortcut = useFormSubmitShortcut(
+    formDraft !== null,
+    handleSubmitForm,
+  )
 
   const handleDeletePrompt = useCallback(
     async (prompt: typeof selectedPrompt) => {
@@ -358,6 +361,7 @@ export const PromptLibraryBrowserDialogContainer: FC<
       onCancelForm={handleCancelForm}
       onFormChange={handleFormChange}
       onSubmitForm={() => void handleSubmitForm()}
+      submitShortcut={submitShortcut}
       onDeletePrompt={handleDeletePrompt}
       trigger={trigger}
     />

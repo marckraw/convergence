@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { cn, Button, FormError } from '@convergence/ui'
+import { cn, Button, FormError, Kbd } from '@convergence/ui'
 import { ConversationRoutineRow } from './conversation-routine-row.presentational'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
@@ -34,18 +34,20 @@ export const ConversationActionsRoutines: FC<ConversationActionsViewProps> = ({
     </div>
     {routines.running ? (
       <Button
-        size="lg"
+        size="sm"
         type="button"
         variant="ghost"
         role="menuitem"
         data-actions-item=""
-        className={cn(styles.item, 'mt-1 text-xs text-ink-muted')}
+        className={cn(styles.item, styles.closeItem)}
         onClick={onClose}
       >
         Close menu
       </Button>
     ) : (
-      <p className={styles.hint}>Esc closes</p>
+      <p className={styles.hint}>
+        <Kbd>Esc</Kbd> closes
+      </p>
     )}
   </>
 )

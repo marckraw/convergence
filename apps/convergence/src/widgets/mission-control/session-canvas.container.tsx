@@ -9,7 +9,7 @@ import {
   ReactFlow,
 } from '@xyflow/react'
 import type { Edge, Node, NodeChange, ReactFlowInstance } from '@xyflow/react'
-import { EmptyState, useAppliedTheme } from '@convergence/ui'
+import { EmptyState, SectionLabel, useAppliedTheme } from '@convergence/ui'
 import { Waypoints } from 'lucide-react'
 import {
   CANVAS_CHAIR_NODE_HEIGHT,
@@ -749,12 +749,13 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
       </ReactFlow>
 
       {authoring?.runBanner ? (
-        <p
+        <SectionLabel
           data-run-banner
-          className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-md border border-hairline bg-canvas/90 px-3 py-1 text-3xs uppercase tracking-wide text-ink-muted shadow-control"
+          size="sm"
+          className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-md border border-hairline bg-canvas/90 px-3 py-1 shadow-control"
         >
           {authoring.runBanner}
-        </p>
+        </SectionLabel>
       ) : null}
 
       {authoring?.hint ? (

@@ -748,12 +748,14 @@ describe('App', () => {
     expect(screen.getByText('Starting in main repo')).toBeInTheDocument()
   })
 
-  it('shows loading state', () => {
+  it('shows loading state', async () => {
     mockElectronAPI.project.getActive.mockReturnValue(new Promise(() => {}))
 
     render(<App />)
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    // EmptyState's loading: a status, its words after a moment (NAV-19).
+    const words = await screen.findByText('Loading…', {}, { timeout: 2000 })
+    expect(words.closest('[role="status"]')).not.toBeNull()
   })
 
   it('falls back cleanly when system info is unavailable', async () => {

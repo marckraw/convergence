@@ -5,11 +5,21 @@ import {
 import { readHarnessFactRow } from '../../../electron/backend/session/harness-fact-row.pure'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { metaLine, seen } from '@/shared/testing/meta-line'
 import { isUnavailable } from '@/shared/testing/unavailable'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
 import { HarnessFactsSections } from './harness-facts.presentational'
 import { harnessPill } from './harness-facts.pure'
+
+/** A term and its value as one "Term: value" reading (CONV-24), if both are there. */
+function reading(term: string): string | undefined {
+  const dt = [...document.querySelectorAll('dt')].find(
+    (node) => node.textContent === term,
+  )
+  const dd = dt?.nextElementSibling
+  return dt && dd ? `${term}: ${seen(dd)}` : undefined
+}
 
 /**
  * The harness as the header draws it since MAR-3429 CH4 R3: its reading (the
@@ -66,12 +76,10 @@ it('shows the same hook count and bounded output in the popover — mutation dro
   const hooks = screen.queryByRole('region', { name: 'Hooks' })
   expect({
     pill: screen.getByTestId('harness-pill').textContent,
-    name:
-      hooks &&
-      within(hooks).queryByText('PreToolUse:Bash · PreToolUse')?.textContent,
-    output: screen.queryByText('Output · truncated')?.textContent,
+    name: hooks ? seen(metaLine('PreToolUse:Bash · PreToolUse', hooks)) : null,
+    output: seen(metaLine('Output · truncated')),
     preview: screen.queryByText('bounded preview')?.textContent,
-    duration: screen.queryByText('ok · 17 ms')?.textContent,
+    duration: seen(metaLine('ok · 17 ms')),
   }).toEqual({
     pill: 'Harness · hooks 1',
     name: 'PreToolUse:Bash · PreToolUse',
@@ -167,9 +175,9 @@ it.each([
     })
     expect({
       pill: screen.getByTestId('harness-pill').getAttribute('data-alert'),
-      row: screen
-        .getByText(`server · ${status}`)
-        .classList.contains('text-danger-ink'),
+      row: !!metaLine(`server · ${status}`)
+        ?.closest('p')
+        ?.classList.contains('text-danger-ink'),
     }).toEqual({ pill: String(alert), row: alert })
   },
 )
@@ -220,10 +228,10 @@ it('R2triple bounded init stays useful — mutation hide omitted counts or alert
       '… and 104 more not connected (0 failed or needing auth)',
     )?.textContent,
     plugins: screen.queryByText('… and 104 more plugins')?.textContent,
-    capabilities: screen.queryByText(/88 more capabilities/)?.textContent,
-    tools: screen.queryByText('Tools: 7')?.textContent,
-    skills: screen.queryByText('Skills: 8')?.textContent,
-    commands: screen.queryByText('Slash commands: 9')?.textContent,
+    capabilities: reading('Capabilities'),
+    tools: reading('Tools'),
+    skills: reading('Skills'),
+    commands: reading('Slash commands'),
     truncated: screen.queryByText('Some reported text was truncated.')
       ?.textContent,
   }).toEqual({
@@ -329,7 +337,7 @@ it('R2triple cuts are disclosed beside their text — mutation hide cut indicato
       ?.textContent,
     hook: screen.queryByText('Hook text truncated')?.textContent,
     retry: screen.queryByText('Retry text truncated')?.textContent,
-    denial: screen.queryByText(/Bash · text truncated/)?.textContent,
+    denial: seen(metaLine(/^Bash · text truncated/)),
   }).toEqual({
     rate: 'Rate limit text truncated',
     compact: 'Compacted (cut) · text truncated',
@@ -376,7 +384,7 @@ it('RUN61 r5 pending then failed names linear — mutation remove priority sort 
   })
   expect({
     alert: screen.getByTestId('harness-pill').getAttribute('data-alert'),
-    linear: screen.queryByText('linear · failed')?.textContent,
+    linear: seen(metaLine('linear · failed')),
     overflow: screen.queryByText(
       '… and 1 more not connected (0 failed or needing auth)',
     )?.textContent,
@@ -508,7 +516,7 @@ it('MAR-3213 R2 names the connected servers under the count — mutation derive 
     screen.getByText('Connected: claude.ai Figma, srv-b'),
   ).toBeInTheDocument()
   expect(screen.getByText('… and 1 more connected')).toBeInTheDocument()
-  expect(screen.getByText('linear · needs-auth')).toBeInTheDocument()
+  expect(metaLine('linear · needs-auth')).toBeDefined()
 })
 
 it('MAR-3213 R2 an old fact without the new fields renders exactly today — mutation render the names unconditionally turns red', () => {
@@ -554,7 +562,7 @@ it('MAR-3213 R2 an old fact without the new fields renders exactly today — mut
     pointerType: 'mouse',
   })
   expect(screen.getByText('MCP servers · 1 connected of 2')).toBeInTheDocument()
-  expect(screen.getByText('linear · needs-auth')).toBeInTheDocument()
+  expect(metaLine('linear · needs-auth')).toBeDefined()
   expect(screen.queryByText(/Connected:/)).not.toBeInTheDocument()
   expect(screen.queryByText(/more connected/)).not.toBeInTheDocument()
   expect(container.textContent).not.toContain('undefined')
@@ -677,12 +685,19 @@ describe('MAR-3206 — MCP servers in Details', () => {
       />,
     )
     const list = screen.getByLabelText('MCP servers')
-    expect(list.textContent).toContain(
-      'claude.ai Figma · needs-auth · claudeai · https://mcp.figma.com',
-    )
-    expect(list.textContent).toContain(
-      'linear · connected · user · https://mcp.linear.app',
-    )
+    expect(
+      seen(
+        metaLine(
+          'claude.ai Figma · needs-auth · claudeai · https://mcp.figma.com',
+          list,
+        ),
+      ),
+    ).toBe('claude.ai Figma · needs-auth · claudeai · https://mcp.figma.com')
+    expect(
+      seen(
+        metaLine('linear · connected · user · https://mcp.linear.app', list),
+      ),
+    ).toBe('linear · connected · user · https://mcp.linear.app')
     expect(screen.getByRole('note').textContent).toBe(
       "claude.ai Figma needs sign-in and is hiding the Figma plugin's server (same address). Authorize Figma at claude.ai → Settings → Connectors, then Reconnect.",
     )

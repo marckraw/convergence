@@ -1,30 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useProviderUpdatesStore } from '@/entities/provider-updates'
 import type { ProviderStatusInfo } from '@/entities/session'
 import { ProviderUpdatesToastContainer } from './provider-updates-toast.container'
 
-type SonnerFn = ReturnType<typeof vi.fn> & {
-  info: ReturnType<typeof vi.fn>
-  loading: ReturnType<typeof vi.fn>
-  success: ReturnType<typeof vi.fn>
-  error: ReturnType<typeof vi.fn>
-  dismiss: ReturnType<typeof vi.fn>
-}
-
-vi.mock('sonner', () => {
-  const fn = Object.assign(vi.fn(), {
+vi.mock('@convergence/ui', () => ({
+  notify: {
     info: vi.fn(),
     loading: vi.fn(),
     success: vi.fn(),
-    error: vi.fn(),
+    failure: vi.fn(),
     dismiss: vi.fn(),
-  })
-  return { toast: fn }
-})
+  },
+}))
 
-const sonnerMock = toast as unknown as SonnerFn
+const notifyMock = vi.mocked(notify)
 const updateProvider = vi.fn<() => Promise<void>>()
 const updateAllOutdated = vi.fn<() => Promise<void>>()
 const clearResult = vi.fn()
@@ -78,12 +69,7 @@ function resetStore() {
 
 describe('ProviderUpdatesToastContainer', () => {
   beforeEach(() => {
-    sonnerMock.mockReset()
-    sonnerMock.info.mockReset()
-    sonnerMock.loading.mockReset()
-    sonnerMock.success.mockReset()
-    sonnerMock.error.mockReset()
-    sonnerMock.dismiss.mockReset()
+    vi.clearAllMocks()
     updateProvider.mockReset()
     updateAllOutdated.mockReset()
     clearResult.mockReset()
@@ -95,17 +81,18 @@ describe('ProviderUpdatesToastContainer', () => {
     useProviderUpdatesStore.setState({ statuses: [makeProvider()] })
     rerender(<ProviderUpdatesToastContainer />)
 
-    expect(sonnerMock.info).toHaveBeenCalledWith(
+    expect(notifyMock.info).toHaveBeenCalledWith(
       'Provider update available — Codex 0.130.0',
       expect.objectContaining({
         id: 'provider-updates:available',
         action: expect.objectContaining({ label: 'Update' }),
-        cancel: expect.objectContaining({ label: 'Providers' }),
+        secondaryAction: expect.objectContaining({ label: 'Providers' }),
+        persistent: true,
       }),
     )
 
-    const call = sonnerMock.info.mock.calls.at(-1)
-    call?.[1].action.onClick()
+    const call = notifyMock.info.mock.calls.at(-1)
+    call?.[1]?.action?.onClick()
     expect(updateProvider).toHaveBeenCalledTimes(1)
   })
 
@@ -125,7 +112,7 @@ describe('ProviderUpdatesToastContainer', () => {
     })
     rerender(<ProviderUpdatesToastContainer />)
 
-    expect(sonnerMock.info).not.toHaveBeenCalled()
+    expect(notifyMock.info).not.toHaveBeenCalled()
   })
 
   it('renders success after a provider update result', () => {
@@ -140,10 +127,32 @@ describe('ProviderUpdatesToastContainer', () => {
     })
     rerender(<ProviderUpdatesToastContainer />)
 
-    expect(sonnerMock.success).toHaveBeenCalledWith(
+    expect(notifyMock.success).toHaveBeenCalledWith(
       'Codex updated',
       expect.objectContaining({
         description: 'New sessions will use the refreshed provider.',
+      }),
+    )
+    expect(clearResult).toHaveBeenCalledTimes(1)
+  })
+
+  it('words a failed update "Couldn’t update Codex." with the reason (R10)', () => {
+    const { rerender } = render(<ProviderUpdatesToastContainer />)
+    useProviderUpdatesStore.setState({
+      lastResult: {
+        providerId: 'codex',
+        providerName: 'Codex',
+        ok: false,
+        error: 'npm exited with code 1.',
+      },
+    })
+    rerender(<ProviderUpdatesToastContainer />)
+
+    expect(notifyMock.failure).toHaveBeenCalledWith(
+      'update Codex',
+      'npm exited with code 1.',
+      expect.objectContaining({
+        action: expect.objectContaining({ label: 'Providers' }),
       }),
     )
     expect(clearResult).toHaveBeenCalledTimes(1)

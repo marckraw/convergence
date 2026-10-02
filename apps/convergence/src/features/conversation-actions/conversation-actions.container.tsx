@@ -30,7 +30,11 @@ import {
   type SessionSummary,
 } from '@/entities/session'
 import { remoteSkillsNotice, useSkillStore } from '@/entities/skill'
-import { detectShortcutPlatform } from '@/shared/lib/keyboard-shortcut.pure'
+import {
+  ACTIONS_SHORTCUT,
+  matchKeyboardShortcut,
+  runningShortcutPlatform,
+} from '@/shared/lib/keyboard-shortcut.pure'
 import { listboxStep } from '@convergence/ui'
 import {
   isSearchCaretKey,
@@ -80,14 +84,16 @@ const SKILLS_NOT_OPEN: ConversationActionsViewProps['skills'] = {
   query: '',
 }
 
-/** ⌘. on macOS, Ctrl+. elsewhere; not rebindable, and not ⌘K (R6). */
+/**
+ * ⌘. on macOS, Ctrl+. elsewhere; not rebindable, and not ⌘K (R6). The one
+ * binding the Actions button's tooltip shows too (CONV-35).
+ */
 function isActionsShortcut(event: globalThis.KeyboardEvent): boolean {
-  if (event.key !== '.' || event.shiftKey || event.altKey) return false
-  const mac =
-    detectShortcutPlatform(
-      typeof navigator === 'undefined' ? undefined : navigator.platform,
-    ) === 'mac'
-  return mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+  return matchKeyboardShortcut(
+    event,
+    runningShortcutPlatform(),
+    ACTIONS_SHORTCUT,
+  )
 }
 
 function anyDialogOpen(): boolean {

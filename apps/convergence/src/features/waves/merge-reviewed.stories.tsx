@@ -142,7 +142,13 @@ export const Busy: Story = {
   play: async () => {
     const dialog = await screen.findByRole('dialog')
     await waitFor(() => expect(dialog).toBeVisible())
-    await expect(within(dialog).getByText('Reading PRs…')).toBeVisible()
+    // EmptyState's loading (MC-9): its words once a quick read has passed.
+    const reading = await within(dialog).findByText(
+      'Reading PRs…',
+      {},
+      { timeout: 2000 },
+    )
+    await waitFor(() => expect(reading).toBeVisible())
     await expect(
       within(dialog).getByRole('button', { name: 'Nothing to merge' }),
     ).toBeDisabled()
@@ -171,7 +177,7 @@ export const Empty: Story = {
     const dialog = await screen.findByRole('dialog')
     await waitFor(() => expect(dialog).toBeVisible())
     await expect(
-      within(dialog).getByText('No reviewed PRs awaiting merge.'),
+      within(dialog).getByText('No reviewed PRs awaiting merge'),
     ).toBeVisible()
   },
 }

@@ -7,6 +7,7 @@ import type {
 import {
   Badge,
   Button,
+  Card,
   Dialog,
   DialogBody,
   DialogContent,
@@ -16,6 +17,7 @@ import {
   DialogTrigger,
   SectionLabel,
 } from '@convergence/ui'
+import { RELEASE_NOTES_TITLE } from '@/entities/updates'
 import { Markdown } from '@/shared/ui/markdown.container'
 
 export interface ReleaseHistoryPageItem {
@@ -54,7 +56,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
       {/* A dialog you read and leave: no footer, its ✕ the way out (R6). */}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>About Convergence</DialogTitle>
+          <DialogTitle>{RELEASE_NOTES_TITLE}</DialogTitle>
           <DialogDescription>
             Version {bundle.currentVersion}
             {latest?.date
@@ -73,7 +75,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
               <SectionLabel as="h3" className="mb-2">
                 Current release
               </SectionLabel>
-              <div className="rounded-xl border border-line-soft bg-surface/70 p-4">
+              <Card surface="raised" padding="md">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold">v{latest.version}</p>
@@ -83,7 +85,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
                   </div>
                 </div>
                 <Markdown content={latest.notes} size="sm" />
-              </div>
+              </Card>
             </section>
           ) : null}
 
@@ -99,9 +101,10 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
             </div>
             <div className="space-y-4">
               {historyItems.map(({ release, absoluteIndex }) => (
-                <article
+                <Card
+                  render={<article />}
                   key={`${release.version}-${release.date ?? 'undated'}`}
-                  className="rounded-xl border border-line-soft bg-surface/50 p-4"
+                  padding="md"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
@@ -115,7 +118,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
                     {absoluteIndex === 0 ? <Badge>Current</Badge> : null}
                   </div>
                   <Markdown content={release.notes} size="sm" />
-                </article>
+                </Card>
               ))}
             </div>
             {showPagination ? (

@@ -57,20 +57,27 @@ export const openingOf = (
 /**
  * Whether an anchor's tooltip may show now. An empty label shows nothing. A
  * trigger whose menu or popover is open says enough already: Base UI marks it
- * `data-popup-open`, Radix (until DS3b) `aria-expanded="true"`; so does a
- * trigger with a TooltipCard of its own (`popupOpen` covers both). A tooltip
+ * `data-popup-open`, and so does a trigger with a TooltipCard of its own
+ * (`popupOpen` covers both); a popup trigger that says `aria-haspopup` and
+ * `aria-expanded="true"` is open too. A disclosure that is merely expanded (a
+ * branch row, a fold) has no popup, and keeps its name (NAV-13). A tooltip
  * asked for only when its text is cut short shows only then.
  */
 export const mayShow = (anchor: {
   label: string | null
   popupOpen: boolean
   expanded: string | null
+  hasPopup: string | null
   onlyWhenTruncated: boolean
   truncated: boolean
 }): boolean =>
   Boolean(anchor.label) &&
   !anchor.popupOpen &&
-  anchor.expanded !== 'true' &&
+  !(
+    anchor.expanded === 'true' &&
+    anchor.hasPopup !== null &&
+    anchor.hasPopup !== 'false'
+  ) &&
   (!anchor.onlyWhenTruncated || anchor.truncated)
 
 type Box = { top: number; left: number; width: number; height: number }

@@ -20,6 +20,7 @@ import {
   DiffFileHeader,
   type DiffFileHeaderSubtitleVariant,
 } from './diff-file-header.presentational'
+import { diffContextReasons } from './diff-context-reasons.pure'
 import { planPierreDiffPerformance } from './pierre-diff-performance.pure'
 
 interface PierreDiffViewerProps<TAnnotation = undefined> {
@@ -249,6 +250,16 @@ function renderDiffContextControls(input: {
   onExpandBoth?: () => void
   onReset?: () => void
 }) {
+  // Unavailable says why (R2): each control keeps its place in Tab order.
+  const reasons = diffContextReasons({
+    canExpandBefore: input.canExpandBefore,
+    canExpandAfter: input.canExpandAfter,
+    expandedFromDefault: input.expandedFromDefault,
+    canExpandBeforeHere: Boolean(input.onExpandBefore),
+    canExpandAfterHere: Boolean(input.onExpandAfter),
+    canExpandBothHere: Boolean(input.onExpandBoth),
+    canResetHere: Boolean(input.onReset),
+  })
   return (
     <div
       className="ml-auto flex shrink-0 items-center gap-1"
@@ -259,7 +270,7 @@ function renderDiffContextControls(input: {
         type="button"
         variant="secondary"
         size="xs"
-        disabled={!input.canExpandBefore || !input.onExpandBefore}
+        disabledReason={reasons.above}
         onClick={input.onExpandBefore}
       >
         <ChevronUp className="h-3.5 w-3.5" />
@@ -269,10 +280,7 @@ function renderDiffContextControls(input: {
         type="button"
         variant="secondary"
         size="xs"
-        disabled={
-          (!input.canExpandBefore && !input.canExpandAfter) ||
-          !input.onExpandBoth
-        }
+        disabledReason={reasons.both}
         onClick={input.onExpandBoth}
       >
         <ChevronsUpDown className="h-3.5 w-3.5" />
@@ -282,7 +290,7 @@ function renderDiffContextControls(input: {
         type="button"
         variant="secondary"
         size="xs"
-        disabled={!input.canExpandAfter || !input.onExpandAfter}
+        disabledReason={reasons.below}
         onClick={input.onExpandAfter}
       >
         <ChevronDown className="h-3.5 w-3.5" />
@@ -292,7 +300,7 @@ function renderDiffContextControls(input: {
         type="button"
         variant="secondary"
         size="xs"
-        disabled={!input.expandedFromDefault || !input.onReset}
+        disabledReason={reasons.reset}
         onClick={input.onReset}
       >
         <RotateCcw className="h-3.5 w-3.5" />

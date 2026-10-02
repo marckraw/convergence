@@ -6,7 +6,7 @@ import {
   CHAIR_NODE_EMOJI,
   CHAIR_NODE_LABEL,
 } from '@/features/mission-control'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, Tooltip } from '@convergence/ui'
 import { CANVAS_HIDDEN_HANDLE } from './session-canvas.styles'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasChairNodeData } from './session-canvas.types'
@@ -83,16 +83,19 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
         </span>
 
         {chair.lit ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-label={`Answer the hails for this crew`}
-            onClick={() => chair.onAcknowledge(chair.crewId)}
-            className="ml-auto shrink-0 text-warning-ink hover:text-warning-ink"
-          >
-            Seen
-          </Button>
+          // Its word is its name (WCAG 2.5.3, label in name); what it does
+          // is its tooltip and description.
+          <Tooltip label="Answer the hails for this crew">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => chair.onAcknowledge(chair.crewId)}
+              className="ml-auto shrink-0 text-warning-ink hover:text-warning-ink"
+            >
+              Seen
+            </Button>
+          </Tooltip>
         ) : null}
       </div>
 

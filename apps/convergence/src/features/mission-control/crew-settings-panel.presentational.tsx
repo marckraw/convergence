@@ -325,7 +325,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         disabled={busy}
         onClick={onAddConversation}
         size="sm"
-        className="px-2.5 text-2xs"
       >
         <MessageSquare aria-hidden className="size-3.5" />
         Add conversation…
@@ -337,7 +336,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         variant="secondary"
         disabledReason="Coming with MAR-3099"
         size="sm"
-        className="px-2.5 text-2xs"
       >
         <FlaskConical aria-hidden className="size-3.5" />
         New recipe
@@ -397,7 +395,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                     variant="secondary"
                     disabled={busy}
                     size="sm"
-                    className="gap-1 text-2xs"
+                    className="gap-1"
                   />
                 }
               >
@@ -451,7 +449,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               data-seat-group={group.role}
               className="flex flex-col gap-1"
             >
-              <SectionLabel as="h4" className="text-3xs">
+              <SectionLabel as="h4" size="sm">
                 {group.title} {group.count}
               </SectionLabel>
               <ul className="flex flex-col gap-1">
@@ -534,7 +532,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 min={1}
                 value={attentionMinutes ?? ''}
                 placeholder={String(defaultAttentionMinutes)}
-                aria-label="Minutes without a reply before this crew asks for attention"
+                // Named by its visible label, label in name (WCAG 2.5.3); the
+                // unit and what it counts are its description.
+                aria-description="Minutes without a reply before this crew asks for attention"
                 disabled={busy}
                 onChange={(event) =>
                   onAttentionMinutesChange(readLimit(event.target.value))
@@ -597,7 +597,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               disabled={exporting}
               onClick={onExport}
               size="sm"
-              className="px-3"
             >
               {exporting ? 'Exporting…' : 'Export crew…'}
             </Button>

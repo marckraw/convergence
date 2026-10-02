@@ -1,4 +1,4 @@
-import type { FC, ReactElement } from 'react'
+import type { FC, ReactElement, ReactNode } from 'react'
 import {
   CalendarClock,
   Check,
@@ -35,6 +35,7 @@ import {
   Badge,
   Button,
   buttonVariants,
+  Card,
   cn,
   EmptyState,
   Field,
@@ -51,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  Timestamp,
   toneInk,
   tooltipAttributes,
 } from '@convergence/ui'
@@ -61,11 +63,10 @@ import {
 } from '@/shared/lib/select-value.pure'
 import {
   fieldCaption,
-  metricCard,
+  metricCardPadding,
   noteCard,
   rowActions,
   rowCaption,
-  rowCard,
   rowTop,
   sectionHead,
   spaceAttentionLabels,
@@ -146,6 +147,8 @@ interface SpaceWorkboardProps {
   onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
   onArtifactDialogOpenChange: (open: boolean) => void
   onCreateArtifact: () => void
+  /** The key that also adds the Artifact, in words ("⌘↵"), for Add's tooltip. */
+  artifactShortcut?: string
   onArtifactKindChange: (artifactId: string, kind: SpaceArtifactKind) => void
   onArtifactStatusChange: (
     artifactId: string,
@@ -202,6 +205,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   onArtifactDraftChange,
   onArtifactDialogOpenChange,
   onCreateArtifact,
+  artifactShortcut,
   onArtifactKindChange,
   onArtifactStatusChange,
   onArtifactSourceSessionChange,
@@ -593,6 +597,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       onOpenChange: onArtifactDialogOpenChange,
                       onArtifactDraftChange,
                       onCreateArtifact,
+                      shortcut: artifactShortcut,
                     })}
                   </div>
                 </div>
@@ -685,6 +690,7 @@ function renderAddArtifact(input: {
   onOpenChange: (open: boolean) => void
   onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
   onCreateArtifact: () => void
+  shortcut?: string
 }) {
   const {
     open,
@@ -694,6 +700,7 @@ function renderAddArtifact(input: {
     onOpenChange,
     onArtifactDraftChange,
     onCreateArtifact,
+    shortcut,
   } = input
   const missing =
     artifactDraft.label.trim().length === 0
@@ -715,6 +722,7 @@ function renderAddArtifact(input: {
       description="Attach a concrete artifact produced by this Space."
       saves="on-save"
       onSave={onCreateArtifact}
+      saveShortcut={shortcut}
       saveLabel="Add Artifact"
       pendingLabel="Adding…"
       pending={isCreatingArtifact}
@@ -914,12 +922,12 @@ function renderSynthesisNotes(input: {
   )
 }
 
-function renderMetric(label: string, value: string | number) {
+function renderMetric(label: string, value: ReactNode) {
   return (
-    <div className={metricCard}>
+    <Card padding="none" className={metricCardPadding}>
       <SectionLabel>{label}</SectionLabel>
       <div className="mt-1 truncate text-sm">{value}</div>
-    </div>
+    </Card>
   )
 }
 
@@ -934,7 +942,7 @@ function renderAttemptRow(input: {
   const { attempt } = view
 
   return (
-    <div key={attempt.id} className={rowCard}>
+    <Card key={attempt.id}>
       <div className={rowTop}>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1003,7 +1011,7 @@ function renderAttemptRow(input: {
           </IconButton>
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -1039,7 +1047,7 @@ function renderArtifactRow(input: {
   const artifactUrl = parseHttpUrl(artifact.value)
 
   return (
-    <div key={artifact.id} className={rowCard}>
+    <Card key={artifact.id}>
       <div className="flex flex-col gap-3 md:flex-row md:items-end">
         <div className="flex flex-col gap-1.5  md:w-37.5 md:shrink-0">
           <span className={rowCaption}>Kind</span>
@@ -1174,7 +1182,7 @@ function renderArtifactRow(input: {
           Source: {sourceAttempt.sessionName}
         </div>
       ) : null}
-    </div>
+    </Card>
   )
 }
 
@@ -1187,13 +1195,9 @@ function parseHttpUrl(value: string): string | null {
   }
 }
 
-function formatUpdatedAt(value: string): string {
+/** When the Space last changed: a Timestamp, the whole moment in its tooltip (use-timestamp). */
+function formatUpdatedAt(value: string): ReactNode {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'Unknown'
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+  return <Timestamp date={date} format="datetime" />
 }

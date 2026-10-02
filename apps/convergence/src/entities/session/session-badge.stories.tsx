@@ -12,6 +12,7 @@ const ATTENTIONS = [
   ['needs-input', 'Needs input'],
   ['finished', 'Finished'],
   ['failed', 'Failed'],
+  ['host-unreachable', 'Host unreachable'],
   ['none', 'Working'],
 ] as const
 
@@ -52,8 +53,8 @@ export const Default: Story = {
 
 /**
  * Every attention in its tone (R1): waiting on you is warning, for an answer
- * as for an approval; finished is success, failed is danger; work under way
- * spins.
+ * as for an approval; finished is success, failed is danger; a host out of
+ * reach is warning with its own glyph; work under way spins, in info.
  */
 export const States: Story = {
   render: () => <AllAttentions />,
@@ -68,7 +69,8 @@ export const States: Story = {
       'warning',
       'success',
       'danger',
-      undefined,
+      'warning',
+      'info',
     ])
     const working = canvas.getAllByRole('listitem').at(-1)!
     await expect(

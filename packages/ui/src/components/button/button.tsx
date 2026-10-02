@@ -1,5 +1,5 @@
 import { Button as ButtonPrimitive } from '@base-ui/react/button'
-import type { ReactNode } from 'react'
+import { isValidElement, type ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 import { focusRing } from '#lib/focus-ring.styles'
 import { press } from '../../motion/press/press.styles'
@@ -175,7 +175,7 @@ function ButtonBase({
       // The reason is its description: an attribute, not text in the page,
       // so it never doubles a line that says the same thing beside it.
       aria-description={
-        reason ?? describedAs(props) ?? hintOf(shape, tooltip, props)
+        reason ?? describedAs(props) ?? hintOf(shape, tooltip, props, children)
       }
       disabled={disabled || Boolean(reason)}
       focusableWhenDisabled={reason ? true : focusableWhenDisabled}
@@ -202,18 +202,34 @@ const describedAs = (props: object): string | undefined =>
 /**
  * A text button's tooltip is the hint a native title used to be, and a title
  * was also its description: so is the tooltip, unless it only repeats the
- * button's name. An icon button's tooltip is its name already.
+ * button's name: its aria-label, or with none its words (a Save whose
+ * tooltip is there for its shortcut). An icon button's tooltip is its name
+ * already.
  */
 const hintOf = (
   shape: ButtonShape,
   tooltip: TooltipData,
   props: object,
+  children: ReactNode,
 ): string | undefined => {
   const hint = tooltip['data-tooltip']
   if (shape !== 'text' || !hint) return undefined
-  return hint === (props as { 'aria-label'?: string })['aria-label']
-    ? undefined
-    : hint
+  const label = (props as { 'aria-label'?: string })['aria-label']
+  const name = label ?? wordsOf(children).trim()
+  return hint === name ? undefined : hint
+}
+
+/** The words a button's children say, as its name reads them: hidden glyphs say nothing. */
+const wordsOf = (node: ReactNode): string => {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(wordsOf).join('')
+  if (isValidElement<{ children?: ReactNode; 'aria-hidden'?: unknown }>(node)) {
+    const hidden = node.props['aria-hidden']
+    return hidden === true || hidden === 'true'
+      ? ''
+      : wordsOf(node.props.children)
+  }
+  return ''
 }
 
 /** Both looks in one grid cell, the one not shown hidden, so the wider sets the width. */

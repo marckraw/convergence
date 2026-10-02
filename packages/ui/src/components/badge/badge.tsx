@@ -86,6 +86,18 @@ type BadgeProps = Omit<ComponentProps<'span'>, 'className'> & {
   shape?: BadgeShape
   /** A 12 px glyph before the word, decorative: the word says it. */
   icon?: ReactNode
+  /**
+   * Its word in capitals, as a kind or a short state reads in a list of them
+   * (LOCAL, DISABLED): the look 19 badges typed as a className (DLG).
+   */
+  caps?: boolean
+  /**
+   * The tone's edge and ink with no wash, for a badge on paper that is
+   * already tinted, where a wash would sink its words under 4.5:1 (Loom's
+   * cards); a quiet tag that labels rather than says a state (a diff's file
+   * status). A hue keeps its wash.
+   */
+  outline?: boolean
 }
 
 /**
@@ -100,6 +112,8 @@ function Badge({
   hue,
   shape = 'pill',
   icon,
+  caps = false,
+  outline = false,
   className,
   children,
   ...props
@@ -107,16 +121,24 @@ function Badge({
   const colours =
     hue !== undefined
       ? HUES[hue]
-      : shape === 'count' && tone === 'neutral'
-        ? neutralCount
-        : toneClasses(tone)
+      : outline
+        ? cn(toneLine[tone], toneInk[tone])
+        : shape === 'count' && tone === 'neutral'
+          ? neutralCount
+          : toneClasses(tone)
   return (
     <span
       data-slot="badge"
       data-tone={hue === undefined ? tone : undefined}
       data-hue={hue}
       data-shape={shape}
-      className={cn(badgeVariants({ shape }), colours, className)}
+      data-outline={outline && hue === undefined ? '' : undefined}
+      className={cn(
+        badgeVariants({ shape }),
+        colours,
+        caps && 'uppercase',
+        className,
+      )}
       {...props}
     >
       {icon == null ? null : (

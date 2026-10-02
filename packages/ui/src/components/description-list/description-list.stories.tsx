@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { Clock, GitBranch } from 'lucide-react'
 import { expect } from 'storybook/test'
 import {
   DescriptionItem,
@@ -75,5 +76,37 @@ export const Long: Story = {
     await expect(getComputedStyle(value).textOverflow).toBe('ellipsis')
     await expect(value.scrollWidth).toBeGreaterThan(value.clientWidth)
     await expect(canvas.getByText('Branch')).toBeVisible()
+  },
+}
+
+/**
+ * With glyphs: a muted icon before a term, as the conversation's Details rows
+ * have; a row without one keeps the empty slot, so every term lines up.
+ */
+export const WithIcons: Story = {
+  render: () => (
+    <div className="w-72 rounded-md bg-canvas p-4">
+      <DescriptionList layout="inline" density="compact">
+        <DescriptionItem term="Checkout branch" icon={<GitBranch />}>
+          ui/ds6-states
+        </DescriptionItem>
+        <DescriptionItem term="Context" icon={null}>
+          42% of 200k
+        </DescriptionItem>
+        <DescriptionItem term="Agent working time" icon={<Clock />}>
+          12 min
+        </DescriptionItem>
+      </DescriptionList>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const slots = canvasElement.querySelectorAll(
+      '[data-slot="description-icon"]',
+    )
+    await expect(slots).toHaveLength(3)
+    // Each slot is 16 px, filled or not, so the terms after them line up.
+    for (const slot of slots) {
+      await expect(slot.getBoundingClientRect().width).toBe(16)
+    }
   },
 }

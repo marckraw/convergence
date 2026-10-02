@@ -12,6 +12,7 @@ import {
   popupSurface,
 } from '../../motion/popup.styles'
 import { Kbd, type KbdProps } from '../kbd/kbd'
+import { tooltipAttributes } from '../tooltip/tooltip'
 
 type MenuProps = MenuPrimitive.Root.Props
 
@@ -161,19 +162,42 @@ type MenuItemProps = Omit<MenuPrimitive.Item.Props, 'className'> &
     className?: string
     /** Line up with items that have an icon or a check. */
     inset?: boolean
+    /**
+     * Why it can't be chosen now (R2): the item is disabled, still reached by
+     * the arrow keys and the pointer, the reason is its accessible
+     * description, and its tooltip says why. Empty or missing: available,
+     * unless `disabled`.
+     */
+    disabledReason?: string
   }
 
 /**
  * One action, run by `onClick` (the pointer, Enter or Space). It closes the
  * menu when chosen; `closeOnClick={false}` keeps it open.
  */
-function MenuItem({ className, inset, variant, ...props }: MenuItemProps) {
+function MenuItem({
+  className,
+  inset,
+  variant,
+  disabled,
+  disabledReason,
+  ...props
+}: MenuItemProps) {
+  const reason = disabledReason || undefined
   return (
     <MenuPrimitive.Item
       data-slot="menu-item"
       data-inset={inset || undefined}
       data-variant={variant ?? 'default'}
-      className={cn(menuItemVariants({ variant }), className)}
+      className={cn(
+        menuItemVariants({ variant }),
+        // A reason keeps the pointer, so its tooltip shows.
+        reason && 'data-disabled:pointer-events-auto',
+        className,
+      )}
+      disabled={disabled || Boolean(reason)}
+      aria-description={reason}
+      {...tooltipAttributes(reason, { side: 'right' })}
       {...props}
     />
   )

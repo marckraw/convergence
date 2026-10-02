@@ -1,3 +1,4 @@
+import { formatTimestamp } from '@convergence/ui'
 import type {
   TrackerProbeReading,
   TrackerProjectResolution,
@@ -75,13 +76,13 @@ export function probeAsksForKey(reading: TrackerProbeReading | null): boolean {
   )
 }
 
-/** `08:04` from an ISO time, in the viewer's zone, 24-hour as Loom's clocks are (MC-27). */
+/**
+ * `08:04` from an ISO time, in the viewer's zone, 24-hour as Loom's clocks
+ * are (MC-27): Timestamp's clock, the one Loom's dispatch lines read in too
+ * (MC-13), not a copy of its body.
+ */
 export function probeTimeLabel(at: string): string {
   const date = new Date(at)
   if (Number.isNaN(date.getTime())) return at
-  return date.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+  return formatTimestamp(date, 'clock', { hour12: false })
 }

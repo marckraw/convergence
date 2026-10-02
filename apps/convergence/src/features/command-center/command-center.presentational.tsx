@@ -1,5 +1,17 @@
 import { useId, type FC } from 'react'
 import {
+  AppWindow,
+  ArrowLeftRight,
+  Folder,
+  GitBranch,
+  GitFork,
+  type LucideIcon,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  SquareTerminal,
+} from 'lucide-react'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -66,6 +78,7 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
   const renderRow = (item: PaletteItem, index: number) => {
     const { primary, secondary } = describeItem(item)
     const kindLabel = describeKind(item.kind)
+    const KindIcon = KIND_ICONS[item.kind]
     const accessibleLabel = secondary
       ? `${kindLabel}: ${primary} — ${secondary}`
       : `${kindLabel}: ${primary}`
@@ -78,7 +91,15 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
         onHover={() => onSelectedValueChange?.(item.id)}
         className="justify-between gap-3 px-3 py-2"
       >
-        <span className="truncate">{primary}</span>
+        {/* The kind, seen as well as heard: a project and a session of one name differ (NAV-24). */}
+        <span className="flex min-w-0 items-center gap-2">
+          <KindIcon
+            aria-hidden
+            data-kind={item.kind}
+            className="size-3.5 shrink-0 text-ink-muted"
+          />
+          <span className="truncate">{primary}</span>
+        </span>
         {secondary ? (
           <span className="truncate text-xs text-ink-muted">{secondary}</span>
         ) : null}
@@ -100,7 +121,8 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogContent>
+      {/* No ✕ over the field: Escape closes the palette (NAV-24). */}
+      <DialogContent showClose={false}>
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <DialogDescription className="sr-only">
           Jump to projects, workspaces, sessions, or dialogs.
@@ -194,6 +216,20 @@ function describeItem(item: PaletteItem): {
     case 'check-updates':
       return { primary: item.title, secondary: item.description }
   }
+}
+
+/** Each kind's glyph, before the row's name (NAV-24). */
+const KIND_ICONS: Record<PaletteItem['kind'], LucideIcon> = {
+  project: Folder,
+  workspace: GitBranch,
+  session: MessageSquare,
+  dialog: AppWindow,
+  'new-session': Plus,
+  'new-terminal-session': SquareTerminal,
+  'new-workspace': Plus,
+  'fork-session': GitFork,
+  'swap-primary-surface': ArrowLeftRight,
+  'check-updates': RefreshCw,
 }
 
 function describeKind(kind: PaletteItem['kind']): string {

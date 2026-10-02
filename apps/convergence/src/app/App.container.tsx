@@ -20,8 +20,7 @@ import {
 import { updatesApi, useUpdatesStore } from '@/entities/updates'
 import { useProviderUpdatesStore } from '@/entities/provider-updates'
 import { taskProgressApi, useTaskProgressStore } from '@/entities/task-progress'
-import { toast } from 'sonner'
-import { UiProvider } from '@convergence/ui'
+import { notify, UiProvider } from '@convergence/ui'
 import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import {
@@ -435,21 +434,21 @@ export function App({
 
   useEffect(() => {
     if (projectError) {
-      toast.error(projectError)
+      notify.error(projectError)
       clearProjectError()
     }
   }, [projectError, clearProjectError])
 
   useEffect(() => {
     if (workspaceError) {
-      toast.error(workspaceError)
+      notify.error(workspaceError)
       clearWorkspaceError()
     }
   }, [workspaceError, clearWorkspaceError])
 
   useEffect(() => {
     if (sessionError) {
-      toast.error(sessionError)
+      notify.error(sessionError)
       clearSessionError()
     }
   }, [sessionError, clearSessionError])

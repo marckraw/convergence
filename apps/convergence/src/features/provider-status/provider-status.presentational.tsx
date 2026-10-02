@@ -22,9 +22,11 @@ import {
   DialogTrigger,
   EmptyState,
   focusRingInset,
+  MetaLine,
   Notice,
   SectionLabel,
   sectionLabel,
+  Timestamp,
   type Tone,
 } from '@convergence/ui'
 import {
@@ -60,8 +62,8 @@ interface ProviderStatusDialogProps {
   onUpdateProvider: (providerId: string) => void
 }
 
-/** The badges' print: today's uppercase small caps, on Badge's box. */
-const badgeWords = 'font-medium uppercase tracking-eyebrow'
+/** The badges' weight, over Badge's capitals (`caps`). */
+const badgeWords = 'font-medium'
 
 /** A term in the provider's facts: the eyebrow look, over its value. */
 const renderTerm = (children: ReactNode) => (
@@ -77,7 +79,7 @@ function renderStatusBadge(provider: ProviderStatusInfo) {
       : 'warning'
 
   return (
-    <Badge tone={tone} className={badgeWords}>
+    <Badge tone={tone} caps className={badgeWords}>
       {provider.statusLabel}
     </Badge>
   )
@@ -101,7 +103,7 @@ function renderUpdateBadge(provider: ProviderStatusInfo) {
           : 'Latest unknown'
 
   return (
-    <Badge tone={tone} className={badgeWords}>
+    <Badge tone={tone} caps className={badgeWords}>
       {label}
     </Badge>
   )
@@ -144,8 +146,10 @@ function renderRuntimeInfo(runtimeInfo: ProviderRuntimeInfo | null) {
           {runtimeInfo.electronVersion ?? 'Unknown'}
         </DescriptionItem>
         <DescriptionItem term={renderTerm('Build')}>
-          {runtimeInfo.isPackaged ? 'Packaged' : 'Development'} ·{' '}
-          {runtimeInfo.platform}/{runtimeInfo.arch}
+          <MetaLine wrap>
+            {runtimeInfo.isPackaged ? 'Packaged' : 'Development'}
+            {`${runtimeInfo.platform}/${runtimeInfo.arch}`}
+          </MetaLine>
         </DescriptionItem>
       </DescriptionList>
       <p className="mt-3 text-xs text-ink-muted">
@@ -257,8 +261,10 @@ function renderProviderRow(
                     {formatInstallManager(provider.install.manager)}
                   </DescriptionItem>
                   <DescriptionItem term={renderTerm('CLI Node')}>
-                    {provider.install.nodeVersion ?? 'Unknown'} ·{' '}
-                    {provider.install.nodePath ?? 'Node path unknown'}
+                    <MetaLine wrap>
+                      {provider.install.nodeVersion ?? 'Unknown'}
+                      {provider.install.nodePath ?? 'Node path unknown'}
+                    </MetaLine>
                   </DescriptionItem>
                   {provider.install.manager === 'npm' &&
                     provider.install.prefixDirectory && (
@@ -333,7 +339,7 @@ function renderProviderAccounts(
         </p>
         {health?.checkedAt && (
           <span className="text-2xs text-ink-muted">
-            checked {new Date(health.checkedAt).toLocaleString()}
+            checked <Timestamp date={health.checkedAt} format="datetime" />
           </span>
         )}
       </div>
@@ -364,7 +370,11 @@ function renderProviderAccounts(
                   <span className="ml-2 text-2xs text-ink-muted">default</span>
                 )}
               </span>
-              <Badge tone={ACCOUNT_TONES[status.tone]} className={badgeWords}>
+              <Badge
+                tone={ACCOUNT_TONES[status.tone]}
+                caps
+                className={badgeWords}
+              >
                 {status.label}
               </Badge>
             </div>

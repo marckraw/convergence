@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import { SplitSquareHorizontal, SplitSquareVertical, X } from 'lucide-react'
 import { IconButton } from '@convergence/ui'
+import type { TerminalShortcutLabels } from '@/entities/terminal'
 
 interface PaneToolbarProps {
   onSplitHorizontal: () => void
@@ -12,6 +13,8 @@ interface PaneToolbarProps {
    */
   onClose?: () => void
   closeLabel?: string
+  /** The keys the buttons answer to, in words, for their tooltips (NAV-23). */
+  shortcuts?: TerminalShortcutLabels
 }
 
 export const PaneToolbar: FC<PaneToolbarProps> = ({
@@ -19,11 +22,13 @@ export const PaneToolbar: FC<PaneToolbarProps> = ({
   onSplitVertical,
   onClose,
   closeLabel = 'Close tab',
+  shortcuts,
 }) => {
   return (
     <div className="flex items-center gap-0.5">
       <IconButton
         label="Split horizontal"
+        shortcut={shortcuts?.['split-horizontal']}
         type="button"
         variant="ghost"
         onClick={onSplitHorizontal}
@@ -33,6 +38,7 @@ export const PaneToolbar: FC<PaneToolbarProps> = ({
       </IconButton>
       <IconButton
         label="Split vertical"
+        shortcut={shortcuts?.['split-vertical']}
         type="button"
         variant="ghost"
         onClick={onSplitVertical}
@@ -43,6 +49,7 @@ export const PaneToolbar: FC<PaneToolbarProps> = ({
       {onClose ? (
         <IconButton
           label={closeLabel}
+          shortcut={shortcuts?.['close-tab']}
           type="button"
           variant="ghost"
           onClick={onClose}

@@ -25,7 +25,7 @@ export const SessionCreateInline: FC<SessionCreateInlineProps> = ({
         openDialog('session-intent', { workspaceId })
       }}
       onMouseDown={stopSidebarEvent}
-      className="flex w-full justify-start gap-1 px-2"
+      className="flex w-full justify-start gap-1"
     >
       <Play className="h-3 w-3" />
       New session

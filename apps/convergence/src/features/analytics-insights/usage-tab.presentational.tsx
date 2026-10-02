@@ -11,7 +11,7 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import type { AnalyticsOverview } from '@/entities/analytics'
-import { Card, cn, EmptyState, SectionLabel } from '@convergence/ui'
+import { Card, cn, EmptyState, SectionLabel, Tooltip } from '@convergence/ui'
 import { ChartGpuChart } from '@/shared/ui/chartgpu-chart.container'
 import {
   buildConversationBalanceChartOptions,
@@ -509,18 +509,21 @@ function renderStreakCalendar(overview: AnalyticsOverview) {
           const active = activeDays.has(day)
           const isCurrent = day === currentMarker
           return (
-            <div
+            <Tooltip
               key={day}
-              title={`${formatDateLabel(day)}${active ? ': active' : ''}`}
-              className={cn(
-                'aspect-square rounded-md border',
-                active
-                  ? 'border-chart-2/40 bg-chart-2'
-                  : 'border-line bg-surface-muted/45',
-                isCurrent &&
-                  'ring-2 ring-chart-3 ring-offset-1 ring-offset-canvas',
-              )}
-            />
+              label={`${formatDateLabel(day)}${active ? ': active' : ''}`}
+            >
+              <div
+                className={cn(
+                  'aspect-square rounded-md border',
+                  active
+                    ? 'border-chart-2/40 bg-chart-2'
+                    : 'border-line bg-surface-muted/45',
+                  isCurrent &&
+                    'ring-2 ring-chart-3 ring-offset-1 ring-offset-canvas',
+                )}
+              />
+            </Tooltip>
           )
         })}
       </div>
@@ -611,14 +614,17 @@ function renderHeatmapRow({
             hour,
           )
           return (
-            <div
+            <Tooltip
               key={`${weekday}-${hour}`}
-              title={`${label} ${formatHour(hour)}: ${formatInteger(count)}`}
-              className={cn(
-                'aspect-square rounded-sm border border-line-soft',
-                heatFill[getHeatmapLevel(count, max)],
-              )}
-            />
+              label={`${label} ${formatHour(hour)}: ${formatInteger(count)}`}
+            >
+              <div
+                className={cn(
+                  'aspect-square rounded-sm border border-line-soft',
+                  heatFill[getHeatmapLevel(count, max)],
+                )}
+              />
+            </Tooltip>
           )
         })}
       </div>

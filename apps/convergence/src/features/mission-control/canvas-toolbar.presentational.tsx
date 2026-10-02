@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Link2, Plus, Settings2, History } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import { Button, Toggle } from '@convergence/ui'
 
 interface CanvasToolbarProps {
   importCrew: ReactNode
@@ -57,33 +57,29 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onAddConversation}
         size="sm"
-        className="gap-1 text-2xs"
+        className="gap-1"
       >
         <Plus className="size-3" />
         Add conversation
       </Button>
       {importCrew}
 
-      <Button
-        type="button"
-        variant="ghost"
-        aria-pressed={connecting}
+      {/* A mode, on or off: a Toggle, whose pressed look is R7's raised
+          chip (MC-8). */}
+      <Toggle
+        size="sm"
+        pressed={connecting}
         disabledReason={
           canConnect
             ? undefined
             : 'Add a second conversation to this crew before connecting.'
         }
         onClick={onToggleConnect}
-        size="sm"
-        className={cn(
-          'gap-1 text-2xs',
-          // R7: a toggle that is on is the raised chip.
-          connecting && 'bg-chip text-ink shadow-raised',
-        )}
+        className="gap-1"
       >
         <Link2 className="size-3" />
         Connect
-      </Button>
+      </Toggle>
 
       <Button
         type="button"
@@ -91,7 +87,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onCrewSettings}
         size="sm"
-        className="gap-1 text-2xs"
+        className="gap-1"
       >
         <Settings2 className="size-3" />
         Crew settings
@@ -103,7 +99,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onHistory}
         size="sm"
-        className="gap-1 text-2xs"
+        className="gap-1"
       >
         <History className="size-3" />
         History

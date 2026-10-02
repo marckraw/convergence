@@ -16,6 +16,8 @@ interface TabGroupProps {
   onSelect: (tabId: string) => void
   onCloseTab: (tabId: string) => void
   onNewTab: () => void
+  /** New tab's key in words ("⌘T"), for its tooltip (NAV-23). */
+  newTabShortcut?: string
   trailingSlot?: ReactNode
 }
 
@@ -31,6 +33,7 @@ export const TabGroup: FC<TabGroupProps> = ({
   onSelect,
   onCloseTab,
   onNewTab,
+  newTabShortcut,
   trailingSlot,
 }) => {
   return (
@@ -71,6 +74,7 @@ export const TabGroup: FC<TabGroupProps> = ({
         </TabsList>
         <IconButton
           label="New tab"
+          shortcut={newTabShortcut}
           type="button"
           variant="ghost"
           onClick={onNewTab}

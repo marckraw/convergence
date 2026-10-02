@@ -1,11 +1,13 @@
-import { Tooltip } from '@convergence/ui'
+import { DescriptionItem, DescriptionList, Tooltip } from '@convergence/ui'
 import type { AgentMeterRow } from '@/shared/types/agent-meter.types'
 import { formatSessionMeter } from './agent-meter.pure'
 
 /**
  * The agent's CPU and memory as a named row of the header's Details
  * (MAR-3429 CH4 R3); it no longer holds a place in the header's row. No
- * reading draws nothing (CH1 R3).
+ * reading draws nothing (CH1 R3). A DescriptionItem, inline and compact
+ * (MC-16), with the empty glyph slot the Details rows keep, so it lines up
+ * under them and in Loom's seat cards alike.
  */
 export function SessionAgentMeter({
   row,
@@ -15,19 +17,18 @@ export function SessionAgentMeter({
   remote?: boolean
 }) {
   if (!remote && !row?.usage) return null
-  // The header's Details row: a 16 px glyph column, an 88 px term, the value.
   return (
-    <Tooltip label="Agent CPU and memory. Standalone one-shot and per-turn agents are not metered.">
-      <div
-        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs"
-        data-testid="session-agent-meter"
-      >
-        <span className="w-4 shrink-0" />
-        <span className="w-22 shrink-0 text-ink-muted">CPU / memory</span>
-        <span className="min-w-0 flex-1 truncate text-right tabular-nums text-ink">
+    <DescriptionList layout="inline" density="compact">
+      <Tooltip label="Agent CPU and memory. Standalone one-shot and per-turn agents are not metered.">
+        <DescriptionItem
+          term="CPU / memory"
+          icon={null}
+          className="rounded-md px-2 py-1.5 tabular-nums"
+          data-testid="session-agent-meter"
+        >
           {formatSessionMeter(row ?? undefined, remote)}
-        </span>
-      </div>
-    </Tooltip>
+        </DescriptionItem>
+      </Tooltip>
+    </DescriptionList>
   )
 }

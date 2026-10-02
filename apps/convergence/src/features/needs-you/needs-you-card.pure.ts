@@ -3,6 +3,7 @@ import {
   COMPACTING_CONTEXT_LABEL,
   formatSessionAttentionLabel,
   isSessionCompacting,
+  readSessionAttentionSignal,
   type SessionSummary,
 } from '@/entities/session'
 import {
@@ -36,15 +37,14 @@ export function needsYouCardModel(
         ? 'resident'
         : null
   const endpoint = context.endpoints.find((e) => e.id === session.executionHost)
-  const waiting =
-    session.attention === 'needs-approval' ||
-    session.attention === 'needs-input'
-  const parallelSummary = parallelWorkStatus(session)
   // Between the two: not waiting on Marcin, not failed, and not silently
   // "Working" either — this row is the only place that says the app has lost
   // the wire to the machine (MAR-3051). The run itself is alive on the far
   // machine, so it is neither failed nor settled (MAR-3054 integration).
-  const hostUnreachable = session.attention === 'host-unreachable'
+  // Both facts are the entity's, as Mission Control's card reads them (MC-2).
+  const { hostUnreachable, waitingOnYou: waiting } =
+    readSessionAttentionSignal(session)
+  const parallelSummary = parallelWorkStatus(session)
   const failed =
     !hostUnreachable &&
     (session.attention === 'failed' || session.status === 'failed')

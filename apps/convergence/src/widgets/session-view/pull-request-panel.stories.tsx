@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { metaText } from '@/shared/testing/meta-line'
 import { expect, fn } from 'storybook/test'
 import { PullRequestPanel } from './pull-request-panel.presentational'
 
@@ -38,13 +39,17 @@ type Story = StoryObj<typeof meta>
 /** The session's branch and the pull request GitHub knows for it. */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByText('#915 · open')).toBeVisible()
+    await expect(canvas.getByText(metaText('#915 · open'))).toBeVisible()
     await expect(
       canvas.getByText('https://github.com/marckraw/convergence/pull/915'),
     ).toBeVisible()
+    // A link that looks like a button: it shows where it goes (DS-24).
     await expect(
-      canvas.getByRole('button', { name: 'Open in browser' }),
-    ).toBeVisible()
+      canvas.getByRole('link', { name: 'Open in browser' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/marckraw/convergence/pull/915',
+    )
     await userEvent.click(
       canvas.getByRole('button', { name: 'Refresh PR status' }),
     )

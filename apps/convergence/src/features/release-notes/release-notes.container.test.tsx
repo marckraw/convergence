@@ -15,7 +15,9 @@ describe('ReleaseNotesDialogContainer', () => {
       useDialogStore.getState().open('release-notes')
     })
 
-    expect(screen.getByText('About Convergence')).toBeInTheDocument()
+    expect(
+      screen.getByRole('dialog', { name: 'Release notes' }),
+    ).toBeInTheDocument()
     expect(screen.getByText(/version \d+\.\d+\.\d+/i)).toBeInTheDocument()
     expect(screen.getAllByText(/development build/i).length).toBeGreaterThan(0)
   })
@@ -30,7 +32,9 @@ describe('ReleaseNotesDialogContainer', () => {
     expect(document.querySelector('[data-slot="dialog-footer"]')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
-    expect(screen.queryByText('About Convergence')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('dialog', { name: 'Release notes' }),
+    ).not.toBeInTheDocument()
   })
 
   it('pages the release history under the history it pages', () => {
@@ -60,13 +64,17 @@ describe('ReleaseNotesDialogContainer', () => {
   it('opens when useDialogStore.open() is called with the release-notes kind', () => {
     render(<ReleaseNotesDialogContainer />)
 
-    expect(screen.queryByText('About Convergence')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('dialog', { name: 'Release notes' }),
+    ).not.toBeInTheDocument()
 
     act(() => {
       useDialogStore.getState().open('release-notes')
     })
 
-    expect(screen.getByText('About Convergence')).toBeInTheDocument()
+    expect(
+      screen.getByRole('dialog', { name: 'Release notes' }),
+    ).toBeInTheDocument()
   })
 
   it('closes when useDialogStore.close() is called', () => {
@@ -75,12 +83,16 @@ describe('ReleaseNotesDialogContainer', () => {
     act(() => {
       useDialogStore.getState().open('release-notes')
     })
-    expect(screen.getByText('About Convergence')).toBeInTheDocument()
+    expect(
+      screen.getByRole('dialog', { name: 'Release notes' }),
+    ).toBeInTheDocument()
 
     act(() => {
       useDialogStore.getState().close()
     })
 
-    expect(screen.queryByText('About Convergence')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('dialog', { name: 'Release notes' }),
+    ).not.toBeInTheDocument()
   })
 })

@@ -1,3 +1,4 @@
+import { metaLine } from '@/shared/testing/meta-line'
 import {
   act,
   fireEvent,
@@ -738,7 +739,7 @@ describe('SessionView', () => {
     const failed = {
       main: !!screen.queryByText('main immediately'),
       child: !!screen.queryByText('child hidden'),
-      error: !!screen.queryByText('Parallel work could not be read ·'),
+      error: !!screen.queryByText("Couldn't read parallel work."),
     }
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() =>
@@ -746,9 +747,7 @@ describe('SessionView', () => {
     )
     expect({
       failed,
-      errorAfterRetry: !!screen.queryByText(
-        'Parallel work could not be read ·',
-      ),
+      errorAfterRetry: !!screen.queryByText("Couldn't read parallel work."),
       reads: vi.mocked(window.electronAPI.session.listAgentRuns).mock.calls
         .length,
     }).toEqual({
@@ -1314,7 +1313,7 @@ describe('SessionView', () => {
       await screen.findByRole('button', { name: /^Pull request/ }),
     )
     await screen.findByText('PR unknown — gh not found')
-    expect(screen.getByText('#42 · open')).toBeInTheDocument()
+    expect(metaLine('#42 · open')).toBeDefined()
   })
 
   it('opening Session actions does not refresh the PR (mutation: refresh on every menu)', async () => {
@@ -2696,7 +2695,8 @@ describe('SessionView', () => {
         name: 'Harness history',
       })
       await waitFor(() => expect(document.activeElement).toBe(harness))
-      expect(harness).toHaveTextContent('linear · failed')
+      // The row is a MetaLine (CONV-23): read it as the eye does.
+      expect(metaLine('linear · failed', harness)).toBeDefined()
       await act(async () =>
         fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' }),
       )

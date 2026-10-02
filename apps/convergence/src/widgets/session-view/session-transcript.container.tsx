@@ -5,7 +5,15 @@ import {
 } from '@/entities/session'
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { perfApi } from '@/shared/lib/perf.api'
-import { Button, Divider, Spinner, Tooltip } from '@convergence/ui'
+import {
+  Button,
+  cn,
+  Divider,
+  FormError,
+  sectionLabelVariants,
+  Spinner,
+  Tooltip,
+} from '@convergence/ui'
 import { agentAttributionLabel } from './request-card.pure'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { placeCompactions } from './harness-facts.pure'
@@ -732,7 +740,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       ))}
       {renderEntry.turnBoundary && (
         <Divider
-          className="my-3 font-mono text-3xs tracking-eyebrow uppercase"
+          className={cn('my-3 font-mono', sectionLabelVariants({ size: 'sm' }))}
           data-turn-id={renderEntry.item.turnId}
           label={`Turn ${renderEntry.turnSequence}`}
         />
@@ -763,12 +771,17 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                 </>
               ) : (
                 <>
+                  {/* R10 on one line, the room the list keeps: what failed,
+                      then why, then Retry (CONV-7). */}
                   {olderError && (
-                    <Tooltip label={olderError}>
-                      <span role="status" className="min-w-0 truncate">
-                        {olderError}
-                      </span>
-                    </Tooltip>
+                    <>
+                      <FormError className="shrink-0">
+                        Couldn't load earlier messages.
+                      </FormError>
+                      <Tooltip label={olderError} when="truncated">
+                        <span className="min-w-0 truncate">{olderError}</span>
+                      </Tooltip>
+                    </>
                   )}
                   <Button
                     variant="link"
@@ -778,7 +791,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                     }}
                     className="shrink-0 font-normal text-ink-muted"
                   >
-                    {olderError ? 'Try again' : 'Load earlier messages'}
+                    {olderError ? 'Retry' : 'Load earlier messages'}
                   </Button>
                 </>
               )}

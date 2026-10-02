@@ -1,3 +1,5 @@
+import { fullDateLabel } from '@convergence/ui'
+import { metaText } from '@/shared/testing/meta-line'
 import * as markerHelpers from './parallel-work.pure'
 import { Profiler, useRef, useState } from 'react'
 import {
@@ -173,7 +175,7 @@ it.each([
     expect({
       retry: Boolean(screen.queryByRole('button', { name: 'Retry stop' })),
       refusal: Boolean(screen.queryByText('Control refused')),
-      running: Boolean(screen.queryByText(/^Running ·/)),
+      running: Boolean(screen.queryByText(metaText(/^Running ·/))),
     }).toEqual({ retry: true, refusal: true, running: true })
   },
 )
@@ -425,10 +427,10 @@ it('RUN64 R2 open-only 30s clock and ISO title — mutation tick closed or use 1
   const closed = interval.mock.calls.length
   rerender(<ParallelWork {...input} />)
   const first = screen
-    .queryByText('Running · 4 m')
+    .queryByText(metaText('Running · 4 m'))
     ?.getAttribute('data-tooltip')
   act(() => vi.advanceTimersByTime(60000))
-  const later = Boolean(screen.queryByText('Running · 5 m'))
+  const later = Boolean(screen.queryByText(metaText('Running · 5 m')))
   rerender(<ParallelWork {...input} open={false} />)
   const timersAfterClose = vi.getTimerCount()
   unmount()
@@ -442,7 +444,8 @@ it('RUN64 R2 open-only 30s clock and ISO title — mutation tick closed or use 1
   }).toEqual({
     closed: 0,
     periods: [30000],
-    first: run.startedAt,
+    // The whole moment, as a Timestamp's tooltip says it (CONV-22).
+    first: fullDateLabel(new Date(run.startedAt!)),
     later: true,
     timersAfterClose: 0,
   })
@@ -492,7 +495,9 @@ it('RUN64 R3 older bucket expands without changing all-time summary — mutation
     row.getAttribute('data-work-id'),
   )
   const summary = Boolean(
-    screen.queryByText('This session · 1 running · 1 completed · 1 failed'),
+    screen.queryByText(
+      metaText('This session · 1 running · 1 completed · 1 failed'),
+    ),
   )
   unmount()
   vi.useRealTimers()
@@ -514,7 +519,7 @@ it('RUN64 R2/R3 finished-only panel ages into archive — mutation clock only wi
     ),
   }
   const { unmount } = render(<ParallelWork {...input} />)
-  const before = Boolean(screen.queryByText('Completed · 59 m ago'))
+  const before = Boolean(screen.queryByText(metaText('Completed · 59 m ago')))
   act(() => vi.advanceTimersByTime(60000))
   const bucket = Boolean(
     screen.queryByRole('button', { name: '1 older · newest 1 h ago' }),

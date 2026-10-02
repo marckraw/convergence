@@ -79,3 +79,11 @@ export const INITIAL_UPDATE_STATUS: UpdateIdleStatus = {
   lastChecked: null,
   lastError: null,
 }
+
+/**
+ * The release notes dialog's one name (R10, NAV-31): its title, the Tools
+ * menu's item, the palette's entry, Settings' button and the update toasts'
+ * button. It lives here, beside the updates it describes, because those
+ * readers are features and widgets that may not import one another.
+ */
+export const RELEASE_NOTES_TITLE = 'Release notes'

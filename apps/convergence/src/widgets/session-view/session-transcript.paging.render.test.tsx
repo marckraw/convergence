@@ -266,7 +266,7 @@ it('R2 Compact keeps an unfolded member anchored when prepending extends and rek
   ).not.toBeNull()
 })
 
-it('R9 button loads exactly one page; failure shows Try again and clears the failed episode', async () => {
+it('R9 button loads exactly one page; failure shows Retry and clears the failed episode', async () => {
   const nonce = await open()
   render(<Transcript />)
   act(() => frames.splice(0).forEach((frame) => frame(0)))
@@ -284,7 +284,11 @@ it('R9 button loads exactly one page; failure shows Try again and clears the fai
   )
   expect(resync).toHaveBeenCalledTimes(2)
   expect(screen.getByText('Database busy')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  // CONV-7: the failure is an alert in R10's words, not a polite status.
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    "Couldn't load earlier messages.",
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(resync).toHaveBeenCalledTimes(3)
   expect(screen.getByText('Loading earlier messages…')).toBeInTheDocument()
   older(nonce, 1001, [701])
@@ -412,7 +416,7 @@ it('R11 a failed older load drops a pending jump even after retry succeeds', asy
   resync.mockRejectedValueOnce(new Error('Read failed'))
   await act(async () => render(<Transcript target={{ id: 'm1', nonce: 9 }} />))
   expect(resync).toHaveBeenCalledTimes(2)
-  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   older(nonce, 1001, [701])
   expect(resync).toHaveBeenCalledTimes(3)
 })

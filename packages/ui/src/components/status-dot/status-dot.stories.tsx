@@ -87,3 +87,40 @@ export const ReducedMotion: Story = {
     await expect(getComputedStyle(pulsing).animationName).toBe('none')
   },
 }
+
+/**
+ * Hollow: the tone's solid as an empty ring, the same size as a filled dot,
+ * for what should be there and isn't (a seat with no card).
+ */
+export const Hollow: Story = {
+  render: () => (
+    <div className="flex flex-col gap-2 rounded-md bg-canvas p-3 text-xs text-ink">
+      <p className="flex items-center gap-2">
+        <StatusDot tone="neutral" />
+        Has a card
+      </p>
+      <p className="flex items-center gap-2">
+        <StatusDot tone="warning" hollow />
+        No card
+      </p>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const [filled, hollow] = dots(canvasElement)
+    await expect(hollow).toHaveAttribute('data-hollow')
+    await expect(hollow.getBoundingClientRect().width).toBe(
+      filled.getBoundingClientRect().width,
+    )
+    await expect(getComputedStyle(hollow).borderTopColor).toBe(
+      tokenColor('--warning-solid'),
+    )
+    await expect(getComputedStyle(hollow).backgroundColor).not.toBe(
+      getComputedStyle(filled).backgroundColor,
+    )
+  },
+}
+
+export const HollowDark: Story = {
+  ...Hollow,
+  globals: { theme: 'dark' },
+}

@@ -2,7 +2,13 @@ import type { FC } from 'react'
 import { X } from 'lucide-react'
 import { RelayHopRow, formatArmedLabel } from '@/features/mission-control'
 import type { RelayHopLine, RelaySentence } from '@/features/mission-control'
-import { IconButton, Popover, PopoverContent, StatusDot } from '@convergence/ui'
+import {
+  EmptyState,
+  IconButton,
+  Popover,
+  PopoverContent,
+  StatusDot,
+} from '@convergence/ui'
 
 /** A point in the viewport: where the wire was clicked. */
 export interface CanvasWirePoint {
@@ -96,7 +102,12 @@ export const CanvasWirePopover: FC<CanvasWirePopoverProps> = ({
       </div>
 
       {hopLines.length === 0 ? (
-        <p className="text-2xs text-ink-muted">This wire has not fired yet.</p>
+        // An empty trail says so as every list does (MC-9).
+        <EmptyState
+          size="compact"
+          variant="plain"
+          detail="This wire has not fired yet."
+        />
       ) : (
         <ul className="flex flex-col gap-0.5">
           {hopLines.map((line, index) => (

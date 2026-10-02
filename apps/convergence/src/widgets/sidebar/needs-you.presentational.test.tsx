@@ -70,7 +70,8 @@ it('shows a counted Working section and moves a finished session into review', (
   }
   const { rerender } = render(<NeedsYou groups={groups(session)} {...props} />)
   const section = screen.getByRole('region', { name: 'Working' })
-  expect(within(section).getByRole('heading')).toHaveTextContent('Working1')
+  expect(within(section).getByRole('heading')).toHaveTextContent('Working')
+  expect(sectionHeaderOf(section)).toHaveTextContent('Working1')
   fireEvent.click(
     within(section).getByRole('button', {
       name: 'Active horse, Working, Project',
@@ -92,6 +93,18 @@ it('shows a counted Working section and moves a finished session into review', (
 })
 
 const liveNow = Date.parse('2026-09-12T12:05:00Z')
+
+/**
+ * A section's head: the kit's SectionHeader (NAV-12), its heading (the title,
+ * and a folded section's glyphs) and the count beside it.
+ */
+function sectionHeaderOf(section: HTMLElement): HTMLElement {
+  const header = within(section)
+    .getByRole('heading')
+    .closest<HTMLElement>('[data-slot="section-header"]')
+  if (!header) throw new Error('the section has no SectionHeader')
+  return header
+}
 function runningCard(id: string, minutes: number, providerId: string) {
   return needsYouCardModel(
     {
@@ -190,7 +203,7 @@ it('MAR-3366 R4 a folded section shows count, one glyph per card and its line; a
   expect(folded.querySelector('[data-fold-line]')).toHaveTextContent(
     'longest 52m 0s',
   )
-  expect(heading).toHaveTextContent(/4$/)
+  expect(sectionHeaderOf(folded)).toHaveTextContent(/4$/)
   expect(
     within(heading).getByRole('img', {
       name: 'Horse a, Horse b, Horse c, Horse d',
@@ -198,7 +211,8 @@ it('MAR-3366 R4 a folded section shows count, one glyph per card and its line; a
   ).toBeInTheDocument()
   expect(within(folded).queryByRole('button', { name: /^Horse a,/ })).toBeNull()
   const open = screen.getByRole('region', { name: 'Needs review' })
-  expect(within(open).getByRole('heading')).toHaveTextContent(/^Needs review1$/)
+  expect(within(open).getByRole('heading')).toHaveTextContent(/^Needs review$/)
+  expect(sectionHeaderOf(open)).toHaveTextContent(/^Needs review1$/)
   expect(open.querySelector('[data-fold-glyphs]')).toBeNull()
   expect(
     within(open).getByRole('button', { name: 'Needs review' }),
@@ -371,5 +385,7 @@ it('MAR-3372 R4 a fold never hides an ask: line 2 opens with it in its tone and 
   const working = part('Working')
   expect(working.line).toHaveTextContent(/^longest 3m 0s · Project$/)
   expect(working.title.className).toBe('')
-  expect(working.heading).toHaveClass('text-ink-muted')
+  expect(working.heading.closest('[data-slot="section-header"]')).toHaveClass(
+    'text-ink-muted',
+  )
 })

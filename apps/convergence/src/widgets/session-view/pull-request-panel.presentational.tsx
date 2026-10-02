@@ -3,9 +3,12 @@ import { GitBranch, GitPullRequest, RefreshCw, X } from 'lucide-react'
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
 import {
   Button,
+  buttonVariants,
   Card,
+  cn,
   EmptyState,
   IconButton,
+  MetaLine,
   Notice,
   PanelHeader,
   SectionLabel,
@@ -98,21 +101,36 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
 
         {pullRequest ? (
           <Card render={<section />} className="text-sm">
-            <p className="font-medium">
-              #{pullRequest.number} · {pullRequest.state}
-            </p>
+            <MetaLine className="font-medium">
+              {`#${pullRequest.number}`}
+              {pullRequest.state}
+            </MetaLine>
             <p className="mt-2 break-all text-ink-muted">{pullRequest.url}</p>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                if (/^https:\/\//.test(pullRequest.url))
-                  window.open(pullRequest.url, '_blank')
-              }}
-              size="lg"
-              className="mt-3"
-            >
-              Open in browser
-            </Button>
+            {/* It goes somewhere, so it is a link that looks like a button,
+                and opens like every other link (DS-24). Only an https
+                address is handed to the browser. */}
+            {/^https:\/\//.test(pullRequest.url) ? (
+              <a
+                href={pullRequest.url}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  buttonVariants({ variant: 'secondary', size: 'lg' }),
+                  'mt-3',
+                )}
+              >
+                Open in browser
+              </a>
+            ) : (
+              <Button
+                variant="secondary"
+                disabledReason="Only an https:// address opens in the browser."
+                size="lg"
+                className="mt-3"
+              >
+                Open in browser
+              </Button>
+            )}
           </Card>
         ) : null}
       </SidePanelBody>
