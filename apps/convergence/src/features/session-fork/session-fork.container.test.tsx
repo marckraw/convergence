@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   localProviderCatalogs,
@@ -462,6 +469,38 @@ describe('SessionForkDialogContainer', () => {
 
     await screen.findByDisplayValue(/Shipping the fork dialog/)
     expect(previewFork).toHaveBeenCalledTimes(2)
+  })
+
+  it('DLG-31 a failed create says "Couldn’t create the fork." with the reason under it — mutation: show the bare message turns red', async () => {
+    const forkFull = vi
+      .fn()
+      .mockRejectedValue(new Error('The branch fork/x already exists.'))
+    primeStores({ forkFull })
+
+    render(<SessionForkDialogContainer />)
+    expect(await screen.findByText('Fork session')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Create fork$/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Couldn’t create the fork. The branch fork/x already exists.',
+    )
+    expect(
+      within(alert).getByText('The branch fork/x already exists.'),
+    ).toBeInTheDocument()
+  })
+
+  it('DLG-31 a failure with no message still says what failed, and nothing else', async () => {
+    const forkFull = vi.fn().mockRejectedValue({ code: 'EUNKNOWN' })
+    primeStores({ forkFull })
+
+    render(<SessionForkDialogContainer />)
+    expect(await screen.findByText('Fork session')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Create fork$/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /^Couldn’t create the fork\.$/,
+    )
   })
 
   it('toggling workspace to fork requires a branch and submits it verbatim', async () => {

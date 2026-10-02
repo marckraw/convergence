@@ -299,6 +299,29 @@ export const Failed: Story = {
   },
 }
 
+/**
+ * Creating the fork failed: what failed over the buttons, and why on the
+ * line under it (R10, DLG-31).
+ */
+export const CreateFailed: Story = {
+  name: 'Create failed',
+  args: {
+    submitError: { reason: 'The branch fork/composer-focus already exists.' },
+  },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openedDialog()
+    const alert = within(dialog).getByRole('alert')
+    await expect(alert).toHaveTextContent('Couldn’t create the fork.')
+    await expect(
+      within(alert).getByText('The branch fork/composer-focus already exists.'),
+    ).toBeVisible()
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Create fork' }),
+    )
+    await expect(args.onConfirm).toHaveBeenCalledOnce()
+  },
+}
+
 /** A new workspace needs a branch name before Create. */
 export const NewWorkspace: Story = {
   name: 'New workspace',
