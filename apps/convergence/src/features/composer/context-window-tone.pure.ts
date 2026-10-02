@@ -59,3 +59,18 @@ export function describeContextAlert(
     ? `Over your alert threshold (${formatTokenCap(alert.tokens)} tokens)`
     : `Over your alert threshold (${alert.percent} %)`
 }
+
+/** The context dot's name for a screen reader: how much room is left (CONV-30). */
+export function contextWindowLabel(
+  contextWindow: SessionContextWindow | null | undefined,
+): string {
+  if (!contextWindow || contextWindow.availability === 'unavailable') {
+    return 'Context window unavailable'
+  }
+  return `Context window ${contextWindow.remainingPercentage}% remaining`
+}
+
+/** A token count in full, grouped in thousands: "152,000". */
+export function formatFullTokens(value: number): string {
+  return new Intl.NumberFormat('en-US').format(value)
+}

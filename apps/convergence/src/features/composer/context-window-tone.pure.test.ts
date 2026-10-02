@@ -4,6 +4,8 @@ import type { ContextAlertSettings } from '@/shared/lib/context-alert-settings.p
 import {
   describeContextAlert,
   getContextTone,
+  contextWindowLabel,
+  formatFullTokens,
 } from './context-window-tone.pure'
 
 const alert: ContextAlertSettings = {
@@ -104,5 +106,35 @@ describe('describeContextAlert', () => {
     expect(describeContextAlert(window_(410000, 1000000), alert)).toBe(
       'Over your alert threshold (400k tokens)',
     )
+  })
+})
+
+describe('contextWindowLabel (CONV-30)', () => {
+  it('names the room left, or says nothing was reported', () => {
+    expect(contextWindowLabel(null)).toBe('Context window unavailable')
+    expect(
+      contextWindowLabel({
+        availability: 'unavailable',
+        source: 'provider',
+        reason: 'No usage',
+      }),
+    ).toBe('Context window unavailable')
+    expect(
+      contextWindowLabel({
+        availability: 'available',
+        source: 'provider',
+        usedTokens: 40000,
+        windowTokens: 200000,
+        usedPercentage: 20,
+        remainingPercentage: 80,
+      }),
+    ).toBe('Context window 80% remaining')
+  })
+})
+
+describe('formatFullTokens (CONV-30)', () => {
+  it('writes a count in full, grouped in thousands', () => {
+    expect(formatFullTokens(152000)).toBe('152,000')
+    expect(formatFullTokens(980)).toBe('980')
   })
 })

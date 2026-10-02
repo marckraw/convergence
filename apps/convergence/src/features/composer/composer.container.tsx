@@ -20,11 +20,9 @@ import {
   isSessionCompacting,
 } from '@/entities/session'
 import { useContextDrillStore } from '@/entities/context-drill'
-import {
-  COMPOSER_WAIT_NOTICES,
-  composerWaitReason,
-  WAITS_FOR_COMPACTION_LABEL,
-} from './composer-wait.pure'
+import { COMPOSER_WAIT_NOTICES, composerWaitReason } from './composer-wait.pure'
+import { QueuedInputs } from './queued-inputs.presentational'
+import { queuedInputViews } from './queued-inputs.pure'
 import {
   catalogInForce,
   providerCatalogHostLabel,
@@ -129,14 +127,12 @@ import {
   workAddressForNewSession,
   type LocalRepositoryState,
 } from './execution-bar.pure'
-import { SectionLabel } from '@convergence/ui'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
-import { Button, IconButton, Notice } from '@convergence/ui'
+import { Notice } from '@convergence/ui'
 import { attachmentRejectionsTitle } from './attachment-rejections.pure'
-import { X } from 'lucide-react'
 
 import type { ComposerSessionContext } from './composer.types'
 export type { ComposerSessionContext } from './composer.types'
@@ -165,51 +161,11 @@ const EMPTY_PROJECT_CONTEXT_ITEMS: ProjectContextItem[] = []
  */
 const NOT_LOOKED_FOR_REPOSITORY: LocalRepositoryState = { status: 'asking' }
 
-/**
- * A waiting row says WHEN it goes, not merely that it is in a list
- * (MAR-2971, R1). "Queued" was true and useless: the four cards Marcin was
- * left with told him a state word and no future.
- */
-const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
-  queued: 'Waiting for the next turn',
-  dispatching: 'Dispatching',
-  sent: 'Sent',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-}
-
-/**
- * Why a queued input can't be cancelled any more (R2): a waiting or failed
- * one can, the rest are past the point where cancelling means anything.
- */
-const CANCEL_QUEUED_UNAVAILABLE: Partial<
-  Record<SessionQueuedInput['state'], string>
-> = {
-  dispatching: 'It is being delivered now.',
-  sent: 'It was delivered already.',
-  cancelled: 'It was cancelled already.',
-}
-
-const DELIVERY_MODE_LABELS: Partial<Record<MidRunInputMode, string>> = {
-  'follow-up': 'Follow-up',
-  steer: 'Steer',
-  interrupt: 'Interrupt',
-}
-
 function getComposerContextKey(context: ComposerSessionContext): string {
   if (context.kind === 'project') {
     return `project:${context.projectId}:${context.workspaceId ?? 'main'}`
   }
   return 'global'
-}
-
-function getQueuedInputPreview(input: SessionQueuedInput): string {
-  const text = input.text.trim()
-  if (text) return text
-  if (input.attachmentIds.length === 1) return '1 attachment'
-  if (input.attachmentIds.length > 1)
-    return `${input.attachmentIds.length} attachments`
-  return 'Empty input'
 }
 
 const ComposerContainerView: FC<ComposerContainerProps> = ({
@@ -2247,81 +2203,11 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         onDrop={handleDrop}
         onPaste={handlePaste}
       />
-      {queuedInputs.length > 0 ? (
-        <div
-          className="mx-auto mt-2 w-full max-w-conversation rounded-md border border-line bg-surface-muted/30 px-3 py-2"
-          data-testid="queued-inputs"
-        >
-          <div className="space-y-2">
-            {queuedInputs.map((input) => (
-              <div
-                key={input.id}
-                className="flex items-start justify-between gap-3 text-xs"
-              >
-                <div className="min-w-0 flex-1">
-                  <SectionLabel size="sm" className="flex items-center gap-2">
-                    <span>
-                      {DELIVERY_MODE_LABELS[input.deliveryMode] ??
-                        input.deliveryMode}
-                    </span>
-                    <span>
-                      {/* Why it waits, when it waits (MAR-3288 R7). */}
-                      {input.state === 'queued' && waitReason
-                        ? WAITS_FOR_COMPACTION_LABEL
-                        : QUEUED_INPUT_STATE_LABELS[input.state]}
-                    </span>
-                  </SectionLabel>
-                  <div className="truncate text-ink">
-                    {getQueuedInputPreview(input)}
-                  </div>
-                  {input.error ? (
-                    <div className="truncate text-danger-ink">
-                      {input.error}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {/*
-                   * Deliver now (MAR-2971, R2). Only a failed row has an
-                   * attempt to repeat; a waiting one is already on its way,
-                   * and offering to hurry it would be a button that lies.
-                   *
-                   * And only ONCE (lap 5). A failed row keeps its card as the
-                   * record of the first attempt, so the button would stay
-                   * clickable forever; pressed twice it would queue a second
-                   * re-attempt sharing the first's place in line. Once
-                   * something has replaced this row the errand is already
-                   * being carried again, and the honest card says so by
-                   * offering nothing to press.
-                   */}
-                  {input.state === 'failed' && !input.redeliveredBy ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      aria-label="Deliver now"
-                      onClick={() => void redeliverQueuedInput(input.id)}
-                      size="xs"
-                    >
-                      Deliver now
-                    </Button>
-                  ) : null}
-                  <IconButton
-                    label="Cancel queued input"
-                    type="button"
-                    variant="ghost"
-                    disabledReason={CANCEL_QUEUED_UNAVAILABLE[input.state]}
-                    onClick={() => void cancelQueuedInput(input.id)}
-                    size="xs"
-                    className="shrink-0"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </IconButton>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <QueuedInputs
+        inputs={queuedInputViews(queuedInputs, Boolean(waitReason))}
+        onDeliverNow={(id) => void redeliverQueuedInput(id)}
+        onCancel={(id) => void cancelQueuedInput(id)}
+      />
       {/* A failure, so an alert (DS-5): "Couldn't attach …", each reason under it. */}
       {rejections.length > 0 && (
         <Notice
