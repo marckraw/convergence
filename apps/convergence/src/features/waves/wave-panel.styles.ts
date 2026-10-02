@@ -203,6 +203,10 @@ export const LOOM_SHEET_BODY_CLASS =
  */
 export const WAVE_SECTION_HINT_CLASS = 'px-3 pb-1 text-2xs text-ink-muted'
 
+/**
+ * A line under a sheet's list: how many are older, what left the loop. Not
+ * an empty sheet's note, which is EmptyState's (MC-20).
+ */
 export const LOOM_SHEET_NOTE_CLASS = 'px-3 pt-3 text-2xs text-ink-muted'
 
 /** The horses line above the cards (MAR-3191): a section title (MC-34). */
@@ -307,10 +311,6 @@ export const LOOM_SEARCH_TOGGLE_CLASS = 'shrink-0 text-ink-muted'
 
 /** Compact's subline row: the subline, then the search icon. */
 export const LOOM_SEARCH_SUBLINE_ROW_CLASS = 'mb-2 flex items-start gap-2'
-
-/** The "no match here" line in the open sheet (R3, R5). */
-export const LOOM_SEARCH_MISS_CLASS =
-  'px-3 pt-3 text-2xs leading-relaxed text-ink-muted'
 
 /**
  * One "1 in Plan" answer: a link Button that opens that sheet (R3). A link
