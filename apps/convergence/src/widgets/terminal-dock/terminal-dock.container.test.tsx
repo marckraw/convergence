@@ -92,7 +92,7 @@ vi.mock('@/features/terminal-pane', () => ({
   },
 }))
 
-import { TerminalDock } from './index'
+import { ShowTerminal, TerminalDock } from './index'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -450,6 +450,128 @@ describe('TerminalDock container', () => {
 
     expect(screen.getByTestId('terminal-dock')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hide terminal' })).toBeNull()
+  })
+
+  // MAR-3608: once hidden, the dock came back only through Cmd-`. Show
+  // terminal is that way back on screen, in the window's status bar; the
+  // shell renders it and the dock side by side, and so do these tests.
+  describe('Show terminal', () => {
+    type SessionState = ReturnType<typeof useSessionStore.getState>
+
+    /** Three terminals in two panes, the dock hidden unless told otherwise. */
+    function setup({
+      primarySurface = 'conversation',
+      dockVisible = false,
+      withTerminals = true,
+    }: {
+      primarySurface?: Session['primarySurface']
+      dockVisible?: boolean
+      withTerminals?: boolean
+    } = {}) {
+      useSessionStore.setState({
+        sessions: [makeSession({ primarySurface })],
+        activeSessionId: 's-1',
+      } as Partial<SessionState>)
+      useTerminalStore.setState({
+        treesBySessionId: {
+          's-1': withTerminals
+            ? split('s1', 'horizontal', [
+                leaf('l1', [makeTab('t-1'), makeTab('t-2')]),
+                leaf('l2', [makeTab('t-3')]),
+              ])
+            : null,
+        },
+        focusedLeafBySessionId: { 's-1': withTerminals ? 'l1' : null },
+        dockVisibleBySessionId: { 's-1': dockVisible },
+      })
+    }
+
+    const queryShow = () =>
+      screen.queryByRole('button', { name: 'Show terminal' })
+
+    // Mutation: drop the container's onShow (or the button's onClick) -> the
+    // dock stays hidden: red.
+    it('brings the hidden dock back, as Cmd-` does, with its terminals as they were', () => {
+      setup()
+      const closeAllSpy = vi.spyOn(
+        useTerminalStore.getState(),
+        'closeAllForSession',
+      )
+      render(
+        <>
+          <TerminalDock />
+          <ShowTerminal />
+        </>,
+      )
+      expect(screen.queryByTestId('terminal-dock')).toBeNull()
+
+      const show = screen.getByRole('button', { name: 'Show terminal' })
+      // Its tooltip says the key (the tests run as a Mac), and it says how
+      // many terminals wait in the dock.
+      expect(show).toHaveAttribute('data-tooltip-shortcut', '⌘`')
+      expect(show).toHaveTextContent('3')
+      expect(show).toHaveAccessibleDescription('3 terminals open')
+      fireEvent.click(show)
+
+      expect(screen.getByTestId('terminal-dock')).toBeInTheDocument()
+      expect(useTerminalStore.getState().isDockVisible('s-1')).toBe(true)
+      expect(screen.getAllByTestId('terminal-pane-stub')).toHaveLength(2)
+      expect(closeAllSpy).not.toHaveBeenCalled()
+      expect(queryShow()).toBeNull()
+    })
+
+    it('is the way back from Hide terminal and from Cmd-`, and goes as the dock comes back', () => {
+      setup({ dockVisible: true })
+      render(
+        <>
+          <TerminalDock />
+          <ShowTerminal />
+        </>,
+      )
+      expect(queryShow()).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Hide terminal' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Show terminal' }))
+      expect(screen.getByTestId('terminal-dock')).toBeInTheDocument()
+      expect(queryShow()).toBeNull()
+
+      fireEvent.keyDown(window, { key: '`', metaKey: true })
+      expect(screen.queryByTestId('terminal-dock')).toBeNull()
+      expect(queryShow()).toBeInTheDocument()
+
+      fireEvent.keyDown(window, { key: '`', metaKey: true })
+      expect(screen.getByTestId('terminal-dock')).toBeInTheDocument()
+      expect(queryShow()).toBeNull()
+    })
+
+    it('is absent while the dock is on screen', () => {
+      setup({ dockVisible: true })
+      render(<ShowTerminal />)
+      expect(queryShow()).toBeNull()
+    })
+
+    it('is absent when the conversation has no terminals: Close terminal ended them', () => {
+      setup({ withTerminals: false })
+      render(<ShowTerminal />)
+      expect(queryShow()).toBeNull()
+    })
+
+    it('is absent when the terminal is the main view, where there is no dock and Cmd-` does nothing', () => {
+      setup({ primarySurface: 'terminal' })
+      render(
+        <>
+          <TerminalDock mode="main" />
+          <ShowTerminal />
+        </>,
+      )
+      expect(screen.getByTestId('terminal-dock')).toBeInTheDocument()
+      expect(queryShow()).toBeNull()
+    })
+
+    it('is absent with no conversation open', () => {
+      render(<ShowTerminal />)
+      expect(queryShow()).toBeNull()
+    })
   })
 
   describe('keyboard shortcuts', () => {

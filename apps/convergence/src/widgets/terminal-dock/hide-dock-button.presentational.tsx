@@ -20,8 +20,9 @@ interface HideDockButtonProps {
 
 /**
  * The dock's Hide terminal: puts the dock away, as ⌘` does, and leaves its
- * terminals running. The header's Project › Close terminal is the other
- * control, and the one that ends them; this one never does.
+ * terminals running; Show terminal, at the status bar's end, brings it back.
+ * The header's Project › Close terminal is the other control, and the one
+ * that ends them; this one never does.
  */
 export const HideDockButton: FC<HideDockButtonProps> = ({
   placement,
