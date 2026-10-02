@@ -20,6 +20,8 @@ import {
   Button,
   ChoiceField,
   cn,
+  dialogRail,
+  dialogSplit,
   EmptyState,
   FormDialog,
   ListRow,
@@ -445,8 +447,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       saves="as-you-go"
       error={error}
     >
-      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <aside className="shrink-0 border-b border-line-soft bg-surface/30 sm:w-64 sm:border-r sm:border-b-0">
+      <div className={dialogSplit}>
+        <aside className={cn(dialogRail, 'bg-surface/30 sm:w-64')}>
           <nav
             aria-label="Settings sections"
             className="app-scrollbar flex gap-1 overflow-x-auto p-3 sm:h-full sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto"

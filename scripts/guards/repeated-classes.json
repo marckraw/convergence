@@ -19,5 +19,46 @@
   "functions": ["cn", "cva"],
   "minUtilities": 4,
   "maxOccurrences": 2,
-  "allowlist": []
+  "allowlist": [
+    {
+      "classes": "flex min-w-0 items-center gap-2",
+      "reason": "A layout sentence, not a component: a glyph and its words in a row that may be cut short. Fourteen unrelated places hold it (pickers, headers, panels and three @convergence/ui parts), each around different content."
+    },
+    {
+      "classes": "flex min-w-0 items-center gap-1.5",
+      "reason": "A layout sentence, not a component: a glyph and its words in a row that may be cut short, at the tighter gap small text takes."
+    },
+    {
+      "classes": "flex shrink-0 items-center gap-1",
+      "reason": "A layout sentence, not a component: a row's trailing cluster (actions, badges) that keeps its width while the words beside it shrink."
+    },
+    {
+      "classes": "flex shrink-0 items-center gap-2",
+      "reason": "A layout sentence, not a component: a cluster that keeps its width while the words beside it shrink, at the wider gap."
+    },
+    {
+      "classes": "flex h-full min-h-0 flex-col",
+      "reason": "A layout sentence, not a component: a column that fills its parent and lets one child scroll."
+    },
+    {
+      "classes": "flex items-start justify-between gap-3",
+      "reason": "A layout sentence, not a component: words at the start and something at the end, top-aligned, in cards and popovers whose contents differ."
+    },
+    {
+      "classes": "flex items-center justify-between gap-3",
+      "reason": "A layout sentence, not a component: words at the start and a control at the end, centred on each other."
+    },
+    {
+      "classes": "flex items-center justify-between gap-2",
+      "reason": "A layout sentence, not a component: a label at the start and its control at the end, at the tighter gap."
+    },
+    {
+      "classes": "flex flex-wrap items-center gap-2",
+      "reason": "A layout sentence, not a component: a row of controls or chips that wraps when it runs out of room."
+    },
+    {
+      "classes": "flex flex-wrap items-center gap-1",
+      "reason": "A layout sentence, not a component: a row of small chips that wraps when it runs out of room, at the tight gap."
+    }
+  ]
 }

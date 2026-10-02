@@ -10,6 +10,9 @@ import {
 } from '@/entities/local-model-tunnel'
 import {
   Button,
+  cn,
+  dialogRail,
+  dialogSplit,
   EmptyState,
   FormDialog,
   FormError,
@@ -257,8 +260,8 @@ export const LocalModelTunnelStatusContainer: FC = () => {
         flush
         saves="as-you-go"
       >
-        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <aside className="shrink-0 border-b border-line-soft bg-surface/30 p-3 sm:w-64 sm:border-r sm:border-b-0">
+        <div className={dialogSplit}>
+          <aside className={cn(dialogRail, 'bg-surface/30 p-3 sm:w-64')}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <SectionLabel as="h3">Profiles</SectionLabel>
               <IconButton
