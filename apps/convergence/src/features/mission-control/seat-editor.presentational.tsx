@@ -16,6 +16,8 @@ import {
   Field,
   FieldDescription,
   FieldLabel,
+  Fieldset,
+  FieldsetLegend,
   IconButton,
   Input,
   Notice,
@@ -147,6 +149,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
   // A refusal describes the field it refuses (MC-4): its id is the field's
   // aria-describedby while it shows.
   const refusalIds = useId()
+  const laneHintId = `${refusalIds}-lane-hint`
   const refusalId = (field: SeatRefusalField) =>
     problems[field] === undefined ? undefined : `${refusalIds}-${field}`
   const refusalFor = (field: SeatRefusalField) => {
@@ -377,15 +380,20 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             {refusalFor('hostPolicy')}
           </Field>
         ) : null}
-        <Field invalid={problems.lanePolicy !== undefined} className="gap-1">
-          <FieldLabel variant="caption" nativeLabel={false} render={<div />}>
+        {/* A group of radios is named by a Fieldset's legend: in a Field,
+            each radio would take the Field's label as its own name. */}
+        <Fieldset className="gap-1">
+          <FieldsetLegend className="text-2xs text-ink-muted">
             Lane <span className="sr-only">for {label}</span>
-          </FieldLabel>
+          </FieldsetLegend>
           <SegmentedControl
             size="xs"
             value={member.lanePolicy ?? DEFAULT_LANE}
             disabled={busy}
-            aria-describedby={refusalId('lanePolicy')}
+            aria-invalid={problems.lanePolicy !== undefined || undefined}
+            aria-describedby={[laneHintId, refusalId('lanePolicy')]
+              .filter(Boolean)
+              .join(' ')}
             onValueChange={(value) => {
               const lanePolicy =
                 value === DEFAULT_LANE ? null : (value as SeatLane)
@@ -402,11 +410,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               </SegmentedControlItem>
             ))}
           </SegmentedControl>
-          <FieldDescription className="text-3xs">
+          <p id={laneHintId} className="text-3xs text-ink-muted">
             Applied when a recipe is spawned.
-          </FieldDescription>
+          </p>
           {refusalFor('lanePolicy')}
-        </Field>
+        </Fieldset>
         {member.lanePolicy === 'own-worktree' ? (
           <Field
             invalid={problems.lanePath !== undefined}

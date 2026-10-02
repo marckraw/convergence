@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { selectOption } from '@/shared/testing/select-option'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
@@ -280,10 +286,14 @@ describe('SpaceWorkboardDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
     await screen.findByText('Agent-native work tracking')
     fireEvent.click(screen.getByRole('button', { name: /add artifact/i }))
-    fireEvent.change(screen.getByLabelText(/new artifact label/i), {
+    // Add Artifact's fields are named by their captions (DLG-7).
+    const addArtifact = await screen.findByRole('dialog', {
+      name: 'Add Artifact',
+    })
+    fireEvent.change(within(addArtifact).getByLabelText('Label'), {
       target: { value: 'Public PR' },
     })
-    fireEvent.change(screen.getByLabelText(/new artifact value/i), {
+    fireEvent.change(within(addArtifact).getByLabelText('Value'), {
       target: { value: 'https://github.com/example/repo/pull/1' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Add Artifact' }))

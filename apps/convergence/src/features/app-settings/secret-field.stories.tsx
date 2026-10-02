@@ -86,9 +86,9 @@ export const Replace: Story = {
 export const Busy: Story = {
   args: { configured: true, value: 'sk-or-new', saving: true },
   play: async ({ canvas }) => {
-    const save = canvas.getByRole('button', { name: 'Replace key' })
+    // Busy, it says so in its words: "Saving…" (R10).
+    const save = canvas.getByRole('button', { name: 'Saving…' })
     await expect(save).toHaveAttribute('aria-busy', 'true')
-    await expect(save).toHaveTextContent('Saving…')
     await expect(canvas.getByLabelText('API key')).toBeDisabled()
   },
 }
