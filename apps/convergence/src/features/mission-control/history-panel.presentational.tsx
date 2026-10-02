@@ -2,6 +2,8 @@ import type { FC } from 'react'
 import { X } from 'lucide-react'
 import {
   Button,
+  Card,
+  CardAction,
   cn,
   EmptyState,
   FormError,
@@ -12,6 +14,7 @@ import {
 } from '@convergence/ui'
 import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
 import { HistoryEventRowView } from './history-event-row.presentational'
+import { ROW_CARD_DOOR_CLASS, ROW_CARD_PICKED_CLASS } from './row-card.styles'
 import { HISTORY_FILTERS } from './run-history.pure'
 import type {
   HistoryEventRow,
@@ -202,30 +205,32 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
         <ul className="w-64 shrink-0 space-y-1 overflow-y-auto border-r border-hairline px-3 pb-3">
           {runs.map((run) => (
             <li key={run.flowRunId}>
-              <Button
-                type="button"
-                variant="ghost"
-                aria-pressed={run.flowRunId === selectedRunId}
-                onClick={() => onSelectRun(run.flowRunId)}
-                size="lg"
+              <Card
+                interactive
+                padding="none"
                 className={cn(
-                  'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 text-left font-normal',
                   TONE_FRAME[HISTORY_TONE[run.tone]],
                   // R7: the picked run wears the selected fill.
-                  run.flowRunId === selectedRunId && 'bg-fill-selected',
+                  run.flowRunId === selectedRunId && ROW_CARD_PICKED_CLASS,
                 )}
               >
-                <span className="text-xs">
-                  {run.timeLabel}
-                  {run.startingStation ? ` · ${run.startingStation}` : ''}
-                </span>
-                <span
-                  className={cn('text-3xs', toneInk[HISTORY_TONE[run.tone]])}
+                <CardAction
+                  aria-pressed={run.flowRunId === selectedRunId}
+                  onClick={() => onSelectRun(run.flowRunId)}
+                  className={ROW_CARD_DOOR_CLASS}
                 >
-                  {run.statusLine}
-                </span>
-                <span className="text-3xs">{run.activityLine}</span>
-              </Button>
+                  <span className="text-xs">
+                    {run.timeLabel}
+                    {run.startingStation ? ` · ${run.startingStation}` : ''}
+                  </span>
+                  <span
+                    className={cn('text-3xs', toneInk[HISTORY_TONE[run.tone]])}
+                  >
+                    {run.statusLine}
+                  </span>
+                  <span className="text-3xs">{run.activityLine}</span>
+                </CardAction>
+              </Card>
             </li>
           ))}
 

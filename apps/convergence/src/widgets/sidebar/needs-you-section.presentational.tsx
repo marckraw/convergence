@@ -53,11 +53,10 @@ export function NeedsYouSection({
         >
           <Button
             type="button"
-            variant="ghost"
+            variant="link"
             aria-expanded={!folded}
             onClick={() => onToggleFold?.(title)}
-            size="lg"
-            className="h-auto shrink-0 gap-1 rounded-sm p-0 text-2xs font-medium hover:bg-transparent hover:text-ink"
+            className="shrink-0 gap-1 rounded-sm text-inherit hover:text-ink hover:no-underline"
           >
             <ChevronRight
               aria-hidden="true"

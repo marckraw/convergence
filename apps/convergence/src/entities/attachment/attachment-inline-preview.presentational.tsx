@@ -18,15 +18,15 @@ export const AttachmentInlinePreview: FC<AttachmentInlinePreviewProps> = ({
 
   return (
     <Tooltip label={attachment.filename}>
+      {/* A link Button: the picture and its name act, with no control box to undo. */}
       <Button
         type="button"
-        variant="ghost"
+        variant="link"
         aria-label={`Preview ${attachment.filename}`}
         data-testid="attachment-inline-preview"
         data-attachment-id={attachment.id}
         onClick={() => onOpen(attachment)}
-        size="lg"
-        className="group h-auto w-full max-w-md flex-col items-stretch justify-start gap-0 whitespace-normal rounded-none p-0 text-left font-normal hover:bg-transparent hover:text-inherit"
+        className="group w-full max-w-md flex-col items-stretch justify-start gap-0 whitespace-normal rounded-none text-left font-normal text-inherit hover:no-underline"
       >
         <span className="block aspect-[4/3] w-full overflow-hidden rounded-md border border-line bg-viewer">
           {/* The button's name and the line under the picture name it already. */}

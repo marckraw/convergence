@@ -33,16 +33,17 @@ export const LoomOutsideGroupView: FC<{
     className="mt-2 flex flex-col"
   >
     {view.foldable ? (
+      // A link Button: the section title's own words and box act, with no
+      // control box of their own to undo.
       <Button
         type="button"
-        variant="ghost"
-        size="lg"
+        variant="link"
         aria-expanded={open}
         aria-controls={LIST_ID}
         onClick={onToggle}
         className={cn(
           WAVE_SECTION_TITLE_CLASS,
-          'h-auto justify-start gap-1 rounded-md hover:bg-fill-hover',
+          'justify-start gap-1 rounded-md hover:bg-fill-hover hover:no-underline',
         )}
       >
         <ChevronRight

@@ -481,13 +481,13 @@ export const ProjectTree = memo(function ProjectTree({
 
       {/* New workspace */}
       {!searching ? (
-        <div className="mt-2 ml-2">
+        <div className="mt-2 ml-2 text-xs">
+          {/* Quiet words that act: a link Button, which has no box to undo. */}
           <Button
             type="button"
-            variant="quiet"
+            variant="link"
             onClick={onOpenCreateWorkspace}
-            size="lg"
-            className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal"
+            className="gap-1 font-normal text-ink-muted hover:text-ink"
           >
             <Plus className="h-3 w-3" />
             New workspace

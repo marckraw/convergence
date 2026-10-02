@@ -37,7 +37,7 @@ export const ConversationRoutineRow: FC<{
       {cancel ? (
         <>
           <Button
-            size="lg"
+            size="md"
             type="button"
             variant="ghost"
             role="menuitem"

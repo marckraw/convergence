@@ -647,7 +647,8 @@ export const SessionView: FC = () => {
                             session.parentSessionId &&
                             setActiveSession(session.parentSessionId)
                           }
-                          className="h-auto justify-start px-2 py-1.5"
+                          size="sm"
+                          className="justify-start gap-2"
                         >
                           <GitFork className="h-3.5 w-3.5" />
                           Forked from:{' '}

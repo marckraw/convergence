@@ -226,7 +226,6 @@ export const LoomSheetView = <TSession,>({
                     type="button"
                     variant="link"
                     onClick={() => onSelectSheet?.(place.sheet)}
-                    size="lg"
                     className={LOOM_SEARCH_ELSEWHERE_CLASS}
                   >
                     {loomSearchElsewhereLabel(place)}
