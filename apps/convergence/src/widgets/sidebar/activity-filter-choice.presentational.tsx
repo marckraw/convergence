@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
-import { Button, cn, Tooltip } from '@convergence/ui'
+import { cn, Toggle, Tooltip } from '@convergence/ui'
 
+/**
+ * One choice among the Activity feed's filters: a Toggle, so it says
+ * aria-pressed and, chosen, is the raised chip every pick-one control wears
+ * (R7, NAV-18; it was a hand-drawn border and a 5% fill).
+ */
 export function FilterChoice({
   label,
   selected,
@@ -19,31 +24,26 @@ export function FilterChoice({
   tooltip?: string
 }) {
   const control = (
-    <Button
-      type="button"
-      variant="ghost"
+    <Toggle
+      size="sm"
+      pressed={selected}
       aria-label={label}
       aria-description={
         count === undefined ? undefined : `${count} matching conversations`
       }
-      aria-pressed={selected}
       onClick={onClick}
-      className={cn(
-        'h-[30px] shrink-0 gap-1.5 border border-transparent px-2 text-[11px] font-normal',
-        selected && 'border-foreground/25 bg-foreground/5 font-medium',
-        className,
-      )}
+      className={cn('shrink-0 px-2 font-normal', className)}
     >
       {children}
       {count !== undefined && (
         <span
           aria-hidden="true"
-          className="tabular-nums text-[10px] text-muted-foreground"
+          className="tabular-nums text-3xs text-muted-foreground"
         >
           {count}
         </span>
       )}
-    </Button>
+    </Toggle>
   )
   return tooltip ? <Tooltip label={tooltip}>{control}</Tooltip> : control
 }

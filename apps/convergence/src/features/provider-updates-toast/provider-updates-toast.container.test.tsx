@@ -96,7 +96,7 @@ describe('ProviderUpdatesToastContainer', () => {
     rerender(<ProviderUpdatesToastContainer />)
 
     expect(sonnerMock.info).toHaveBeenCalledWith(
-      'Provider update available - Codex 0.130.0',
+      'Provider update available — Codex 0.130.0',
       expect.objectContaining({
         id: 'provider-updates:available',
         action: expect.objectContaining({ label: 'Update' }),

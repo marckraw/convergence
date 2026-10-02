@@ -568,13 +568,15 @@ describe('App', () => {
     expect(screen.getByText('Coordinate launch work.')).toBeInTheDocument()
   })
 
+  // The rail's mark and count wear one tone (R1): warning for a card that
+  // waits on you, danger for a failure, success for review-only.
   it.each([
-    ['none', 'border-emerald-500', 0],
-    ['failed', 'border-destructive', 1],
-    ['needs-input', 'border-warning', 1],
+    ['none', 'success', 0],
+    ['failed', 'danger', 1],
+    ['needs-input', 'warning', 1],
   ] as const)(
     'attention badge excludes dismissed and quiet cards with %s live attention (mutation: count dismissed)',
-    async (attention, color, count) => {
+    async (attention, tone, count) => {
       const pinned = makeSessionSummary({
         id: 'snoozed',
         name: 'Snoozed pinned',
@@ -624,10 +626,17 @@ describe('App', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
       const indicator = screen.getByRole('button', { name: /^Needs You/ })
       expect(indicator).toHaveAccessibleName(`Needs You (${count})`)
-      expect(indicator.querySelector('span')).toHaveClass(color)
-      if (count)
-        expect(within(indicator).getByText(String(count))).toBeInTheDocument()
-      else expect(indicator.querySelectorAll('span')).toHaveLength(1)
+      expect(indicator.querySelector('[data-tone]')).toHaveAttribute(
+        'data-tone',
+        tone,
+      )
+      if (count) {
+        const badge = within(indicator).getByText(String(count))
+        expect(badge.closest('[data-slot="badge"]')).toHaveAttribute(
+          'data-tone',
+          tone,
+        )
+      } else expect(indicator.querySelectorAll('span')).toHaveLength(1)
     },
   )
 

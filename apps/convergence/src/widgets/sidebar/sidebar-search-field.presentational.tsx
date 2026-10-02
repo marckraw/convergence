@@ -1,6 +1,5 @@
 import type { FC, RefObject } from 'react'
-import { X } from 'lucide-react'
-import { cn, IconButton, Input } from '@convergence/ui'
+import { cn, SearchField } from '@convergence/ui'
 
 interface SidebarSearchFieldProps {
   query: string
@@ -11,6 +10,11 @@ interface SidebarSearchFieldProps {
   className?: string
 }
 
+/**
+ * The sidebar's conversation search: the kit's SearchField (NAV-15), with
+ * its magnifier and one clear button (the browser's own is hidden), in the
+ * search landmark the ⌘F shortcut looks for.
+ */
 export const SidebarSearchField: FC<SidebarSearchFieldProps> = ({
   query,
   inputRef,
@@ -23,17 +27,16 @@ export const SidebarSearchField: FC<SidebarSearchFieldProps> = ({
     data-sidebar-search
     role="search"
     aria-label="Search conversations"
-    className={cn('relative px-3 pt-2', className)}
+    className={cn('px-3 pt-2', className)}
   >
-    <Input
+    <SearchField
       size="md"
       ref={inputRef}
-      type="search"
       value={query}
       placeholder="Search conversations"
       aria-label="Search conversations"
-      className="pr-8"
       onChange={(event) => onQueryChange(event.target.value)}
+      onClear={onClear}
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return
         event.preventDefault()
@@ -41,17 +44,5 @@ export const SidebarSearchField: FC<SidebarSearchFieldProps> = ({
         onEscape()
       }}
     />
-    {query.length > 0 ? (
-      <IconButton
-        label="Clear search"
-        type="button"
-        variant="ghost"
-        onClick={onClear}
-        size="sm"
-        className="absolute top-2.5 right-3.5 text-muted-foreground"
-      >
-        <X className="h-3.5 w-3.5" />
-      </IconButton>
-    ) : null}
   </div>
 )

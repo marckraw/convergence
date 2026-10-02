@@ -21,6 +21,13 @@ import { sidebarCards } from './sidebar-sessions.pure'
 
 beforeEach(() => localStorage.clear())
 
+/**
+ * The base branch's section header holds its name and, beside it, how many
+ * sessions sit on it (SectionHeader, NAV-12): the count's words.
+ */
+const baseBranchCount = (name: string) =>
+  screen.getByRole('heading', { name }).nextElementSibling?.textContent
+
 const baseSession = {
   contextKind: 'project' as const,
   projectId: 'project-1',
@@ -199,7 +206,7 @@ describe('SidebarConversations (production search wiring)', () => {
     expect(
       within(screen.getByRole('region', { name: 'Pinned' })).getByText('2'),
     ).toBeInTheDocument()
-    expect(screen.getByText('master (1)')).toBeInTheDocument()
+    expect(baseBranchCount('master')).toBe('1')
     expect(screen.getByText('-- Fable Mastermind --')).toBeInTheDocument()
     expect(screen.getByText('Fable Reviewer')).toBeInTheDocument()
     expect(screen.getByText('Fable horse')).toBeInTheDocument()
@@ -211,7 +218,7 @@ describe('SidebarConversations (production search wiring)', () => {
       { target: { value: '' } },
     )
     expect(screen.getByText('Plain agent')).toBeInTheDocument()
-    expect(screen.getByText('master (11)')).toBeInTheDocument()
+    expect(baseBranchCount('master')).toBe('11')
   })
 
   it('R3 filters live as he types — no Enter required', () => {
@@ -302,7 +309,7 @@ describe('SidebarConversations (production search wiring)', () => {
     ).toBeNull()
     expect(screen.getByText('Plain agent')).toBeInTheDocument()
     expect(screen.getByText('Other work 0')).toBeInTheDocument()
-    expect(screen.getByText('master (11)')).toBeInTheDocument()
+    expect(baseBranchCount('master')).toBe('11')
   })
 
   it('R4 never persists the query in localStorage', () => {

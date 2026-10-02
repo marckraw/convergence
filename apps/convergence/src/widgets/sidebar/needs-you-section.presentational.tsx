@@ -47,7 +47,7 @@ export function NeedsYouSection({
       <div className="mb-1.5">
         <h2
           className={cn(
-            'flex items-center gap-1.5 text-[11px] font-medium',
+            'flex items-center gap-1.5 text-2xs font-medium',
             pinned ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
@@ -57,7 +57,7 @@ export function NeedsYouSection({
             aria-expanded={!folded}
             onClick={() => onToggleFold?.(title)}
             size="lg"
-            className="h-auto shrink-0 gap-1 rounded-sm p-0 text-[11px] font-medium hover:bg-transparent hover:text-foreground"
+            className="h-auto shrink-0 gap-1 rounded-sm p-0 text-2xs font-medium hover:bg-transparent hover:text-foreground"
           >
             <ChevronRight
               aria-hidden="true"

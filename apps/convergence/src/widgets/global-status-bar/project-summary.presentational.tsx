@@ -6,8 +6,8 @@ import {
   isSessionCompacting,
   type ProjectActivity,
 } from '@/entities/session'
-import { cn } from '@convergence/ui'
-import { dotClass } from './global-status-bar.styles'
+import { StatusDot } from '@convergence/ui'
+import { barTone } from './global-status-bar.styles'
 
 interface ProjectSummaryProps {
   project: ProjectActivity
@@ -21,7 +21,7 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
   const rows = [...project.needsAttention, ...project.running]
   return (
     <div className="min-w-0 space-y-1">
-      <p className="text-[11px] font-medium text-foreground">
+      <p className="text-2xs font-medium text-foreground">
         {project.projectName}
       </p>
       {rows.map((session) => {
@@ -29,34 +29,30 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
         const activityLabel = isSessionCompacting(session)
           ? COMPACTING_CONTEXT_LABEL
           : formatActivityLabel(session.activity)
-        const attentionLabel =
+        const waiting =
           session.attention === 'needs-approval' ||
           session.attention === 'needs-input'
-            ? formatSessionAttentionLabel(session)
-            : null
+        const attentionLabel = waiting
+          ? formatSessionAttentionLabel(session)
+          : null
         return (
           <div
             key={session.id}
-            className="flex min-w-0 items-center gap-1.5 text-[11px]"
+            className="flex min-w-0 items-center gap-1.5 text-2xs"
           >
-            <span
-              className={cn(
-                dotClass,
-                session.attention === 'needs-approval' ||
-                  session.attention === 'needs-input'
-                  ? 'bg-warning'
-                  : 'bg-emerald-400',
-              )}
+            <StatusDot
+              size="sm"
+              tone={waiting ? barTone.waiting : barTone.running}
             />
             <span className="max-w-40 truncate text-foreground">
               {session.name}
             </span>
-            <span className="shrink-0 text-muted-foreground/80">
+            <span className="shrink-0 text-muted-foreground">
               · {providerLabel(session.providerId)}
             </span>
             {attentionLabel || activityLabel ? (
               <span
-                className="shrink-0 truncate text-muted-foreground/70"
+                className="shrink-0 truncate text-muted-foreground"
                 data-testid={`global-status-activity-${session.id}`}
               >
                 · {attentionLabel ?? activityLabel}

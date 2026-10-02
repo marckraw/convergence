@@ -97,7 +97,6 @@ describe('MAR-3314 R1: per-file sidebar hover', () => {
         <SidebarToolsMenu
           activeSurface="code"
           hasActiveProject
-          iconOnly
           onOpenDialog={vi.fn()}
         />
       </TooltipProvider>,

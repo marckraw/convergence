@@ -23,7 +23,7 @@ export const ProjectActionRunLog: FC<ProjectActionRunLogProps> = ({
 
   return (
     <div className="border-t border-border bg-muted/30 p-3">
-      <div className="mb-2 grid gap-1 text-[11px] text-muted-foreground">
+      <div className="mb-2 grid gap-1 text-2xs text-muted-foreground">
         <span>cwd: {run.cwd}</span>
         <span>
           started: {formatTimestamp(run.startedAt)}
@@ -32,14 +32,14 @@ export const ProjectActionRunLog: FC<ProjectActionRunLogProps> = ({
         </span>
         <span>stdin is not supported for project actions.</span>
       </div>
-      <pre className="app-scrollbar max-h-72 overflow-auto rounded-md border border-border bg-background p-2 font-mono text-[11px] leading-relaxed">
+      <pre className="max-h-72 overflow-auto rounded-md border border-border bg-background p-2 font-mono text-2xs leading-relaxed">
         {chunks.length === 0 ? (
           <span className="text-muted-foreground">No output yet.</span>
         ) : (
           chunks.map((chunk, index) => (
             <span
               key={`${chunk.stream}-${index}`}
-              className={chunk.stream === 'stderr' ? 'text-destructive' : ''}
+              className={chunk.stream === 'stderr' ? 'text-danger-ink' : ''}
             >
               {chunk.text}
             </span>
