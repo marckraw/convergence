@@ -7,6 +7,7 @@ const meta = {
   title: 'Features/Composer/ComposerSelect',
   component: ComposerSelect,
   args: {
+    label: 'Reasoning effort',
     selectedId: 'medium',
     value: 'Medium',
     items: [
@@ -15,7 +16,7 @@ const meta = {
       { id: 'high', label: 'High', description: 'Thinks longer.' },
     ],
     onChange: fn(),
-    className: 'px-2 text-xs',
+    size: 'sm',
   },
 } satisfies Meta<typeof ComposerSelect>
 
@@ -23,22 +24,27 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** One of the composer's searchable choices: open it and pick. */
+/**
+ * One of the composer's searchable choices: named by what it picks, showing
+ * its value. Open it and pick.
+ */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('combobox', { name: 'Medium' }))
+    const picker = canvas.getByRole('combobox', { name: 'Reasoning effort' })
+    await expect(picker).toHaveTextContent('Medium')
+    await userEvent.click(picker)
     await userEvent.click(await screen.findByRole('option', { name: /High/ }))
     await expect(args.onChange).toHaveBeenCalledWith('high')
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
   },
 }
 
-/** Named for what it chooses, with an icon, as the Codex speed is. */
+/** With an icon, as the Codex speed is. */
 export const WithIcon: Story = {
   args: {
+    label: 'Speed',
     selectedId: 'priority',
     value: 'Fast',
-    ariaLabel: 'Speed: Fast',
     icon: <Zap className="h-3.5 w-3.5" aria-hidden />,
     items: [
       { id: 'default', label: 'Standard' },
@@ -46,9 +52,9 @@ export const WithIcon: Story = {
     ],
   },
   play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole('combobox', { name: 'Speed: Fast' }),
-    ).toBeVisible()
+    const speed = canvas.getByRole('combobox', { name: 'Speed' })
+    await expect(speed).toBeVisible()
+    await expect(speed).toHaveTextContent('Fast')
   },
 }
 
@@ -57,7 +63,7 @@ export const Disabled: Story = {
   args: { disabled: true },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('combobox', { name: 'Medium' }),
+      canvas.getByRole('combobox', { name: 'Reasoning effort' }),
     ).toBeDisabled()
   },
 }

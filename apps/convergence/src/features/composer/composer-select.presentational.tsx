@@ -2,6 +2,12 @@ import type { FC, ReactNode } from 'react'
 import { Combobox, type ComboboxItem, type ControlSize } from '@convergence/ui'
 
 interface ComposerSelectProps {
+  /**
+   * What it picks, as its name: "Permissions", "Speed", "Runs on" (CONV N2).
+   * Required, so no picker is announced by its value alone ("Ask, combobox")
+   * while the value is what it shows.
+   */
+  label: string
   selectedId: string
   value: string
   items: ComboboxItem[]
@@ -11,10 +17,10 @@ interface ComposerSelectProps {
   size?: ControlSize
   className?: string
   icon?: ReactNode
-  ariaLabel?: string
 }
 
 export const ComposerSelect: FC<ComposerSelectProps> = ({
+  label,
   selectedId,
   value,
   items,
@@ -23,7 +29,6 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
   size = 'md',
   className,
   icon,
-  ariaLabel,
 }) => (
   <Combobox
     selectedId={selectedId}
@@ -37,6 +42,6 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
     size={size}
     className={className}
     icon={icon}
-    ariaLabel={ariaLabel}
+    ariaLabel={label}
   />
 )

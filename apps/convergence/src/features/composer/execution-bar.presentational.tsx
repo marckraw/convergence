@@ -58,6 +58,9 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
       <span className={stripLabelClass}>Runs on</span>
       {view.mode === 'choosing' ? (
         <ComposerSelect
+          // Named by the words before it, so what is said and what is read
+          // are one name (CONV N2).
+          label="Runs on"
           selectedId={view.hostId}
           value={
             view.choices.find((choice) => choice.id === view.hostId)?.label ??

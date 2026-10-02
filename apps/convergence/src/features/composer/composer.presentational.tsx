@@ -880,6 +880,7 @@ export const Composer: FC<ComposerProps> = ({
                     <CatalogNotice notice={optionRow.notice} />
                   ) : null}
                   <ComposerSelect
+                    label="Provider"
                     size="sm"
                     selectedId={selection.providerId}
                     value={selection.providerLabel || 'Select provider'}
@@ -901,12 +902,14 @@ export const Composer: FC<ComposerProps> = ({
                       onModelChange(modelId, providerId)
                     }
                     disabled={modelSelectionDisabled || !selection.provider}
+                    label="Model"
                     triggerVariant="ghost"
                     triggerSize="sm"
                     triggerClassName={composerToolbarControl}
                   />
                   {effortItems.length > 0 && (
                     <ComposerSelect
+                      label="Reasoning effort"
                       size="sm"
                       selectedId={selection.effortId}
                       value={selection.effort?.label ?? 'Select effort'}
@@ -945,10 +948,10 @@ export const Composer: FC<ComposerProps> = ({
                   */}
                   {codexBillingControlsAvailable ? (
                     <ComposerSelect
+                      label="Speed"
                       size="sm"
                       selectedId={codexSpeedId}
                       value={codexSpeedLabel}
-                      ariaLabel={`Speed: ${codexSpeedLabel}`}
                       items={codexSpeedChoices.map((choice) => ({
                         id: choice.id,
                         label: choice.label,
@@ -981,6 +984,7 @@ export const Composer: FC<ComposerProps> = ({
                   {!selectionDisabled ? (
                     <>
                       <ComposerSelect
+                        label="Permissions"
                         size="sm"
                         selectedId={simplePermissionPreset}
                         value={
@@ -1102,6 +1106,7 @@ export const Composer: FC<ComposerProps> = ({
               {selection.providerId === 'codex' ? (
                 <>
                   <ComposerSelect
+                    label="Approval policy"
                     size="sm"
                     selectedId={codexConfig.approvalPolicy}
                     value={
@@ -1117,6 +1122,7 @@ export const Composer: FC<ComposerProps> = ({
                     className={composerToolbarControl}
                   />
                   <ComposerSelect
+                    label="Sandbox"
                     size="sm"
                     selectedId={codexConfig.sandbox}
                     value={
@@ -1134,6 +1140,7 @@ export const Composer: FC<ComposerProps> = ({
                 </>
               ) : (
                 <ComposerSelect
+                  label="Permission mode"
                   size="sm"
                   selectedId={claudeCodeConfig.permissionMode}
                   value={
