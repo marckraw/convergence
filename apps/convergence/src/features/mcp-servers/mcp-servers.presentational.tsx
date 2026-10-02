@@ -8,6 +8,7 @@ import type {
 import {
   Badge,
   Card,
+  cn,
   Dialog,
   DialogBody,
   DialogContent,
@@ -20,6 +21,7 @@ import {
   ListRow,
   Notice,
   SectionLabel,
+  toneInk,
   TooltipCard,
 } from '@convergence/ui'
 import {
@@ -44,18 +46,20 @@ interface McpServersDialogProps {
   onRefresh: () => void
 }
 
+/** A status's glyph, in its tone's ink (the kit's map, R1). */
 function renderStatusIcon(status: McpServerStatus) {
+  const className = cn('size-3.5', toneInk[mcpStatusTone(status)])
   switch (status) {
     case 'ready':
-      return <CircleCheck className="size-3.5 text-success-ink" />
+      return <CircleCheck className={className} />
     case 'needs-auth':
-      return <KeyRound className="size-3.5 text-warning-ink" />
+      return <KeyRound className={className} />
     case 'failed':
-      return <CircleAlert className="size-3.5 text-danger-ink" />
+      return <CircleAlert className={className} />
     case 'disabled':
-      return <Ban className="size-3.5 text-ink-muted" />
+      return <Ban className={className} />
     default:
-      return <CircleHelp className="size-3.5 text-ink-muted" />
+      return <CircleHelp className={className} />
   }
 }
 

@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { SkillCatalogEntry } from '@/entities/skill'
-import { Badge, Card, CardAction, cn, EmptyState } from '@convergence/ui'
+import { Badge, Card, CardAction, EmptyState, StatusDot } from '@convergence/ui'
 import type { SkillGridGroup } from './skills-browser.pure'
 import {
   renderProviderChip,
@@ -32,12 +32,10 @@ function renderSkillCard(
     >
       <span className="flex min-w-0 items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span
-            aria-hidden
-            className={cn(
-              'size-1.5 shrink-0 rounded-full',
-              skill.enabled ? 'bg-success-solid' : 'bg-neutral-solid',
-            )}
+          <StatusDot
+            size="sm"
+            tone={skill.enabled ? 'success' : 'neutral'}
+            className="shrink-0"
           />
           <CardAction
             onClick={() => onSelectSkill(skill.id)}

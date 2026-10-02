@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Badge, Card, CardAction, cn } from '@convergence/ui'
+import { Badge, Card, CardAction, cn, toneInk } from '@convergence/ui'
 import type { SkillBrowserFilters } from './skills-browser.pure'
 import { SKILL_ORIGIN_META } from './skills-browser.styles'
 import type { SkillsOverview } from './skills-overview.pure'
@@ -21,8 +21,8 @@ function renderStatTile(
       <p
         className={cn(
           'text-2xl font-semibold tabular-nums',
-          tone === 'warning' && 'text-warning-ink',
-          tone === 'muted' && 'text-ink-muted',
+          tone === 'warning' && toneInk.warning,
+          tone === 'muted' && toneInk.neutral,
         )}
       >
         {value}

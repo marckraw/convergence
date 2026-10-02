@@ -22,15 +22,17 @@ import {
   Badge,
   Button,
   Card,
+  cn,
   CopyButton,
   EmptyState,
+  IconButton,
   Menu,
   MenuContent,
   MenuItem,
   MenuTrigger,
-  IconButton,
   Notice,
   SectionLabel,
+  toneInk,
   Tooltip,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
@@ -121,12 +123,13 @@ function renderWarningList(warnings: SkillWarning[]) {
   return (
     <div className="space-y-1.5">
       {warnings.map((warning) => (
-        <div
+        <Card
           key={`${warning.code}-${warning.message}`}
-          className="rounded-md border border-warning-line bg-warning-soft px-2 py-1.5 text-xs text-warning-ink"
+          tone="warning"
+          className={cn('rounded-md px-2 py-1.5 text-xs', toneInk.warning)}
         >
           <span className="font-medium">{warning.code}:</span> {warning.message}
-        </div>
+        </Card>
       ))}
     </div>
   )

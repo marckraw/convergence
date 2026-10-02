@@ -13,7 +13,14 @@ import type {
   WorkStyleInteractionShape,
   WorkStyleSessionSizeBucket,
 } from '@/entities/analytics'
-import { Button, Card, cn, EmptyState, SectionLabel } from '@convergence/ui'
+import {
+  Button,
+  Card,
+  cn,
+  EmptyState,
+  SectionLabel,
+  toneInk,
+} from '@convergence/ui'
 import {
   formatHour,
   formatInteger,
@@ -88,9 +95,16 @@ export function WorkStyleTab({
             </p>
           </div>
           {/* What this profile promises about privacy: information, not a warning (R1). */}
-          <p className="shrink-0 rounded-lg border border-info-line bg-info-soft px-3 py-2 text-xs leading-relaxed text-info-ink">
+          <Card
+            render={<p />}
+            tone="info"
+            className={cn(
+              'shrink-0 px-3 py-2 text-xs leading-relaxed',
+              toneInk.info,
+            )}
+          >
             No model call. No transcripts sent.
-          </p>
+          </Card>
         </div>
       </Card>
 
@@ -213,9 +227,16 @@ function renderGeneratedProfilePanel({
             </Card>
           ))}
           {generated.payload.caveats.length > 0 ? (
-            <p className="rounded-lg border border-warning-line bg-warning-soft p-3 text-xs leading-relaxed text-warning-ink md:col-span-2">
+            <Card
+              render={<p />}
+              tone="warning"
+              className={cn(
+                'text-xs leading-relaxed md:col-span-2',
+                toneInk.warning,
+              )}
+            >
               {generated.payload.caveats.join(' ')}
-            </p>
+            </Card>
           ) : null}
         </div>
       ) : null}

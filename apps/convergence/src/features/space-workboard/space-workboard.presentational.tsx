@@ -51,6 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  toneInk,
   tooltipAttributes,
 } from '@convergence/ui'
 import {
@@ -449,7 +450,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                 <section className={suggestionBox}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <SectionLabel as="h4" className="text-info-ink">
+                      <SectionLabel as="h4" className={toneInk.info}>
                         Suggested updates
                       </SectionLabel>
                       <p className="mt-1 text-xs text-ink-muted">

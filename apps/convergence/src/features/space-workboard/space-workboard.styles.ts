@@ -1,4 +1,5 @@
 import type { SpaceAttention, SpaceStatus } from '@/entities/space'
+import { cn, toneLine, toneSoft } from '@convergence/ui'
 export { spaceStatusLabels } from '@/entities/space'
 
 export const spaceStatusOptions: SpaceStatus[] = [
@@ -38,8 +39,11 @@ export const metricCard =
   'rounded-lg border border-line-soft bg-surface/30 px-3 py-2'
 
 /** What synthesis or discovery suggests, on the info tint: a hint to accept or not. */
-export const suggestionBox =
-  'space-y-3 rounded-lg border border-info-line bg-info-soft p-3'
+export const suggestionBox = cn(
+  'space-y-3 rounded-lg border p-3',
+  toneLine.info,
+  toneSoft.info,
+)
 
 /** One suggested Artifact inside a suggestion box. */
 export const suggestionRow =
