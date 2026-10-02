@@ -143,18 +143,15 @@ const meta = {
       sourceSessionId: '',
     },
     artifactDialogOpen: false,
-    createTitle: '',
     attemptCounts: { 'space-ds4': 2, 'space-loom': 4 },
     artifactCounts: { 'space-ds4': 1, 'space-loom': 3 },
     isLoading: false,
-    isCreating: false,
     isCreatingArtifact: false,
     isDiscoveringArtifacts: false,
     isSynthesizing: false,
     error: null,
     onOpenChange: fn(),
-    onCreateTitleChange: fn(),
-    onCreate: fn(),
+    onCreateSpace: fn(),
     onSelectSpace: fn(),
     onDraftChange: fn(),
     onArtifactDraftChange: fn(),
@@ -237,15 +234,14 @@ export const Default: Story = {
   },
 }
 
-/** A title typed: the + makes a new Space. */
+/** Create Space… opens the New Space dialog, the one way to make one (ruling 4). */
 export const Create: Story = {
-  args: { createTitle: 'Release 1.0' },
   play: async ({ args, userEvent }) => {
     const dialog = await openWorkboard()
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Create Space' }),
+      within(dialog).getByRole('button', { name: 'Create Space…' }),
     )
-    await expect(args.onCreate).toHaveBeenCalledOnce()
+    await expect(args.onCreateSpace).toHaveBeenCalledOnce()
   },
 }
 
@@ -425,8 +421,8 @@ export const Empty: Story = {
       within(dialog).getByText('Select or create a Space.'),
     ).toBeVisible()
     await expect(
-      within(dialog).getByRole('button', { name: 'Create Space' }),
-    ).toBeDisabled()
+      within(dialog).getByRole('button', { name: 'Create Space…' }),
+    ).toBeEnabled()
   },
 }
 

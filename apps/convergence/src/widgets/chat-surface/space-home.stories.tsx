@@ -192,7 +192,9 @@ export const Default: Story = {
     await expect(args.onBeginAttempt).toHaveBeenCalledOnce()
     await userEvent.click(canvas.getByRole('tab', { name: 'Sources' }))
     await expect(args.onTabChange).toHaveBeenCalledWith('sources')
-    await userEvent.click(canvas.getByRole('button', { name: 'Archive Space' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Archive Space…' }),
+    )
     await expect(args.onArchiveSpace).toHaveBeenCalledOnce()
   },
 }

@@ -93,12 +93,7 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody
-          tabIndex={0}
-          role="region"
-          aria-label="Provider events"
-          className="app-scrollbar"
-        >
+        <DialogBody tabIndex={0} role="region" aria-label="Provider events">
           <p className={drawerStyles.count}>
             {entries.length} entries · session {sessionId.slice(0, 8)}
           </p>
@@ -122,6 +117,7 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
                       ) : null}
                     </div>
                     {payload ? (
+                      // raw-element: one event's payload in the row's own small print, dozens to a page; CodeBlock's framed box would wrap each
                       <pre className={drawerStyles.payload}>{payload}</pre>
                     ) : null}
                   </li>

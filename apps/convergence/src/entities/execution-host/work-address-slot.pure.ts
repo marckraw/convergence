@@ -243,7 +243,7 @@ export function resolveWorkAddressSlot(
       ? projects.reason
       : (listed?.unreachableReason ?? null)
   const notice = unreadableReason
-    ? `Could not read which Projects ${input.hostLabel} has: ${unreadableReason}`
+    ? `Couldn’t read which Projects ${input.hostLabel} has: ${unreadableReason}`
     : null
 
   if (choices.length === 0) {

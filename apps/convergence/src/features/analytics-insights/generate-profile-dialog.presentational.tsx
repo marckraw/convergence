@@ -3,6 +3,7 @@ import { Bot, Sparkles } from 'lucide-react'
 import type { ProviderInfo } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
 import {
+  Card,
   Combobox,
   type ComboboxItem,
   Field,
@@ -116,7 +117,7 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
         </div>
       </div>
 
-      <div className="flex items-start gap-3 rounded-lg border border-line bg-surface/60 p-4">
+      <Card padding="md" className="flex items-start gap-3">
         <span className="rounded-md border border-line bg-canvas p-2 text-ink-muted">
           <Bot className="size-4" />
         </span>
@@ -125,7 +126,7 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
           confirm. The generated snapshot is stored locally and can be deleted
           without deleting session history.
         </p>
-      </div>
+      </Card>
     </div>
   </FormDialog>
 )

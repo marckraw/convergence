@@ -1,6 +1,10 @@
+import { RefreshCw } from 'lucide-react'
 import type { ReleasePlan } from '@/entities/release'
 import {
   Button,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
   Dialog,
   DialogBody,
   DialogContent,
@@ -9,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  EmptyState,
   FormError,
 } from '@convergence/ui'
 import { canMergeReviewed, mergeActWords } from './merge-reviewed.pure'
@@ -54,7 +59,19 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
         }
       />
       <DialogContent onKeyDown={(event) => event.stopPropagation()}>
-        <DialogHeader className="border-b-0 p-6 pr-12">
+        <DialogHeader
+          actions={
+            // Refresh lives in the header (R6); the footer holds the merge.
+            <Button
+              variant="secondary"
+              onClick={props.onRefresh}
+              disabled={running}
+            >
+              <RefreshCw aria-hidden />
+              Refresh
+            </Button>
+          }
+        >
           <DialogTitle>Merge reviewed</DialogTitle>
           <DialogDescription>
             Reviewed PRs in Awaiting QA. Untick rows to choose a partial set.
@@ -62,15 +79,28 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
         </DialogHeader>
         <DialogBody className="space-y-5">
           <FormError>{props.error}</FormError>
-          {!plan && !props.error ? <p role="status">Reading PRs…</p> : null}
+          {/* Loading, unavailable and empty read as every list's do (MC-9). */}
+          {!plan && !props.error ? (
+            <EmptyState state="loading" size="compact" title="Reading PRs…" />
+          ) : null}
           {plan?.unavailable ? (
-            <p role="status">gh not found — merge by hand</p>
+            <div role="status">
+              <EmptyState
+                size="compact"
+                title="gh not found"
+                detail="Merge by hand."
+              />
+            </div>
           ) : null}
           {plan && plan.candidates.length === 0 ? (
-            <p>No reviewed PRs awaiting merge.</p>
+            <EmptyState size="compact" title="No reviewed PRs awaiting merge" />
           ) : null}
           {merged.length > 0 && awaiting.length === 0 ? (
-            <p>Nothing to merge — every reviewed PR is already merged.</p>
+            <EmptyState
+              size="compact"
+              title="Nothing to merge"
+              detail="Every reviewed PR is already merged."
+            />
           ) : null}
           {waves.map((wave) => (
             <section
@@ -93,20 +123,23 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             </section>
           ))}
           {merged.length > 0 ? (
-            <details className="space-y-2">
-              <summary className="min-h-10 text-sm font-medium">
+            // A Collapsible, its chevron turning (MC-17).
+            <Collapsible className="space-y-2">
+              <CollapsibleTrigger className="min-h-10 text-sm font-medium">
                 Already merged · {merged.length}
-              </summary>
-              {merged.map((row) => (
-                <MergeReviewedRow
-                  key={row.issueId}
-                  row={row}
-                  selected={false}
-                  running={running}
-                  onToggle={props.onToggle}
-                />
-              ))}
-            </details>
+              </CollapsibleTrigger>
+              <CollapsiblePanel keepMounted className="space-y-2">
+                {merged.map((row) => (
+                  <MergeReviewedRow
+                    key={row.issueId}
+                    row={row}
+                    selected={false}
+                    running={running}
+                    onToggle={props.onToggle}
+                  />
+                ))}
+              </CollapsiblePanel>
+            </Collapsible>
           ) : null}
           <div role="status" aria-live="polite" className="space-y-1 text-sm">
             {plan?.waitingFor ? (
@@ -121,15 +154,7 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             ))}
           </div>
         </DialogBody>
-        <DialogFooter className="border-t-0 p-6">
-          <Button
-            variant="secondary"
-            onClick={props.onRefresh}
-            disabled={running}
-            size="lg"
-          >
-            Refresh
-          </Button>
+        <DialogFooter>
           <Button
             disabled={!canMergeReviewed(plan, selected, busy)}
             onClick={props.onMerge}

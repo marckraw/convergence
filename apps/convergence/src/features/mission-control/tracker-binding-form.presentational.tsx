@@ -171,7 +171,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           disabled={busy || !draft.projectId.trim()}
           onClick={onSaveBinding}
           size="sm"
-          className="flex-1 px-3"
+          className="flex-1"
         >
           {bound ? 'Save binding' : 'Bind to project'}
         </Button>
@@ -182,7 +182,6 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             disabled={busy}
             onClick={onUnbind}
             size="sm"
-            className="px-3"
           >
             Unbind
           </Button>
@@ -221,7 +220,6 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             disabled={busy || !keyDraft.trim()}
             onClick={onSaveKey}
             size="sm"
-            className="px-3"
           >
             Store key
           </Button>
@@ -246,7 +244,6 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           disabled={busy || !bound}
           onClick={onTest}
           size="sm"
-          className="px-3"
         >
           Test
         </Button>

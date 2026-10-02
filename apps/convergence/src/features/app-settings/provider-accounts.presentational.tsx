@@ -25,6 +25,7 @@ import {
   SegmentedControl,
   SegmentedControlItem,
   settingsHeading,
+  Timestamp,
   type Tone,
 } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
@@ -164,12 +165,10 @@ export interface ProviderAccountsFieldsProps {
   onConnectLinear: (accountId: string) => void
 }
 
-function formatCheckedAt(value: string | null): string {
+/** When the identity was checked: a Timestamp, the whole moment in its tooltip. */
+function checkedAt(value: string | null) {
   if (!value) return 'not checked yet'
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return <Timestamp date={value} format="datetime" />
 }
 
 export function ProviderAccountsFields({
@@ -236,7 +235,7 @@ export function ProviderAccountsFields({
     !isCodex && Boolean(removalLayout?.privateEntries.length)
 
   return (
-    <div className="space-y-4 [&_button]:min-h-10">
+    <div className="space-y-4">
       {/* Two providers, one at a time (R9): a SegmentedControl. */}
       <SegmentedControl
         aria-label="Account provider"
@@ -320,14 +319,14 @@ export function ProviderAccountsFields({
                         {row.identity}
                       </h4>
                       {row.isDefault ? (
-                        <Badge shape="label" className="uppercase">
+                        <Badge shape="label" caps>
                           default
                         </Badge>
                       ) : null}
                       <Badge
                         shape="label"
                         tone={STATUS_TONE[row.status.tone]}
-                        className="uppercase"
+                        caps
                       >
                         {row.status.label}
                       </Badge>
@@ -381,12 +380,12 @@ export function ProviderAccountsFields({
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="danger-quiet"
                       disabled={isBusy}
                       onClick={() => onRequestRemove(row.id)}
                     >
                       <Trash2 className="size-3.5" />
-                      Remove
+                      Remove…
                     </Button>
                   </div>
                 </div>
@@ -800,7 +799,7 @@ export function ProviderAccountsFields({
 
       <div className={spreadRow}>
         <p className="text-xs text-ink-muted">
-          Identity checked: {formatCheckedAt(lastCheckedAt)}
+          Identity checked: {checkedAt(lastCheckedAt)}
           {claudeVersion ? ` · Claude Code ${claudeVersion}` : ''}
         </p>
         <Button

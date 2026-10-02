@@ -30,7 +30,7 @@ describe('TerminalIdleSection', () => {
       </TooltipProvider>,
     )
 
-    expect(screen.getByText('Terminals Idle')).toBeInTheDocument()
+    expect(screen.getByText('Idle terminals')).toBeInTheDocument()
     expect(screen.getByText('Convergence')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Terminal - Convergence'))
 

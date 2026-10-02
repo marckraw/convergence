@@ -128,7 +128,7 @@ export const Default: Story = {
       '2',
     )
     const hail = canvas.getByRole('button', { name: 'Hail opus-mac' })
-    await expect(hail).toHaveAttribute('aria-expanded', 'false')
+    await expect(hail).toHaveAttribute('aria-pressed', 'false')
     await userEvent.click(hail)
     await expect(args.onHail).toHaveBeenCalledWith(args.card)
   },
@@ -202,7 +202,7 @@ export const Open: Story = {
     await expect(card).toHaveAttribute('aria-current', 'true')
     await expect(
       canvas.getByRole('button', { name: 'Hail opus-mac' }),
-    ).toHaveAttribute('aria-expanded', 'true')
+    ).toHaveAttribute('aria-pressed', 'true')
   },
 }
 

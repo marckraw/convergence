@@ -1,3 +1,6 @@
+import { formatTimestamp } from '@convergence/ui'
+
+const writeTime = (at: Date) => formatTimestamp(at, 'clock', { seconds: true })
 import { isMcpAlertStatus } from './harness-facts.pure'
 import { describe, expect, it } from 'vitest'
 import {
@@ -447,11 +450,12 @@ describe('MAR-3206 R5 R6 R7 — the MCP heading and a Reconnect error', () => {
 
   it('R5 R13 says since when the list is unchanged and whether a process runs — whenever none runs, not only with alerts; "read at" back and this turns red', () => {
     const allConnected = status([{ name: 'linear', status: 'connected' }])
-    const time = new Date(at).toLocaleTimeString()
+    // Timestamp's clock to the second (use-timestamp), as the renderer writes it.
+    const time = writeTime(new Date(at))
     expect({
-      running: mcpStatusHeading(allConnected, true),
-      stopped: mcpStatusHeading(allConnected, false),
-      unknown: mcpStatusHeading(allConnected, null),
+      running: mcpStatusHeading(allConnected, true, writeTime),
+      stopped: mcpStatusHeading(allConnected, false, writeTime),
+      unknown: mcpStatusHeading(allConnected, null, writeTime),
     }).toEqual({
       running: `MCP servers · 1 connected of 1 · unchanged since ${time} · process running`,
       stopped: `MCP servers · 1 connected of 1 · unchanged since ${time} · no process is running; the next message starts one and reads its connectors afresh`,
@@ -465,7 +469,11 @@ describe('MAR-3206 R5 R6 R7 — the MCP heading and a Reconnect error', () => {
       status: 'connected',
     }))
     expect(
-      mcpStatusHeading(status(listed, { connected: 25, omitted: 5 }), null),
+      mcpStatusHeading(
+        status(listed, { connected: 25, omitted: 5 }),
+        null,
+        writeTime,
+      ),
     ).toMatch(/^MCP servers · 25 connected of 25 · /)
   })
 

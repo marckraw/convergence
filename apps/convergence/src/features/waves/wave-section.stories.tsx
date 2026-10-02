@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, waitFor, within } from 'storybook/test'
 import { Button } from '@convergence/ui'
 import { loomSheets } from './loom-sheets.pure'
 import { WaveSectionView } from './wave-section.presentational'
@@ -111,16 +111,20 @@ export const Long: Story = {
 export const Disclosure: Story = {
   args: { title: 'loom-p2', disclosure: 'closed' },
   play: async ({ canvas, userEvent }) => {
-    const group = canvas.getByRole('group', { name: 'loom-p2' })
-    await expect(group).not.toHaveAttribute('open')
+    // A Collapsible section (MC-17): data-open says whether it is open.
+    const group = canvas.getByRole('region', { name: 'loom-p2' })
+    await expect(group).not.toHaveAttribute('data-open')
     await expect(
-      within(group).queryByRole('button', { name: /MAR-3191/ }),
+      within(group).queryByRole('button', { name: /MAR-3191/, hidden: true }),
     ).not.toBeVisible()
     await userEvent.click(within(group).getByText('loom-p2 · 3'))
-    await expect(group).toHaveAttribute('open')
-    await expect(
-      within(group).getByRole('button', { name: /MAR-3191/ }),
-    ).toBeVisible()
+    await expect(group).toHaveAttribute('data-open')
+    // The panel grows open (Collapsible's motion): visible once it has.
+    await waitFor(() =>
+      expect(
+        within(group).getByRole('button', { name: /MAR-3191/ }),
+      ).toBeVisible(),
+    )
   },
 }
 

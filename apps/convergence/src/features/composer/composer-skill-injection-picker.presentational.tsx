@@ -125,7 +125,9 @@ export const ComposerSkillInjectionPicker: FC<
                     />
                   ) : null}
                   {!skill.enabled ? (
-                    <Badge className="ml-auto uppercase">Disabled</Badge>
+                    <Badge caps className="ml-auto">
+                      Disabled
+                    </Badge>
                   ) : null}
                 </span>
                 <span className={inlinePickerRowDetail}>

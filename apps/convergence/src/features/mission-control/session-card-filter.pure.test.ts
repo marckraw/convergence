@@ -8,8 +8,10 @@ import {
   filterSessionCards,
   filterSessionCardsExcept,
   getSessionCardProjectKey,
+  clearSessionCardFacets,
   isEmptySessionCardFilter,
   matchesSessionCardQuery,
+  narrowsByFacet,
   toggleFilterId,
   toggleSessionCardState,
 } from './session-card-filter.pure'
@@ -442,6 +444,31 @@ describe('isEmptySessionCardFilter', () => {
     expect(
       isEmptySessionCardFilter(filterWith({ providerIds: ['codex'] })),
     ).toBe(false)
+  })
+})
+
+describe('the filter row’s one Clear filters (MC-7)', () => {
+  it('shows once a chip or a picker narrows the room, and not for the search', () => {
+    expect(narrowsByFacet(EMPTY_SESSION_CARD_FILTER)).toBe(false)
+    expect(narrowsByFacet(withQuery('room'))).toBe(false)
+    expect(narrowsByFacet(withStates('working'))).toBe(true)
+    expect(narrowsByFacet(filterWith({ projectIds: ['project-a'] }))).toBe(true)
+    expect(narrowsByFacet(filterWith({ providerIds: ['codex'] }))).toBe(true)
+    expect(narrowsByFacet(filterWith({ crewIds: ['crew-1'] }))).toBe(true)
+  })
+
+  it('clears every chip and picker at once, and keeps the search', () => {
+    const narrowed = filterWith({
+      query: 'auth',
+      states: ['working', 'failed'],
+      projectIds: ['project-a'],
+      providerIds: ['codex'],
+      crewIds: ['crew-1'],
+    })
+    expect(clearSessionCardFacets(narrowed)).toEqual({
+      ...EMPTY_SESSION_CARD_FILTER,
+      query: 'auth',
+    })
   })
 })
 

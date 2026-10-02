@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { metaText } from '@/shared/testing/meta-line'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, waitFor } from 'storybook/test'
 import { HarnessFactsSections } from './harness-facts.presentational'
 
 /*
@@ -141,9 +142,13 @@ export const Default: Story = {
     ]) {
       await expect(canvas.getByRole('region', { name })).toBeVisible()
     }
-    await expect(canvas.getByText('ok · 17 ms')).toBeVisible()
-    await expect(canvas.getByText('2 attempts · succeeded')).toBeVisible()
-    await expect(canvas.getByText('Utilization: 82%')).toBeVisible()
+    // Lines of facts are MetaLines and readings are terms with values (CONV-23, CONV-24).
+    await expect(canvas.getByText(metaText('ok · 17 ms'))).toBeVisible()
+    await expect(
+      canvas.getByText(metaText('2 attempts · succeeded')),
+    ).toBeVisible()
+    await expect(canvas.getByText('Utilization').tagName).toBe('DT')
+    await expect(canvas.getByText('82%').tagName).toBe('DD')
     await expect(canvas.getByText('Claude Code 2.4.1')).toBeVisible()
     await expect(
       canvas.getByText('Connected: linear, figma, context7'),
@@ -151,8 +156,9 @@ export const Default: Story = {
     // A hook's output stays folded until asked for.
     const preview = canvas.getByText(/prettier: apps\/convergence/)
     await expect(preview).not.toBeVisible()
-    await userEvent.click(canvas.getByText('Output · truncated'))
-    await expect(preview).toBeVisible()
+    await userEvent.click(canvas.getByText(metaText('Output · truncated')))
+    // The panel grows open (Collapsible's motion): visible once it has.
+    await waitFor(() => expect(preview).toBeVisible())
     await expect(canvas.getByText('18400 bytes reported')).toBeVisible()
   },
 }
@@ -178,7 +184,10 @@ export const Empty: Story = {
 export const Busy: Story = {
   args: { facts: null, loading: true },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Loading harness facts…')).toBeVisible()
+    // EmptyState's loading (CONV-19): its words once a quick read has passed.
+    await expect(
+      await canvas.findByText('Loading harness facts…', {}, { timeout: 2000 }),
+    ).toBeInTheDocument()
   },
 }
 
@@ -186,12 +195,12 @@ export const Busy: Story = {
 export const Failed: Story = {
   args: {
     facts: null,
-    error: 'Could not read harness facts: the session database is locked.',
+    error: 'The session database is locked.',
   },
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'the session database is locked',
-    )
+    const alert = canvas.getByRole('alert')
+    await expect(alert).toHaveTextContent("Couldn't read the harness facts.")
+    await expect(alert).toHaveTextContent('The session database is locked.')
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
     await expect(args.onRetry).toHaveBeenCalledOnce()
   },

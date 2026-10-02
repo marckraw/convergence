@@ -53,7 +53,6 @@ const meta = {
     onSelectTab: fn(),
     onNewTab: fn(),
     onSplit: fn(),
-    onCloseActiveTab: fn(),
     onCloseTab: fn(),
     onFocusLeaf: fn(),
     renderTerminal,
@@ -98,8 +97,11 @@ export const Default: Story = {
       canvas.getByRole('button', { name: 'Split vertical' }),
     )
     await expect(args.onSplit).toHaveBeenCalledWith('leaf-1', 'vertical')
-    await userEvent.click(canvas.getByRole('button', { name: 'Close tab' }))
-    await expect(args.onCloseActiveTab).toHaveBeenCalledWith('leaf-1')
+    // One close per tab, on the tab itself: the toolbar draws no second ✕
+    // for the open one (NAV-9).
+    await expect(
+      canvas.queryByRole('button', { name: 'Close tab' }),
+    ).not.toBeInTheDocument()
     await userEvent.click(canvas.getByRole('button', { name: 'New tab' }))
     await expect(args.onNewTab).toHaveBeenCalledWith('leaf-1')
   },

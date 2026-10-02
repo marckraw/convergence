@@ -277,7 +277,7 @@ export const GeneratedProfile: Story = {
     await expect(
       canvas.getByRole('heading', { name: 'The long-run builder' }),
     ).toBeVisible()
-    await userEvent.click(canvas.getByRole('button', { name: 'Delete' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete…' }))
     await expect(args.onDeleteGeneratedProfile).toHaveBeenCalledOnce()
     await expect(
       canvas.getByRole('button', { name: 'Regenerate' }),

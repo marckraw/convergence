@@ -14,7 +14,13 @@ interface TunnelActionButtonsProps {
   onStart: () => void
   onStop: () => void
   onRestart: () => void
-  onManage: () => void
+  /**
+   * Where an external tunnel is managed: the popover's row opens the
+   * profile's editor. Left out where there is nowhere further to go (in that
+   * editor), so an external tunnel shows no action at all rather than a
+   * Manage that does nothing.
+   */
+  onManage?: () => void
 }
 
 export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
@@ -95,11 +101,11 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
   }
 
   if (state === 'external') {
-    return (
+    return onManage ? (
       <Button type="button" variant="secondary" onClick={onManage}>
         Manage
       </Button>
-    )
+    ) : null
   }
 
   return (

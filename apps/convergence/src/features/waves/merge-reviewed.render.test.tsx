@@ -88,9 +88,11 @@ it('MAR-3360 R2 three merged rows and one mergeable count only the mergeable sel
   expect(
     screen.getByRole('checkbox', { name: /^Select PR #1 · / }),
   ).toBeEnabled()
-  const summary = screen.getByText('Already merged · 3')
-  expect(summary.closest('details')).not.toHaveAttribute('open')
+  // Folded in a Collapsible (MC-17): its trigger says so, and opens it.
+  const summary = screen.getByRole('button', { name: /Already merged · 3/ })
+  expect(summary).toHaveAttribute('aria-expanded', 'false')
   fireEvent.click(summary)
+  expect(summary).toHaveAttribute('aria-expanded', 'true')
   for (const row of mergedRows) {
     const checkbox = screen.getByLabelText(
       new RegExp(`^Select PR #${row.prNumber} · `),
@@ -111,9 +113,8 @@ it('MAR-3360 R2 only merged rows show the summary and disabled Nothing to merge'
   expect(
     screen.getByRole('button', { name: 'Nothing to merge' }),
   ).toBeDisabled()
-  expect(
-    screen.getByText('Nothing to merge — every reviewed PR is already merged.'),
-  ).toBeTruthy()
+  // EmptyState's words (MC-9): what's the matter, then why.
+  expect(screen.getByText('Every reviewed PR is already merged.')).toBeTruthy()
   expect(screen.getByText('Already merged · 3')).toBeTruthy()
 })
 
@@ -179,7 +180,11 @@ it('MAR-3087 R7 missing gh disables the merge and says merge by hand', () => {
       plan={{ ...plan, unavailable: true }}
     />,
   )
-  expect(screen.getByText('gh not found — merge by hand')).toBeTruthy()
+  // EmptyState's words (MC-9), announced as a status.
+  expect(
+    screen.getByText('gh not found').closest('[role="status"]'),
+  ).not.toBeNull()
+  expect(screen.getByText('Merge by hand.')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Merge 1' })).toBeDisabled()
 })
 

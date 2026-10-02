@@ -57,16 +57,12 @@ function renderPanel(
     accentColor: null,
     onEmojiChange: noop,
     onAccentColorChange: noop,
-    memberCount: 2,
     includePositions: false,
     exporting: false,
     lastExportPath: lastExportPath,
-    confirmingDelete: false,
     onIncludePositionsChange: noop,
     onExport: noop,
     onRequestDelete: noop,
-    onCancelDelete: noop,
-    onConfirmDelete: noop,
     updateError: null,
     savedName: 'Review loop',
     crewName: 'Review loop',
@@ -703,7 +699,7 @@ describe('R8 — drawer order and Crew details', () => {
     expect(
       screen.getByText('Typed fields save when you leave them'),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove from crew' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from crew…' }))
     expect(onRemoveMember).toHaveBeenCalledWith({ sessionId: 's1' })
     view.unmount()
 
@@ -712,7 +708,7 @@ describe('R8 — drawer order and Crew details', () => {
       openSeatKey: 'baton:glm',
     })
     expect(
-      screen.getByRole('button', { name: 'Delete recipe' }),
+      screen.getByRole('button', { name: 'Delete recipe…' }),
     ).toBeInTheDocument()
   })
 })
@@ -769,7 +765,7 @@ describe('R10 — the edge states that are real', () => {
     expect(
       screen.getByText('grok’s conversation no longer exists'),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove seat' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove seat…' }))
     expect(onRemoveMember).toHaveBeenCalledWith({ sessionId: 's2' })
   })
 })
@@ -797,7 +793,7 @@ describe('MAR-3118 lap 2 — E: the WIP stepper steps from what the field shows'
 })
 
 describe('MAR-3118 lap 4 — C: the refusal marker is drawn on the closed row', () => {
-  it('shows the amber marker on a closed seat with a standing refusal, and none without', () => {
+  it('shows the danger marker on a closed seat with a standing refusal, and none without', () => {
     const { rerender, props } = renderPanel(null, null, [opus], vi.fn(), {
       ...seatCtx,
       problem: {

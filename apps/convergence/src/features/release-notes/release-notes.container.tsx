@@ -1,9 +1,7 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import type { FC } from 'react'
-import { Info } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import releaseNotesBundle from '@/shared/generated/release-notes.generated.json'
-import { Button } from '@convergence/ui'
 import { ReleaseNotesDialog } from './release-notes.presentational'
 import type { ReleaseNotesBundle } from './release-notes.types'
 
@@ -59,23 +57,7 @@ export const ReleaseNotesDialogContainer: FC<
       historyPage={safePage}
       historyTotalPages={historyTotalPages}
       onHistoryPageChange={setHistoryPage}
-      trigger={
-        trigger ?? (
-          <Button
-            type="button"
-            variant="quiet"
-            className="w-full justify-between px-2"
-          >
-            <span className="flex items-center gap-2">
-              <Info className="size-3.5" />
-              What&apos;s new
-            </span>
-            <span className="text-2xs text-ink-muted">
-              v{bundle.currentVersion}
-            </span>
-          </Button>
-        )
-      }
+      trigger={trigger}
     />
   )
 }

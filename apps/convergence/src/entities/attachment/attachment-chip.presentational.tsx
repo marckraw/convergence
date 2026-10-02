@@ -38,7 +38,7 @@ export const AttachmentChip: FC<AttachmentChipProps> = ({
         size="xs"
         aria-label={`Preview ${attachment.filename}`}
         onClick={() => onOpen(attachment)}
-        className="max-w-full gap-1.5 px-1 text-xs font-normal"
+        className="max-w-full gap-1.5 font-normal"
       >
         {attachment.thumbnailPath ? (
           <img

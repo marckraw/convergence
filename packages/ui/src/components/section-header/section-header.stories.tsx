@@ -111,6 +111,55 @@ export const Collapsible_: Story = {
   },
 }
 
+/** A folded section that still shows a glimpse of what it holds, beside its name. */
+function FoldedSection() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="w-64 rounded-md bg-canvas p-2">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <SectionHeader
+          label="Waiting on you"
+          count={2}
+          collapsible
+          summary={
+            <span role="img" aria-label="Rewrite the importer, Cut the release">
+              ● ●
+            </span>
+          }
+        />
+        <CollapsiblePanel>
+          <ul className="pt-1 text-xs text-ink">
+            <li>Rewrite the importer</li>
+            <li>Cut the release</li>
+          </ul>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
+  )
+}
+
+/**
+ * Summary: what a folded section still shows, beside its name and inside its
+ * heading, outside the trigger; the count keeps its place at the end.
+ */
+export const Summary: Story = {
+  render: () => <FoldedSection />,
+  play: async ({ canvas }) => {
+    const trigger = canvas.getByRole('button', { name: 'Waiting on you' })
+    const glimpse = canvas.getByRole('img', {
+      name: 'Rewrite the importer, Cut the release',
+    })
+    await expect(trigger).not.toContainElement(glimpse)
+    await expect(canvas.getByRole('heading', { level: 2 })).toContainElement(
+      glimpse,
+    )
+    await expect(glimpse.getBoundingClientRect().left).toBeGreaterThanOrEqual(
+      trigger.getBoundingClientRect().right,
+    )
+    await expect(canvas.getByText('2')).toBeVisible()
+  },
+}
+
 /** Long: the name is cut short; the count and the action keep their place. */
 export const Long: Story = {
   args: { label: 'Sessions in every repository this project has ever opened' },

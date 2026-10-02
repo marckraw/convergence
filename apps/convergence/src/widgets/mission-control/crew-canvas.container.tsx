@@ -1,7 +1,7 @@
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { type LocalRepositoryState } from '@/entities/execution-host'
 import { resolveConnectionWorkAddress } from '@/features/mission-control'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { projectOpenApi } from '@/entities/project-open'
 import {
   useCallback,
@@ -177,7 +177,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const [nameDraft, setNameDraft] = useState('')
   const [includePositions, setIncludePositions] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const updateCrew = useSessionCrewStore((state) => state.updateCrew)
   const deleteCrew = useSessionCrewStore((state) => state.deleteCrew)
   /**
@@ -486,7 +485,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const supportsReset = recipientProvider?.supportsConversationReset ?? false
 
   const closePanel = useCallback(() => {
-    setConfirmingDelete(false)
     setPanelState({ kind: 'none' })
     setDraft(null)
     setSavedDraft(null)
@@ -650,7 +648,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       // exists to prevent — the work is the expensive part, not the row.
       setSaveError(
         useSessionRelayStore.getState().error ??
-          'Convergence could not store this connection.',
+          'Couldn’t store this connection.',
       )
       return
     }
@@ -1284,7 +1282,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         setHistoryError(
           error instanceof Error
             ? error.message
-            : 'Convergence could not read this crew’s history.',
+            : 'Couldn’t read this crew’s history.',
         )
       }
       setHistoryLoading(false)
@@ -1321,7 +1319,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       setOlderError(
         error instanceof Error
           ? error.message
-          : 'Convergence could not read this crew’s history.',
+          : 'Couldn’t read this crew’s history.',
       )
     }
     setHistoryLoadingOlder(false)
@@ -1503,7 +1501,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         includePositions,
       })
       if (!result) return
-      toast.success('Crew exported', {
+      notify.success('Crew exported', {
         description: result.path,
         action: {
           label: 'Reveal',
@@ -1518,16 +1516,15 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
             )
             void projectOpenApi
               .open({ appId: 'finder', path: directory })
-              .catch((error) => toast.error(String(error)))
+              .catch((error: unknown) =>
+                notify.failure('reveal the export in Finder', error),
+              )
           },
         },
       })
       closePanel()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      toast.error('Could not export crew', {
-        description: message,
-      })
+      notify.failure('export the crew', error)
     } finally {
       setExporting(false)
     }
@@ -1539,7 +1536,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     resetNameDraft()
     clearCrewError()
     setIncludePositions(false)
-    setConfirmingDelete(false)
   }, [crew?.id, panel.kind, clearCrewError])
 
   const armedCount = relays.filter((relay) => relay.armed).length
@@ -1567,7 +1563,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 })
               }
               size="sm"
-              className="text-2xs"
             >
               Import crew…
             </Button>
@@ -1966,18 +1961,22 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               trackerSection={
                 <TrackerBindingFormContainer key={crew.id} crew={crew} />
               }
-              memberCount={crew.sessionIds.length}
               includePositions={includePositions}
               exporting={exporting}
               lastExportPath={crew.lastExportPath}
-              confirmingDelete={confirmingDelete}
               onIncludePositionsChange={setIncludePositions}
               onExport={() => {
                 void exportCrew()
               }}
-              onRequestDelete={() => setConfirmingDelete(true)}
-              onCancelDelete={() => setConfirmingDelete(false)}
-              onConfirmDelete={async () => {
+              onRequestDelete={async () => {
+                // The saved name, never the draft being typed (R5).
+                const confirmed = await confirm({
+                  title: `Delete crew “${crew.name}”?`,
+                  description: `It holds ${formatCrewMemberCount(crew.sessionIds.length)}. Only the crew disappears; the conversations stay exactly where they are.`,
+                  confirmLabel: 'Delete crew',
+                  variant: 'danger',
+                })
+                if (!confirmed) return
                 setBusy(true)
                 try {
                   if (await deleteCrew(crew.id)) closePanel()

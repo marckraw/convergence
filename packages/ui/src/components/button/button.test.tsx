@@ -112,6 +112,31 @@ describe('Button', () => {
     ).not.toHaveAttribute('aria-description')
   })
 
+  it("doesn't hear its own words twice when its tooltip is there for a shortcut", () => {
+    render(
+      <Tooltip label="Save" shortcut="⌘↵">
+        <Button type="submit">Save</Button>
+      </Tooltip>,
+    )
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toHaveAttribute('data-tooltip-shortcut', '⌘↵')
+    expect(save).not.toHaveAttribute('aria-description')
+  })
+
+  it('reads its words past a glyph when it compares them with its tooltip', () => {
+    render(
+      <Tooltip label="Save" shortcut="⌘↵">
+        <Button>
+          <svg aria-hidden />
+          Save
+        </Button>
+      </Tooltip>,
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).not.toHaveAttribute(
+      'aria-description',
+    )
+  })
+
   it('is busy with aria-busy, and its name says so only when it is', () => {
     const { rerender } = render(
       <Button pending={false} pendingLabel="Saving…">

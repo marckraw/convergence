@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { type ComboboxItem, Input, Combobox } from '@convergence/ui'
+import { Badge, type ComboboxItem, Input, Combobox } from '@convergence/ui'
 import {
   stripFactClass,
   stripInputClass,
@@ -62,9 +62,14 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
     return (
       <>
         <span className={stripLabelClass}>Works in</span>
-        <span className={stripFactClass} data-testid="work-address-fact">
+        <Badge
+          shape="label"
+          outline
+          className={stripFactClass}
+          data-testid="work-address-fact"
+        >
           {view.label}
-        </span>
+        </Badge>
         {/*
           The branch that was asked for and not granted, said beside the one
           that exists rather than instead of it (MAR-2694). Reconciling the two
@@ -104,7 +109,7 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
         disabled={disabled}
         size="xs"
         className={stripSelectClass}
-        searchPlaceholder="Search options..."
+        searchPlaceholder="Search options…"
         emptyMessage="No matching options."
         variant="ghost"
       />

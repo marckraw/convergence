@@ -160,3 +160,22 @@ describe('MAR-3204: the window on the card, and the ticket line as a door', () =
     expect(screen.getByRole('button', { name: 'Details' })).toBeTruthy()
   })
 })
+
+describe('DS6: muted words on a washed card wear the on-tint ink', () => {
+  // A working card is washed in info: --ink-muted falls under 4.5:1 there in
+  // dark, over the sheet's surface-muted paper; --ink-muted-on-tint holds.
+  // Mutation: drop LOOM_HORSE_META_INK from the card -> red.
+  it('a working card’s meta line is on the on-tint ink', () => {
+    cardFor({ status: 'running' })
+    const open = screen.getByText('Open →')
+    expect(open).toHaveClass('text-ink-muted-on-tint')
+    expect(open).not.toHaveClass('text-ink-muted')
+  })
+
+  it('an idle card, with no wash, keeps the plain muted ink', () => {
+    cardFor({ status: 'completed' })
+    const open = screen.getByText('Open →')
+    expect(open).toHaveClass('text-ink-muted')
+    expect(open).not.toHaveClass('text-ink-muted-on-tint')
+  })
+})

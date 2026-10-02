@@ -401,7 +401,7 @@ it('RUN77 lap4 zero-count answered says finishing — mutation claim Tasks runni
   expect(view.groups[0].title).toBe('Working')
 })
 
-it('MAR-3366 R1 renders sections Pinned, Needs attention, Review, Working, Errands — mutation: swap Review and Working back turns red', () => {
+it('MAR-3366 R1 renders sections Pinned, Needs you, Review, Working, Errands — mutation: swap Review and Working back turns red', () => {
   const cards = [
     cardFixtures.working,
     cardFixtures.open,
@@ -412,7 +412,7 @@ it('MAR-3366 R1 renders sections Pinned, Needs attention, Review, Working, Erran
   const view = buildFeedView(groupNeedsYou(cards), defaultFeedView())
   expect(view.groups.map((group) => group.title)).toEqual([
     'Pinned',
-    'Needs attention',
+    'Needs you',
     'Review',
     'Working',
     'Errands with a PR',

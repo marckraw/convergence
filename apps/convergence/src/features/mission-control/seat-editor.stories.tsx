@@ -128,7 +128,7 @@ export const Default: Story = {
     )
     await expect(args.facts[1]!.open!.onOpen).toHaveBeenCalledOnce()
     await userEvent.click(
-      within(editor).getByRole('button', { name: 'Remove from crew' }),
+      within(editor).getByRole('button', { name: 'Remove from crew…' }),
     )
     await expect(args.onRemove).toHaveBeenCalledOnce()
     await userEvent.click(
@@ -201,7 +201,7 @@ export const Long: Story = {
     )
     await expect(args.onSeatEdit).toHaveBeenCalledWith({ wipLimit: 2 })
     await expect(
-      canvas.getByRole('button', { name: 'Delete recipe' }),
+      canvas.getByRole('button', { name: 'Delete recipe…' }),
     ).toBeVisible()
   },
 }
@@ -235,7 +235,7 @@ export const Orphan: Story = {
       canvas.getByText('opus-mac’s conversation no longer exists'),
     ).toBeVisible()
     await expect(canvas.queryByRole('region', { name: 'Facts' })).toBeNull()
-    await userEvent.click(canvas.getByRole('button', { name: 'Remove seat' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove seat…' }))
     await expect(args.onRemove).toHaveBeenCalledOnce()
   },
 }
@@ -267,7 +267,7 @@ export const Disabled: Story = {
       canvas.getByRole('radio', { name: 'mastermind' }),
     ).toHaveAttribute('aria-disabled', 'true')
     await expect(
-      canvas.getByRole('button', { name: 'Remove from crew' }),
+      canvas.getByRole('button', { name: 'Remove from crew…' }),
     ).toBeDisabled()
   },
 }

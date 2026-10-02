@@ -7,6 +7,7 @@ import {
   findAdjacentLeaf,
   matchShortcut,
   terminalApi,
+  terminalShortcutLabels,
 } from '@/entities/terminal'
 import type {
   FocusDirection,
@@ -31,6 +32,9 @@ function getPlatform(): 'mac' | 'other' {
   if (typeof navigator === 'undefined') return 'other'
   return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
+
+/** The keys the pane's buttons name in their tooltips: the ones the keymap below answers to (NAV-23). */
+const SHORTCUT_LABELS = terminalShortcutLabels(getPlatform())
 
 interface TerminalDockContainerProps {
   mode?: 'dock' | 'main'
@@ -121,18 +125,6 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
     (leafId: string, tabId: string) => {
       if (!sessionId) return
       void closeTab(sessionId, leafId, tabId)
-    },
-    [sessionId, closeTab],
-  )
-
-  const handleCloseActiveTab = useCallback(
-    (leafId: string) => {
-      if (!sessionId) return
-      const current = useTerminalStore.getState().getTree(sessionId)
-      if (!current) return
-      const found = findLeaf(current, leafId)
-      if (!found) return
-      void closeTab(sessionId, leafId, found.leaf.activeTabId)
     },
     [sessionId, closeTab],
   )
@@ -367,10 +359,10 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
               onSelectTab={handleSelectTab}
               onNewTab={handleNewTab}
               onSplit={handleSplit}
-              onCloseActiveTab={handleCloseActiveTab}
               onCloseTab={handleCloseTab}
               onFocusLeaf={handleFocusLeaf}
               onResizeSplit={handleResizeSplit}
+              shortcutLabels={SHORTCUT_LABELS}
             />
           </div>
         </div>
@@ -410,10 +402,10 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
         onSelectTab={handleSelectTab}
         onNewTab={handleNewTab}
         onSplit={handleSplit}
-        onCloseActiveTab={handleCloseActiveTab}
         onCloseTab={handleCloseTab}
         onFocusLeaf={handleFocusLeaf}
         onResizeSplit={handleResizeSplit}
+        shortcutLabels={SHORTCUT_LABELS}
       />
     </div>
   )

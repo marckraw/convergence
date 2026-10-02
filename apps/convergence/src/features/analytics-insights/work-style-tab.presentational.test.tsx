@@ -173,7 +173,7 @@ describe('WorkStyleTab', () => {
     expect(screen.getByText('Contextual Clarifier')).toBeInTheDocument()
     expect(screen.getByText('Planning')).toBeInTheDocument()
 
-    screen.getByRole('button', { name: 'Delete' }).click()
+    screen.getByRole('button', { name: 'Delete…' }).click()
     expect(onDeleteGeneratedProfile).toHaveBeenCalledTimes(1)
 
     screen.getByRole('button', { name: 'Regenerate' }).click()

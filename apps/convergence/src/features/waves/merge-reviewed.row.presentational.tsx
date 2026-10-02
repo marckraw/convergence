@@ -15,7 +15,7 @@ export function MergeReviewedRow({
   const mergeable = row.verdict === 'mergeable'
   return (
     <ChoiceField
-      className="min-h-10 rounded-lg bg-ink/5 p-3"
+      className="min-h-10 rounded-lg bg-fill-quiet p-3"
       disabled={running || !mergeable}
       label={
         <span className="block break-words">

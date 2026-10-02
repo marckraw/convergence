@@ -195,18 +195,18 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
             ) : (
               <Button variant="quiet" onClick={onArchiveSpace}>
                 <Archive aria-hidden />
-                Archive Space
+                Archive Space…
               </Button>
             )}
             <Button variant="danger-quiet" onClick={onDeleteSpace}>
               <Trash2 aria-hidden />
-              Delete Space
+              Delete Space…
             </Button>
           </>
         }
       />
 
-      <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-8 py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
           <div>
             <div className="mb-3 flex items-center gap-2 text-sm text-ink-muted">

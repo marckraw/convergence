@@ -30,13 +30,8 @@ export const spaceAttentionLabels: Record<SpaceAttention, string> = {
   stale: 'Stale',
 }
 
-/** An Attempt's or an Artifact's box on the board. */
-export const rowCard =
-  'rounded-lg border border-line-soft bg-surface/30 px-3 py-3'
-
-/** A metric's box: Attempts, Artifacts, Updated. */
-export const metricCard =
-  'rounded-lg border border-line-soft bg-surface/30 px-3 py-2'
+/** A metric's box (a Card): Attempts, Artifacts, Updated, a little shorter than a row's. */
+export const metricCardPadding = 'px-3 py-2'
 
 /** What synthesis or discovery suggests, on the info tint: a hint to accept or not. */
 export const suggestionBox = cn(

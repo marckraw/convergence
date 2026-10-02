@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Maximize2, PanelLeftClose } from 'lucide-react'
-import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
+import { Button, cn, IconButton } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -8,7 +8,6 @@ import type { LoomStackProps } from './loom-stack.types'
 import {
   LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_COMPACT_CLASS,
-  NO_DRAG_STYLE,
   LOOM_SEARCH_COMPACT_ROW_CLASS,
   LOOM_SEARCH_SUBLINE_ROW_CLASS,
 } from './wave-panel.styles'
@@ -18,7 +17,8 @@ import { LoomSearchToggleView } from './loom-search-toggle.presentational'
 import { isLoomSearchShortcut } from './loom-search.pure'
 
 /**
- * One string per control, the label and the hint alike (MAR-3311 R1).
+ * One string per control (MAR-3311 R1): Expand's name, and Collapse's name and
+ * tooltip.
  */
 const EXPAND_LOOM = 'Expand Loom'
 const COLLAPSE_LOOM = 'Collapse Loom'
@@ -55,18 +55,16 @@ export const LoomCompactView: FC<
     <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3">
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
       <div className="flex shrink-0 items-center gap-1">
-        <Tooltip label={EXPAND_LOOM} side="bottom">
-          <Button
-            type="button"
-            variant="ghost"
-            aria-label={EXPAND_LOOM}
-            onClick={onExpand}
-            size="lg"
-            className="px-2 text-xs py-0"
-          >
-            Expand <Maximize2 className="size-3.5" />
-          </Button>
-        </Tooltip>
+        {/* Its words are on it: no tooltip to say them again (MC-15). */}
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={EXPAND_LOOM}
+          onClick={onExpand}
+          size="md"
+        >
+          Expand <Maximize2 className="size-3.5" />
+        </Button>
         {/* Icon-only, and named apart from the two controls that were
             already here (MAR-3292 R4): "Expand Loom" goes wider, "Fold
             Loom" in the expanded header comes back to this column, and
@@ -79,7 +77,6 @@ export const LoomCompactView: FC<
           label={COLLAPSE_LOOM}
           type="button"
           variant="ghost"
-          style={NO_DRAG_STYLE}
           onClick={onCollapse}
           tooltipSide="bottom"
           size="sm"
@@ -122,8 +119,8 @@ export const LoomCompactView: FC<
         variant="ghost"
         ref={props.guideRef}
         onClick={props.onOpenGuide}
-        size="lg"
-        className="w-full justify-start px-2 text-xs py-0"
+        size="md"
+        className="w-full justify-start"
       >
         {LEARN_LOOM_ENTRY}
       </Button>

@@ -1,13 +1,13 @@
 import type { FC } from 'react'
 import { Waypoints } from 'lucide-react'
 import {
-  Button,
   cn,
   Popover,
   PopoverContent,
   PopoverTrigger,
   type PopupFinalFocus,
   type PopupOpenChangeDetails,
+  StatusPillButton,
   Tooltip,
 } from '@convergence/ui'
 import { formatSessionWireCount } from './session-wires.pure'
@@ -67,20 +67,17 @@ export const SessionWires: FC<SessionWiresProps> = ({
       <PopoverTrigger
         render={
           <Tooltip label={summary}>
-            <Button
-              variant="ghost"
+            {/* A state that opens what it is about: a pressable status pill,
+                the header row's own part (CONV-3). */}
+            <StatusPillButton
               aria-label={summary}
-              size="sm"
+              leading={<Waypoints aria-hidden className="size-3" />}
               // A wire at rest is quieter than one that will fire (run 17).
               data-armed={armedCount > 0 ? 'true' : 'false'}
-              className={cn(
-                'rounded-full border border-line-soft text-2xs',
-                armedCount === 0 ? 'text-ink-muted/60' : 'text-ink',
-              )}
+              className={armedCount === 0 ? 'text-ink-muted/60' : 'text-ink'}
             >
-              <Waypoints aria-hidden className="size-3.5" />
               {formatSessionWireCount(lines.length)}
-            </Button>
+            </StatusPillButton>
           </Tooltip>
         }
       />

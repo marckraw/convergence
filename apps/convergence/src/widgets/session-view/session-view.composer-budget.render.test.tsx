@@ -148,7 +148,7 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
     it('R1 costs exactly one commit per keystroke — 20 keys, 20 commits', async () => {
       const commits = renderCounted()
       await settle(commits)
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      const textbox = screen.getByPlaceholderText('Send a follow-up…')
 
       for (let i = 1; i <= 20; i += 1) {
         fireEvent.change(textbox, { target: { value: 'x'.repeat(i) } })
@@ -263,7 +263,7 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
     it('R2 the open conversation starting to run is drawn: the running placeholder and the queued follow-up appear', async () => {
       const commits = renderCounted()
       await settle(commits)
-      expect(screen.getByPlaceholderText('Send a follow-up...')).toBeVisible()
+      expect(screen.getByPlaceholderText('Send a follow-up…')).toBeVisible()
 
       act(() => {
         useSessionStore
@@ -274,7 +274,7 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
       })
 
       expect(commits.count).toBeGreaterThanOrEqual(1)
-      expect(screen.getByPlaceholderText('Queue a follow-up...')).toBeVisible()
+      expect(screen.getByPlaceholderText('Queue a follow-up…')).toBeVisible()
 
       commits.reset()
       act(() => {
@@ -300,7 +300,7 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
       }
 
       expect(commits.count).toBe(0)
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Send quiet' })).toBeNull()
 
       act(() => {
         useSessionRelayStore.setState({
@@ -310,8 +310,8 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
 
       expect(commits.count).toBeGreaterThanOrEqual(1)
       expect(
-        screen.getByRole('switch', { name: 'Send quiet' }),
-      ).toHaveAttribute('aria-checked', 'false')
+        screen.getByRole('button', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-pressed', 'false')
     })
 
     it('R3 aimed from Mission Control at a conversation of a project nobody has opened, it still continues that conversation — mutation drop the globalSessions fallback turns red', () => {
@@ -338,7 +338,7 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
         />,
       )
 
-      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      const textbox = screen.getByPlaceholderText('Send a follow-up…')
       fireEvent.change(textbox, { target: { value: 'From the Hail' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
 

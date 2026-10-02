@@ -41,7 +41,8 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
   onCheckAll,
 }) => (
   <Card
-    render={<section aria-labelledby="connections-overview-heading" />}
+    render={<section />}
+    aria-labelledby="connections-overview-heading"
     padding="md"
     className="space-y-3"
   >
@@ -49,15 +50,18 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
       <h3 id="connections-overview-heading" className={settingsHeading}>
         Who can reach Figma, Linear and GitHub
       </h3>
+      {/* Busy is the Button's own (DLG-17): aria-busy, the spinner in the
+          icon's place, and a width that holds while the words change. */}
       <Button
         type="button"
         variant="secondary"
         disabled={isChecking}
         onClick={onCheckAll}
-        className="min-h-10"
+        pending={isChecking}
+        pendingLabel="Checking all accounts…"
       >
-        <RefreshCw className="mr-2 size-3.5" aria-hidden="true" />
-        {isChecking ? 'Checking all accounts…' : 'Check all accounts'}
+        <RefreshCw className="size-3.5" aria-hidden="true" />
+        Check all accounts
       </Button>
     </div>
     <p className="text-pretty text-xs leading-relaxed text-ink-muted">

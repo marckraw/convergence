@@ -174,7 +174,8 @@ type Story = StoryObj<typeof meta>
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByText('need you')).toBeVisible()
+    // One waits on you, and the count says so in the singular (NAV-32).
+    await expect(canvas.getByText('needs you')).toBeVisible()
     const chip = canvas.getByRole('button', {
       name: 'Switch to project convergence, 1 running, 1 approval',
     })
@@ -228,7 +229,7 @@ export const AggregateTooltip: Story = {
   name: 'Aggregate tooltip',
   play: async ({ canvas, userEvent }) => {
     const counts = canvas.getByRole('group', {
-      name: 'Agents: 3 running, 1 need you',
+      name: 'Agents: 3 running, 1 needs you',
     })
     await userEvent.tab()
     await expect(counts).toHaveFocus()

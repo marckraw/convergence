@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  Tooltip,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import type { PromptLibraryBrowserFilters } from './prompt-library-browser.pure'
@@ -56,7 +57,8 @@ export interface PromptLibraryFormDraft {
 interface PromptLibraryBrowserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   projectName: string | null
   catalog: PromptLibraryCatalog | null
   prompts: PromptLibraryEntry[]
@@ -81,6 +83,8 @@ interface PromptLibraryBrowserDialogProps {
   onCancelForm: () => void
   onFormChange: (patch: Partial<PromptLibraryFormDraft>) => void
   onSubmitForm: () => void
+  /** The key that also saves the form, in words ("⌘↵"), for Save's tooltip. */
+  submitShortcut?: string
   onDeletePrompt: (prompt: PromptLibraryEntry) => void
 }
 
@@ -174,6 +178,7 @@ function renderDetailsPane({
   onCancelForm,
   onFormChange,
   onSubmitForm,
+  submitShortcut,
   onDeletePrompt,
 }: Pick<
   PromptLibraryBrowserDialogProps,
@@ -189,6 +194,7 @@ function renderDetailsPane({
   | 'onCancelForm'
   | 'onFormChange'
   | 'onSubmitForm'
+  | 'submitShortcut'
   | 'onDeletePrompt'
 >) {
   if (!projectName) {
@@ -210,6 +216,7 @@ function renderDetailsPane({
       onCancel: onCancelForm,
       onChange: onFormChange,
       onSubmit: onSubmitForm,
+      submitShortcut,
     })
   }
 
@@ -304,10 +311,11 @@ function renderDetailsPane({
                 />
               </div>
               {/* The prompt's own text: it scrolls, so the keyboard can reach it. */}
+              {/* raw-element: a prompt is prose, kept in the body font as it was written; CodeBlock is monospace */}
               <pre
                 tabIndex={0}
                 aria-label="Prompt text"
-                className="app-scrollbar max-h-60 overflow-auto rounded-md border border-line-soft bg-canvas/60 p-3 text-xs leading-5 whitespace-pre-wrap text-ink"
+                className="max-h-60 overflow-auto rounded-md border border-line-soft bg-canvas/60 p-3 text-xs leading-5 whitespace-pre-wrap text-ink"
               >
                 {selectedDetails.promptText}
               </pre>
@@ -337,6 +345,7 @@ function renderPromptForm({
   onCancel,
   onChange,
   onSubmit,
+  submitShortcut,
 }: {
   draft: PromptLibraryFormDraft
   error: string | null
@@ -344,6 +353,7 @@ function renderPromptForm({
   onCancel: () => void
   onChange: (patch: Partial<PromptLibraryFormDraft>) => void
   onSubmit: () => void
+  submitShortcut?: string
 }) {
   return (
     <div className={dialogPane}>
@@ -366,15 +376,20 @@ function renderPromptForm({
             <X className="size-3.5" />
             Cancel
           </Button>
-          <Button
-            type="button"
-            onClick={onSubmit}
-            pending={isMutating}
-            pendingLabel="Saving…"
+          <Tooltip
+            label={submitShortcut ? 'Save' : undefined}
+            shortcut={submitShortcut}
           >
-            <Save className="size-3.5" />
-            Save
-          </Button>
+            <Button
+              type="button"
+              onClick={onSubmit}
+              pending={isMutating}
+              pendingLabel="Saving…"
+            >
+              <Save className="size-3.5" />
+              Save
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -525,6 +540,7 @@ export const PromptLibraryBrowserDialog: FC<
   onCancelForm,
   onFormChange,
   onSubmitForm,
+  submitShortcut,
   onDeletePrompt,
 }) => {
   const selectedPromptId = selectedPrompt?.id ?? null
@@ -631,7 +647,7 @@ export const PromptLibraryBrowserDialog: FC<
             </div>
           </div>
 
-          <div className="app-scrollbar h-130 overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
+          <div className="h-130 overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
             {!projectName ? (
               <EmptyState
                 title="No project open"
@@ -692,6 +708,7 @@ export const PromptLibraryBrowserDialog: FC<
             onCancelForm,
             onFormChange,
             onSubmitForm,
+            submitShortcut,
             onDeletePrompt,
           })}
         </div>

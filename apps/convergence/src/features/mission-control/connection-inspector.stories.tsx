@@ -127,7 +127,7 @@ export const Default: Story = {
       canvas.getByRole('button', { name: 'Save changes' }),
     ).toBeDisabled()
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Delete connection' }),
+      canvas.getByRole('button', { name: 'Delete connection…' }),
     )
     await expect(args.onDelete).toHaveBeenCalledOnce()
     await userEvent.click(
@@ -174,7 +174,7 @@ export const Empty: Story = {
       'BATON: horses',
     )
     await expect(
-      canvas.queryByRole('button', { name: 'Delete connection' }),
+      canvas.queryByRole('button', { name: 'Delete connection…' }),
     ).toBeNull()
     await userEvent.click(canvas.getByRole('button', { name: 'Save changes' }))
     await expect(args.onSave).toHaveBeenCalledOnce()

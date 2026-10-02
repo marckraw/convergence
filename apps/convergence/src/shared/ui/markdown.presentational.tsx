@@ -2,7 +2,7 @@ import { memo, useMemo, type FC, type Ref } from 'react'
 import { defaultRehypePlugins, Streamdown, type Components } from 'streamdown'
 import { mermaid as mermaidPlugin } from '@streamdown/mermaid'
 import { code as codePlugin } from '@streamdown/code'
-import { cn, TextLink } from '@convergence/ui'
+import { cn, sectionLabel, TextLink } from '@convergence/ui'
 
 const SHIKI_THEME: ['github-light', 'github-dark'] = [
   'github-light',
@@ -142,7 +142,8 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
       <h3
         className={cn(
           isCompact
-            ? 'mt-3 mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-muted'
+            ? // A compact heading is the eyebrow over its list (DS-20).
+              cn('mt-3 mb-1.5', sectionLabel)
             : 'mt-4 mb-2 text-base font-semibold',
           className,
         )}
@@ -198,7 +199,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
       />
     ),
     table: ({ className, children, ...props }) => (
-      <div className="app-scrollbar my-4 overflow-x-auto rounded-xl border border-line bg-canvas/50">
+      <div className="my-4 overflow-x-auto rounded-xl border border-line bg-canvas/50">
         <table
           className={cn(
             'min-w-full border-collapse text-left',

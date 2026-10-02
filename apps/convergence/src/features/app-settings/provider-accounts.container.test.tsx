@@ -235,7 +235,7 @@ describe('ProviderAccountsContainer', () => {
       'true',
     )
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove…' })).toBeDisabled()
     finishLogin({ account: account({ providerId: 'codex' }), warnings: [] })
     await waitFor(() =>
       expect(
@@ -298,7 +298,7 @@ describe('ProviderAccountsContainer', () => {
     render(<ProviderAccountsContainer />)
     await screen.findByText(/No Anthropic accounts enrolled/)
     fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove…' }))
     expect(
       screen.getByText(
         'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.',
@@ -434,7 +434,7 @@ describe('ProviderAccountsContainer', () => {
       screen.getByRole('checkbox', { name: /Delete the private files/ }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove…' }))
     await screen.findByRole('checkbox', { name: /Delete the private files/ })
     expect(
       screen.getByRole('checkbox', { name: /Delete the private files/ }),

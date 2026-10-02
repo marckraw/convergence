@@ -10,7 +10,6 @@ import {
   Card,
   EmptyState,
   FormDialog,
-  Input,
   ListRow,
   SectionLabel,
   Select,
@@ -35,18 +34,16 @@ interface SpaceSessionLinkDialogProps {
   sessionName: string
   spaces: Space[]
   linkedSpaces: LinkedSpaceView[]
-  createTitle: string
   selectedSpaceId: string
   selectedRole: SpaceAttemptRole
   isLoading: boolean
-  isCreating: boolean
   isLinking: boolean
   isDetaching: boolean
   error: string | null
   onOpenChange: (open: boolean) => void
-  onCreateTitleChange: (value: string) => void
   onSelectedSpaceChange: (id: string) => void
   onSelectedRoleChange: (role: SpaceAttemptRole) => void
+  /** Opens the New Space dialog from this session (ruling 4). */
   onCreateFromSession: () => void
   onAttachToSpace: () => void
   onDetachAttempt: (attemptId: string, spaceId: string) => void
@@ -57,16 +54,13 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
   sessionName,
   spaces,
   linkedSpaces,
-  createTitle,
   selectedSpaceId,
   selectedRole,
   isLoading,
-  isCreating,
   isLinking,
   isDetaching,
   error,
   onOpenChange,
-  onCreateTitleChange,
   onSelectedSpaceChange,
   onSelectedRoleChange,
   onCreateFromSession,
@@ -77,7 +71,6 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
     linkedSpaces.map((entry) => entry.attempt.spaceId),
   )
   const linkableSpaces = spaces.filter((space) => !linkedSpaceIds.has(space.id))
-  const createDisabled = createTitle.trim().length === 0 || isCreating
   const attachDisabled =
     selectedSpaceId.length === 0 || isLinking || linkableSpaces.length === 0
 
@@ -103,26 +96,12 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
 
         <section className="space-y-3">
           <SectionLabel as="h3">Create from session</SectionLabel>
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!createDisabled) onCreateFromSession()
-            }}
-          >
-            <Input
-              size="lg"
-              value={createTitle}
-              onChange={(event) => onCreateTitleChange(event.target.value)}
-              placeholder="Space title"
-              aria-label="Space title from session"
-              disabled={isCreating}
-            />
-            <Button type="submit" disabled={createDisabled}>
-              <Plus className="size-4" />
-              Create
-            </Button>
-          </form>
+          {/* One way to create a Space: the New Space dialog, which starts
+              from this session's name and makes it the seed (ruling 4). */}
+          <Button type="button" onClick={onCreateFromSession}>
+            <Plus className="size-4" />
+            Create Space…
+          </Button>
         </section>
 
         <section className="space-y-3">
@@ -216,9 +195,9 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
           ) : (
             <div className="space-y-2">
               {linkedSpaces.map(({ attempt, space }) => (
-                <div
+                <Card
                   key={attempt.id}
-                  className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-line-soft bg-surface/30 px-3 py-3"
+                  className="flex min-w-0 items-center justify-between gap-3"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">
@@ -238,7 +217,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                     <Unlink className="size-4" />
                     Detach
                   </Button>
-                </div>
+                </Card>
               ))}
             </div>
           )}

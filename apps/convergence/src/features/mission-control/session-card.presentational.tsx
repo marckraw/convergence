@@ -2,18 +2,20 @@ import type { ComponentProps, FC, ReactNode } from 'react'
 import { Cable, Radio } from 'lucide-react'
 import {
   formatSessionAttentionLabel,
+  SESSION_STATE_TONE,
   SessionStateBadge,
 } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { ProviderModel } from '@/shared/ui/provider-model.presentational'
 import {
-  Button,
   Card,
   CardAction,
   cn,
   Spinner,
   StatusDot,
+  Toggle,
+  toneInk,
   Tooltip,
 } from '@convergence/ui'
 import { CrewMark } from './crew-mark.presentational'
@@ -158,7 +160,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
             <StatusDot
               tone={
                 signal.hostUnreachable
-                  ? 'warning'
+                  ? SESSION_STATE_TONE.unreachable
                   : STATUS_DOT_TONE[session.status]
               }
               pulse={signal.running}
@@ -222,7 +224,9 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
           <p
             className={cn(
               'mt-auto truncate text-2xs',
-              signal.hostUnreachable ? 'text-warning-ink' : 'text-ink-muted',
+              signal.hostUnreachable
+                ? toneInk[SESSION_STATE_TONE.unreachable]
+                : 'text-ink-muted',
             )}
           >
             {activity}
@@ -233,14 +237,28 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
       {grid ? (
         <div className="flex items-center justify-between gap-2 border-t border-hairline px-3 py-2">
           <span
+            data-tone={
+              signal.hostUnreachable
+                ? SESSION_STATE_TONE.unreachable
+                : undefined
+            }
             className={cn(
               'flex min-w-0 items-center gap-1.5 text-xs',
               signal.hostUnreachable
-                ? 'text-warning-ink'
+                ? toneInk[SESSION_STATE_TONE.unreachable]
                 : ACTIVITY_TEXT_STYLES[session.status],
             )}
           >
-            {signal.running ? <Spinner size="xs" /> : null}
+            {/* At work, the spinner in the working tone (R1: info), as the
+                Activity feed and the sidebar's rows draw it (MC-1). */}
+            {signal.running ? (
+              <span data-tone={SESSION_STATE_TONE.working} className="flex">
+                <Spinner
+                  size="xs"
+                  className={toneInk[SESSION_STATE_TONE.working]}
+                />
+              </span>
+            ) : null}
             <span className="truncate">{activity}</span>
           </span>
 
@@ -248,18 +266,18 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
             {crewAction}
 
             {onHail ? (
-              <Button
-                type="button"
-                variant={hailOpen ? 'tonal' : 'ghost'}
-                aria-expanded={hailOpen}
+              // Open or not, one control: a Toggle, pressed while its Hail
+              // shows, in R7's chosen look, never a variant swapped in (DS-28).
+              <Toggle
+                size="xs"
+                pressed={hailOpen}
                 aria-label={`Hail ${session.name}`}
                 onClick={() => onHail(card)}
-                size="xs"
-                className="shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+                className="gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-pressed:opacity-100"
               >
                 <Radio className="size-3" />
                 Hail
-              </Button>
+              </Toggle>
             ) : null}
           </div>
         </div>

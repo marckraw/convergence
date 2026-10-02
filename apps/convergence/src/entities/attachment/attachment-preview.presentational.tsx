@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import {
+  CodeBlock,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -39,7 +40,7 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
       <DialogContent size="2xl" className="max-h-full">
-        <DialogHeader className="border-b border-line px-4 py-3 pr-10">
+        <DialogHeader>
           <DialogTitle className="truncate">
             {attachment?.filename ?? 'Preview'}
           </DialogTitle>
@@ -91,9 +92,11 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
           )}
 
           {!isLoading && !error && attachment?.kind === 'text' && (
-            <pre className="max-h-(--layout-preview-height) overflow-auto whitespace-pre-wrap rounded bg-surface-muted/40 p-3 font-mono text-xs text-ink">
+            // The file's text: CodeBlock, wrapping, as tall as it is; the
+            // preview's own pane scrolls it (CONV-32).
+            <CodeBlock label="Text preview" maxHeight="none" wrap>
               {textContent ?? ''}
-            </pre>
+            </CodeBlock>
           )}
         </div>
       </DialogContent>

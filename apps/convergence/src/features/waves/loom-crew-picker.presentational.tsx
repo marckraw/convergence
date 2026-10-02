@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import { Link2 } from 'lucide-react'
 import {
-  cn,
   IconButton,
   Select,
   SelectContent,
@@ -10,7 +9,6 @@ import {
   SelectValue,
 } from '@convergence/ui'
 import { LOOM_FOLLOW_LABEL } from './loom-follow.pure'
-import { NO_DRAG_STYLE } from './wave-panel.styles'
 import type { LoomSubline } from './loom-stack.types'
 
 /**
@@ -77,15 +75,11 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
         type="button"
         variant="ghost"
         pressed={follow.on}
-        style={NO_DRAG_STYLE}
         onClick={() => follow.onToggle(!follow.on)}
         size="sm"
-        className={cn(
-          'shrink-0 text-ink-muted',
-          // R7: a toggle that is on is the raised chip, as Mission Control's
-          // Connect is (MC-19).
-          follow.on && 'bg-chip text-ink shadow-raised',
-        )}
+        // R7: on, it is the raised chip, which IconButton's pressed draws
+        // itself, as Mission Control's Connect does (MC-8).
+        className="shrink-0 text-ink-muted"
       >
         <Link2 aria-hidden="true" className="size-3.5" />
       </IconButton>

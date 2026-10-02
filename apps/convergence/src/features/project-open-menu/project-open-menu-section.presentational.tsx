@@ -1,6 +1,10 @@
 import { Code2, Folder } from 'lucide-react'
-import type { ProjectOpenApp } from '@/entities/project-open'
-import { Button } from '@convergence/ui'
+import {
+  openInLabel,
+  projectOpenNote,
+  type ProjectOpenApp,
+} from '@/entities/project-open'
+import { Button, SectionLabel } from '@convergence/ui'
 
 interface ProjectOpenMenuSectionProps {
   apps: ProjectOpenApp[]
@@ -25,13 +29,17 @@ export function ProjectOpenMenuSection({
   disabledReason,
   onOpen,
 }: ProjectOpenMenuSectionProps) {
+  // The same list as the header's Open menu: one note, one label (NAV-25).
+  const note = projectOpenNote({
+    apps,
+    loading,
+    unavailableReason: disabledReason,
+  })
   return (
     <div role="group" aria-label="Open in" className="flex flex-col">
-      <div className="px-2 pt-1.5 pb-1 text-2xs text-ink-muted">Open in</div>
-      {disabledReason || loading ? (
-        <p className="px-2 py-1.5 text-sm text-ink-muted">
-          {disabledReason ?? 'Detecting apps…'}
-        </p>
+      <SectionLabel className="px-2 pt-1.5 pb-1">Open in</SectionLabel>
+      {note ? (
+        <p className="px-2 py-1.5 text-sm text-ink-muted">{note}</p>
       ) : (
         apps.map((app) => {
           const Icon = app.kind === 'file-manager' ? Folder : Code2
@@ -40,10 +48,10 @@ export function ProjectOpenMenuSection({
               key={app.id}
               variant="ghost"
               onClick={() => onOpen(app)}
-              className="w-full justify-start px-2 font-normal"
+              className="w-full justify-start font-normal"
             >
               <Icon className="size-3.5" />
-              Open in {app.label}
+              {openInLabel(app)}
             </Button>
           )
         })

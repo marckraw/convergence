@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -14,6 +15,12 @@ import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { SpaceWorkboardDialogContainer } from './space-workboard.container'
+
+/** The sidebar's menus open it through the dialog store; it has no trigger of its own (NAV-34). */
+const openSpaces = () =>
+  act(() => {
+    useDialogStore.getState().open('space-workboard')
+  })
 
 const space: Space = {
   id: 'i1',
@@ -206,7 +213,7 @@ describe('SpaceWorkboardDialogContainer', () => {
   it('loads Spaces when opened', async () => {
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
 
     await waitFor(() => {
       expect(mockElectronAPI.space.list).toHaveBeenCalled()
@@ -216,30 +223,25 @@ describe('SpaceWorkboardDialogContainer', () => {
     ).toBeInTheDocument()
   })
 
-  it('creates and selects a Space', async () => {
+  it('creates a Space in the New Space dialog, which hands back to the board (ruling 4)', async () => {
     mockElectronAPI.space.list.mockResolvedValue([])
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
-    fireEvent.change(screen.getByLabelText(/new space title/i), {
-      target: { value: 'Agent-native work tracking' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /create space/i }))
+    openSpaces()
+    expect(screen.queryByLabelText(/new space title/i)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Create Space…' }))
 
-    await waitFor(() => {
-      expect(mockElectronAPI.space.create).toHaveBeenCalledWith({
-        title: 'Agent-native work tracking',
-      })
+    expect(useDialogStore.getState()).toMatchObject({
+      openDialog: 'space-create',
+      payload: { newSpace: { returnTo: 'space-workboard' } },
     })
-    expect(
-      screen.getByDisplayValue('Agent-native work tracking'),
-    ).toBeInTheDocument()
+    expect(mockElectronAPI.space.create).not.toHaveBeenCalled()
   })
 
   it('saves stable Space fields', async () => {
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Agent-native work tracking')
     fireEvent.change(screen.getByDisplayValue('Agent-native work tracking'), {
       target: { value: 'Spaces V1' },
@@ -283,7 +285,7 @@ describe('SpaceWorkboardDialogContainer', () => {
   it('creates a manual Artifact for the selected Space', async () => {
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Agent-native work tracking')
     fireEvent.click(screen.getByRole('button', { name: /add artifact/i }))
     // Add Artifact's fields are named by their captions (DLG-7).
@@ -314,7 +316,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     mockElectronAPI.space.listArtifacts.mockResolvedValue([artifact])
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByDisplayValue('Public PR')
     selectOption(/status for public pr/i, 'Ready')
     fireEvent.click(
@@ -342,7 +344,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     })
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Implement artifact suggestions')
     fireEvent.click(screen.getByRole('button', { name: /discover/i }))
 
@@ -367,7 +369,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     mockElectronAPI.space.listAttempts.mockResolvedValue([attempt])
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Implement artifact suggestions')
     fireEvent.click(screen.getByRole('button', { name: /synthesize/i }))
 
@@ -412,7 +414,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     })
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Implement artifact suggestions')
     fireEvent.click(screen.getByRole('button', { name: /synthesize/i }))
 

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { useMemo } from 'react'
-import { cn } from '@convergence/ui'
+import { cn, EmptyState } from '@convergence/ui'
 import {
   buildPierreChangedFilesTreeInput,
   type PierreChangedFileInput,
@@ -35,14 +35,20 @@ export const ChangedFilesTree: FC<ChangedFilesTreeProps> = ({
   )
   const treeKey = buildTreeModelKey(treeInput)
 
+  // Loading and empty read as every list's do (CONV-19).
   if (loading) {
     return (
-      <div className="p-3 text-xs text-ink-muted">Loading changed files...</div>
+      <EmptyState
+        state="loading"
+        size="compact"
+        variant="plain"
+        title="Loading changed files…"
+      />
     )
   }
 
   if (treeInput.paths.length === 0) {
-    return <div className="p-3 text-xs text-ink-muted">{emptyMessage}</div>
+    return <EmptyState size="compact" variant="plain" title={emptyMessage} />
   }
 
   return (

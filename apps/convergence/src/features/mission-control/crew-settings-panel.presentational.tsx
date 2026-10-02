@@ -38,7 +38,6 @@ import { flowRunCeilingNote } from './crew-loop.pure'
 import { CrewMark } from './crew-mark.presentational'
 import { InspectorHeader } from './inspector-header.presentational'
 import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
-import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 import {
   hostLabel,
@@ -61,16 +60,13 @@ interface CrewSettingsPanelProps {
   accentColor: string | null
   onEmojiChange: (emoji: string | null) => void
   onAccentColorChange: (accentColor: string | null) => void
-  memberCount: number
   includePositions: boolean
   lastExportPath?: string | null
   exporting: boolean
-  confirmingDelete: boolean
   onIncludePositionsChange: (include: boolean) => void
   onExport: () => void
+  /** Delete crew…: the container asks first, in ConfirmDialog (R5). */
   onRequestDelete: () => void
-  onCancelDelete: () => void
-  onConfirmDelete: () => void
   updateError: string | null
   savedName: string
   crewName: string
@@ -175,16 +171,12 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   accentColor,
   onEmojiChange,
   onAccentColorChange,
-  memberCount,
   includePositions,
   lastExportPath,
   exporting,
-  confirmingDelete,
   onIncludePositionsChange,
   onExport,
   onRequestDelete,
-  onCancelDelete,
-  onConfirmDelete,
   updateError,
   savedName,
   crewName,
@@ -332,7 +324,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         disabled={busy}
         onClick={onAddConversation}
         size="sm"
-        className="px-2.5 text-2xs"
       >
         <MessageSquare aria-hidden className="size-3.5" />
         Add conversation…
@@ -344,7 +335,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         variant="secondary"
         disabledReason="Coming with MAR-3099"
         size="sm"
-        className="px-2.5 text-2xs"
       >
         <FlaskConical aria-hidden className="size-3.5" />
         New recipe
@@ -404,7 +394,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                     variant="secondary"
                     disabled={busy}
                     size="sm"
-                    className="gap-1 text-2xs"
+                    className="gap-1"
                   />
                 }
               >
@@ -458,7 +448,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               data-seat-group={group.role}
               className="flex flex-col gap-1"
             >
-              <SectionLabel as="h4" className="text-3xs">
+              <SectionLabel as="h4" size="sm">
                 {group.title} {group.count}
               </SectionLabel>
               <ul className="flex flex-col gap-1">
@@ -589,7 +579,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               disabled={exporting}
               onClick={onExport}
               size="sm"
-              className="px-3"
             >
               {exporting ? 'Exporting…' : 'Export crew…'}
             </Button>
@@ -611,48 +600,17 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             className="border-t border-hairline pt-2"
           >
             <SectionLabel as="h4">Danger</SectionLabel>
-            {confirmingDelete ? (
-              <div className="flex flex-col gap-2">
-                <p className="text-2xs text-ink-muted">
-                  Delete “{savedName}” with {formatCrewMemberCount(memberCount)}
-                  ? Only the crew disappears; the conversations stay exactly
-                  where they are.
-                </p>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    type="button"
-                    variant="danger"
-                    disabled={busy}
-                    onClick={onConfirmDelete}
-                    size="sm"
-                    className="flex-1 px-3"
-                  >
-                    Delete crew
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={onCancelDelete}
-                    size="sm"
-                    className="px-3"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="danger-quiet"
-                onClick={onRequestDelete}
-                size="sm"
-                className="w-full justify-start font-normal"
-              >
-                <Trash2 className="size-3.5" />
-                Delete crew
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="danger-quiet"
+              disabled={busy}
+              onClick={onRequestDelete}
+              size="sm"
+              className="w-full justify-start font-normal"
+            >
+              <Trash2 className="size-3.5" />
+              Delete crew…
+            </Button>
           </section>
 
           <Notice

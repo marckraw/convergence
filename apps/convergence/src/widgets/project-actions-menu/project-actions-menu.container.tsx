@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FC, ReactElement, ReactNode } from 'react'
-import { toast } from 'sonner'
 import { useDialogStore } from '@/entities/dialog'
 import { laneApi, type Project } from '@/entities/project'
 import {
@@ -10,7 +9,7 @@ import {
   type ProjectScriptRun,
 } from '@/entities/project-script'
 import { ProjectScriptEditor } from '@/features/project-script-editor'
-import { Popover, PopoverTrigger, useConfirm } from '@convergence/ui'
+import { notify, Popover, PopoverTrigger, useConfirm } from '@convergence/ui'
 import { isProjectScriptRunActive } from './project-actions-menu.pure'
 import {
   ProjectActionsMenuPresentational,
@@ -154,9 +153,7 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
           onRevealLane={() => {
             setMenuOpen(false)
             void laneApi.reveal(project.id).catch((err: unknown) => {
-              toast.error(
-                err instanceof Error ? err.message : 'Failed to reveal lane',
-              )
+              notify.failure('reveal the lane', err)
             })
           }}
           onRun={(item) => {

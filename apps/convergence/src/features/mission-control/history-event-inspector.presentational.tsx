@@ -119,23 +119,13 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
 
     <div className="flex flex-col items-start gap-1.5">
       {openRecipientLabel ? (
-        <Button
-          type="button"
-          variant="tonal"
-          onClick={onOpenRecipient}
-          className="text-2xs"
-        >
+        <Button type="button" variant="tonal" onClick={onOpenRecipient}>
           Open {openRecipientLabel} conversation
         </Button>
       ) : null}
 
       {hasCurrentConnection ? (
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onViewCurrentConnection}
-          className="text-2xs"
-        >
+        <Button type="button" variant="ghost" onClick={onViewCurrentConnection}>
           View current connection
         </Button>
       ) : null}
@@ -147,7 +137,6 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
             variant="ghost"
             disabled={busy || acknowledged}
             onClick={onMarkSeen}
-            className="text-2xs"
           >
             {acknowledged ? 'Seen' : 'Mark seen'}
           </Button>

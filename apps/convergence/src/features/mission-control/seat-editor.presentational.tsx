@@ -202,9 +202,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               disabled={busy}
               onClick={onRemove}
               size="sm"
-              className="px-2.5 text-2xs"
             >
-              Remove seat
+              Remove seat…
             </Button>
           }
         >
@@ -326,7 +325,6 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 disabled={busy}
                 onClick={onWriteCard}
                 size="sm"
-                className="px-2.5 text-2xs"
               >
                 Write a card
               </Button>
@@ -342,7 +340,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       </div>
 
       <section aria-label="Policy" className="flex flex-col gap-2">
-        <SectionLabel as="h4" className="text-3xs">
+        <SectionLabel as="h4" size="sm">
           Policy
         </SectionLabel>
         {recipe ? (
@@ -517,10 +515,10 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           disabled={busy}
           onClick={onRemove}
           size="sm"
-          className="shrink-0 gap-1 px-1 text-2xs font-normal disabled:opacity-50"
+          className="shrink-0 gap-1 font-normal disabled:opacity-50"
         >
           <Trash2 aria-hidden className="size-3.5" />
-          {recipe ? 'Delete recipe' : 'Remove from crew'}
+          {recipe ? 'Delete recipe…' : 'Remove from crew…'}
         </Button>
       </div>
     </section>

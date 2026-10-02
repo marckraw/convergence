@@ -5,7 +5,6 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  Folder,
   FolderOpen,
   Link2,
   X,
@@ -17,7 +16,12 @@ import type {
   SkillDetails,
   SkillWarning,
 } from '@/entities/skill'
-import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
+import {
+  ProjectOpenMenu,
+  projectOpenNote,
+  type ProjectOpenApp,
+  type ProjectOpenAppId,
+} from '@/entities/project-open'
 import {
   Badge,
   Button,
@@ -106,7 +110,8 @@ function renderDependencyList(dependencies: SkillDependency[]) {
           </span>
           <Badge
             tone={DEPENDENCY_STATE_TONES[dependency.state]}
-            className="shrink-0 font-medium uppercase"
+            caps
+            className="shrink-0 font-medium"
           >
             {DEPENDENCY_STATE_LABELS[dependency.state]}
           </Badge>
@@ -190,7 +195,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
       <div className="mb-4 min-w-0">
         <div className="mb-3 flex items-end justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className="uppercase">{selectedSkill.providerName}</Badge>
+            <Badge caps>{selectedSkill.providerName}</Badge>
             {renderScopeChip(selectedSkill.scope)}
             {renderStatusBadge(selectedSkill.enabled)}
             {renderWarningBadge(selectedSkill.warnings.length)}
@@ -247,49 +252,19 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
                 <FolderOpen className="size-4" />
               </IconButton>
             ) : null}
-            {selectedSkill.path && onOpenInEditor
-              ? withTooltip(
-                  'Open the skill folder in an editor',
-                  <Menu>
-                    <MenuTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          aria-label="Open in editor"
-                          size="sm"
-                          className="gap-1"
-                        >
-                          <Code2 className="size-3.5" />
-                          Open
-                          <ChevronDown className="size-3" />
-                        </Button>
-                      }
-                    />
-                    <MenuContent align="end" className="min-w-40">
-                      {editorAppsLoading ? (
-                        <MenuItem disabled>Detecting apps…</MenuItem>
-                      ) : (editorApps?.length ?? 0) === 0 ? (
-                        <MenuItem disabled>No editors found</MenuItem>
-                      ) : (
-                        editorApps?.map((app) => {
-                          const Icon =
-                            app.kind === 'file-manager' ? Folder : Code2
-                          return (
-                            <MenuItem
-                              key={app.id}
-                              onClick={() => onOpenInEditor(app.id)}
-                            >
-                              <Icon className="size-3.5" />
-                              {app.label}
-                            </MenuItem>
-                          )
-                        })
-                      )}
-                    </MenuContent>
-                  </Menu>,
-                )
-              : null}
+            {/* The header's Open menu, opening the skill's folder (DLG-29). */}
+            {selectedSkill.path && onOpenInEditor ? (
+              <ProjectOpenMenu
+                apps={editorApps ?? []}
+                note={projectOpenNote({
+                  apps: editorApps ?? [],
+                  loading: editorAppsLoading ?? false,
+                })}
+                onOpen={(app) => onOpenInEditor(app.id)}
+                label="Open in editor"
+                tooltip="Open the skill folder in an editor"
+              />
+            ) : null}
             {selectedSkill.path && onOpenFile ? (
               <IconButton
                 label="Open SKILL.md"

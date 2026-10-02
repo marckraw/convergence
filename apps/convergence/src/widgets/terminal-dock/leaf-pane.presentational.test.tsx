@@ -35,7 +35,6 @@ describe('LeafPaneView', () => {
         onSelectTab={vi.fn()}
         onNewTab={vi.fn()}
         onSplit={vi.fn()}
-        onCloseActiveTab={vi.fn()}
         onCloseTab={vi.fn()}
         onFocusLeaf={vi.fn()}
         renderTerminal={() => <div data-testid="pane" />}

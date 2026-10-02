@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
-import { toast } from 'sonner'
 import { useDialogStore } from '@/entities/dialog'
 import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
-import type { ComboboxItem } from '@convergence/ui'
+import { notify, type ComboboxItem } from '@convergence/ui'
 import {
   PROJECT_DEFAULT_ID,
   WorkspaceCreateDialog,
@@ -128,7 +127,7 @@ export const WorkspaceCreateDialogContainer: FC = () => {
         return
       }
       beginSessionDraft(created.id)
-      toast.success(
+      notify.success(
         `Worktree ${created.branchName} ready — start a session below`,
       )
       closeDialog()
@@ -150,8 +149,8 @@ export const WorkspaceCreateDialogContainer: FC = () => {
     closeDialog,
   ])
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(open, handleSubmit)
+  // Enable cmd+Enter to submit the form; Create says so in its tooltip (DS-34)
+  const submitShortcut = useFormSubmitShortcut(open, handleSubmit)
 
   if (!activeProject) return null
 
@@ -170,6 +169,7 @@ export const WorkspaceCreateDialogContainer: FC = () => {
       isSubmitting={isSubmitting}
       error={error}
       onSubmit={() => void handleSubmit()}
+      submitShortcut={submitShortcut}
     />
   )
 }

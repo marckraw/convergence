@@ -31,7 +31,7 @@ vi.mock('@/features/terminal-pane', () => ({
   }: {
     onSplitHorizontal: () => void
     onSplitVertical: () => void
-    onClose: () => void
+    onClose?: () => void
   }) => (
     <div>
       <button
@@ -48,9 +48,11 @@ vi.mock('@/features/terminal-pane', () => ({
       >
         v
       </button>
-      <button type="button" aria-label="Close tab" onClick={onClose}>
-        x
-      </button>
+      {onClose ? (
+        <button type="button" aria-label="Close tab" onClick={onClose}>
+          x
+        </button>
+      ) : null}
     </div>
   ),
   CloseConfirmDialog: ({
@@ -226,6 +228,41 @@ describe('TerminalDock container', () => {
     )
   })
 
+  // NAV-16: the line between the dock and the conversation is the kit's
+  // ResizeHandle. Mutation: the old pointer-only div -> no tab stop, no
+  // value, and the keys do nothing: red.
+  it('the dock resizes from the keyboard, and says its size and range', () => {
+    useSessionStore.setState({
+      sessions: [makeSession()],
+      activeSessionId: 's-1',
+    } as Partial<ReturnType<typeof useSessionStore.getState>>)
+    useTerminalStore.setState({
+      treesBySessionId: { 's-1': leaf('l1', [makeTab('t-1')]) },
+      focusedLeafBySessionId: { 's-1': 'l1' },
+    })
+    // jsdom's window is 768 px tall: the dock may take 60% of it.
+    const max = String(Math.floor(window.innerHeight * 0.6))
+
+    render(<TerminalDock />)
+
+    const line = screen.getByRole('separator', { name: 'Resize terminal dock' })
+    expect(line).toHaveAttribute('tabindex', '0')
+    expect(line).toHaveAttribute('aria-orientation', 'horizontal')
+    expect(line).toHaveAttribute('aria-valuenow', '280')
+    expect(line).toHaveAttribute('aria-valuemin', '120')
+    expect(line).toHaveAttribute('aria-valuemax', max)
+
+    // The dock is under the line: moving it up makes the dock taller.
+    fireEvent.keyDown(line, { key: 'ArrowUp' })
+    expect(useTerminalStore.getState().getDockHeight('s-1')).toBe(296)
+    expect(line).toHaveAttribute('aria-valuenow', '296')
+    fireEvent.keyDown(line, { key: 'End' })
+    expect(String(useTerminalStore.getState().getDockHeight('s-1'))).toBe(max)
+    // A double-click puts the default back.
+    fireEvent.doubleClick(line)
+    expect(useTerminalStore.getState().getDockHeight('s-1')).toBe(280)
+  })
+
   it('renders only the active tab of a leaf with multiple tabs', () => {
     useSessionStore.setState({
       sessions: [makeSession()],
@@ -320,7 +357,7 @@ describe('TerminalDock container', () => {
     )
   })
 
-  it('clicking "Close tab" closes the active tab of the leaf', () => {
+  it('closes a tab from its own ✕, the only close it has (NAV-9; mutation: pass onClose to the toolbar again)', () => {
     useSessionStore.setState({
       sessions: [makeSession()],
       activeSessionId: 's-1',
@@ -334,7 +371,13 @@ describe('TerminalDock container', () => {
       .mockResolvedValue(undefined)
 
     render(<TerminalDock />)
-    fireEvent.click(screen.getByRole('button', { name: /^close tab$/i }))
+    // The pane's toolbar draws no second close for the open tab.
+    expect(screen.queryByRole('button', { name: /^close tab$/i })).toBeNull()
+    // The tab's ✕ is the pointer's (Delete is the keyboard's), so it is out of
+    // the accessibility tree.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close tab zsh', hidden: true }),
+    )
 
     expect(closeSpy).toHaveBeenCalledWith('s-1', 'l1', 't-1')
   })

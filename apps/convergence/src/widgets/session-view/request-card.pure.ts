@@ -1,9 +1,11 @@
+import { ATTENTION_WORDS, inputRequestWords } from '@/entities/session'
+
 /**
  * The words of the cards where the agent waits on you (CONV-8, MAR-3617):
  * one map that both a card's visible title and its accessible name read, so
- * the two can't drift apart. The words match `formatSessionAttentionLabel`
- * (entities/session), which the sidebar and Mission Control show for the same
- * state.
+ * the two can't drift apart. The words are the session entity's own
+ * (`ATTENTION_WORDS`, CONV-3), which the header's pill and
+ * `formatSessionAttentionLabel` (the sidebar, Mission Control) read too.
  */
 
 export type ApprovalResolution =
@@ -17,7 +19,7 @@ export type ApprovalResolution =
 export function approvalCardTitle(resolution: ApprovalResolution): string {
   if (resolution === 'denied') return 'Denied'
   if (resolution === 'approved') return 'Approved'
-  return 'Approval needed'
+  return ATTENTION_WORDS['needs-approval']
 }
 
 export type InputRequestKind =
@@ -31,16 +33,7 @@ export type InputRequestKind =
 
 /** An input request card's title, by what it asks for. */
 export function inputCardTitle(kind: InputRequestKind): string {
-  switch (kind) {
-    case 'plan':
-      return 'Plan review needed'
-    case 'form':
-      return 'Form input needed'
-    case 'url':
-      return 'URL confirmation needed'
-    default:
-      return 'Input needed'
-  }
+  return inputRequestWords(kind)
 }
 
 /**

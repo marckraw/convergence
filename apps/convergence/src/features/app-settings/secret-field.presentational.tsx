@@ -91,7 +91,7 @@ export const SecretField: FC<SecretFieldProps> = ({
           {actions}
           <Button
             type="button"
-            variant="ghost"
+            variant="danger-quiet"
             aria-label={owner ? `Remove ${noun}${forOwner}` : undefined}
             onClick={onRemove}
             disabled={saving}

@@ -1,5 +1,5 @@
 import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
 import { DraftStart } from './draft-start.presentational'
@@ -46,6 +46,7 @@ import { useTerminalStore } from '@/entities/terminal'
 import {
   Button,
   cn,
+  DescriptionList,
   focusRingInset,
   IconButton,
   MenuCheckboxItem,
@@ -486,8 +487,11 @@ export const SessionView: FC = () => {
     }
   }
   const togglePin = () =>
-    void setPinned(session.id, !session.pinnedAt).catch((error) =>
-      toast.error(error instanceof Error ? error.message : String(error)),
+    void setPinned(session.id, !session.pinnedAt).catch((error: unknown) =>
+      notify.failure(
+        session.pinnedAt ? 'unpin the conversation' : 'pin the conversation',
+        error,
+      ),
     )
   const parallelLabel = parallelWorkInRow(session.parallelWork)
   const harnessAlert = supportsHarnessFacts ? harnessPill(harness.facts) : null
@@ -647,7 +651,8 @@ export const SessionView: FC = () => {
                             session.parentSessionId &&
                             setActiveSession(session.parentSessionId)
                           }
-                          className="h-auto justify-start px-2 py-1.5"
+                          size="sm"
+                          className="justify-start gap-2"
                         >
                           <GitFork className="h-3.5 w-3.5" />
                           Forked from:{' '}
@@ -656,92 +661,101 @@ export const SessionView: FC = () => {
                           )?.name ?? 'parent'}
                         </Button>
                       )}
-                      {remoteDetails ? (
-                        <>
-                          <SessionHeaderDetailRow
-                            icon={<Cloud className="h-3.5 w-3.5" />}
-                            label="Execution host"
-                            value="Remote daemon"
-                          />
-                          {/*
+                      {/* The facts as terms and values (CONV-24). */}
+                      <DescriptionList
+                        layout="inline"
+                        density="compact"
+                        className="gap-1.5"
+                      >
+                        {remoteDetails ? (
+                          <>
+                            <SessionHeaderDetailRow
+                              icon={<Cloud className="h-3.5 w-3.5" />}
+                              label="Execution host"
+                              value="Remote daemon"
+                            />
+                            {/*
                     What this session was told, above what the daemon says
                     it did (MAR-2689). A row written before the work address
                     existed reads "Unknown" rather than a repository
                     re-derived from a local checkout it may never have
                     matched.
                   */}
-                          <SessionHeaderDetailRow
-                            label="Works in"
-                            value={remoteDetails.worksIn}
-                          />
-                          {remoteDetails.remoteRepository && (
                             <SessionHeaderDetailRow
-                              label="Remote repository"
-                              value={remoteDetails.remoteRepository}
+                              label="Works in"
+                              value={remoteDetails.worksIn}
                             />
-                          )}
-                          {remoteDetails.branch && (
+                            {remoteDetails.remoteRepository && (
+                              <SessionHeaderDetailRow
+                                label="Remote repository"
+                                value={remoteDetails.remoteRepository}
+                              />
+                            )}
+                            {remoteDetails.branch && (
+                              <SessionHeaderDetailRow
+                                icon={<GitBranch className="h-3.5 w-3.5" />}
+                                label="Remote branch"
+                                value={remoteDetails.branch}
+                              />
+                            )}
+                            {remoteDetails.requestedBranch && (
+                              <SessionHeaderDetailRow
+                                label="Branch requested"
+                                value={remoteDetails.requestedBranch}
+                              />
+                            )}
+                            <SessionHeaderDetailRow
+                              icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                              label="Pull request"
+                              value={pullRequestLabel}
+                            />
+                            {remoteDetails.unreadable && (
+                              <SessionHeaderDetailRow
+                                label="Remote workspace"
+                                value={remoteDetails.unreadable}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <>
                             <SessionHeaderDetailRow
                               icon={<GitBranch className="h-3.5 w-3.5" />}
-                              label="Remote branch"
-                              value={remoteDetails.branch}
+                              label="Checkout branch"
+                              value={branchName ?? 'Unknown'}
                             />
-                          )}
-                          {remoteDetails.requestedBranch && (
                             <SessionHeaderDetailRow
-                              label="Branch requested"
-                              value={remoteDetails.requestedBranch}
+                              icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                              label="Pull request"
+                              value={pullRequestLabel}
                             />
-                          )}
+                          </>
+                        )}
+                        {activityLabel && (
                           <SessionHeaderDetailRow
-                            icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                            label="Pull request"
-                            value={pullRequestLabel}
+                            label="Activity"
+                            value={activityLabel}
                           />
-                          {remoteDetails.unreadable && (
-                            <SessionHeaderDetailRow
-                              label="Remote workspace"
-                              value={remoteDetails.unreadable}
-                            />
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <SessionHeaderDetailRow
-                            icon={<GitBranch className="h-3.5 w-3.5" />}
-                            label="Checkout branch"
-                            value={branchName ?? 'Unknown'}
-                          />
-                          <SessionHeaderDetailRow
-                            icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                            label="Pull request"
-                            value={pullRequestLabel}
-                          />
-                        </>
-                      )}
-                      {activityLabel && (
-                        <SessionHeaderDetailRow
-                          label="Activity"
-                          value={activityLabel}
+                        )}
+                        <SessionElapsedDuration
+                          label={elapsedReading.label}
+                          totalMs={elapsedReading.totalMs}
+                          streamingItem={elapsedReading.streamingItem}
+                          turnSpan={elapsedReading.turnSpan}
                         />
-                      )}
-                      <SessionElapsedDuration
-                        label={elapsedReading.label}
-                        totalMs={elapsedReading.totalMs}
-                        streamingItem={elapsedReading.streamingItem}
-                        turnSpan={elapsedReading.turnSpan}
-                      />
-                      <SessionHeaderDetailRow
-                        label="Context"
-                        value={formatSessionContextLabel(session.contextWindow)}
-                      />
-                      {session.archivedAt && (
                         <SessionHeaderDetailRow
-                          icon={<Archive className="h-3.5 w-3.5" />}
-                          label="State"
-                          value="Archived"
+                          label="Context"
+                          value={formatSessionContextLabel(
+                            session.contextWindow,
+                          )}
                         />
-                      )}
+                        {session.archivedAt && (
+                          <SessionHeaderDetailRow
+                            icon={<Archive className="h-3.5 w-3.5" />}
+                            label="State"
+                            value="Archived"
+                          />
+                        )}
+                      </DescriptionList>
                     </div>
                   </section>
                   {supportsHarnessFacts && (

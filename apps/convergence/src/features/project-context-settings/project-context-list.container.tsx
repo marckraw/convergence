@@ -112,8 +112,11 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
     }
   }
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(formState.mode !== 'closed', handleSubmit)
+  // Enable cmd+Enter to submit the form; its button says so (DS-34)
+  const submitShortcut = useFormSubmitShortcut(
+    formState.mode !== 'closed',
+    handleSubmit,
+  )
 
   // What can't be taken back asks first, in the app's own dialog (R5).
   const handleDeleteRequest = async (item: ProjectContextItem) => {
@@ -150,6 +153,7 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
           onBodyChange={setBodyDraft}
           onReinjectModeChange={setModeDraft}
           onSubmit={() => void handleSubmit()}
+          submitShortcut={submitShortcut}
           onCancel={closeForm}
         />
       )}

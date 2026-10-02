@@ -281,3 +281,51 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
     expect(content()?.getAttribute('aria-hidden')).toBeNull()
   })
 })
+
+describe('NAV-16: the sidebar comes back as it was left', () => {
+  const KEY = 'convergence-sidebar-layout'
+  const handle = () =>
+    screen.queryByRole('separator', { name: 'Resize the sidebar' })
+
+  beforeEach(() => {
+    localStorage.clear()
+    useSessionStore.setState({ globalSessions: [] })
+    useSessionCrewStore.setState({ crews: [] })
+  })
+
+  afterEach(() => {
+    cleanup()
+    delete (window as unknown as { electronAPI?: unknown }).electronAPI
+  })
+
+  // Mutation: start the width at DEFAULT_SIDEBAR again -> 260 here, red.
+  it('at the width it was left, and keeps the next one', async () => {
+    localStorage.setItem(KEY, JSON.stringify({ width: 312, collapsed: false }))
+    stubBridge([])
+
+    await renderShell()
+
+    expect(handle()).toHaveAttribute('aria-valuenow', '312')
+    await act(async () => {
+      handle()!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+      )
+    })
+    expect(handle()).toHaveAttribute('aria-valuenow', '328')
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({
+      width: 328,
+      collapsed: false,
+    })
+  })
+
+  // Mutation: start the fold at false again -> the handle is drawn, red.
+  it('folded to the rail, if it was folded', async () => {
+    localStorage.setItem(KEY, JSON.stringify({ width: 312, collapsed: true }))
+    stubBridge([])
+
+    await renderShell()
+
+    // A folded sidebar has no line to drag.
+    expect(handle()).toBeNull()
+  })
+})

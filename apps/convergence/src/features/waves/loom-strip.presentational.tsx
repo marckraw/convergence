@@ -5,17 +5,16 @@ import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
 import { LOOM_SHEET_ICONS, LOOM_SHEET_ICON_CLASS } from './loom-sheet.styles'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
+import { StatusDot } from '@convergence/ui'
 import {
   LOOM_SHEETS,
   LOOM_SHEET_NAMES,
   type LoomSheet,
 } from './wave-panel-sheet.pure'
 import {
-  NO_DRAG_STYLE,
   LOOM_STRIP_BUTTON_CLASS,
   LOOM_STRIP_COUNT_CLASS,
   LOOM_STRIP_SHEET_CLASS,
-  WAVE_OUTAGE_DOT_CLASS,
   WAVE_RAIL_CLASS,
 } from './wave-panel.styles'
 
@@ -127,15 +126,13 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
   <aside
     aria-label="Loom strip"
     data-loom="strip"
-    className={cn(WAVE_RAIL_CLASS, className)}
-    style={NO_DRAG_STYLE}
+    className={cn(WAVE_RAIL_CLASS, 'app-no-drag', className)}
   >
     <IconButton
       label={OPEN_LOOM}
       ref={openRef}
       type="button"
       variant="ghost"
-      style={NO_DRAG_STYLE}
       onClick={onOpen}
       tooltipSide="right"
       size="sm"
@@ -145,11 +142,9 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
     </IconButton>
 
     {outage ? (
-      <span
-        role="status"
-        aria-label="Tracker not answering"
-        className={WAVE_OUTAGE_DOT_CLASS}
-      />
+      <span role="status" aria-label="Tracker not answering" className="flex">
+        <StatusDot tone="warning" size="sm" />
+      </span>
     ) : null}
     {LOOM_SHEETS.map((sheet) => {
       // The stack's own glyph and colour (MC-24): folding the column changes
@@ -166,7 +161,6 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
             variant="ghost"
             data-loom-strip-sheet={sheet}
             aria-label={name}
-            style={NO_DRAG_STYLE}
             onClick={() => onSelectSheet(sheet)}
             className={LOOM_STRIP_SHEET_CLASS}
           >
@@ -191,7 +185,6 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
       variant="ghost"
       size="sm"
       className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
-      style={NO_DRAG_STYLE}
       onClick={onExpand}
     >
       <Maximize2 className="size-3.5" />

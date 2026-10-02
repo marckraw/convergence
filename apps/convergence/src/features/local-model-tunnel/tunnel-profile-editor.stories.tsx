@@ -287,6 +287,26 @@ export const Busy: Story = {
   },
 }
 
+/**
+ * Someone else's tunnel holds the port: it is managed where it runs, so the
+ * editor offers no action for it (no Manage that went nowhere; DLG note).
+ */
+export const External: Story = {
+  args: {
+    item: {
+      profile: { ...profile, allowExternal: true },
+      status: { ...status, state: 'external', managed: false, pid: null },
+    },
+    draft: draftOf({ ...profile, allowExternal: true }),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: 'Manage' })).toBeNull()
+    await expect(
+      canvas.getByRole('button', { name: 'Save profile' }),
+    ).toBeVisible()
+  },
+}
+
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },

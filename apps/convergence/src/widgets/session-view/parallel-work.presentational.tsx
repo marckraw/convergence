@@ -18,7 +18,9 @@ import {
   cn,
   EmptyState,
   FormError,
+  fullDateLabel,
   IconButton,
+  MetaLine,
   PanelHeader,
   Tooltip,
 } from '@convergence/ui'
@@ -119,14 +121,15 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
       ),
     [rows, items],
   )
-  const inventoryLabel = [
+  // The inventory's facts, joined by MetaLine (CONV-23).
+  const inventory = [
     'This session',
     `${counts.running} running`,
     `${completed} completed`,
     ...(counts.unknown ? [`${counts.unknown} unknown`] : []),
     ...(counts.failed ? [`${counts.failed} failed`] : []),
     ...(counts.stopped ? [`${counts.stopped} stopped`] : []),
-  ].join(' · ')
+  ]
   const selected = rows.find((row) => workRowKey(row) === selectedId)
   const decision = (row: ParallelWorkRow) => {
     const id = decisionIds.get(workRowKey(row))
@@ -211,15 +214,23 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         >
           {workTitle(row)}
         </Button>
-        <p className="text-2xs text-ink-muted">
-          {row.run
-            ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
-            : (row.task?.taskType ?? 'Not reported')}
-        </p>
-        <Tooltip label={time.at ?? undefined}>
-          <p className="text-2xs">
-            {workStatus(row)} · {time.label}
+        {row.run ? (
+          <MetaLine wrap className="text-2xs text-ink-muted">
+            {row.run.agentType ?? 'Not reported'}
+            {row.run.model ?? 'Not reported'}
+            {`depth ${row.run.depth ?? 'Not reported'}`}
+          </MetaLine>
+        ) : (
+          <p className="text-2xs text-ink-muted">
+            {row.task?.taskType ?? 'Not reported'}
           </p>
+        )}
+        {/* The whole moment in our Tooltip, as a Timestamp's (CONV-22). */}
+        <Tooltip label={time.at ? fullDateLabel(new Date(time.at)) : undefined}>
+          <MetaLine wrap className="text-2xs">
+            {workStatus(row)}
+            {time.label}
+          </MetaLine>
         </Tooltip>
         {row.run && (
           <p className="text-2xs text-ink-muted">
@@ -260,24 +271,35 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           data-tone={tone}
           data-returned={returned ? '' : undefined}
         >
-          {children.length > 0 && (
-            <Button
-              variant="quiet"
-              size="xs"
-              aria-expanded={!hidden}
-              aria-label={`${hidden ? 'Expand' : 'Collapse'} ${workTitle(row)}`}
-              onClick={() => props.onToggle?.(key)}
-              className="-ml-2 text-2xs"
-            >
-              {hidden ? (
-                <ChevronRight className="size-3" />
-              ) : (
+          {/* Open, the toggle is an icon: an IconButton, whose label is its
+              name and its tooltip. Folded, it says what it hides, and those
+              words are its name, with what it does in the tooltip (CONV-5). */}
+          {children.length > 0 &&
+            (hidden ? (
+              <Tooltip label={`Expand ${workTitle(row)}`}>
+                <Button
+                  variant="quiet"
+                  size="xs"
+                  aria-expanded={false}
+                  onClick={() => props.onToggle?.(key)}
+                  className="-ml-2"
+                >
+                  <ChevronRight className="size-3" />
+                  {`${descendantCounts.get(key) ?? 0} descendants running`}
+                </Button>
+              </Tooltip>
+            ) : (
+              <IconButton
+                label={`Collapse ${workTitle(row)}`}
+                variant="quiet"
+                size="xs"
+                aria-expanded
+                onClick={() => props.onToggle?.(key)}
+                className="-ml-2"
+              >
                 <ChevronDown className="size-3" />
-              )}
-              {hidden &&
-                `${descendantCounts.get(key) ?? 0} descendants running`}
-            </Button>
-          )}
+              </IconButton>
+            ))}
           {content(row)}
           {controls(row)}
         </Card>
@@ -322,7 +344,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         data-parallel-scroll
       >
         {!selected && (
-          <p className="text-2xs text-ink-muted">{inventoryLabel}</p>
+          <MetaLine wrap className="text-2xs text-ink-muted">
+            {inventory}
+          </MetaLine>
         )}
         {props.showEmpty !== false && !rows.length && (
           <EmptyState
@@ -349,8 +373,8 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
                   variant="ghost"
                   aria-expanded={props.olderOpen ?? false}
                   onClick={props.onToggleOlder}
-                  size="lg"
-                  className="text-xs text-ink-muted"
+                  size="md"
+                  className="text-ink-muted"
                 >
                   {archive.older.length} older ·{' '}
                   {archive.newest

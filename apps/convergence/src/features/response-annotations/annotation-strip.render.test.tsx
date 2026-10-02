@@ -101,7 +101,10 @@ describe('the RESPONDING TO strip', () => {
     seedFourteen()
     render(<AnnotationTray sessionId={SESSION_ID} />)
 
-    const badge = screen.getByText('14 annotations')
+    // A count Badge (CONV-15): the live region is the Badge, its words inside.
+    const badge = screen
+      .getByText('14 annotations')
+      .closest('[data-slot="badge"]')
     expect(badge).toHaveAttribute('aria-live', 'polite')
   })
 

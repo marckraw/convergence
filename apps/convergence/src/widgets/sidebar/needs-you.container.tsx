@@ -8,6 +8,7 @@ import {
 } from 'react'
 import {
   buildFeedView,
+  currentSectionTitle,
   defaultFeedView,
   readFeedView,
   holdFeedOrder,
@@ -29,7 +30,9 @@ function readFoldedTitles(): Set<string> {
     const value: unknown = JSON.parse(localStorage.getItem(foldedKey) ?? '[]')
     return new Set(
       Array.isArray(value)
-        ? value.filter((title): title is string => typeof title === 'string')
+        ? value
+            .filter((title): title is string => typeof title === 'string')
+            .map(currentSectionTitle)
         : [],
     )
   } catch {
@@ -144,7 +147,7 @@ export const NeedsYou = memo(function NeedsYou({
           variant="ghost"
           type="button"
           onClick={() => setHeldOrder(null)}
-          className="mx-3 text-2xs text-ink-muted underline"
+          className="mx-3 text-ink-muted underline"
         >
           Order paused · Update order
         </Button>

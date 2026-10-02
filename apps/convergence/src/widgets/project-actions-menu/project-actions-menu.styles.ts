@@ -20,3 +20,9 @@ export const actionDetail = 'block truncate font-mono text-2xs text-ink-muted'
 /** A Button drawn as one of the panel's wide rows. */
 export const actionButtonRow =
   'h-auto w-full justify-start rounded-md px-3 text-left'
+
+/**
+ * The last row, Add action: a row (h-auto), so its room is the row's, not
+ * a Button size (R3), with a dashed edge that says it adds one more.
+ */
+export const actionAddRow = `${actionButtonRow} border border-dashed border-line py-3`

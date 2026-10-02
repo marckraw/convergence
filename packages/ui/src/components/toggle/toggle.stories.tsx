@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Zap } from 'lucide-react'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, screen } from 'storybook/test'
 import { Toggle } from './toggle'
 
 const meta = {
@@ -67,6 +67,33 @@ export const Disabled: Story = {
     await expect(fast).toHaveAttribute('aria-pressed', 'true')
     await userEvent.tab()
     await expect(fast).not.toHaveFocus()
+    await expect(args.onPressedChange).not.toHaveBeenCalled()
+  },
+}
+
+/**
+ * Disabled with a reason (R2): it stays reachable by Tab, a press changes
+ * nothing, and its tooltip says why.
+ */
+export const DisabledWithReason: Story = {
+  args: {
+    disabledReason: 'Add a second conversation to this crew before connecting.',
+    children: 'Connect',
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const connect = canvas.getByRole('button', { name: 'Connect' })
+    await expect(connect).toHaveAttribute('aria-disabled', 'true')
+    await expect(connect).toHaveAccessibleDescription(
+      'Add a second conversation to this crew before connecting.',
+    )
+    await userEvent.tab()
+    await expect(connect).toHaveFocus()
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('Add a second conversation')
+    await userEvent.keyboard('{Enter}')
+    await userEvent.click(connect)
+    await expect(connect).toHaveAttribute('aria-pressed', 'false')
     await expect(args.onPressedChange).not.toHaveBeenCalled()
   },
 }

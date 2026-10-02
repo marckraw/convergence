@@ -1,4 +1,4 @@
-import type { FC, ReactElement } from 'react'
+import type { FC, ReactElement, ReactNode } from 'react'
 import {
   CalendarClock,
   Check,
@@ -35,6 +35,7 @@ import {
   Badge,
   Button,
   buttonVariants,
+  Card,
   cn,
   dialogPane,
   EmptyState,
@@ -52,6 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  Timestamp,
   toneInk,
   tooltipAttributes,
 } from '@convergence/ui'
@@ -61,11 +63,10 @@ import {
   toSelectValue,
 } from '@/shared/lib/select-value.pure'
 import {
-  metricCard,
+  metricCardPadding,
   noteCard,
   rowActions,
   rowCaption,
-  rowCard,
   rowTop,
   sectionHead,
   spaceAttentionLabels,
@@ -128,24 +129,24 @@ interface SpaceWorkboardProps {
   synthesisPreview: SpaceSynthesisPreview | null
   artifactDraft: SpaceArtifactDraft
   artifactDialogOpen: boolean
-  createTitle: string
   attemptCounts: Record<string, number>
   artifactCounts: Record<string, number>
   isLoading: boolean
-  isCreating: boolean
   isCreatingArtifact: boolean
   isDiscoveringArtifacts: boolean
   isSynthesizing: boolean
   error: string | null
   onOpenChange: (open: boolean) => void
-  onCreateTitleChange: (value: string) => void
-  onCreate: () => void
+  /** Opens the New Space dialog, the one way to create a Space (ruling 4). */
+  onCreateSpace: () => void
   onSelectSpace: (id: string) => void
   /** A change to the Space's own fields; it is kept as it is made (R6). */
   onDraftChange: (draft: SpaceDraft) => void
   onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
   onArtifactDialogOpenChange: (open: boolean) => void
   onCreateArtifact: () => void
+  /** The key that also adds the Artifact, in words ("⌘↵"), for Add's tooltip. */
+  artifactShortcut?: string
   onArtifactKindChange: (artifactId: string, kind: SpaceArtifactKind) => void
   onArtifactStatusChange: (
     artifactId: string,
@@ -185,23 +186,21 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   synthesisPreview,
   artifactDraft,
   artifactDialogOpen,
-  createTitle,
   attemptCounts,
   artifactCounts,
   isLoading,
-  isCreating,
   isCreatingArtifact,
   isDiscoveringArtifacts,
   isSynthesizing,
   error,
   onOpenChange,
-  onCreateTitleChange,
-  onCreate,
+  onCreateSpace,
   onSelectSpace,
   onDraftChange,
   onArtifactDraftChange,
   onArtifactDialogOpenChange,
   onCreateArtifact,
+  artifactShortcut,
   onArtifactKindChange,
   onArtifactStatusChange,
   onArtifactSourceSessionChange,
@@ -222,7 +221,6 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
   onSetPrimaryAttempt,
   onDetachAttempt,
 }) => {
-  const createDisabled = createTitle.trim().length === 0 || isCreating
   const titleMissing = selectedDraft.title.trim().length === 0
 
   return (
@@ -243,34 +241,19 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <section className="flex min-h-0 flex-col border-b border-line-soft md:w-80 md:shrink-0 md:border-r md:border-b-0">
           <div className="border-b border-line-soft p-4">
-            <form
-              className="flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (!createDisabled) onCreate()
-              }}
+            {/* One way to create a Space: the New Space dialog (ruling 4). */}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onCreateSpace}
+              className="w-full"
             >
-              <Input
-                size="lg"
-                value={createTitle}
-                onChange={(event) => onCreateTitleChange(event.target.value)}
-                placeholder="New Space"
-                disabled={isCreating}
-                aria-label="New Space title"
-              />
-              <IconButton
-                label="Create Space"
-                type="submit"
-                variant="secondary"
-                disabled={createDisabled}
-                size="lg"
-              >
-                <Plus className="size-4" />
-              </IconButton>
-            </form>
+              <Plus className="size-4" />
+              Create Space…
+            </Button>
           </div>
 
-          <div className="app-scrollbar max-h-64 min-h-0 overflow-y-auto p-2 md:max-h-none md:flex-1">
+          <div className="max-h-64 min-h-0 overflow-y-auto p-2 md:max-h-none md:flex-1">
             {isLoading && spaces.length === 0 ? (
               <EmptyState
                 variant="plain"
@@ -281,7 +264,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
               <EmptyState
                 variant="plain"
                 title="No Spaces yet"
-                detail="Name one above to start."
+                detail="Create one above to start."
               />
             ) : (
               <div className="space-y-1">
@@ -593,6 +576,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       onOpenChange: onArtifactDialogOpenChange,
                       onArtifactDraftChange,
                       onCreateArtifact,
+                      shortcut: artifactShortcut,
                     })}
                   </div>
                 </div>
@@ -685,6 +669,7 @@ function renderAddArtifact(input: {
   onOpenChange: (open: boolean) => void
   onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
   onCreateArtifact: () => void
+  shortcut?: string
 }) {
   const {
     open,
@@ -694,6 +679,7 @@ function renderAddArtifact(input: {
     onOpenChange,
     onArtifactDraftChange,
     onCreateArtifact,
+    shortcut,
   } = input
   const missing =
     artifactDraft.label.trim().length === 0
@@ -715,6 +701,7 @@ function renderAddArtifact(input: {
       description="Attach a concrete artifact produced by this Space."
       saves="on-save"
       onSave={onCreateArtifact}
+      saveShortcut={shortcut}
       saveLabel="Add Artifact"
       pendingLabel="Adding…"
       pending={isCreatingArtifact}
@@ -910,12 +897,12 @@ function renderSynthesisNotes(input: {
   )
 }
 
-function renderMetric(label: string, value: string | number) {
+function renderMetric(label: string, value: ReactNode) {
   return (
-    <div className={metricCard}>
+    <Card padding="none" className={metricCardPadding}>
       <SectionLabel>{label}</SectionLabel>
       <div className="mt-1 truncate text-sm">{value}</div>
-    </div>
+    </Card>
   )
 }
 
@@ -930,7 +917,7 @@ function renderAttemptRow(input: {
   const { attempt } = view
 
   return (
-    <div key={attempt.id} className={rowCard}>
+    <Card key={attempt.id}>
       <div className={rowTop}>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -999,7 +986,7 @@ function renderAttemptRow(input: {
           </IconButton>
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -1035,7 +1022,7 @@ function renderArtifactRow(input: {
   const artifactUrl = parseHttpUrl(artifact.value)
 
   return (
-    <div key={artifact.id} className={rowCard}>
+    <Card key={artifact.id}>
       <div className="flex flex-col gap-3 md:flex-row md:items-end">
         <div className="flex flex-col gap-1.5  md:w-37.5 md:shrink-0">
           <span className={rowCaption}>Kind</span>
@@ -1170,7 +1157,7 @@ function renderArtifactRow(input: {
           Source: {sourceAttempt.sessionName}
         </div>
       ) : null}
-    </div>
+    </Card>
   )
 }
 
@@ -1183,13 +1170,9 @@ function parseHttpUrl(value: string): string | null {
   }
 }
 
-function formatUpdatedAt(value: string): string {
+/** When the Space last changed: a Timestamp, the whole moment in its tooltip (use-timestamp). */
+function formatUpdatedAt(value: string): ReactNode {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'Unknown'
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+  return <Timestamp date={date} format="datetime" />
 }

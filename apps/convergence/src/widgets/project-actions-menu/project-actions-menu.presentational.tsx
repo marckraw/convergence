@@ -11,6 +11,7 @@ import {
   IconButton,
   Notice,
   PopoverContent,
+  SectionLabel,
   Tooltip,
   type PopupFinalFocus,
   type PopupOpenChangeDetails,
@@ -29,6 +30,7 @@ import {
 import { ProjectActionRunLog } from './project-action-run-log.presentational'
 import { formatProjectActionRunMeta } from './project-actions-menu.pure'
 import {
+  actionAddRow,
   actionButtonRow,
   actionDetail,
   actionIconBox,
@@ -96,7 +98,7 @@ export const ProjectActionsMenuPresentational: FC<
     finalFocus={contentFocus?.finalFocus}
   >
     <div className="flex items-center justify-between border-b border-line-soft px-2 py-1.5 text-2xs text-ink-muted">
-      <span>Project actions</span>
+      <SectionLabel>Project actions</SectionLabel>
       <span className="max-w-32 truncate">{projectName}</span>
     </div>
 
@@ -195,9 +197,9 @@ export const ProjectActionsMenuPresentational: FC<
                       <Pencil className="h-3.5 w-3.5" />
                     </IconButton>
                     <IconButton
-                      label="Delete action"
+                      label="Delete action…"
                       type="button"
-                      variant="ghost"
+                      variant="danger-quiet"
                       onClick={() => onDelete(script)}
                       size="sm"
                     >
@@ -222,11 +224,7 @@ export const ProjectActionsMenuPresentational: FC<
         variant="ghost"
         onClick={onAdd}
         size="lg"
-        className={cn(
-          actionButtonRow,
-          'border border-dashed border-line py-3',
-          items.length > 0 && 'mt-2',
-        )}
+        className={cn(actionAddRow, items.length > 0 && 'mt-2')}
       >
         <span className={actionIconColumn}>
           <span className={actionIconBox}>
@@ -240,7 +238,7 @@ export const ProjectActionsMenuPresentational: FC<
       </Button>
 
       <div className="mt-2 border-t border-line-soft pt-2">
-        <div className="px-2 pb-1 text-2xs text-ink-muted">Lanes</div>
+        <SectionLabel className="px-2 pb-1">Lanes</SectionLabel>
         <Button
           type="button"
           variant="ghost"

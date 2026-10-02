@@ -10,6 +10,10 @@
  * transition and the accessibility check both read it. The ink at 4 % it
  * replaces lifted a dark card until its muted words fell to 4.4:1; this keeps
  * them at 4.8:1 or more (pinned in app/theme-contrast.pure.test.ts).
+ *
+ * The card is the kit's Card (MC-2): these are the two colours its classes
+ * paint, bg-(--needs-you-card-surface) and hover:bg-(--needs-you-card-hover),
+ * so they win over the Card's own surface as utilities do.
  */
 @layer components {
   .needs-you-card {
@@ -19,11 +23,7 @@
       var(--needs-you-provider-tint) 6%,
       var(--surface)
     );
-    background-color: var(--needs-you-card-surface);
-  }
-
-  .needs-you-card:hover {
-    background-color: color-mix(
+    --needs-you-card-hover: color-mix(
       in srgb,
       var(--fill-selected) 50%,
       var(--needs-you-card-surface)

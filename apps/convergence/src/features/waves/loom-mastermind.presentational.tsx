@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Button, cn } from '@convergence/ui'
+import { Card, CardAction, cn } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomMastermindVerdictLine,
@@ -10,6 +10,7 @@ import {
   LOOM_CARD_HEAD_CLASS,
   LOOM_HORSE_CARD_CLASS,
   LOOM_HORSE_META_CLASS,
+  LOOM_HORSE_META_INK,
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TINT_CLASS,
   LOOM_SEAT_CARD_DOOR_CLASS,
@@ -31,41 +32,46 @@ export function LoomMastermindCard({
 }: LoomMastermindCardProps) {
   const openable = mastermind.openable && onOpenSeat !== undefined
   const ids = loomSeatCardIds('mastermind', mastermind.key)
+  const metaClass = cn(
+    LOOM_HORSE_META_CLASS,
+    LOOM_HORSE_META_INK[mastermind.runtime],
+  )
+  const seatName = `${mastermind.seat ?? 'unnamed seat'}${
+    showCrewName && mastermind.crewName ? ` · ${mastermind.crewName}` : ''
+  }`
   return (
     <div className="px-3 py-0.5" data-loom-mastermind={mastermind.key}>
-      <div
+      <Card
+        interactive={openable}
+        padding="none"
         className={cn(
           LOOM_HORSE_CARD_CLASS,
           LOOM_HORSE_TINT_CLASS[mastermind.runtime],
-          'relative',
-          openable && 'hover:bg-fill-hover',
         )}
       >
-        {openable ? (
-          <Button
-            type="button"
-            variant="ghost"
-            aria-labelledby={[
-              `${ids}-seat`,
-              `${ids}-runtime`,
-              `${ids}-verdict`,
-              mastermind.hostLabel ? `${ids}-host` : null,
-              `${ids}-open`,
-            ]
-              .filter((id): id is string => id !== null)
-              .join(' ')}
-            onClick={() => onOpenSeat?.(mastermind.sessionId!)}
-            size="lg"
-            className={LOOM_SEAT_CARD_DOOR_CLASS}
-          />
-        ) : null}
         <span className={LOOM_CARD_HEAD_CLASS}>
-          <span id={`${ids}-seat`} className="min-w-0 truncate font-medium">
-            {mastermind.seat ?? 'unnamed seat'}
-            {showCrewName && mastermind.crewName
-              ? ` · ${mastermind.crewName}`
-              : null}
-          </span>
+          {openable ? (
+            <CardAction
+              id={`${ids}-seat`}
+              aria-labelledby={[
+                `${ids}-seat`,
+                `${ids}-runtime`,
+                `${ids}-verdict`,
+                mastermind.hostLabel ? `${ids}-host` : null,
+                `${ids}-open`,
+              ]
+                .filter((id): id is string => id !== null)
+                .join(' ')}
+              onClick={() => onOpenSeat?.(mastermind.sessionId!)}
+              className={LOOM_SEAT_CARD_DOOR_CLASS}
+            >
+              {seatName}
+            </CardAction>
+          ) : (
+            <span id={`${ids}-seat`} className={LOOM_SEAT_CARD_DOOR_CLASS}>
+              {seatName}
+            </span>
+          )}
           <span className="flex-1" />
           <span id={`${ids}-runtime`} className={LOOM_HORSE_RUNTIME_CLASS}>
             {loomHorseRuntimeLabel(mastermind)}
@@ -76,16 +82,16 @@ export function LoomMastermindCard({
           {loomMastermindVerdictLine(mastermind.waitingReturns)}
         </span>
         {mastermind.hostLabel ? (
-          <span id={`${ids}-host`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-host`} className={metaClass}>
             {mastermind.hostLabel}
           </span>
         ) : null}
         {openable ? (
-          <span id={`${ids}-open`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-open`} className={metaClass}>
             Open →
           </span>
         ) : null}
-      </div>
+      </Card>
     </div>
   )
 }

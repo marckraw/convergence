@@ -31,7 +31,8 @@ interface ProjectSettingsDialogProps {
   onEnvCopyEnabledChange: (enabled: boolean) => void
   onEnvOverwriteChange: (enabled: boolean) => void
   onEnvPatternsTextChange: (value: string) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   contextSection?: ReactNode
 }
 

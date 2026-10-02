@@ -62,6 +62,7 @@ describe('mayShow', () => {
     label: 'Settings',
     popupOpen: false,
     expanded: null,
+    hasPopup: null,
     onlyWhenTruncated: false,
     truncated: false,
   }
@@ -77,8 +78,22 @@ describe('mayShow', () => {
 
   it('stays away from a trigger whose menu or popover is open', () => {
     expect(mayShow({ ...anchor, popupOpen: true })).toBe(false)
-    expect(mayShow({ ...anchor, expanded: 'true' })).toBe(false)
-    expect(mayShow({ ...anchor, expanded: 'false' })).toBe(true)
+    expect(mayShow({ ...anchor, expanded: 'true', hasPopup: 'menu' })).toBe(
+      false,
+    )
+    expect(mayShow({ ...anchor, expanded: 'true', hasPopup: 'true' })).toBe(
+      false,
+    )
+    expect(mayShow({ ...anchor, expanded: 'false', hasPopup: 'menu' })).toBe(
+      true,
+    )
+  })
+
+  it('keeps the name on a disclosure that is open, which has no popup (NAV-13)', () => {
+    expect(mayShow({ ...anchor, expanded: 'true' })).toBe(true)
+    expect(mayShow({ ...anchor, expanded: 'true', hasPopup: 'false' })).toBe(
+      true,
+    )
   })
 
   it('shows a truncated-only tooltip only when the text is cut short', () => {

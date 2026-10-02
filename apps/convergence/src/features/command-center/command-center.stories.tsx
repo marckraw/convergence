@@ -118,6 +118,16 @@ export const Default: Story = {
     ])
     // An empty section is left out.
     await expect(within(dialog).queryByText('Workspaces')).toBeNull()
+    // Each row shows its kind, not only says it (NAV-24): a glyph per kind.
+    await expect(
+      options.map((option) =>
+        option.querySelector('[data-kind]')?.getAttribute('data-kind'),
+      ),
+    ).toEqual(['session', 'new-session', 'session', 'project', 'dialog'])
+    // No ✕ over the field: Escape closes it.
+    await expect(
+      within(dialog).queryByRole('button', { name: 'Close' }),
+    ).toBeNull()
 
     await userEvent.keyboard('p')
     await expect(args.onQueryChange).toHaveBeenCalledWith('p')
