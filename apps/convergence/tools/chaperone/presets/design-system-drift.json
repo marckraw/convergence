@@ -206,7 +206,6 @@
         "type": "forbidden-import",
         "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
-        "exclude": ["**/*.test.{ts,tsx}"],
         "restrictions": [
           {
             "source": "^sonner(/|$)",

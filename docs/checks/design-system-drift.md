@@ -105,7 +105,7 @@ mapping in its message is the DS5 codemod's table
 | `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
 | `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
-| `use-notify`              | an import of `sonner` (its `toast`, its `Toaster`, or a type) in the app, tests left out                                                                                                                                                   | `notify` from `@convergence/ui`: `notify.failure("update Codex", error)` reads "Couldn’t update Codex." with the reason under it (R10); `toast` for the rest                                 | DS-8        |
+| `use-notify`              | an import of `sonner` (its `toast`, its `Toaster`, or a type) anywhere in the app, tests too                                                                                                                                               | `notify` from `@convergence/ui`: `notify.failure("update Codex", error)` reads "Couldn’t update Codex." with the reason under it (R10); `toast` for the rest                                 | DS-8        |
 
 A regex reads text, not code, so it sees only what's written where it looks: a size override kept
 in a `*.styles.ts` constant passes `use-button-sizes`, and `repeated-classes` is what catches that
@@ -120,7 +120,8 @@ comment may name the recipe it replaced.
 import, and a type import counts too (`includeTypeImports`). Ruling 2 (2 Oct 2026) moved the
 toasts onto the design system: `Toaster` draws each one on the popup surface with its kind in R1's
 tones, and `notify` words a failure as R10 does, so a toast raised from `sonner` itself would skip
-both. Tests are left out: one may still mock `sonner` underneath `notify`.
+both. Tests count too, unlike the regex rules': a test mocks `notify` from `@convergence/ui`, and a
+`vi.mock('sonner')` under it is not an import.
 
 ## 3. A raw element needs a reason
 
