@@ -18,7 +18,9 @@ import {
   cn,
   EmptyState,
   FormError,
+  fullDateLabel,
   IconButton,
+  MetaLine,
   PanelHeader,
   Tooltip,
 } from '@convergence/ui'
@@ -119,14 +121,15 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
       ),
     [rows, items],
   )
-  const inventoryLabel = [
+  // The inventory's facts, joined by MetaLine (CONV-23).
+  const inventory = [
     'This session',
     `${counts.running} running`,
     `${completed} completed`,
     ...(counts.unknown ? [`${counts.unknown} unknown`] : []),
     ...(counts.failed ? [`${counts.failed} failed`] : []),
     ...(counts.stopped ? [`${counts.stopped} stopped`] : []),
-  ].join(' · ')
+  ]
   const selected = rows.find((row) => workRowKey(row) === selectedId)
   const decision = (row: ParallelWorkRow) => {
     const id = decisionIds.get(workRowKey(row))
@@ -211,15 +214,23 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         >
           {workTitle(row)}
         </Button>
-        <p className="text-2xs text-ink-muted">
-          {row.run
-            ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
-            : (row.task?.taskType ?? 'Not reported')}
-        </p>
-        <Tooltip label={time.at ?? undefined}>
-          <p className="text-2xs">
-            {workStatus(row)} · {time.label}
+        {row.run ? (
+          <MetaLine wrap className="text-2xs text-ink-muted">
+            {row.run.agentType ?? 'Not reported'}
+            {row.run.model ?? 'Not reported'}
+            {`depth ${row.run.depth ?? 'Not reported'}`}
+          </MetaLine>
+        ) : (
+          <p className="text-2xs text-ink-muted">
+            {row.task?.taskType ?? 'Not reported'}
           </p>
+        )}
+        {/* The whole moment in our Tooltip, as a Timestamp's (CONV-22). */}
+        <Tooltip label={time.at ? fullDateLabel(new Date(time.at)) : undefined}>
+          <MetaLine wrap className="text-2xs">
+            {workStatus(row)}
+            {time.label}
+          </MetaLine>
         </Tooltip>
         {row.run && (
           <p className="text-2xs text-ink-muted">
@@ -322,7 +333,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         data-parallel-scroll
       >
         {!selected && (
-          <p className="text-2xs text-ink-muted">{inventoryLabel}</p>
+          <MetaLine wrap className="text-2xs text-ink-muted">
+            {inventory}
+          </MetaLine>
         )}
         {props.showEmpty !== false && !rows.length && (
           <EmptyState

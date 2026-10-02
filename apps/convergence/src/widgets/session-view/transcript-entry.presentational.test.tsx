@@ -1,3 +1,4 @@
+import { metaLine, seen } from '@/shared/testing/meta-line'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Attachment } from '@/entities/attachment'
@@ -78,14 +79,19 @@ describe('ConversationItemView', () => {
         },
       },
     })
+    // The path and the reason are one MetaLine that wraps (CONV-23).
+    const details = metaLine(
+      '/fixture/marker · needs permission · Ask rule: Bash(build:*) (userSettings)',
+    )
     expect({
       label: screen.queryByText('↳ Inspect fixture (Explore)')?.textContent,
-      details: screen.queryByText(
-        '/fixture/marker · needs permission · Ask rule: Bash(build:*) (userSettings)',
-      )?.className,
+      details: seen(details),
+      wraps: details?.hasAttribute('data-wrap'),
     }).toEqual({
       label: '↳ Inspect fixture (Explore)',
-      details: 'mt-1 break-words text-xs text-ink-muted',
+      details:
+        '/fixture/marker · needs permission · Ask rule: Bash(build:*) (userSettings)',
+      wraps: true,
     })
   })
   it('renders the attributed agent label exactly — drop the label or omit description/type turns red', () => {

@@ -27,6 +27,7 @@ import {
   CollapsiblePanel,
   CollapsibleTrigger,
   Divider,
+  MetaLine,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { ANNOTATION_MESSAGE_ID_ATTRIBUTE } from '@/features/response-annotations'
@@ -419,14 +420,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               size="sm"
             />
             {entry.permissionDetails && (
-              <p className="mt-1 break-words text-xs text-ink-muted">
-                {[
-                  entry.permissionDetails.blockedPath,
-                  entry.permissionDetails.decisionReason,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
+              // The path and the reason, joined by MetaLine (CONV-23).
+              <MetaLine wrap className="mt-1 text-xs text-ink-muted">
+                {entry.permissionDetails.blockedPath}
+                {entry.permissionDetails.decisionReason}
+              </MetaLine>
             )}
             {viewModel.actionableApproval && onApprove && onDeny && (
               <div className="mt-3 flex flex-wrap gap-2">

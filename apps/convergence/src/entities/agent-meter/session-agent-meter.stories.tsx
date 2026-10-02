@@ -30,6 +30,8 @@ export const Default: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('CPU / memory')).toBeVisible()
     await expect(canvas.getByText('12% · 340 MB')).toBeVisible()
+    // A term and its value (MC-16), lined up with the Details rows.
+    await expect(canvas.getByText('12% · 340 MB').tagName).toBe('DD')
   },
 }
 
