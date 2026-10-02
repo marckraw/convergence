@@ -448,7 +448,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               data-seat-group={group.role}
               className="flex flex-col gap-1"
             >
-              <SectionLabel as="h4" size="sm">
+              {/* Under "Seats" (h4): a rank down, so each rank has one size
+                  (MC-13). */}
+              <SectionLabel as="h5" size="sm">
                 {group.title} {group.count}
               </SectionLabel>
               <ul className="flex flex-col gap-1">
