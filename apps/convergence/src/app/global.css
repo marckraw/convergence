@@ -54,9 +54,10 @@
 /*
  * The window's chrome (MAR-3617): every colour here is a token from
  * @convergence/ui's tokens.css, light-dark() in both themes. The frame's wash
- * darkens toward pure black at its foot, which is --media-backdrop's value
- * (rgb(0 0 0) in both themes); no chrome token is black, and one use doesn't
- * make one (R11).
+ * darkens toward pure black at its foot, which is --viewer's value (rgb(0 0 0)
+ * in both themes, the media viewer's letterbox); no chrome token is black, and
+ * one use doesn't make one (R11). global-css-tokens.test.ts keeps every var()
+ * here defined.
  */
 @layer components {
   .app-chrome {
