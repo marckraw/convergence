@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { crewTokens } from './crew.tokens'
 import { layoutPx } from './layout.tokens'
 import { terminalTokens } from './terminal.tokens'
 
@@ -79,5 +80,21 @@ describe('terminal.tokens.ts mirrors the --terminal-* tokens', () => {
     for (const [, name, value] of terminal) {
       expect(value, `--${name}`).not.toMatch(/light-dark\(/)
     }
+  })
+})
+
+describe('crew.tokens.ts mirrors the --crew-* tokens', () => {
+  it.each(Object.entries(crewTokens))(
+    'crewTokens.%s is --crew-%s, the same in both themes',
+    (name, hex) => {
+      expect(token(`crew-${name}`)).toBe(`light-dark(${hex}, ${hex})`)
+    },
+  )
+
+  it('names every crew colour tokens.css has, and no other', () => {
+    const declared = [...css.matchAll(/--crew-([a-z]+):/g)].map(
+      ([, name]) => name,
+    )
+    expect(declared.sort()).toEqual(Object.keys(crewTokens).sort())
   })
 })

@@ -3,6 +3,8 @@ import type { SessionCrew } from '@/entities/session-crew'
 import {
   CREW_ACCENT_COLORS,
   CREW_EMOJI_CHOICES,
+  crewColor,
+  crewHue,
   crewsHoldingSession,
   filterCrewsByQuery,
   formatCrewTriggerLabel,
@@ -105,5 +107,39 @@ describe('decoration palettes', () => {
     for (const choice of CREW_ACCENT_COLORS) {
       expect(choice.value.length).toBeLessThanOrEqual(32)
     }
+  })
+
+  it('keeps the stored values a crew already has: the hex is the key (MAR-3617)', () => {
+    // Crews in the database carry these exact strings; a palette that stopped
+    // offering one would orphan every crew that picked it.
+    expect(CREW_ACCENT_COLORS.map((choice) => choice.value)).toEqual([
+      '#7c3aed',
+      '#2563eb',
+      '#06b6d4',
+      '#10b981',
+      '#f59e0b',
+      '#ef4444',
+      '#ec4899',
+      '#94a3b8',
+    ])
+  })
+})
+
+describe('a crew colour paints with its hue token', () => {
+  it('finds the hue of every palette colour, whatever its case', () => {
+    for (const choice of CREW_ACCENT_COLORS) {
+      expect(crewHue(choice.value)).toBe(choice.hue)
+      expect(crewHue(choice.value.toUpperCase())).toBe(choice.hue)
+      expect(crewColor(choice.value)).toBe(`var(--${choice.hue})`)
+    }
+  })
+
+  it('has no hue for a crew with no colour, or one the palette never offered', () => {
+    expect(crewHue(null)).toBeUndefined()
+    expect(crewHue('')).toBeUndefined()
+    expect(crewHue('#123456')).toBeUndefined()
+    expect(crewColor(null)).toBeNull()
+    // An older crew's own value still paints, as itself.
+    expect(crewColor('#123456')).toBe('#123456')
   })
 })

@@ -7,7 +7,7 @@ import {
   MessageSquareWarning,
 } from 'lucide-react'
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
-import { Tooltip } from '@convergence/ui'
+import { cn, focusRing, Tooltip } from '@convergence/ui'
 import { pullRequestPresentation } from './pull-request-presentation.pure'
 
 export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {
@@ -24,28 +24,35 @@ export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {
             : presentation.state === 'approved'
               ? CircleCheck
               : GitPullRequest
+  // A merge is the merged hue (teal, as the PR panel draws it, R0); the
+  // rest are R1's tones: closed is danger, changes asked a heads-up, open or
+  // approved success, a draft muted.
   const color =
     presentation.state === 'merged'
-      ? 'text-purple-600 dark:text-purple-400'
+      ? 'text-merged-ink'
       : presentation.state === 'closed'
-        ? 'text-destructive'
+        ? 'text-danger-ink'
         : presentation.state === 'changes-requested'
-          ? 'text-warning-foreground'
+          ? 'text-warning-ink'
           : presentation.state === 'draft'
-            ? 'text-muted-foreground'
-            : 'text-emerald-700 dark:text-emerald-400'
+            ? 'text-ink-muted'
+            : 'text-success-ink'
   const content = (
     <>
       <Icon aria-hidden="true" className={`size-3 shrink-0 ${color}`} />
       <span className="tabular-nums">#{pr.number}</span>
-      <span className="text-muted-foreground">· {presentation.label}</span>
+      <span className="text-ink-muted">· {presentation.label}</span>
     </>
   )
   return (
     <Tooltip label={presentation.tooltip}>
       {presentation.href ? (
+        // raw-element: the chip is the card's second door, raised over its stretched first one; TextLink's underline would not fit the chip
         <a
-          className="relative z-10 flex w-fit max-w-full items-center gap-1 rounded py-0.5 text-[10px] font-normal hover:underline focus-visible:outline focus-visible:outline-2"
+          className={cn(
+            'relative z-10 flex w-fit max-w-full items-center gap-1 rounded py-0.5 text-3xs font-normal hover:underline',
+            focusRing,
+          )}
           href={presentation.href}
           target="_blank"
           rel="noreferrer"
@@ -56,7 +63,7 @@ export function NeedsYouPr({ pr }: { pr: SessionPullRequest }) {
       ) : (
         <span
           tabIndex={0}
-          className="relative z-10 flex items-center gap-1 text-[10px]"
+          className="relative z-10 flex items-center gap-1 text-3xs"
         >
           {content}
         </span>

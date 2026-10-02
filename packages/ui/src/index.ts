@@ -379,6 +379,7 @@ export {
 } from './lib/tone.styles'
 export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'
+export { crewTokens, type CrewTokenName } from './styles/crew.tokens'
 export { layoutPx } from './styles/layout.tokens'
 export { terminalTokens } from './styles/terminal.tokens'
 export {

@@ -139,20 +139,6 @@ const detail: LoomSheetDetail = {
   onOpenConversation: fn(),
 }
 
-/**
- * Loom's row words fail contrast today: the amber action words on the light
- * paper, the muted status chips and closed titles on the dark one, the
- * emerald Done chip on light. Only the stories that draw those rows.
- */
-const lowContrastRows = {
-  a11y: {
-    config: {
-      // a11y-known: Loom row action words, status chips and closed sheet titles miss 4.5:1 (color-contrast) — fixed by the sweep (DS4)
-      rules: [{ id: 'color-contrast', enabled: false }],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Waves/LoomStack',
   component: LoomStackView,
@@ -179,9 +165,7 @@ const meta = {
     (Story, { args }) => (
       <div
         className={
-          args.wide
-            ? 'flex h-[640px] w-[1100px] flex-col'
-            : 'flex h-[760px] w-[340px] flex-col'
+          args.wide ? 'flex h-160 w-275 flex-col' : 'flex h-190 w-85 flex-col'
         }
       >
         <Story />
@@ -208,7 +192,6 @@ type Story = StoryObj<typeof meta>
  * are titles, each a button that opens its sheet.
  */
 export const Default: Story = {
-  parameters: lowContrastRows,
   play: async ({ args, canvas, userEvent }) => {
     const now = canvas.getByRole('button', {
       name: 'Now · 3 open · 4 awaiting QA',
@@ -246,7 +229,6 @@ export const Dark: Story = {
 
 /** Awaiting QA revealed: every row, and the control says it shows fewer. */
 export const Long: Story = {
-  parameters: lowContrastRows,
   args: { qaExpanded: true },
   play: async ({ canvas }) => {
     const qa = canvas.getByRole('region', { name: 'Awaiting QA' })
@@ -261,7 +243,6 @@ export const Long: Story = {
 
 /** Before: grouped by wave, newest first, only the newest open. */
 export const Before: Story = {
-  parameters: lowContrastRows,
   args: { open: 'before' },
   play: async ({ canvas }) => {
     await expect(
@@ -273,7 +254,6 @@ export const Before: Story = {
 
 /** Next: the queue per horse, each saying what that horse is doing now. */
 export const Next: Story = {
-  parameters: lowContrastRows,
   args: { open: 'next' },
   play: async ({ canvas }) => {
     await expect(
@@ -285,7 +265,6 @@ export const Next: Story = {
 
 /** Plan: the stages of preparation, then "Not in the loop", folded. */
 export const Plan: Story = {
-  parameters: lowContrastRows,
   args: {
     open: 'plan',
     outside: (
@@ -325,7 +304,6 @@ export const Plan: Story = {
 
 /** Expanded's shape: the same sheets side by side, the open one widest. */
 export const Wide: Story = {
-  parameters: lowContrastRows,
   args: { wide: true },
   play: async ({ canvas }) => {
     await expect(

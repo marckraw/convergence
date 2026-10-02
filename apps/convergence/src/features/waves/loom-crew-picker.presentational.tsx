@@ -76,13 +76,15 @@ export const LoomSublineContent: FC<{ subline: LoomSubline }> = ({
         label={LOOM_FOLLOW_LABEL}
         type="button"
         variant="ghost"
-        aria-pressed={follow.on}
+        pressed={follow.on}
         style={NO_DRAG_STYLE}
         onClick={() => follow.onToggle(!follow.on)}
         size="sm"
         className={cn(
-          'shrink-0 text-muted-foreground',
-          follow.on && 'bg-accent text-accent-foreground',
+          'shrink-0 text-ink-muted',
+          // R7: a toggle that is on is the raised chip, as Mission Control's
+          // Connect is (MC-19).
+          follow.on && 'bg-chip text-ink shadow-raised',
         )}
       >
         <Link2 aria-hidden="true" className="size-3.5" />

@@ -11,6 +11,7 @@ import {
   classifySessionCardState,
   countSessionCardStates,
   formatSessionCardState,
+  readSessionCardSignal,
 } from './session-card-state.pure'
 
 const STATUSES: SessionStatus[] = [
@@ -321,4 +322,69 @@ it('reads a host-unreachable card as its own state, never as failed, whatever th
     expect(state).toBe('host-unreachable')
     expect(state).not.toBe('failed')
   }
+})
+
+/**
+ * The card's corner, read once for the grid card and the canvas node (MC-4).
+ * The host guard comes first: a session on a host the room cannot see never
+ * pulses and never wears an attention badge, whatever its record says.
+ *
+ * Mutation: drop `!hostUnreachable &&` from `running` or `needsYou` and the
+ * unreachable rows read running or needing you, red.
+ */
+describe('readSessionCardSignal', () => {
+  it('pulses a running session and names nothing in its corner', () => {
+    expect(
+      readSessionCardSignal(
+        makeCard({ status: 'running', attention: 'none', activity: null }),
+      ),
+    ).toEqual({
+      state: 'working',
+      hostUnreachable: false,
+      running: true,
+      needsYou: false,
+    })
+  })
+
+  it('names a session that waits on you, and does not pulse it', () => {
+    expect(
+      readSessionCardSignal(
+        makeCard({ status: 'idle', attention: 'needs-input', activity: null }),
+      ),
+    ).toEqual({
+      state: 'needs-you',
+      hostUnreachable: false,
+      running: false,
+      needsYou: true,
+    })
+  })
+
+  it('names a finished session’s parallel work in its corner', () => {
+    const card = makeCard({
+      status: 'completed',
+      attention: 'none',
+      activity: null,
+    })
+    card.session.parallelWork = {
+      running: 2,
+      unknown: 0,
+      failed: 0,
+      stopped: 0,
+    }
+    expect(readSessionCardSignal(card).needsYou).toBe(true)
+  })
+
+  it('never pulses or badges a session on a host the room cannot see', () => {
+    for (const status of STATUSES) {
+      const signal = readSessionCardSignal(
+        makeCard({ status, attention: 'host-unreachable', activity: null }),
+      )
+      expect(signal).toEqual({
+        state: 'host-unreachable',
+        hostUnreachable: true,
+        running: false,
+        needsYou: false,
+      })
+    }
+  })
 })

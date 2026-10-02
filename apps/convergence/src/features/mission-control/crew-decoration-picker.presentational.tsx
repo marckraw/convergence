@@ -4,7 +4,9 @@ import { cn, IconButton } from '@convergence/ui'
 import {
   CREW_ACCENT_COLORS,
   CREW_EMOJI_CHOICES,
+  crewColor,
 } from './session-crew-picker.pure'
+import { CREW_ROW_CLASS } from './session-filter.styles'
 
 interface CrewDecorationPickerProps {
   emoji: string | null
@@ -29,25 +31,22 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
 }) => {
   return (
     <div className="flex flex-col gap-2">
-      <div
-        role="group"
-        aria-label="Crew emoji"
-        className="flex flex-wrap items-center gap-1"
-      >
+      <div role="group" aria-label="Crew emoji" className={CREW_ROW_CLASS}>
         {CREW_EMOJI_CHOICES.map((choice) => (
           <IconButton
             label={`Emoji ${choice}`}
             key={choice}
             type="button"
             variant="ghost"
-            aria-pressed={emoji === choice}
+            pressed={emoji === choice}
             onClick={() => onEmojiChange(emoji === choice ? null : choice)}
             size="xs"
             className={cn(
               'rounded-md border text-xs leading-none',
+              // R7: the chosen one is the raised chip.
               emoji === choice
-                ? 'border-white/40 bg-white/10'
-                : 'border-transparent hover:border-white/20',
+                ? 'border-hairline-strong bg-chip shadow-raised'
+                : 'border-transparent hover:border-hairline-strong',
             )}
           >
             {choice}
@@ -58,7 +57,7 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
       <div
         role="group"
         aria-label="Crew accent color"
-        className="flex flex-wrap items-center gap-1"
+        className={CREW_ROW_CLASS}
       >
         {CREW_ACCENT_COLORS.map((choice) => (
           <IconButton
@@ -66,19 +65,22 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
             key={choice.value}
             type="button"
             variant="ghost"
-            aria-pressed={accentColor === choice.value}
+            pressed={accentColor === choice.value}
             onClick={() =>
               onAccentColorChange(
                 accentColor === choice.value ? null : choice.value,
               )
             }
-            style={{ backgroundColor: choice.value }}
+            // The swatch paints with the hue's token; the hex is what's stored.
+            style={{ backgroundColor: crewColor(choice.value) ?? undefined }}
             size="xs"
             className={cn(
               'rounded-full border-2 transition-transform hover:bg-transparent',
+              // The chosen swatch grows and wears an ink ring, which reads on
+              // a light window as well as a dark one.
               accentColor === choice.value
-                ? 'scale-110 border-white/70'
-                : 'border-transparent hover:border-white/30',
+                ? 'scale-110 border-ink/70'
+                : 'border-transparent hover:border-hairline-strong',
             )}
           />
         ))}
@@ -90,7 +92,7 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
             variant="quiet"
             onClick={() => onAccentColorChange(null)}
             size="xs"
-            className="rounded-full border border-white/15"
+            className="rounded-full border border-hairline-strong"
           >
             <Ban className="size-3" />
           </IconButton>

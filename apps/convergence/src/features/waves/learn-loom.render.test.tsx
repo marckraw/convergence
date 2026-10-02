@@ -334,8 +334,8 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     open()
     const card = document.querySelector('[data-learn-loom-key]') as HTMLElement
     // Mutation: render them as bare paragraphs again -> no fill, red.
-    expect(card.className).toContain('bg-card')
-    expect(card.className).toContain('rounded-[10px]')
+    expect(card.className).toContain('bg-surface')
+    expect(card.className).toContain('rounded')
     expect(
       within(card).getByText(
         'Groomed = understood. Grounded = checked in code.',
@@ -363,29 +363,34 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     // 559:2060/2091/2064/2090: the eyebrow and the identifier are the SAME
     // blue on all six steps, and only the active sheet's border and the
     // ticket's move. Mutation: colour the eyebrow by emphasis -> red on the
-    // amber step.
-    expect(eyebrow().className).toContain('text-blue-500')
-    expect(identifier().className).toContain('text-blue-500')
-    expect(activeSheet().className).toContain('border-blue-500')
-    expect(ticket().className).toContain('border-blue-500')
+    // amber step. In R1's tones since MAR-3617: the blue is info (its ink for
+    // words, its solid for the borders), the amber warning, the green success.
+    expect(eyebrow().className).toContain('text-info-ink')
+    expect(identifier().className).toContain('text-info-ink')
+    expect(activeSheet()).toHaveAttribute('data-emphasis', 'info')
+    expect(ticket()).toHaveAttribute('data-emphasis', 'info')
+    expect(activeSheet().className).toContain('border-info-solid')
+    expect(ticket().className).toContain('border-info-solid')
     // The status line says the change in words, never in hue (R7).
-    expect(status().className).toContain('text-foreground')
+    expect(status().className).toContain('text-ink')
 
-    // Amber when it is waiting on a person.
+    // Warning when it is waiting on a person.
     advanceTo(4)
-    expect(eyebrow().className).toContain('text-blue-500')
-    expect(identifier().className).toContain('text-blue-500')
-    expect(activeSheet().className).toContain('border-amber-400')
-    expect(ticket().className).toContain('border-amber-400')
-    expect(status().className).toContain('text-foreground')
+    expect(eyebrow().className).toContain('text-info-ink')
+    expect(identifier().className).toContain('text-info-ink')
+    expect(activeSheet()).toHaveAttribute('data-emphasis', 'warning')
+    expect(ticket()).toHaveAttribute('data-emphasis', 'warning')
+    expect(ticket().className).toContain('border-warning-solid')
+    expect(status().className).toContain('text-ink')
 
-    // Green when it is accepted.
+    // Success when it is accepted.
     advanceTo(1)
-    expect(eyebrow().className).toContain('text-blue-500')
-    expect(identifier().className).toContain('text-blue-500')
-    expect(activeSheet().className).toContain('border-emerald-500')
-    expect(ticket().className).toContain('border-emerald-500')
-    expect(status().className).toContain('text-foreground')
+    expect(eyebrow().className).toContain('text-info-ink')
+    expect(identifier().className).toContain('text-info-ink')
+    expect(activeSheet()).toHaveAttribute('data-emphasis', 'success')
+    expect(ticket()).toHaveAttribute('data-emphasis', 'success')
+    expect(ticket().className).toContain('border-success-solid')
+    expect(status().className).toContain('text-ink')
   })
 
   it('lap 4, G3: the ticket reads in the frames’ order, and the icons are the stack’s', () => {
@@ -403,14 +408,15 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     ])
 
     // 559:815 is emerald and 559:821 is sky -- the real stack's own colours,
-    // which both surfaces now read from one map.
+    // which both surfaces read from one map, in R1's tones since MAR-3617:
+    // Before's success ink, Now's info ink.
     // Mutation: hardcode the icons muted in the guide -> red.
     const icon = (sheet: string) =>
       document.querySelector(
         `[data-learn-loom-sheet="${sheet}"] svg`,
       ) as SVGElement
-    expect(icon('before').getAttribute('class')).toContain('text-emerald-500')
-    expect(icon('now').getAttribute('class')).toContain('text-sky-400')
+    expect(icon('before').getAttribute('class')).toContain('text-success-ink')
+    expect(icon('now').getAttribute('class')).toContain('text-info-ink')
   })
 
   it('G3: the ticket’s note is sentence case, and the reference leads larger', () => {
@@ -419,13 +425,14 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     // Mutation: restore `uppercase` -> red. The words are a note about the
     // card, not a label stamped on it.
     expect(note.className).not.toContain('uppercase')
-    expect(note.className).toContain('text-muted-foreground')
+    expect(note.className).toContain('text-ink-muted')
 
     press(LEARN_LOOM_CONTROLS.reference)
     const lead = screen.getByText(
       'One shared plan. Agents do the work. You accept the result.',
     )
-    expect(lead.className).toContain('text-[19px]')
+    // The frame's 19 px, at the nearest type step (R11).
+    expect(lead.className).toContain('text-xl')
     expect(lead.className).toContain('font-semibold')
   })
 })
@@ -534,10 +541,8 @@ describe('MAR-3202 R1: one timing and one curve, worn by everything', () => {
       )
       // And the stylesheet reads those variables rather than a second copy
       // of the numbers -- otherwise the constant above would be decoration.
-      expect(el.className, at).toContain(
-        'duration-[var(--learn-loom-duration)]',
-      )
-      expect(el.className, at).toContain('ease-[var(--learn-loom-easing)]')
+      expect(el.className, at).toContain('duration-(--learn-loom-duration)')
+      expect(el.className, at).toContain('ease-(--learn-loom-easing)')
       // Mutation: add `delay-100`, or an inline `transitionDelay` -> red.
       // The handoff forbids a stagger by name; this is where one could enter.
       expect(el.style.transitionDelay, at).toBe('')
@@ -546,18 +551,18 @@ describe('MAR-3202 R1: one timing and one curve, worn by everything', () => {
   })
 
   // LL3 changed this assertion's sheet list, and only that: a step changes
-  // the sheet's FILL too (closed white/2 %, active white/4 %), which LL2
-  // left off the list, so the fill snapped while the border and the width
-  // glided. The rule is unchanged -- the list is now the truer reading of
-  // "what a step actually changes".
+  // the sheet's FILL too, which LL2 left off the list, so the fill snapped
+  // while the border and the width glided. Since MAR-3617 the sheets and the
+  // ticket wear the kit's `transition-layout`, which moves size, place, edge
+  // and fill -- and never opacity or a transform.
   it('and each transitions only what a step actually changes', () => {
     open()
     for (const sheet of sheetsOf()) {
-      expect(sheet.className).toContain(
-        'transition-[flex-grow,flex-basis,border-color,background-color]',
-      )
+      expect(sheet.className).toContain('transition-layout')
+      expect(sheet.className).not.toMatch(/transition-(all|opacity|transform)/)
     }
-    expect(ticket().className).toContain('transition-[left,border-color]')
+    expect(ticket().className).toContain('transition-layout')
+    expect(ticket().className).not.toMatch(/transition-(all|opacity|transform)/)
     // Still only what changes: the ticket's fill is the same at every step,
     // so it is not on its list. Mutation: paste the sheets' property list
     // onto the ticket -> red.
@@ -624,23 +629,23 @@ describe('MAR-3202 R3: Work, Review and Accept do not slide', () => {
     open()
     advanceTo(3)
     const still = geometry()
-    expect(ticket().className).toContain('border-blue-500')
+    expect(ticket()).toHaveAttribute('data-emphasis', 'info')
 
     fireEvent.click(next())
     // Review -> Accept: the same place in Loom, a different moment in it.
     expect(geometry()).toEqual(still)
-    expect(ticket().className).toContain('border-amber-400')
+    expect(ticket()).toHaveAttribute('data-emphasis', 'warning')
     expect(
-      (document.querySelector('[data-learn-loom-active="true"]') as HTMLElement)
-        .className,
-    ).toContain('border-amber-400')
+      document.querySelector('[data-learn-loom-active="true"]') as HTMLElement,
+    ).toHaveAttribute('data-emphasis', 'warning')
   })
 })
 
 describe('MAR-3202 R4: the frame is the boundary, and it holds', () => {
   it('fixed, clipping, and animating nothing of its own', () => {
     open()
-    expect(frame().className).toContain('h-[264px]')
+    // The frame's 264 px, on the spacing scale.
+    expect(frame().className).toContain('h-66')
     // The bound, not decoration: the row's widths stay conserved today by
     // arithmetic, and this is what keeps R4 true when LL3 changes the row.
     expect(frame().className).toContain('overflow-hidden')

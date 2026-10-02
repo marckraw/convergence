@@ -3,7 +3,15 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
-import { Button, Input, Switch } from '@convergence/ui'
+import {
+  Button,
+  DescriptionItem,
+  DescriptionList,
+  FormError,
+  Input,
+  SectionLabel,
+  Switch,
+} from '@convergence/ui'
 import {
   probeAsksForKey,
   probeTimeLabel,
@@ -45,7 +53,7 @@ interface TrackerBindingFormProps {
   onTest: () => void
 }
 
-const LABEL = 'text-[11px] text-muted-foreground'
+const LABEL = 'text-2xs text-ink-muted'
 
 /**
  * The crew's tracker binding (MAR-3084 R9): four fields, whether a key is
@@ -78,13 +86,11 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
     <section
       aria-label="Tracker"
       data-crew-tracker
-      className="flex flex-col gap-2 border-t border-white/10 pt-2"
+      className="flex flex-col gap-2 border-t border-hairline pt-2"
     >
       <section aria-label="Dispatch" className="flex flex-col gap-2">
-        <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          Dispatch
-        </h4>
-        <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
+        <SectionLabel as="h4">Dispatch</SectionLabel>
+        <label className="flex min-h-10 items-center gap-2 text-xs text-ink-muted">
           <Switch
             checked={autoDispatch}
             disabled={busy || !bound}
@@ -93,20 +99,18 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           Auto-dispatch — send issues labeled groomed, grounded, their seat and
           dispatch into their seats' conversations
         </label>
-        <p className="text-[11px] tabular-nums text-muted-foreground">
+        <p className="text-2xs tabular-nums text-ink-muted">
           {dispatchCandidates.length
             ? `${dispatchCandidates.length} issue(s) would start now: ${dispatchCandidates.join(', ')}`
             : 'Nothing would start now'}
         </p>
       </section>
-      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        Tracker
-      </h4>
+      <SectionLabel as="h4">Tracker</SectionLabel>
 
-      <div className="flex items-center gap-2">
-        <span className={`flex-1 ${LABEL}`}>Kind</span>
-        <span className="text-xs">Linear</span>
-      </div>
+      {/* Facts nobody edits here are a DescriptionList, as a seat's are (MC-30). */}
+      <DescriptionList layout="inline" density="compact">
+        <DescriptionItem term="Kind">Linear</DescriptionItem>
+      </DescriptionList>
       <label className="flex flex-col gap-1">
         {/* What a person HAS is the URL in their address bar or the project's
             name; the id is the one thing Linear shows nowhere (MAR-3156). */}
@@ -180,16 +184,17 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className={`flex-1 ${LABEL}`}>API key</span>
-        <span className="text-xs" data-tracker-credential>
-          {credential === null
-            ? 'Checking…'
-            : credential === 'present'
-              ? 'Stored in Keychain'
-              : 'Not stored'}
-        </span>
-      </div>
+      <DescriptionList layout="inline" density="compact">
+        <DescriptionItem term="API key">
+          <span data-tracker-credential>
+            {credential === null
+              ? 'Checking…'
+              : credential === 'present'
+                ? 'Stored in Keychain'
+                : 'Not stored'}
+          </span>
+        </DescriptionItem>
+      </DescriptionList>
       {credential !== 'present' || asksForKey ? (
         <div className="flex items-center gap-1.5">
           <Input
@@ -240,21 +245,17 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         >
           Test
         </Button>
-        <p className="flex-1 text-[11px]" data-tracker-probe>
+        <p className="flex-1 text-2xs" data-tracker-probe>
           {lastProbe ? trackerProbeSentence(lastProbe) : 'Not tested yet'}
         </p>
       </div>
       {lastProbe ? (
-        <p className="text-[10px] text-muted-foreground/70">
+        <p className="text-3xs text-ink-muted">
           Tested at {probeTimeLabel(lastProbe.at)}
         </p>
       ) : null}
-      {error ? (
-        <p role="alert" className="text-[11px] text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <p className="text-[10px] text-muted-foreground/70">
+      <FormError>{error}</FormError>
+      <p className="text-3xs text-ink-muted">
         Read only: the app watches this project once a minute and never writes
         to it; with auto-dispatch on it sends issues into your seats'
         conversations.

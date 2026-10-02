@@ -89,7 +89,7 @@ export const LoomCompactView: FC<
         </IconButton>
       </div>
     </div>
-    <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
+    <div className="shrink-0 px-3 pb-4 text-xs text-ink-muted">
       <div className={LOOM_SEARCH_SUBLINE_ROW_CLASS}>
         {/* A box, not a paragraph (MAR-3284 R4): with more than one crew
             this holds the crew picker, and a control does not belong inside

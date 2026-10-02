@@ -15,9 +15,10 @@ interface WaveResizeHandleProps {
  * The column's right edge as a control (MAR-3155 R4).
  *
  * A `separator` with a value, not a decorative strip: the arrow keys move it,
- * so it has to be reachable and to say where it is. The class is a copy of
- * the sidebar's handle rather than an import -- a feature may not reach into
- * `app`, and the two edges are allowed to drift apart.
+ * so it has to be reachable and to say where it is. It wears the kit's
+ * ResizeHandle look (MC-32) but keeps Loom's own gesture: the kit's handle
+ * reports every move, and Loom's hook commits a width only when the drag or
+ * the step ends, weighed against the column on screen then.
  */
 export const WaveResizeHandle: FC<WaveResizeHandleProps> = ({
   width,

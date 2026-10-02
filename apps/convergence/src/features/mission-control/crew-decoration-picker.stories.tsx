@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, within } from 'storybook/test'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
+import { crewTokens } from '@convergence/ui'
 
 const meta = {
   title: 'Features/MissionControl/CrewDecorationPicker',
@@ -29,7 +30,9 @@ export const Default: Story = {
     await userEvent.click(
       within(accent).getByRole('button', { name: 'Violet' }),
     )
-    await expect(args.onAccentColorChange).toHaveBeenCalledWith('#7c3aed')
+    await expect(args.onAccentColorChange).toHaveBeenCalledWith(
+      crewTokens.violet,
+    )
     await expect(
       canvas.queryByRole('button', { name: 'No accent color' }),
     ).toBeNull()
@@ -46,7 +49,7 @@ export const Dark: Story = {
  * and the accent can be taken off outright.
  */
 export const Busy: Story = {
-  args: { emoji: '🛰️', accentColor: '#2563eb' },
+  args: { emoji: '🛰️', accentColor: crewTokens.blue },
   play: async ({ args, canvas, userEvent }) => {
     const satellite = canvas.getByRole('button', { name: 'Emoji 🛰️' })
     await expect(satellite).toHaveAttribute('aria-pressed', 'true')

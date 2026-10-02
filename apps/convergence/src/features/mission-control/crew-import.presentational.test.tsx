@@ -212,7 +212,7 @@ it.each([
  * offer of the member already holding its baton and still render an empty
  * Decision cell -- which is the dead end itself, one layer up.
  */
-it('renders the chooser on a create role that offers a baton holder (mutation: gate the select on state)', () => {
+it('renders the chooser on a create role that offers a baton holder (mutation: gate the select on state)', async () => {
   const choice = vi.fn()
   render(
     <CrewImportView
@@ -249,15 +249,18 @@ it('renders the chooser on a create role that offers a baton holder (mutation: g
       onChooseFolder={() => {}}
     />,
   )
+  // The app's Select (MC-10): open it from the keyboard, read its options,
+  // pick one.
   const select = screen.getByRole('combobox', { name: 'Choose horse' })
-  expect(
-    [...select.querySelectorAll('option')].map((o) => o.textContent),
-  ).toEqual([
+  select.focus()
+  fireEvent.keyDown(select, { key: 'ArrowDown' })
+  const options = await screen.findAllByRole('option')
+  expect(options.map((o) => o.textContent)).toEqual([
     'Choose…',
     'Bind the member that holds this baton · session-0',
     'Create new',
   ])
-  fireEvent.change(select, { target: { value: 'session-0' } })
+  fireEvent.keyDown(options[1]!, { key: 'Enter' })
   expect(choice).toHaveBeenCalledWith('horse', 'session-0')
 })
 

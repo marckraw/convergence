@@ -7,7 +7,7 @@ import { LOOM_HORSE_ACCESS_TONE } from './loom-horse-access.styles'
 export const LoomHorseAccessLine: FC<{ line: Line }> = ({ line }) => (
   <span
     className={cn(
-      'block truncate text-[11px] leading-4',
+      'block truncate text-2xs leading-4',
       LOOM_HORSE_ACCESS_TONE[line.tone],
     )}
     title={line.text}

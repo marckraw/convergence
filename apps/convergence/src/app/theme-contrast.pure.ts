@@ -86,8 +86,14 @@ export function resolveThemeColor(
   return parseCssColor(value)
 }
 
-/** A backdrop: a token, or a token at an opacity laid over an opaque token. */
-export type Backdrop = string | { layer: string; alpha?: number; over: string }
+/**
+ * A backdrop: a token, or a token at an opacity laid over an opaque backdrop,
+ * which may itself be a layer (a hover fill over a tinted card over the
+ * surface).
+ */
+export type Backdrop =
+  | string
+  | { layer: string; alpha?: number; over: Backdrop }
 
 export function resolveBackdrop(
   tokens: Record<string, string>,
@@ -96,7 +102,7 @@ export function resolveBackdrop(
   if (typeof spec === 'string') return resolveThemeColor(tokens, spec)
   return compositeOver(
     withAlpha(resolveThemeColor(tokens, spec.layer), spec.alpha ?? 1),
-    resolveThemeColor(tokens, spec.over),
+    resolveBackdrop(tokens, spec.over),
   )
 }
 
@@ -106,5 +112,5 @@ export function backdropLabel(spec: Backdrop): string {
     spec.alpha === undefined
       ? spec.layer
       : `${spec.layer}/${Math.round(spec.alpha * 100)}`
-  return `${layer} over ${spec.over}`
+  return `${layer} over ${backdropLabel(spec.over)}`
 }

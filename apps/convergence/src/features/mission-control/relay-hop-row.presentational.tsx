@@ -1,34 +1,8 @@
 import type { FC } from 'react'
-import { ArrowRight, ChevronDown, ChevronRight } from 'lucide-react'
-import { cn, IconButton } from '@convergence/ui'
-import type { RelayHopLine, RelayHopTone } from './relay-hop.pure'
-
-const TONE_TEXT: Record<RelayHopTone, string> = {
-  delivered: 'text-emerald-400',
-  skipped: 'text-muted-foreground',
-  alarm: 'text-red-400',
-  unknown: 'text-muted-foreground',
-}
-
-const TONE_DOT: Record<RelayHopTone, string> = {
-  delivered: 'bg-emerald-400',
-  skipped: 'bg-white/25',
-  alarm: 'bg-red-400',
-  unknown: 'bg-white/25',
-}
-
-/**
- * The "why" line under a row takes the row's own tone. The ledger explains
- * every skip in words, and once the loop law started writing quiet rows a
- * permanently red explanation would have made a wire behaving correctly look
- * like a wire that broke.
- */
-const TONE_NOTE: Record<RelayHopTone, string> = {
-  delivered: 'text-muted-foreground',
-  skipped: 'text-muted-foreground',
-  alarm: 'text-red-400',
-  unknown: 'text-muted-foreground',
-}
+import { ArrowRight, ChevronRight } from 'lucide-react'
+import { cn, IconButton, StatusDot, toneInk, Tooltip } from '@convergence/ui'
+import { RELAY_HOP_TONE } from './hop-tone.styles'
+import type { RelayHopLine } from './relay-hop.pure'
 
 interface RelayHopRowProps {
   line: RelayHopLine
@@ -51,31 +25,29 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
 }) => {
   const alarm = line.tone === 'alarm'
   const canExpand = line.payloadPreview !== null
+  const tone = RELAY_HOP_TONE[line.tone]
 
   return (
     <li
       data-relay-hop
       className={cn(
         'rounded px-1.5 py-1',
-        alarm && 'bg-red-500/10 ring-1 ring-red-500/30',
+        alarm && 'bg-danger-soft ring-1 ring-danger-line',
       )}
     >
-      <div className="flex items-center gap-1.5 text-[11px] leading-tight">
-        <span
-          aria-hidden
-          className={cn('size-1.5 shrink-0 rounded-full', TONE_DOT[line.tone])}
-        />
-        <span className="shrink-0 tabular-nums text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-2xs leading-tight">
+        <StatusDot tone={tone} size="sm" />
+        <span className="shrink-0 tabular-nums text-ink-muted">
           {line.timeLabel}
         </span>
-        <span className="truncate text-foreground">{line.sourceName}</span>
+        <span className="truncate text-ink">{line.sourceName}</span>
         {line.targetName ? (
           <>
             <ArrowRight
               aria-hidden
-              className="size-3 shrink-0 text-muted-foreground"
+              className="size-3 shrink-0 text-ink-muted"
             />
-            <span className="truncate text-foreground">{line.targetName}</span>
+            <span className="truncate text-ink">{line.targetName}</span>
           </>
         ) : null}
         {/* The route and the round sit before the outcome, in the order the
@@ -84,34 +56,37 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
             every row written before batons existed, which is the honest answer
             rather than a zero nobody recorded. */}
         {line.batonLabel ? (
-          <span className="ml-auto shrink-0 text-muted-foreground">
+          <span className="ml-auto shrink-0 text-ink-muted">
             {line.batonLabel}
           </span>
         ) : null}
         {line.roundLabel ? (
           <span
             className={cn(
-              'shrink-0 tabular-nums text-muted-foreground',
+              'shrink-0 tabular-nums text-ink-muted',
               line.batonLabel ? '' : 'ml-auto',
             )}
           >
             {line.roundLabel}
           </span>
         ) : null}
-        <span
-          title={
+        <Tooltip
+          label={
             line.rawOutcome
               ? `Recorded by another version as "${line.rawOutcome}"`
               : undefined
           }
-          className={cn(
-            'shrink-0 font-medium',
-            !line.batonLabel && !line.roundLabel && 'ml-auto',
-            TONE_TEXT[line.tone],
-          )}
         >
-          {line.outcomeLabel}
-        </span>
+          <span
+            className={cn(
+              'shrink-0 font-medium',
+              !line.batonLabel && !line.roundLabel && 'ml-auto',
+              toneInk[tone],
+            )}
+          >
+            {line.outcomeLabel}
+          </span>
+        </Tooltip>
 
         {canExpand ? (
           <IconButton
@@ -125,20 +100,26 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
             size="xs"
             className="shrink-0"
           >
-            {expanded ? (
-              <ChevronDown className="size-3" />
-            ) : (
-              <ChevronRight className="size-3" />
-            )}
+            {/* One chevron that turns (MC-31), as every disclosure does. */}
+            <ChevronRight
+              className={cn(
+                'size-3 transition-transform',
+                expanded && 'rotate-90',
+              )}
+            />
           </IconButton>
         ) : null}
       </div>
 
+      {/* The "why" line takes the row's own tone. The ledger explains every
+          skip in words, and once the loop law started writing quiet rows a
+          permanently red explanation would have made a wire behaving
+          correctly look like a wire that broke. */}
       {line.error ? (
         <p
           className={cn(
-            'mt-0.5 pl-3 text-[11px] leading-snug',
-            TONE_NOTE[line.tone],
+            'mt-0.5 pl-3 text-2xs leading-snug',
+            alarm ? toneInk.danger : 'text-ink-muted',
           )}
         >
           {line.error}
@@ -146,7 +127,7 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
       ) : null}
 
       {expanded && line.payloadPreview ? (
-        <p className="mt-1 rounded bg-black/20 px-2 py-1 text-[11px] leading-snug text-muted-foreground">
+        <p className="mt-1 rounded bg-surface-sunken px-2 py-1 text-2xs leading-snug text-ink-muted">
           {line.payloadPreview}
         </p>
       ) : null}

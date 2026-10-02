@@ -1,7 +1,12 @@
 import type { CSSProperties, FC } from 'react'
-import { Users } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, Toggle } from '@convergence/ui'
+import { CrewMark } from './crew-mark.presentational'
 import type { SessionCardCrewFacetOption } from './session-card-facets.pure'
+import { crewColor } from './session-crew-picker.pure'
+import {
+  FILTER_CHIP_ROW_CLASS,
+  FILTER_CLEAR_CLASS,
+} from './session-filter.styles'
 
 interface SessionCrewChipsProps {
   options: readonly SessionCardCrewFacetOption[]
@@ -10,18 +15,22 @@ interface SessionCrewChipsProps {
   onClear: () => void
 }
 
-/** The accent tint an active chip wears, mixed down so text stays readable. */
+/**
+ * The crew's colour on its chip, from its hue token, mixed down so the words
+ * stay readable: its edge at rest, its edge and a wash once pressed.
+ */
 function accentStyle(
   accentColor: string | null,
   active: boolean,
 ): CSSProperties | undefined {
-  if (!accentColor) return undefined
+  const color = crewColor(accentColor)
+  if (!color) return undefined
   return active
     ? {
-        borderColor: accentColor,
-        backgroundColor: `color-mix(in srgb, ${accentColor} 22%, transparent)`,
+        borderColor: color,
+        backgroundColor: `color-mix(in srgb, ${color} 22%, transparent)`,
       }
-    : { borderColor: `color-mix(in srgb, ${accentColor} 45%, transparent)` }
+    : { borderColor: `color-mix(in srgb, ${color} 45%, transparent)` }
 }
 
 /**
@@ -41,37 +50,34 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
   if (options.length === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className={FILTER_CHIP_ROW_CLASS}>
       {options.map((option) => {
         const active = selected.includes(option.id)
 
         return (
-          <Button
+          <Toggle
             key={option.id}
-            type="button"
-            variant="ghost"
-            aria-pressed={active}
-            onClick={() => onToggle(option.id)}
-            style={accentStyle(option.accentColor, active)}
+            variant="chip"
             size="sm"
+            pressed={active}
+            onPressedChange={() => onToggle(option.id)}
+            style={accentStyle(option.accentColor, active)}
             className={cn(
-              'max-w-44 rounded-full border px-2.5 text-[11px] font-normal',
-              active
-                ? 'text-foreground'
-                : 'border-white/10 text-muted-foreground hover:border-white/20',
+              'max-w-44',
               option.count === 0 && !active && 'opacity-50',
             )}
           >
-            {option.emoji ? (
-              <span aria-hidden className="leading-none">
-                {option.emoji}
-              </span>
-            ) : (
-              <Users className="size-3" />
-            )}
+            <CrewMark
+              crew={{
+                name: option.label,
+                emoji: option.emoji,
+                accentColor: option.accentColor,
+              }}
+              variant="glyph"
+            />
             <span className="truncate">{option.label}</span>
             <span className="tabular-nums opacity-70">{option.count}</span>
-          </Button>
+          </Toggle>
         )
       })}
 
@@ -80,8 +86,7 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
           type="button"
           variant="link"
           onClick={onClear}
-          size="sm"
-          className="h-7 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
+          className={FILTER_CLEAR_CLASS}
         >
           Clear
         </Button>

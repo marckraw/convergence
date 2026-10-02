@@ -70,7 +70,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="flex h-[720px]">
+        <div className="flex h-180">
           <Story />
         </div>
       </TooltipProvider>
@@ -127,14 +127,6 @@ export const Default: Story = {
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the row's muted "Linear: In Progress" chip is 4.36:1 on the dark paper (color-contrast) — fixed by the sweep (DS4)
-        rules: [{ id: 'color-contrast', enabled: false }],
-      },
-    },
-  },
 }
 
 /** The search field revealed, holding a query: Enter applies, ✕ clears. */

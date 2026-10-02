@@ -114,7 +114,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="flex h-[900px] w-[960px] flex-col">
+      <div className="flex h-225 w-240 flex-col">
         <Story />
       </div>
     ),
@@ -133,14 +133,15 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const panel = canvas.getByRole('region', { name: 'History' })
-    const filters = within(panel).getByRole('group', {
+    // One filter of a few: a segmented radio group (MC-7).
+    const filters = within(panel).getByRole('radiogroup', {
       name: 'Which runs to show',
     })
     await expect(
-      within(filters).getByRole('button', { name: 'All runs' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+      within(filters).getByRole('radio', { name: 'All runs' }),
+    ).toBeChecked()
     await userEvent.click(
-      within(filters).getByRole('button', { name: 'Handed back' }),
+      within(filters).getByRole('radio', { name: 'Handed back' }),
     )
     await expect(args.onFilterChange).toHaveBeenCalledWith('handed-back')
     const selectedRun = canvas.getByRole('button', { name: /^14:32 · Fable/ })

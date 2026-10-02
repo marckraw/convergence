@@ -56,19 +56,21 @@ export const SeatRow: FC<SeatRowProps> = ({
       type="button"
       variant="ghost"
       data-seat-row
+      data-seat-orphan={orphan || undefined}
       aria-label={seatRowAccessibleName({ member, source, host, refused })}
       onClick={onToggle}
       size="lg"
       className={cn(
-        'flex w-full min-w-0 items-center justify-start rounded-md border bg-white/[0.02] px-2.5 text-left font-normal transition-colors hover:border-white/20 text-xs py-0',
-        orphan ? 'border-amber-500/50' : 'border-white/10',
+        'flex w-full min-w-0 items-center justify-start rounded-md border bg-fill-quiet px-2.5 text-left font-normal transition-colors hover:border-hairline-strong text-xs py-0',
+        // A seat whose conversation is gone is a heads-up: the warning tone.
+        orphan ? 'border-warning-line' : 'border-hairline',
       )}
     >
       <KindGlyph
         aria-hidden
         className={cn(
           'size-3.5 shrink-0',
-          orphan ? 'text-amber-400' : 'text-muted-foreground',
+          orphan ? 'text-warning-ink' : 'text-ink-muted',
         )}
       />
       <span className="shrink-0 truncate text-xs font-medium">
@@ -76,8 +78,8 @@ export const SeatRow: FC<SeatRowProps> = ({
       </span>
       <span
         className={cn(
-          'min-w-0 flex-1 truncate text-[11px]',
-          orphan ? 'text-amber-400' : 'text-muted-foreground',
+          'min-w-0 flex-1 truncate text-2xs',
+          orphan ? 'text-warning-ink' : 'text-ink-muted',
         )}
       >
         {source}
@@ -85,7 +87,7 @@ export const SeatRow: FC<SeatRowProps> = ({
       <HostGlyph
         aria-hidden
         data-seat-host={hostIsLocal ? 'local' : 'remote'}
-        className="size-3.5 shrink-0 text-muted-foreground"
+        className="size-3.5 shrink-0 text-ink-muted"
       >
         <title>{host}</title>
       </HostGlyph>
@@ -93,7 +95,7 @@ export const SeatRow: FC<SeatRowProps> = ({
         <GitCommitHorizontal
           aria-hidden
           data-seat-lane="main"
-          className="size-3.5 shrink-0 text-muted-foreground"
+          className="size-3.5 shrink-0 text-ink-muted"
         >
           <title>{laneLabel(member.lanePolicy)}</title>
         </GitCommitHorizontal>
@@ -101,7 +103,7 @@ export const SeatRow: FC<SeatRowProps> = ({
         <GitBranch
           aria-hidden
           data-seat-lane="own-worktree"
-          className="size-3.5 shrink-0 text-muted-foreground"
+          className="size-3.5 shrink-0 text-ink-muted"
         >
           <title>{laneLabel(member.lanePolicy)}</title>
         </GitBranch>
@@ -109,7 +111,7 @@ export const SeatRow: FC<SeatRowProps> = ({
       <span
         aria-hidden
         data-seat-wip
-        className="shrink-0 rounded border border-white/15 px-1 text-[10px] leading-4 text-muted-foreground"
+        className="shrink-0 rounded border border-hairline-strong px-1 text-3xs leading-4 text-ink-muted"
       >
         {member.wipLimit}
       </span>
@@ -118,22 +120,20 @@ export const SeatRow: FC<SeatRowProps> = ({
         data-card-dot={hasCard ? 'filled' : 'hollow'}
         className={cn(
           'size-2 shrink-0 rounded-full',
-          hasCard ? 'bg-foreground/80' : 'border border-amber-400',
+          // No card is a heads-up: a hollow dot in the warning solid.
+          hasCard ? 'bg-ink/80' : 'border border-warning-solid',
         )}
       />
       {refused ? (
         <span
           aria-hidden
           data-seat-refused
-          className="shrink-0 rounded bg-amber-500/15 px-1 text-[10px] font-semibold leading-4 text-amber-400"
+          className="shrink-0 rounded bg-danger-soft px-1 text-3xs font-semibold leading-4 text-danger-ink"
         >
           !
         </span>
       ) : null}
-      <ChevronRight
-        aria-hidden
-        className="size-3.5 shrink-0 text-muted-foreground"
-      />
+      <ChevronRight aria-hidden className="size-3.5 shrink-0 text-ink-muted" />
     </Button>
   )
 }

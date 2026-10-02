@@ -51,7 +51,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="h-[560px] w-[1000px]">
+      <div className="h-140 w-250">
         <Story />
       </div>
     ),
@@ -68,16 +68,29 @@ type Story = StoryObj<typeof meta>
  * search, the order, the filter row, and the cards.
  */
 export const Default: Story = {
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
     await expect(
       canvas.getByRole('heading', { name: 'Mission Control' }),
     ).toBeVisible()
+    // The top strip drags the window (NAV-4); its controls keep their clicks.
+    const region = (element: Element) =>
+      getComputedStyle(element).getPropertyValue('-webkit-app-region')
+    await expect(
+      region(canvasElement.querySelector('[data-mission-control-header]')!),
+    ).toBe('drag')
+    await expect(region(canvas.getByRole('radio', { name: 'Canvas' }))).toBe(
+      'no-drag',
+    )
     await expect(
       canvas.getByText('15 sessions · 2 need you · 3 running'),
     ).toBeVisible()
-    const flat = canvas.getByRole('button', { name: 'Flat' })
-    await expect(flat).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(canvas.getByRole('button', { name: 'Canvas' }))
+    // One of two layouts: a segmented radio group (MC-7), Flat chosen.
+    await expect(
+      canvas.getByRole('radiogroup', { name: 'Mission Control layout' }),
+    ).toBeVisible()
+    const flat = canvas.getByRole('radio', { name: 'Flat' })
+    await expect(flat).toBeChecked()
+    await userEvent.click(canvas.getByRole('radio', { name: 'Canvas' }))
     await expect(args.onModeChange).toHaveBeenCalledWith('canvas')
     await userEvent.type(
       canvas.getByRole('searchbox', { name: 'Search session cards' }),
@@ -139,13 +152,15 @@ export const Canvas: Story = {
     mode: 'canvas',
     fillsContent: true,
     children: (
-      <div role="img" aria-label="Crew canvas" className="h-full bg-muted" />
+      <div
+        role="img"
+        aria-label="Crew canvas"
+        className="h-full bg-surface-muted"
+      />
     ),
   },
   play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole('button', { name: 'Canvas' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(canvas.getByRole('radio', { name: 'Canvas' })).toBeChecked()
     await expect(canvas.getByRole('img', { name: 'Crew canvas' })).toBeVisible()
   },
 }

@@ -111,9 +111,13 @@ export const Default: Story = {
     await expect(update).toBeChecked()
     await userEvent.click(update)
     await expect(args.onUpdate).toHaveBeenCalledWith('opus-mac', false)
-    await userEvent.selectOptions(
+    // The app's Select (MC-10), its list in the popup layer.
+    await userEvent.click(
       within(dialog).getByRole('combobox', { name: 'Choose reviewer' }),
-      'session-astra',
+    )
+    const listbox = await screen.findByRole('listbox')
+    await userEvent.click(
+      within(listbox).getByRole('option', { name: 'Astra' }),
     )
     await expect(args.onChoice).toHaveBeenCalledWith(
       'reviewer',

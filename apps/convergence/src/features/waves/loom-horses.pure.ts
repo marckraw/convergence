@@ -252,6 +252,19 @@ function newestInState(
   return mine[0] ?? null
 }
 
+/**
+ * The id base a seat card names its parts by (`loom-horse-…`,
+ * `loom-mastermind-…`): its door is labelled by those parts, and a key carries
+ * `:` and a name may carry more, so anything outside an id's letters becomes
+ * `_` (MC-26: one helper, where the two cards each wrote the regex).
+ */
+export function loomSeatCardIds(
+  kind: 'horse' | 'mastermind',
+  key: string,
+): string {
+  return `loom-${kind}-${key.replace(/[^A-Za-z0-9_-]/g, '_')}`
+}
+
 /** `21:40`: the clock a dispatch record is read in, 24-hour, local time. */
 export function loomDispatchClock(sentAt: string): string {
   return new Date(sentAt).toLocaleTimeString([], {

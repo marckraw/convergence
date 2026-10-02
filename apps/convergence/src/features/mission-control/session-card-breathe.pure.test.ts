@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionCrew } from '@/entities/session-crew'
 import { buildCardBreatheStyle } from './session-card-breathe.pure'
-import { CARD_BREATHE, STATUS_DOT_STYLES } from './session-card.styles'
+import { CARD_BREATHE, STATUS_DOT_TONE } from './session-card.styles'
 
 function crew(id: string, accentColor: string | null): SessionCrew {
   return {
@@ -77,12 +77,17 @@ describe('the breathing glow a working card carries', () => {
     expect(style?.['--breathe-spread']).toBe(`${CARD_BREATHE.spreadPx}px`)
   })
 
-  it('names a neutral hue the room actually defines', () => {
-    // Tailwind only emits `--color-emerald-500` because some class in the
-    // source asks for that shade -- the running status dot is the one that
-    // does. Change that dot's colour and the crewless glow would silently
-    // resolve to nothing, so the two are pinned to each other here.
-    expect(STATUS_DOT_STYLES.running).toContain('emerald-500')
-    expect(CARD_BREATHE.neutralColor).toBe('var(--color-emerald-500)')
+  it('names a neutral hue the room actually defines: the working tone (R1)', () => {
+    // The crewless glow is the running dot's own colour, a token tokens.css
+    // always declares, not a palette shade Tailwind emits only while some class
+    // asks for it. The two are pinned to each other here.
+    expect(STATUS_DOT_TONE.running).toBe('info')
+    expect(CARD_BREATHE.neutralColor).toBe('var(--info-solid)')
+  })
+
+  it('breathes a palette crew in its hue token, never the stored hex (MAR-3617)', () => {
+    const style = vars(buildCardBreatheStyle(true, [crew('ops', '#7c3aed')]))
+
+    expect(style?.['--breathe-color']).toBe('var(--crew-violet)')
   })
 })

@@ -48,7 +48,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-80 rounded-xl bg-card py-2">
+      <div className="w-80 rounded-xl bg-surface py-2">
         <Story />
       </div>
     ),

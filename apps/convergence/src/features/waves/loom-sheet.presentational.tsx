@@ -39,6 +39,7 @@ import {
   LOOM_QA_PREVIEW,
   type LoomHorse,
   type LoomMastermind,
+  loomDispatchClock,
 } from './loom-horses.pure'
 import { LoomHorseCardContainer as LoomHorseCard } from './loom-horse.container'
 import { LoomMastermindCardContainer } from './loom-mastermind.container'
@@ -387,13 +388,7 @@ export const LoomSheetView = <TSession,>({
             <>
               {/* One group per horse that has anything waiting (MAR-3193
                   R1), each saying what that horse is doing now. */}
-              <div
-                className={
-                  wide
-                    ? 'grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-4'
-                    : undefined
-                }
-              >
+              <div className={wide ? 'grid grid-cols-fit-65 gap-4' : undefined}>
                 {next.seats.map((seat) => (
                   <WaveSectionView
                     appearance="loom"
@@ -425,13 +420,7 @@ export const LoomSheetView = <TSession,>({
               ) : null}
               {dispatchPlan ? (
                 <p className={LOOM_SHEET_NOTE_CLASS}>
-                  Planned{' '}
-                  {new Date(dispatchPlan.plannedAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                  })}{' '}
-                  ·{' '}
+                  Planned {loomDispatchClock(dispatchPlan.plannedAt)} ·{' '}
                   {dispatchPlan.autoDispatch
                     ? 'Auto-dispatch is on · sends within a minute'
                     : 'Auto-dispatch is off · nothing is sent'}
@@ -444,13 +433,7 @@ export const LoomSheetView = <TSession,>({
               {/* The stages of preparation, in the order it happens
                   (MAR-3194 R3). Read-only by ruling: the only thing a
                   person can press here is a row, and it opens the detail. */}
-              <div
-                className={
-                  wide
-                    ? 'grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4'
-                    : undefined
-                }
-              >
+              <div className={wide ? 'grid grid-cols-fit-80 gap-4' : undefined}>
                 {plan.stages.map((stage) => (
                   <WaveSectionView
                     appearance="loom"

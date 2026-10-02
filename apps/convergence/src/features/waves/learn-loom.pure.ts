@@ -10,6 +10,7 @@ import {
   LEARN_LOOM_STEP_COPY,
   type LearnLoomStepCopy,
 } from './learn-loom-copy.pure'
+import { durationsMs, easings } from '@convergence/ui'
 
 /** Which of the guide's two views is on screen. */
 export type LearnLoomView = 'steps' | 'reference'
@@ -175,8 +176,10 @@ export function learnLoomTicketMaxWidth(sheetCount: number): string {
  * which is the opposite of what this lesson claims -- one issue, one journey.
  */
 export const LEARN_LOOM_MOTION = {
-  durationMs: 350,
-  easing: 'cubic-bezier(0.42, 0, 0.58, 1)',
+  /** --motion-slow: rare, guided moments. */
+  durationMs: durationsMs.slow,
+  /** --motion-ease-guide (Figma's EASE_IN_AND_OUT), written out. */
+  easing: `cubic-bezier(${easings.guide.join(', ')})`,
 } as const
 
 /**

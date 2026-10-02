@@ -45,10 +45,10 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
 }) => (
   <div
     data-canvas-toolbar
-    className="flex flex-wrap items-center gap-3 border-b border-white/10 px-5 py-2"
+    className="flex flex-wrap items-center gap-3 border-b border-hairline px-5 py-2"
   >
     <h2 className="text-sm font-medium">{crewName}</h2>
-    <p className="text-[11px] text-muted-foreground">{summary}</p>
+    <p className="text-2xs text-ink-muted">{summary}</p>
 
     <div className="ml-auto flex flex-wrap items-center gap-1.5">
       <Button
@@ -57,7 +57,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onAddConversation}
         size="sm"
-        className="gap-1 text-[11px]"
+        className="gap-1 text-2xs"
       >
         <Plus className="size-3" />
         Add conversation
@@ -76,8 +76,9 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         onClick={onToggleConnect}
         size="sm"
         className={cn(
-          'gap-1 text-[11px]',
-          connecting && 'bg-white/10 text-foreground',
+          'gap-1 text-2xs',
+          // R7: a toggle that is on is the raised chip.
+          connecting && 'bg-chip text-ink shadow-raised',
         )}
       >
         <Link2 className="size-3" />
@@ -90,7 +91,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onCrewSettings}
         size="sm"
-        className="gap-1 text-[11px]"
+        className="gap-1 text-2xs"
       >
         <Settings2 className="size-3" />
         Crew settings
@@ -102,12 +103,14 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         disabled={!hasCrew}
         onClick={onHistory}
         size="sm"
-        className="gap-1 text-[11px]"
+        className="gap-1 text-2xs"
       >
         <History className="size-3" />
         History
         {waitingCount > 0 ? (
-          <span className="tabular-nums text-amber-400">· {waitingCount}</span>
+          <span className="tabular-nums text-warning-ink">
+            · {waitingCount}
+          </span>
         ) : null}
       </Button>
     </div>

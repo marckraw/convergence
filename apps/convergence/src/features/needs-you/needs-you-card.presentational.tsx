@@ -41,14 +41,14 @@ export function NeedsYouCard({
           <div
             role="group"
             aria-label={`Review actions for ${session.name}`}
-            className="flex flex-wrap gap-2 border-t border-border/60 p-2"
+            className="flex flex-wrap gap-2 border-t border-line-soft p-2"
           >
             {card.dismissLabel && !card.dismissed && (
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => onDismiss(session.id)}
-                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                className="flex-1 gap-1.5 border-line-soft bg-surface px-2 text-2xs"
               >
                 <CheckCheck aria-hidden="true" className="size-3.5" />
                 {card.dismissLabel}
@@ -59,7 +59,7 @@ export function NeedsYouCard({
                 type="button"
                 variant="secondary"
                 onClick={() => onArchive(session.id)}
-                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                className="flex-1 gap-1.5 border-line-soft bg-surface px-2 text-2xs"
               >
                 <Archive aria-hidden="true" className="size-3.5" />
                 Archive
@@ -77,7 +77,7 @@ export function NeedsYouCard({
                 type="button"
                 variant="ghost"
                 size="lg"
-                className="w-10 shrink-0 rounded-lg"
+                className="shrink-0 rounded-lg"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </IconButton>
