@@ -148,6 +148,25 @@ function renderConversations(
   )
 }
 
+describe('SidebarConversations (pulse wiring)', () => {
+  it('NAV-21 hands the pulsing sessions to the chat list too — mutation drop the prop turns red', () => {
+    const chat = session({
+      id: 'chat-1',
+      name: 'Planning chat',
+      contextKind: 'global',
+      projectId: null,
+    })
+    renderConversations({
+      activeSurface: 'chat',
+      ungroupedGlobalChatSessions: [chat],
+      pulsingSessionIds: { [chat.id]: true },
+    })
+    expect(
+      screen.getByRole('button', { name: 'Open chat session Planning chat' }),
+    ).toHaveAttribute('data-pulse', 'true')
+  })
+})
+
 describe('SidebarConversations (production search wiring)', () => {
   const pinnedA = session({
     id: 'pin-a',

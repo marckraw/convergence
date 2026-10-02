@@ -121,6 +121,25 @@ describe('GlobalChatSessionList', () => {
       ).toBeInTheDocument()
     },
   )
+  it('NAV-21 a notification pulses the chat row and the Space attempt row, as the code tree does — mutation drop data-pulse turns red', () => {
+    const other = { ...baseSession, id: 'quiet', name: 'Quiet chat' }
+    renderList({
+      sessions: [baseSession, other],
+      spaces: [linkedSpace],
+      expandedSpaceIds: new Set([linkedSpace.id]),
+      pulsingSessionIds: { [baseSession.id]: true },
+    })
+    expect(
+      screen.getByRole('button', { name: /open chat session planning chat/i }),
+    ).toHaveAttribute('data-pulse', 'true')
+    expect(
+      screen.getByRole('button', { name: /open space attempt planning chat/i }),
+    ).toHaveAttribute('data-pulse', 'true')
+    expect(
+      screen.getByRole('button', { name: /open chat session quiet chat/i }),
+    ).not.toHaveAttribute('data-pulse')
+  })
+
   it('selects a global chat session from the list', () => {
     const onSelectSession = vi.fn()
 

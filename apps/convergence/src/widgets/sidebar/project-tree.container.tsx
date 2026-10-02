@@ -16,15 +16,11 @@ import {
 import {
   Badge,
   Button,
-  cn,
   EmptyState,
-  Menu,
-  MenuContent,
   MenuItem,
   MenuSeparator,
-  MenuTrigger,
-  IconButton,
   Input,
+  RowActions,
   SectionHeader,
   Spinner,
   Tooltip,
@@ -32,7 +28,6 @@ import {
 import {
   Archive,
   GitBranch,
-  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
@@ -175,77 +170,56 @@ export const ProjectTree = memo(function ProjectTree({
     const canRegenerateName = session.providerId !== 'shell'
 
     return (
-      <Menu>
-        <MenuTrigger
-          render={
-            <IconButton
-              label={`Session actions ${session.name}`}
-              tooltipSide="left"
-              type="button"
-              variant="ghost"
-              size={card ? 'lg' : 'xs'}
-              // A row's ⋯ shows with its row (ListRow's actions); a card's always.
-              className={cn(
-                'shrink-0 text-ink-muted hover:text-ink',
-                card && 'rounded-lg',
-              )}
-              onClick={(event) => event.stopPropagation()}
+      // A row's ⋯ shows with its row (ListRow's actions); a card's always.
+      <RowActions
+        label={`Session actions ${session.name}`}
+        size={card ? 'lg' : 'xs'}
+        className={card ? 'rounded-lg' : undefined}
+      >
+        <MenuItem
+          onClick={() => {
+            setRenamingSessionId(session.id)
+            setRenameDraft(session.name)
+          }}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          <span>Rename</span>
+        </MenuItem>
+        {canRegenerateName ? (
+          <>
+            <MenuItem
+              disabled={isRegeneratingName}
+              onClick={() => onRegenerateSessionName(session.id)}
             >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </IconButton>
-          }
-        />
-        <MenuContent align="end">
-          <MenuItem
-            onClick={() => {
-              setRenamingSessionId(session.id)
-              setRenameDraft(session.name)
-            }}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            <span>Rename</span>
-          </MenuItem>
-          {canRegenerateName ? (
-            <>
-              <MenuItem
-                disabled={isRegeneratingName}
-                onClick={() => onRegenerateSessionName(session.id)}
-              >
-                {isRegeneratingName ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5" />
-                )}
-                <span>
-                  {isRegeneratingName
-                    ? 'Regenerating name…'
-                    : 'Regenerate name'}
-                </span>
-              </MenuItem>
-              <MenuSeparator />
-            </>
-          ) : null}
-          {isArchived ? (
-            <MenuItem onClick={() => onUnarchiveSession(session.id)}>
-              <Undo2 className="h-3.5 w-3.5" />
-              <span>Unarchive session</span>
+              {isRegeneratingName ? (
+                <Spinner size="sm" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {isRegeneratingName ? 'Regenerating name…' : 'Regenerate name'}
+              </span>
             </MenuItem>
-          ) : (
-            <MenuItem onClick={() => onArchiveSession(session.id)}>
-              <Archive className="h-3.5 w-3.5" />
-              <span>Archive session</span>
-            </MenuItem>
-          )}
-          <MenuSeparator />
-          <MenuItem
-            variant="danger"
-            onClick={() => onDeleteSession(session.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete session…</span>
+            <MenuSeparator />
+          </>
+        ) : null}
+        {isArchived ? (
+          <MenuItem onClick={() => onUnarchiveSession(session.id)}>
+            <Undo2 className="h-3.5 w-3.5" />
+            <span>Unarchive session</span>
           </MenuItem>
-        </MenuContent>
-      </Menu>
+        ) : (
+          <MenuItem onClick={() => onArchiveSession(session.id)}>
+            <Archive className="h-3.5 w-3.5" />
+            <span>Archive session</span>
+          </MenuItem>
+        )}
+        <MenuSeparator />
+        <MenuItem variant="danger" onClick={() => onDeleteSession(session.id)}>
+          <Trash2 className="h-3.5 w-3.5" />
+          <span>Delete session…</span>
+        </MenuItem>
+      </RowActions>
     )
   }
 
@@ -253,59 +227,39 @@ export const ProjectTree = memo(function ProjectTree({
     const isArchived = !!workspace.archivedAt
 
     return (
-      <Menu>
-        <MenuTrigger
-          render={
-            <IconButton
-              label={`Workspace actions ${workspace.branchName}`}
-              type="button"
-              variant="quiet"
-              onClick={(event) => event.stopPropagation()}
-              tooltipSide="left"
-              size="xs"
-              className="shrink-0"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </IconButton>
-          }
-        />
-
-        <MenuContent align="end">
-          {isArchived ? (
-            <MenuItem onClick={() => onUnarchiveWorkspace?.(workspace.id)}>
-              <Undo2 className="h-3.5 w-3.5" />
-              <span>Unarchive workspace</span>
-            </MenuItem>
-          ) : (
-            <MenuItem onClick={() => onArchiveWorkspace?.(workspace.id)}>
-              <Archive className="h-3.5 w-3.5" />
-              <span>Archive workspace…</span>
-            </MenuItem>
-          )}
-          {!workspace.worktreeRemovedAt ? (
-            <>
-              <MenuItem onClick={() => onSyncWorkspaceEnvFiles?.(workspace.id)}>
-                <RefreshCw className="h-3.5 w-3.5" />
-                <span>Sync env files</span>
-              </MenuItem>
-              <MenuItem
-                onClick={() => onRemoveWorkspaceWorktree?.(workspace.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Remove worktree from disk…</span>
-              </MenuItem>
-            </>
-          ) : null}
-          <MenuSeparator />
-          <MenuItem
-            variant="danger"
-            onClick={() => onDeleteWorkspace(workspace.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete permanently…</span>
+      <RowActions label={`Workspace actions ${workspace.branchName}`}>
+        {isArchived ? (
+          <MenuItem onClick={() => onUnarchiveWorkspace?.(workspace.id)}>
+            <Undo2 className="h-3.5 w-3.5" />
+            <span>Unarchive workspace</span>
           </MenuItem>
-        </MenuContent>
-      </Menu>
+        ) : (
+          <MenuItem onClick={() => onArchiveWorkspace?.(workspace.id)}>
+            <Archive className="h-3.5 w-3.5" />
+            <span>Archive workspace…</span>
+          </MenuItem>
+        )}
+        {!workspace.worktreeRemovedAt ? (
+          <>
+            <MenuItem onClick={() => onSyncWorkspaceEnvFiles?.(workspace.id)}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Sync env files</span>
+            </MenuItem>
+            <MenuItem onClick={() => onRemoveWorkspaceWorktree?.(workspace.id)}>
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Remove worktree from disk…</span>
+            </MenuItem>
+          </>
+        ) : null}
+        <MenuSeparator />
+        <MenuItem
+          variant="danger"
+          onClick={() => onDeleteWorkspace(workspace.id)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          <span>Delete permanently…</span>
+        </MenuItem>
+      </RowActions>
     )
   }
 

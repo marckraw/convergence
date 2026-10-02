@@ -425,3 +425,7 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export {
+  RowActions,
+  type RowActionsProps,
+} from './components/row-actions/row-actions'
