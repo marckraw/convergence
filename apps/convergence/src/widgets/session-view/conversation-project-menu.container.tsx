@@ -9,6 +9,7 @@ import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
 import {
   Button,
   cn,
+  Divider,
   MenuButton,
   Popover,
   PopoverContent,
@@ -97,7 +98,7 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
         disabledReason={openApps.disabledReason}
         onOpen={(app) => thenClose(() => openApps.openIn(app))()}
       />
-      <div className="my-1 h-px bg-surface-muted" />
+      <Divider className="my-1" />
       <Button
         variant="ghost"
         aria-pressed={pullRequestOpen}
