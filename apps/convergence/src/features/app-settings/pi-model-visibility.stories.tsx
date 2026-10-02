@@ -91,10 +91,11 @@ export const Empty: Story = {
     selectedModelIdsSet: new Set<string>(),
   },
   play: async ({ canvas }) => {
+    // Each empty list says so on EmptyState (DLG-18).
     await expect(
-      canvas.getByText('No Pi models were found in models.json.'),
+      canvas.getByText('No Pi models in models.json yet'),
     ).toBeVisible()
-    await expect(canvas.getByText('No matching Pi models.')).toBeVisible()
+    await expect(canvas.getByText('No Pi models match “mistral”')).toBeVisible()
     await expect(
       canvas.queryByRole('button', { name: 'Clear selection' }),
     ).toBeNull()

@@ -130,6 +130,10 @@ export const Default: Story = {
     )
     await expect(within(dialog).getByText('chrome-devtools')).toBeVisible()
     await expect(within(dialog).getByText('Needs auth')).toBeVisible()
+    // An empty list says so on EmptyState (DLG-18): Codex has no project servers.
+    await expect(
+      within(dialog).getByText('No project servers yet'),
+    ).toBeVisible()
     await expect(
       within(dialog).getByText('pi-mcp-adapter is not installed.'),
     ).toBeVisible()

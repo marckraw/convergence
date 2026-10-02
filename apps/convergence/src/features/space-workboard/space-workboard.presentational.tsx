@@ -73,7 +73,6 @@ import {
   spaceAttentionOptions,
   spaceStatusLabels,
   spaceStatusOptions,
-  suggestionBox,
   suggestionRow,
 } from './space-workboard.styles'
 import type { SpaceArtifactSuggestion } from './space-artifact-suggestions.pure'
@@ -430,7 +429,9 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
               </div>
 
               {synthesisPreview ? (
-                <section className={suggestionBox}>
+                // What synthesis suggests is a Card in the info tone: a
+                // hint to accept or not (DS-10).
+                <Card tone="info" render={<section />} className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <SectionLabel as="h4" className={toneInk.info}>
@@ -513,7 +514,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                       ))}
                     </div>
                   ) : null}
-                </section>
+                </Card>
               ) : null}
 
               <div className="grid gap-3 sm:grid-cols-3">
@@ -585,7 +586,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                   <div className="space-y-2">
                     <SectionLabel>Suggestions</SectionLabel>
                     {artifactSuggestions.map((suggestion) => (
-                      <div key={suggestion.id} className={suggestionBox}>
+                      <Card key={suggestion.id} tone="info">
                         <div className={rowTop}>
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">
@@ -618,7 +619,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                             </IconButton>
                           </div>
                         </div>
-                      </div>
+                      </Card>
                     ))}
                   </div>
                 ) : null}

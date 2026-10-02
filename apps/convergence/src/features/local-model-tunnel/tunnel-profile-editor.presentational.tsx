@@ -13,6 +13,9 @@ import {
   Button,
   Card,
   ChoiceField,
+  CodeBlock,
+  DescriptionItem,
+  DescriptionList,
   EmptyState,
   Field,
   FieldLabel,
@@ -426,9 +429,10 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
       {isSshTunnel ? (
         <section className="space-y-3">
           {renderSectionLabel('Command preview')}
-          <code className="block overflow-x-auto rounded-lg border border-line-soft bg-surface-muted/30 px-3 py-2 text-xs text-ink/85">
+          {/* The command, as a CodeBlock shows code (DS-10). */}
+          <CodeBlock label="Command preview">
             {item.status.commandPreview}
-          </code>
+          </CodeBlock>
         </section>
       ) : null}
 
@@ -439,16 +443,22 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
       {item.status.diagnostics.length > 0 ? (
         <section className="space-y-2">
           {renderSectionLabel('Diagnostics')}
-          <dl className="space-y-2 rounded-lg border border-line-soft bg-surface-muted/20 px-3 py-2 text-xs">
-            {item.status.diagnostics.map((diagnostic) => (
-              <div key={`${diagnostic.label}:${diagnostic.value}`}>
-                <dt className="font-medium text-ink">{diagnostic.label}</dt>
-                <dd className="mt-0.5 wrap-break-word whitespace-pre-wrap text-ink-muted">
-                  {diagnostic.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {/* Terms and values in a Card (DS-10), each value kept as the
+              runtime wrote it, its line breaks too. */}
+          <Card>
+            <DescriptionList density="compact">
+              {item.status.diagnostics.map((diagnostic) => (
+                <DescriptionItem
+                  key={`${diagnostic.label}:${diagnostic.value}`}
+                  term={diagnostic.label}
+                >
+                  <span className="whitespace-pre-wrap">
+                    {diagnostic.value}
+                  </span>
+                </DescriptionItem>
+              ))}
+            </DescriptionList>
+          </Card>
         </section>
       ) : null}
 
