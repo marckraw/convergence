@@ -14,6 +14,7 @@ import {
   findTurnFileChangeRow,
   type TurnFileChangeRow,
 } from './turn-file-change-rows.pure'
+import { sumTurnFileCounts, turnFileLabel } from './turn-card.pure'
 
 interface TurnCardProps {
   turn: Turn
@@ -26,19 +27,6 @@ interface TurnCardProps {
   onSelectFile: (row: TurnFileChangeRow | null) => void
 }
 
-function sumCounts(changes: TurnFileChange[]): {
-  additions: number
-  deletions: number
-} {
-  let additions = 0
-  let deletions = 0
-  for (const change of changes) {
-    additions += change.additions
-    deletions += change.deletions
-  }
-  return { additions, deletions }
-}
-
 export const TurnCard: FC<TurnCardProps> = ({
   turn,
   fileChanges,
@@ -48,13 +36,9 @@ export const TurnCard: FC<TurnCardProps> = ({
   onToggle,
   onSelectFile,
 }) => {
-  const counts = sumCounts(fileChanges)
-  const fileLabel =
-    fileChanges.length === 0
-      ? turn.status === 'running'
-        ? 'working…'
-        : 'no changes'
-      : `${fileChanges.length} file${fileChanges.length === 1 ? '' : 's'}`
+  // The derivations live in turn-card.pure.ts (CONV-30): the card draws.
+  const counts = sumTurnFileCounts(fileChanges)
+  const fileLabel = turnFileLabel(turn.status, fileChanges.length)
 
   return (
     // The kit's Collapsible, held open from outside (DS-21): its trigger says
