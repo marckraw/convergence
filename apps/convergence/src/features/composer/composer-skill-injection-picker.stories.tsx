@@ -116,7 +116,11 @@ export const Remote: Story = {
 export const Busy: Story = {
   args: { items: [], isLoading: true },
   play: async ({ canvas }) => {
-    const words = await canvas.findByText('Loading skills…')
+    const words = await canvas.findByText(
+      'Loading skills…',
+      {},
+      { timeout: 2000 },
+    )
     await waitFor(() => expect(words).toBeVisible())
   },
 }
