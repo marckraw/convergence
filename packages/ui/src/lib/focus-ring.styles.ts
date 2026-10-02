@@ -1,5 +1,5 @@
 /*
- * The focus ring (MAR-3616): a solid line in the ring color (--ring), shown
+ * The focus ring (MAR-3616): a solid line in the focus color (--focus), shown
  * only when the keyboard moved the focus (focus-visible), never on a click.
  * One recipe in four placements; pick by where the element sits, never by
  * taste, and never type the classes out again.
