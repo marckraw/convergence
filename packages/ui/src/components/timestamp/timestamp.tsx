@@ -17,7 +17,7 @@ type TimestampProps = Omit<
     className?: string
     /** The moment: a Date, or an ISO string as the backend stores it. */
     date: Date | string
-    /** relative ("4 minutes ago", the default), clock, date or datetime. */
+    /** relative ("4 minutes ago", the default), clock, date, datetime or log. */
     format?: TimestampFormat
   }
 
@@ -37,6 +37,8 @@ function Timestamp({
   now,
   locale,
   timeZone,
+  seconds,
+  hour12,
   className,
   ...props
 }: TimestampProps) {
@@ -57,7 +59,13 @@ function Timestamp({
         className={cn('tabular-nums', className)}
         {...props}
       >
-        {formatTimestamp(moment, format, { now, locale, timeZone })}
+        {formatTimestamp(moment, format, {
+          now,
+          locale,
+          timeZone,
+          seconds,
+          hour12,
+        })}
       </time>
     </Tooltip>
   )

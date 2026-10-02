@@ -110,3 +110,45 @@ export const Default: Story = {
 export const Dark: Story = {
   globals: { theme: 'dark' },
 }
+
+/**
+ * Log: a running record's moment, to the second on a 24-hour clock, as the
+ * transcript writes it; and a clock to the second, for a run's start and end.
+ */
+export const Log: Story = {
+  render: () => (
+    <div className="flex w-72 flex-col gap-1 rounded-md bg-canvas p-4 text-xs text-ink">
+      <Timestamp
+        date="2026-10-01T10:05:06Z"
+        format="log"
+        now={now}
+        locale="en-GB"
+        timeZone="UTC"
+      />
+      <Timestamp
+        date="2026-09-30T10:05:06Z"
+        format="log"
+        now={now}
+        locale="en-GB"
+        timeZone="UTC"
+      />
+      <Timestamp
+        date="2026-10-01T10:05:06Z"
+        format="clock"
+        seconds
+        locale="en-US"
+        timeZone="UTC"
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const times = [
+      ...canvasElement.querySelectorAll<HTMLTimeElement>('time'),
+    ].map((time) => plain(time.textContent))
+    await expect(times).toEqual([
+      'Today, 10:05:06',
+      'Yesterday, 10:05:06',
+      '10:05:06 AM',
+    ])
+  },
+}

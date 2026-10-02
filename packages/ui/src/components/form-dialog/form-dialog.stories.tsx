@@ -19,6 +19,7 @@ type EditProfileProps = {
   /** How many settings the body lists. */
   fields?: number
   saveDisabledReason?: string
+  saveShortcut?: string
 }
 
 /** Editing a tunnel profile: a few fields, ending the way R6 says. */
@@ -30,6 +31,7 @@ function EditProfile({
   error,
   fields = 2,
   saveDisabledReason,
+  saveShortcut,
 }: EditProfileProps) {
   const [open, setOpen] = useState(false)
   return (
@@ -48,6 +50,7 @@ function EditProfile({
         pending={pending}
         error={error}
         saveDisabledReason={saveDisabledReason}
+        saveShortcut={saveShortcut}
         headerActions={
           onRefresh ? (
             <IconButton label="Refresh" size="sm" onClick={onRefresh}>
@@ -172,6 +175,22 @@ export const Disabled: Story = {
     )
     await userEvent.keyboard('{Enter}')
     await expect(args.onSave).not.toHaveBeenCalled()
+    await arrived(dialog)
+  },
+}
+
+/**
+ * A form that also saves on ⌘↵ says so: Save's tooltip shows the key, and
+ * the button's name stays "Save" (DS-34).
+ */
+export const Shortcut: Story = {
+  args: { saveShortcut: '⌘↵' },
+  play: async ({ canvas, userEvent }) => {
+    const { dialog } = await open(canvas, userEvent)
+    const save = within(dialog).getByRole('button', { name: 'Save' })
+    await expect(save).toHaveAttribute('data-tooltip', 'Save')
+    await expect(save).toHaveAttribute('data-tooltip-shortcut', '⌘↵')
+    await expect(save).not.toHaveAttribute('aria-description')
     await arrived(dialog)
   },
 }

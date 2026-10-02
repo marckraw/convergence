@@ -425,3 +425,7 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export {
+  calendarDaysBefore,
+  exactDateLabel,
+} from './components/timestamp/timestamp.pure'
