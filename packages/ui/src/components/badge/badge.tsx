@@ -2,6 +2,7 @@ import { cva } from 'class-variance-authority'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 import { toneInk, toneLine, toneSoft, type Tone } from '#lib/tone.styles'
+import { tooltipAttributes } from '../tooltip/tooltip'
 
 /**
  * R1's named categories: things told apart by hue, not by state. A tag hue
@@ -103,7 +104,8 @@ type BadgeProps = Omit<ComponentProps<'span'>, 'className'> & {
 /**
  * A small word on a tint: a state, a kind, a count (MAR-3616). One height,
  * 20 px, in the 10 px step (R4), whatever it says, so badges side by side line
- * up; a long word is cut short rather than widening its row. Its default is
+ * up; a long word is cut short rather than widening its row, and shows whole
+ * in our Tooltip while it is cut (R2, MC N5). Its default is
  * the app's most copied chip (14 times): a full round pill on the muted wash
  * with the soft line, in the muted ink.
  */
@@ -126,6 +128,14 @@ function Badge({
         : shape === 'count' && tone === 'neutral'
           ? neutralCount
           : toneClasses(tone)
+  // Words cut short show whole in a Tooltip (R2), unless one around the
+  // badge already says something of its own.
+  const words =
+    typeof children === 'string' || typeof children === 'number'
+      ? String(children)
+      : undefined
+  const wrapped =
+    (props as Record<string, unknown>)['data-tooltip'] !== undefined
   return (
     <span
       data-slot="badge"
@@ -146,7 +156,12 @@ function Badge({
           {icon}
         </span>
       )}
-      <span className="min-w-0 truncate">{children}</span>
+      <span
+        className="min-w-0 truncate"
+        {...(wrapped ? {} : tooltipAttributes(words, { when: 'truncated' }))}
+      >
+        {children}
+      </span>
     </span>
   )
 }
