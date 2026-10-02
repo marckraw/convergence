@@ -92,7 +92,7 @@ export const ReplaceToken: Story = {
       'cvg_secret',
     )
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Save token for kuba-vps' }),
+      canvas.getByRole('button', { name: 'Replace token for kuba-vps' }),
     )
     await expect(args.onSaveDaemonToken).toHaveBeenCalledOnce()
   },
@@ -184,6 +184,10 @@ export const Busy: Story = {
       canvas.getByRole('button', { name: 'Test connection for kuba-vps' }),
     ).toBeDisabled()
     await expect(canvas.getByLabelText('Execution host token')).toBeDisabled()
+    // Saving, Save stays where it is and says it is busy (DLG-28).
+    await expect(
+      canvas.getByRole('button', { name: 'Replace token for kuba-vps' }),
+    ).toHaveAttribute('aria-busy', 'true')
   },
 }
 
@@ -222,9 +226,18 @@ export const Disabled: Story = {
     ).toHaveAccessibleDescription(
       'Enter a valid URL first — this endpoint is saved once its address is.',
     )
-    await expect(
-      canvas.getByRole('button', { name: 'Save token for kuba-vps' }),
-    ).toBeDisabled()
+    // Save and Remove token… are unavailable with that reason too (R2,
+    // DLG-28), where they were plainly disabled.
+    for (const name of [
+      'Save token for kuba-vps',
+      'Remove token for kuba-vps',
+    ]) {
+      const button = canvas.getByRole('button', { name })
+      await expect(button).toHaveAttribute('aria-disabled', 'true')
+      await expect(button).toHaveAccessibleDescription(
+        'Enter a valid URL first — this endpoint is saved once its address is.',
+      )
+    }
   },
 }
 

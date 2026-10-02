@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import { Button, Card, cn, settingsHeading } from '@convergence/ui'
 import {
   CONNECTION_SERVICES,
   connectionCell,
@@ -40,12 +40,13 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
   isChecking,
   onCheckAll,
 }) => (
-  <section
-    aria-labelledby="connections-overview-heading"
-    className="space-y-3 rounded-xl border border-line bg-surface/45 px-4 py-4"
+  <Card
+    render={<section aria-labelledby="connections-overview-heading" />}
+    padding="md"
+    className="space-y-3"
   >
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h3 id="connections-overview-heading" className="text-sm font-semibold">
+      <h3 id="connections-overview-heading" className={settingsHeading}>
         Who can reach Figma, Linear and GitHub
       </h3>
       <Button
@@ -136,5 +137,5 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
         </table>
       </div>
     ) : null}
-  </section>
+  </Card>
 )

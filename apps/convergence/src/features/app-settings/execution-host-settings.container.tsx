@@ -129,6 +129,14 @@ export const ExecutionHostSettingsContainer: FC<
   }, [loadStatus, isTokenBlocked])
 
   const handleSaveToken = useCallback(async () => {
+    // Busy, Save stays where it is (DLG-28); a second press waits for the
+    // first, and an empty or blocked field has nothing to save.
+    if (
+      isCredentialSaving ||
+      isTokenBlocked ||
+      daemonTokenDraft.trim().length === 0
+    )
+      return
     setIsCredentialSaving(true)
     setCredentialError(null)
     setCredentialMessage(null)
@@ -153,7 +161,7 @@ export const ExecutionHostSettingsContainer: FC<
     } finally {
       setIsCredentialSaving(false)
     }
-  }, [daemonTokenDraft, endpointId])
+  }, [daemonTokenDraft, endpointId, isCredentialSaving, isTokenBlocked])
 
   const handleDeleteToken = useCallback(async () => {
     const confirmed = await confirm({

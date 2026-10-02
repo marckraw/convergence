@@ -10,6 +10,7 @@ import {
   FormDialog,
   Input,
   RadioGroup,
+  settingsHeading,
   Switch,
 } from '@convergence/ui'
 import type { WorkspaceStartStrategy } from '@/entities/project'
@@ -114,7 +115,7 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
 
       <section className="space-y-3 border-t border-line-soft pt-5">
         <div>
-          <h3 className="text-sm font-medium">Workspace env files</h3>
+          <h3 className={settingsHeading}>Workspace env files</h3>
           <p className="mt-1 text-xs text-ink-muted">
             Copy ignored root env files from the project repo when worktrees are
             created or manually synced.
