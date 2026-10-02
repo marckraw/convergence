@@ -12,6 +12,12 @@ import { Notice, useConfirm } from '@convergence/ui'
 
 interface ProjectContextSettingsProps {
   projectId: string
+  /**
+   * Whether the item editor holds changes not saved yet: the dialog around it
+   * saves as you go, but this editor keeps its draft until Save, so closing
+   * the dialog asks first (DLG-10).
+   */
+  onDraftChange?: (unsaved: boolean) => void
 }
 
 type FormState =
@@ -19,10 +25,20 @@ type FormState =
   | { mode: 'create' }
   | { mode: 'edit'; item: ProjectContextItem }
 
+/** What the editor held when it opened: a draft that differs is unsaved. */
+interface DraftOrigin {
+  label: string
+  body: string
+  mode: ProjectContextReinjectMode
+}
+
+const NEW_ITEM_ORIGIN: DraftOrigin = { label: '', body: '', mode: 'boot' }
+
 const EMPTY_ITEMS: ProjectContextItem[] = []
 
 export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
   projectId,
+  onDraftChange,
 }) => {
   const itemsByProjectId = useProjectContextStore(
     (state) => state.itemsByProjectId,
@@ -43,6 +59,18 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
   const [modeDraft, setModeDraft] = useState<ProjectContextReinjectMode>('boot')
   const [isSaving, setIsSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [origin, setOrigin] = useState<DraftOrigin>(NEW_ITEM_ORIGIN)
+
+  const unsaved =
+    formState.mode !== 'closed' &&
+    (labelDraft !== origin.label ||
+      bodyDraft !== origin.body ||
+      modeDraft !== origin.mode)
+  useEffect(() => {
+    onDraftChange?.(unsaved)
+  }, [onDraftChange, unsaved])
+  // Gone with the dialog, it holds nothing.
+  useEffect(() => () => onDraftChange?.(false), [onDraftChange])
 
   useEffect(() => {
     void loadForProject(projectId)
@@ -51,9 +79,10 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
   const openCreate = () => {
     clearError()
     setFormError(null)
-    setLabelDraft('')
-    setBodyDraft('')
-    setModeDraft('boot')
+    setLabelDraft(NEW_ITEM_ORIGIN.label)
+    setBodyDraft(NEW_ITEM_ORIGIN.body)
+    setModeDraft(NEW_ITEM_ORIGIN.mode)
+    setOrigin(NEW_ITEM_ORIGIN)
     setFormState({ mode: 'create' })
   }
 
@@ -63,6 +92,11 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
     setLabelDraft(item.label ?? '')
     setBodyDraft(item.body)
     setModeDraft(item.reinjectMode)
+    setOrigin({
+      label: item.label ?? '',
+      body: item.body,
+      mode: item.reinjectMode,
+    })
     setFormState({ mode: 'edit', item })
   }
 

@@ -7,10 +7,13 @@ import { answerConfirm } from '@/shared/testing/confirm'
 import { ProjectContextSettings } from './project-context-list.container'
 
 /** Under the app's UiProvider, which hosts the delete's question (R5). */
-function renderSettings() {
+function renderSettings(onDraftChange?: (unsaved: boolean) => void) {
   return render(
     <UiProvider>
-      <ProjectContextSettings projectId={PROJECT_ID} />
+      <ProjectContextSettings
+        projectId={PROJECT_ID}
+        onDraftChange={onDraftChange}
+      />
     </UiProvider>,
   )
 }
@@ -208,6 +211,41 @@ describe('ProjectContextSettings', () => {
         itemA.id,
       )
     })
+  })
+
+  it('says when its editor holds changes not saved yet (DLG-10)', async () => {
+    const onDraftChange = vi.fn()
+    const unsaved = () => onDraftChange.mock.lastCall?.[0]
+    renderSettings(onDraftChange)
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(`project-context-item-${itemA.id}`),
+      ).toBeTruthy()
+    })
+    expect(unsaved()).toBe(false)
+
+    // Opened as it was saved, the editor holds nothing to lose.
+    fireEvent.click(screen.getByRole('button', { name: /Edit monorepo/i }))
+    expect(unsaved()).toBe(false)
+
+    // Mutation: never report a draft -> the dialog closes over it, red.
+    fireEvent.change(screen.getByLabelText(/Body/i), {
+      target: { value: 'An edit not saved yet.' },
+    })
+    expect(unsaved()).toBe(true)
+
+    // Typed back to what was saved, there's nothing to lose again.
+    fireEvent.change(screen.getByLabelText(/Body/i), {
+      target: { value: itemA.body },
+    })
+    expect(unsaved()).toBe(false)
+
+    fireEvent.change(screen.getByLabelText(/Body/i), {
+      target: { value: 'Another edit.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(unsaved()).toBe(false)
   })
 
   it('cancels the delete confirmation without dispatching', async () => {

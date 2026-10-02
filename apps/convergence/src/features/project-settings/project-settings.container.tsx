@@ -14,6 +14,7 @@ import {
   type WorkspaceStartStrategy,
 } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
+import { useConfirm } from '@convergence/ui'
 import { useSaveAsYouGo } from '@/shared/lib/use-save-as-you-go'
 import { ProjectSettingsDialog } from './project-settings.presentational'
 
@@ -32,7 +33,15 @@ interface ProjectSettingsDrafts {
 }
 
 interface ProjectSettingsDialogContainerProps {
-  contextSection?: (projectId: string) => ReactNode
+  /**
+   * The project's context items, below the settings. Its item editor keeps a
+   * draft until Save, and says whether it holds one through `onDraftChange`,
+   * so closing the dialog can ask before dropping it (DLG-10).
+   */
+  contextSection?: (
+    projectId: string,
+    onDraftChange: (unsaved: boolean) => void,
+  ) => ReactNode
   trigger?: ReactElement
 }
 
@@ -54,6 +63,12 @@ export const ProjectSettingsDialogContainer: FC<
     useState<WorkspaceEnvFileCopyMode>('copy-missing')
   const [envPatternsText, setEnvPatternsText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // Closing with a context item's changes unsaved asks first (R5, DLG-10).
+  const confirm = useConfirm()
+  const contextDraftUnsaved = useRef(false)
+  const handleContextDraftChange = useCallback((unsaved: boolean) => {
+    contextDraftUnsaved.current = unsaved
+  }, [])
 
   const settings = useMemo(
     () => normalizeProjectSettings(activeProject?.settings),
@@ -119,16 +134,28 @@ export const ProjectSettingsDialogContainer: FC<
   })
 
   const handleOpenChange = useCallback(
-    (next: boolean) => {
+    async (next: boolean) => {
       if (next) {
         openDialog('project-settings')
         return
+      }
+      if (contextDraftUnsaved.current) {
+        // The settings save as you go, but a context item's editor keeps its
+        // draft until Save: Done, Escape or ✕ would drop it, so it asks.
+        const discard = await confirm({
+          title: 'Discard the context item you’re editing?',
+          description: 'Your changes to it haven’t been saved.',
+          confirmLabel: 'Discard',
+          cancelLabel: 'Keep editing',
+          variant: 'danger',
+        })
+        if (!discard) return
       }
       // Leaving with a typed value still waiting keeps it.
       flush()
       closeDialog()
     },
-    [openDialog, closeDialog, flush],
+    [openDialog, closeDialog, confirm, flush],
   )
 
   useEffect(() => {
@@ -173,7 +200,7 @@ export const ProjectSettingsDialogContainer: FC<
   return (
     <ProjectSettingsDialog
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={(next) => void handleOpenChange(next)}
       projectName={activeProject.name}
       strategy={strategy}
       baseBranchName={baseBranchName}
@@ -186,7 +213,10 @@ export const ProjectSettingsDialogContainer: FC<
       onEnvCopyEnabledChange={handleEnvCopyEnabledChange}
       onEnvOverwriteChange={handleEnvOverwriteChange}
       onEnvPatternsTextChange={handleEnvPatternsTextChange}
-      contextSection={contextSection?.(activeProject.id)}
+      contextSection={contextSection?.(
+        activeProject.id,
+        handleContextDraftChange,
+      )}
       trigger={trigger}
     />
   )
