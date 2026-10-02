@@ -471,3 +471,4 @@ export {
 // DS8 lane composer (MAR-3608): appended, so the parallel lanes' additions merge as unions.
 export { type SelectTriggerVariant } from './components/select/select'
 export { focusRingAroundField } from './lib/focus-ring.styles'
+export { type StatusPillSize } from './components/status-pill/status-pill'
