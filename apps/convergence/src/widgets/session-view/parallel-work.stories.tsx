@@ -275,7 +275,7 @@ export const Older: Story = {
     ],
   },
   play: async ({ args, canvas, userEvent }) => {
-    const older = canvas.getByRole('button', { name: /1 older, newest/ })
+    const older = canvas.getByRole('button', { name: /^1 older\s*,\s*newest/ })
     await expect(older).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(older)
     await expect(args.onToggleOlder).toHaveBeenCalledOnce()

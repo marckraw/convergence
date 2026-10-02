@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { metaName } from '@/shared/testing/meta-line'
 import { expect, fn } from 'storybook/test'
 import { HarnessAlertChip } from './harness-alert-chip.presentational'
 
@@ -20,7 +21,9 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     // A MetaLine's dot is silent; a screen reader hears a comma (CONV-23).
-    const chip = canvas.getByRole('button', { name: 'Harness, retry 3' })
+    const chip = canvas.getByRole('button', {
+      name: metaName('Harness · retry 3'),
+    })
     await expect(chip).toHaveAttribute('aria-haspopup', 'menu')
     await expect(chip).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(chip)
@@ -33,7 +36,7 @@ export const Expanded: Story = {
   args: { expanded: true },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('button', { name: 'Harness, retry 3' }),
+      canvas.getByRole('button', { name: metaName('Harness · retry 3') }),
     ).toHaveAttribute('aria-expanded', 'true')
   },
 }
@@ -50,7 +53,9 @@ export const Long: Story = {
     ],
   },
   play: async ({ args, canvas }) => {
-    const chip = canvas.getByRole('button', { name: args.facts.join(', ') })
+    const chip = canvas.getByRole('button', {
+      name: metaName(args.facts.join(' · ')),
+    })
     // The full label is the app's tooltip, never a native title (MAR-3616).
     await expect(chip).toHaveAttribute('data-tooltip', args.facts.join(' · '))
     await expect(chip).not.toHaveAttribute('title')

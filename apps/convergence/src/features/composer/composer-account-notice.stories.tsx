@@ -61,7 +61,7 @@ export const Failed: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const alert = canvas.getByRole('alert')
     // Its title's facts on a MetaLine (CONV-23); it names the alert.
-    await expect(alert).toHaveAccessibleName(/^Not sent, /)
+    await expect(alert).toHaveAccessibleName(/^Not sent\s*,\s*\S/)
     await expect(canvas.getByText(metaText(/^Not sent · /))).toBeVisible()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Manage accounts' }),

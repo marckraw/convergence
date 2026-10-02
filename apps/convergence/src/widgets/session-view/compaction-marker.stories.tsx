@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { metaText } from '@/shared/testing/meta-line'
+import { metaName, metaText } from '@/shared/testing/meta-line'
 import { expect } from 'storybook/test'
 import { CompactionMarker } from './compaction-marker.presentational'
 
@@ -38,7 +38,7 @@ export const Default: Story = {
     // hears a comma where the eye reads a dot.
     await expect(
       canvas.getByRole('separator', {
-        name: 'Compacted (auto), 167.4k → 12.3k tokens',
+        name: metaName('Compacted (auto) · 167.4k → 12.3k tokens'),
       }),
     ).toBeVisible()
     await expect(

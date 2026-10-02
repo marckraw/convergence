@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { metaText } from '@/shared/testing/meta-line'
+import { metaName, metaText } from '@/shared/testing/meta-line'
 import { expect, fn } from 'storybook/test'
 import { WorkBlockRow } from './work-block.presentational'
 
@@ -32,7 +32,9 @@ export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     // Its facts on a MetaLine (CONV-23): a screen reader hears a comma where
     // the eye reads a dot.
-    const row = canvas.getByRole('button', { name: args.label.join(', ') })
+    const row = canvas.getByRole('button', {
+      name: metaName(args.label.join(' · ')),
+    })
     await expect(
       canvas.getByText(metaText(args.label.join(' · '))),
     ).toBeVisible()
@@ -52,7 +54,9 @@ export const Default: Story = {
 export const Open: Story = {
   args: { open: true },
   play: async ({ args, canvas }) => {
-    const row = canvas.getByRole('button', { name: args.label.join(', ') })
+    const row = canvas.getByRole('button', {
+      name: metaName(args.label.join(' · ')),
+    })
     await expect(row).toHaveAttribute('aria-expanded', 'true')
     await expect(row).toHaveAttribute('data-tooltip', '7 entries · fold')
   },
