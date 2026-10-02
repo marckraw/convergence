@@ -5,7 +5,12 @@ import { IconButton } from '@convergence/ui'
 interface PaneToolbarProps {
   onSplitHorizontal: () => void
   onSplitVertical: () => void
-  onClose: () => void
+  /**
+   * Closes the pane's open tab. Leave it out where each tab carries its own
+   * close, as the terminal dock's tab strip does: a second ✕ for the same
+   * tab is a duplicate (DS4).
+   */
+  onClose?: () => void
   closeLabel?: string
 }
 
@@ -24,7 +29,7 @@ export const PaneToolbar: FC<PaneToolbarProps> = ({
         onClick={onSplitHorizontal}
         size="xs"
       >
-        <SplitSquareHorizontal className="h-3.5 w-3.5" />
+        <SplitSquareHorizontal className="size-3.5" />
       </IconButton>
       <IconButton
         label="Split vertical"
@@ -33,17 +38,19 @@ export const PaneToolbar: FC<PaneToolbarProps> = ({
         onClick={onSplitVertical}
         size="xs"
       >
-        <SplitSquareVertical className="h-3.5 w-3.5" />
+        <SplitSquareVertical className="size-3.5" />
       </IconButton>
-      <IconButton
-        label={closeLabel}
-        type="button"
-        variant="ghost"
-        onClick={onClose}
-        size="xs"
-      >
-        <X className="h-3.5 w-3.5" />
-      </IconButton>
+      {onClose ? (
+        <IconButton
+          label={closeLabel}
+          type="button"
+          variant="ghost"
+          onClick={onClose}
+          size="xs"
+        >
+          <X className="size-3.5" />
+        </IconButton>
+      ) : null}
     </div>
   )
 }

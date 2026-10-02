@@ -43,6 +43,19 @@ export const ClosePane: Story = {
   },
 }
 
+/**
+ * Without a close: where each tab carries its own ✕ (the terminal dock's
+ * strip), the toolbar only splits, so no tab has two closes.
+ */
+export const WithoutClose: Story = {
+  name: 'Without close',
+  args: { onClose: undefined },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('button')).toHaveLength(2)
+    await expect(canvas.queryByRole('button', { name: 'Close tab' })).toBeNull()
+  },
+}
+
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
