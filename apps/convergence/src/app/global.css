@@ -69,7 +69,7 @@
       linear-gradient(
         180deg,
         color-mix(in srgb, var(--canvas) 62%, transparent),
-        color-mix(in srgb, var(--canvas) 86%, var(--media-backdrop) 10%)
+        color-mix(in srgb, var(--canvas) 86%, var(--viewer) 10%)
       );
   }
 
