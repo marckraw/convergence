@@ -11,7 +11,11 @@ const fixture = vi.hoisted(() => ({
   crews: [],
   loadProviders: vi.fn(),
 }))
-vi.mock('@/entities/session', () => ({
+vi.mock('@/entities/session', async (importOriginal) => ({
+  // The card's state reads the entity's own attention signal (MC-2).
+  readSessionAttentionSignal: (
+    await importOriginal<typeof import('@/entities/session')>()
+  ).readSessionAttentionSignal,
   selectLocalProviders: () => fixture.providers,
   useSessionStore: (selector: (state: unknown) => unknown) =>
     selector({

@@ -132,7 +132,9 @@ export {
 } from './session.selectors.pure'
 export {
   formatSessionAttentionLabel,
+  readSessionAttentionSignal,
   summarizeAttentionRequests,
+  type SessionAttentionSignal,
 } from './session-attention.pure'
 export { resolveMidRunInputPolicy } from './mid-run-input.pure'
 export type {

@@ -216,15 +216,16 @@ export const LOOM_SHEET_NOTE_CLASS = 'px-3 pt-3 text-2xs text-ink-muted'
 export const LOOM_HORSES_LINE_CLASS = WAVE_SECTION_TITLE_CLASS
 
 /**
- * A horse card (MAR-3191): the runtime tints it, so a failed seat is visible
- * from across the room and an idle one does not shout.
+ * A horse card (MAR-3191), laid out inside the kit's Card: the runtime tints
+ * it, so a failed seat is visible from across the room and an idle one does
+ * not shout.
  *
  * The app's own tokens, not r4's literals: the frame was drawn against a
  * mockup's palette and this panel sits beside the conversation, where a raw
  * hex would be the one surface that does not follow the theme.
  */
 export const LOOM_HORSE_CARD_CLASS =
-  'flex h-auto w-full flex-col items-start gap-1.5 whitespace-normal rounded-lg border px-3 py-3 text-left text-xs font-normal'
+  'flex w-full flex-col items-start gap-1.5 whitespace-normal px-3 py-3 text-left text-xs font-normal'
 
 export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
   {
@@ -232,24 +233,25 @@ export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
     // (MC-2); a failed one is danger.
     working: 'border-info-line bg-info-soft',
     failed: 'border-danger-line bg-danger-soft',
-    idle: 'border-hairline',
+    idle: 'border-hairline bg-transparent',
     'not-seen': 'border-hairline bg-fill-quiet',
   }
 
 /**
- * A seat card's door: a button stretched over the whole card, named by the
- * card's own text, with the card's other doors raised above it (MC-26: one
- * constant for the horse and the mastermind card).
+ * A seat card's door: the seat's name as the Card's CardAction, whose hit
+ * area stretches over the whole card, named by the card's own text, with the
+ * card's other doors raised above it (MC-12, MC-26: the horse and the
+ * mastermind card alike).
  */
-export const LOOM_SEAT_CARD_DOOR_CLASS =
-  'absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent'
+export const LOOM_SEAT_CARD_DOOR_CLASS = 'min-w-0 truncate font-medium'
 
 /**
- * The ticket line as a door (MAR-3204 R4): raised above the card's stretched
- * button so a click lands here, and marked as a link so it reads as one.
+ * The ticket line as a door (MAR-3204 R4): a link Button, words that act,
+ * raised above the card's stretched door so a click lands here, in the
+ * card's own print and ink, underlined under the pointer as a link is.
  */
 export const LOOM_HORSE_TICKET_DOOR_CLASS =
-  'relative z-10 h-auto w-full min-w-0 justify-start whitespace-normal rounded-sm p-0 text-left text-xs font-normal underline-offset-2 hover:bg-transparent hover:text-inherit hover:underline'
+  'relative z-10 w-full min-w-0 justify-start whitespace-normal rounded-sm font-normal text-inherit underline-offset-2'
 
 /** The card's second line: host · tracker status · lap. */
 export const LOOM_HORSE_META_CLASS =
