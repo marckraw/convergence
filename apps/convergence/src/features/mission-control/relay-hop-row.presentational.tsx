@@ -18,8 +18,13 @@ interface RelayHopRowProps {
   line: RelayHopLine
   /** The trail's one clock, so every relative time in it is measured alike; now unless told. */
   now?: Date
-  expanded: boolean
-  onToggle: () => void
+  /** Whether its message shows; only a row that can fold has one. */
+  expanded?: boolean
+  /**
+   * Folds the message open and shut. Left out, the row is only read (the
+   * wire popover's glance): no control for a message it can't show (MC N4).
+   */
+  onToggle?: () => void
 }
 
 /**
@@ -34,18 +39,18 @@ interface RelayHopRowProps {
 export const RelayHopRow: FC<RelayHopRowProps> = ({
   line,
   now,
-  expanded,
+  expanded = false,
   onToggle,
 }) => {
   const alarm = line.tone === 'alarm'
-  const canExpand = line.payloadPreview !== null
+  const canExpand = onToggle !== undefined && line.payloadPreview !== null
   const tone = RELAY_HOP_TONE[line.tone]
 
   return (
     <Collapsible
       render={<li />}
       open={expanded}
-      onOpenChange={() => onToggle()}
+      onOpenChange={() => onToggle?.()}
       data-relay-hop
       className={cn(
         'rounded px-1.5 py-1',
@@ -142,7 +147,7 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
         </p>
       ) : null}
 
-      {line.payloadPreview ? (
+      {canExpand ? (
         <CollapsiblePanel>
           <p className="mt-1 rounded bg-surface-sunken px-2 py-1 text-2xs leading-snug text-ink-muted">
             {line.payloadPreview}
