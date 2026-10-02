@@ -44,6 +44,8 @@ export const Default: Story = {
       name: /^feature\/sidebar-overflow/,
     })
     await expect(row).toHaveTextContent('3')
+    // A disclosure says whether it is open (NAV-13).
+    await expect(row).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(row)
     await expect(args.onToggle).toHaveBeenCalledOnce()
     // The ⋯ is out of sight until the row is hovered or focused, never out
@@ -76,6 +78,15 @@ export const Merged: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Merged')).toBeVisible()
     await expect(canvas.getByText('Worktree removed')).toBeVisible()
+    // Open, and still named by its tooltip: no popup is open (NAV-13).
+    const row = canvas.getByRole('button', {
+      name: /^feature\/sidebar-overflow/,
+    })
+    await expect(row).toHaveAttribute('aria-expanded', 'true')
+    await expect(row).toHaveAttribute(
+      'data-tooltip',
+      'feature/sidebar-overflow',
+    )
   },
 }
 

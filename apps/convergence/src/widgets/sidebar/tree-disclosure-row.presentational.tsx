@@ -31,9 +31,9 @@ interface TreeDisclosureRowProps {
  * A row in the project tree that folds the rows under it: a branch, or the
  * archived pile (NAV-5, NAV-13). A ListRow in the sidebar's compact print,
  * its chevron turning a quarter when open and standing still under reduced
- * motion. It says no aria-expanded: the tooltip host hides a tooltip on an
- * expanded control (it reads one as an open popup), which would take the
- * name away from every open branch.
+ * motion. It says whether it is open with aria-expanded; the tooltip host
+ * hides a tooltip only on an open popup trigger (`aria-haspopup`), so an open
+ * branch keeps its name.
  */
 export function TreeDisclosureRow({
   title,
@@ -60,6 +60,7 @@ export function TreeDisclosureRow({
           />
         }
         aria-label={ariaLabel}
+        aria-expanded={expanded}
         onClick={() => {
           if (!locked) onToggle()
         }}
