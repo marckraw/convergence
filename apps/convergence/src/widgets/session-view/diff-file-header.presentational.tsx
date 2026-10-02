@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { Spinner, Tooltip } from '@convergence/ui'
+import { SectionLabel, Spinner, Tooltip } from '@convergence/ui'
 
 export type DiffFileHeaderSubtitleVariant = 'description' | 'label'
 
@@ -36,15 +36,13 @@ export const DiffFileHeader: FC<DiffFileHeaderProps> = ({
       {actions}
     </div>
     {subtitle ? (
-      <p
-        className={
-          subtitleVariant === 'description'
-            ? 'mt-1 text-xs leading-5 text-ink-muted'
-            : 'mt-1 text-3xs uppercase tracking-wider text-ink-muted'
-        }
-      >
-        {subtitle}
-      </p>
+      subtitleVariant === 'description' ? (
+        <p className="mt-1 text-xs leading-5 text-ink-muted">{subtitle}</p>
+      ) : (
+        <SectionLabel size="sm" className="mt-1">
+          {subtitle}
+        </SectionLabel>
+      )
     ) : null}
   </div>
 )

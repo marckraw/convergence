@@ -1,5 +1,6 @@
 import { durationsMs } from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
+import { sectionLabelVariants } from '@convergence/ui'
 
 export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from '@convergence/ui'
 
@@ -108,10 +109,10 @@ export const LOOM_COLLAPSE_BUTTON_CLASS = 'shrink-0'
 
 /**
  * A sheet's section heading, in the eyebrow look at the 10 px step: Loom's
- * section titles and its horses line are one string (MC-34).
+ * section titles and its horses line are one string (MC-34), the kit's
+ * SectionLabel print (MC-5).
  */
-export const WAVE_SECTION_TITLE_CLASS =
-  'px-3 pb-1 pt-3 text-3xs font-medium uppercase tracking-eyebrow text-ink-muted'
+export const WAVE_SECTION_TITLE_CLASS = `px-3 pb-1 pt-3 ${sectionLabelVariants({ size: 'sm' })}`
 
 export const WAVE_ROW_CLASS =
   'flex w-full flex-col items-start justify-start gap-0.5 rounded-md px-3 py-1.5 text-left text-xs font-normal'
@@ -282,8 +283,7 @@ export const LOOM_DETAIL_CHIP_CLASS = LOOM_CHIP_CLASS
 export const LOOM_DETAIL_MUTED_CLASS = 'text-2xs text-ink-muted'
 
 /** The detail's own footer: what this card is, and how fresh. */
-export const LOOM_DETAIL_FOOTER_CLASS =
-  'pt-1 text-3xs uppercase tracking-eyebrow text-ink-muted'
+export const LOOM_DETAIL_FOOTER_CLASS = `pt-1 ${sectionLabelVariants({ size: 'sm' })}`
 
 /**
  * Loom's search field (MAR-3234): the kit's SearchField (MC-17), placed by

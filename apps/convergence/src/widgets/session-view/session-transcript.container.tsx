@@ -5,7 +5,14 @@ import {
 } from '@/entities/session'
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { perfApi } from '@/shared/lib/perf.api'
-import { Button, Divider, Spinner, Tooltip } from '@convergence/ui'
+import {
+  Button,
+  cn,
+  Divider,
+  sectionLabelVariants,
+  Spinner,
+  Tooltip,
+} from '@convergence/ui'
 import { agentAttributionLabel } from './request-card.pure'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { placeCompactions } from './harness-facts.pure'
@@ -732,7 +739,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       ))}
       {renderEntry.turnBoundary && (
         <Divider
-          className="my-3 font-mono text-3xs tracking-eyebrow uppercase"
+          className={cn('my-3 font-mono', sectionLabelVariants({ size: 'sm' }))}
           data-turn-id={renderEntry.item.turnId}
           label={`Turn ${renderEntry.turnSequence}`}
         />

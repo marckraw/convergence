@@ -1,7 +1,7 @@
 import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
 import { isEditableTarget } from '@/shared/lib/editable-target.pure'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, SectionLabel } from '@convergence/ui'
 import { annotationChipFrame } from './annotation.styles'
 import {
   formatAnnotationCount,
@@ -80,9 +80,9 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
     className="mx-auto mb-2 flex w-full max-w-conversation items-center gap-2"
     data-testid="annotation-tray"
   >
-    <span className="shrink-0 text-3xs uppercase tracking-wide text-ink-muted">
+    <SectionLabel size="sm" className="shrink-0">
       Responding to
-    </span>
+    </SectionLabel>
     {/* Live, so a removal is announced as the number it leaves behind. */}
     <span
       aria-live="polite"
