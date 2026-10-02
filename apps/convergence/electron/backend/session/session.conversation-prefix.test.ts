@@ -121,10 +121,17 @@ describe('main conversation prefix on the real schema', () => {
       samples.push(performance.now() - start)
       expect(result).toEqual(expected)
     }
-    const median = [...samples].sort((a, b) => a - b)[3]
+    const sorted = [...samples].sort((a, b) => a - b)
+    const median = sorted[3]
+    // The budget holds the fastest run, not the median (MAR-3620): a shared
+    // CI runner's noise only ever adds time, and a median of a few
+    // milliseconds failed 20 ms by 1-7% on PRs that never touched this code.
+    // A real regression (summarising every row in JS) slows every run, the
+    // fastest included, so this still catches it.
+    const fastest = sorted[0]
     process.stdout.write(
-      `MAR-3408 prefix 50000/newest300 ms ${JSON.stringify({ samples, median })}\n`,
+      `MAR-3408 prefix 50000/newest300 ms ${JSON.stringify({ samples, median, fastest })}\n`,
     )
-    expect(median).toBeLessThanOrEqual(20)
+    expect(fastest).toBeLessThanOrEqual(20)
   })
 })
