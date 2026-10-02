@@ -87,11 +87,9 @@ const rowOf = (key: string) =>
  * The app-region an element is IN: the nearest ancestor-or-self that says,
  * exactly as Electron resolves it -- later in the tree wins.
  *
- * Read off the style object's own property, not
- * `getPropertyValue('-webkit-app-region')`: jsdom's CSS parser does not know
- * the property and drops the declaration, while the assignment React makes
- * survives on the object. It is still the emitted element's own style that is
- * read here, never the prop that asked for it.
+ * Read off the emitted element's classes, the one spelling there is
+ * (`app-drag`, `app-no-drag`; NAV-11): jsdom computes no styles, and no inline
+ * `WebkitAppRegion` is left to read.
  *
  * Module scope, and one copy (MAR-3292): this reader was written twice for
  * MAR-3284 and MAR-3291, and MAR-3292's folded column is the third caller --
@@ -99,15 +97,8 @@ const rowOf = (key: string) =>
  */
 const region = (node: Element | null) => {
   for (let at: Element | null = node; at !== null; at = at.parentElement) {
-    // The design system's parts say it with a class (MAR-3616).
     if (at.classList.contains('app-no-drag')) return 'no-drag'
     if (at.classList.contains('app-drag')) return 'drag'
-    const said = (
-      (at as HTMLElement).style as CSSStyleDeclaration & {
-        WebkitAppRegion?: string
-      }
-    )?.WebkitAppRegion
-    if (said) return said
   }
   return null
 }
@@ -3033,7 +3024,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       await screen.findByLabelText('Loom')
       await collapse()
       const folded = column()!
-      // Mutation: drop `style={NO_DRAG_STYLE}` from the aside -> the
+      // Mutation: drop `app-no-drag` from the aside -> the
       // column resolves to whatever a covered view declared and the icons
       // become a place to pick the window up, red.
       expect(region(folded)).toBe('no-drag')
@@ -3287,7 +3278,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       expect(motion()).toBe('still')
     })
 
-    it('R2: reduced motion is a class, and the shell’s inline style names width and the region only', async () => {
+    it('R2: reduced motion is a class, and the shell’s inline style names its width only', async () => {
       await wide()
       expect(shell()!.className).toBe(LOOM_SHELL_CLASS)
       // The law from `learn-loom.styles.ts`: inline wins over the media
@@ -3322,7 +3313,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     it('R4: the shell declares no-drag in both shapes, so nothing eats a click mid-motion', async () => {
       await wide()
-      // Mutation: drop `NO_DRAG_STYLE` from the shell -> the region
+      // Mutation: drop `app-no-drag` from the shell -> the region
       // resolves to whatever title strip lies under the moving column, red.
       expect(region(shell())).toBe('no-drag')
       expect(document.querySelector('[data-wave-resize-handle]')).toBeTruthy()
@@ -4075,9 +4066,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
         expect(region(header)).toBe('drag')
         expect(region(header.querySelector('h2'))).toBe('drag')
 
-        // Mutation M1: drop `style={NO_DRAG_STYLE}` from any of these
-        // four -> that one resolves to `drag` and is red. This is the whole
-        // defect: a control inside a drag strip is not a control.
+        // Mutation M1: drop `app-no-drag` from any of these four (each
+        // part's own, or the search field's box) -> that one resolves to
+        // `drag` and is red. This is the whole defect: a control inside a
+        // drag strip is not a control.
         for (const control of [
           crewPicker(),
           screen.getByRole('searchbox', { name: 'Search Loom' }),

@@ -8,7 +8,6 @@ import type { LoomStackProps } from './loom-stack.types'
 import {
   LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_COMPACT_CLASS,
-  NO_DRAG_STYLE,
   LOOM_SEARCH_COMPACT_ROW_CLASS,
   LOOM_SEARCH_SUBLINE_ROW_CLASS,
 } from './wave-panel.styles'
@@ -79,7 +78,6 @@ export const LoomCompactView: FC<
           label={COLLAPSE_LOOM}
           type="button"
           variant="ghost"
-          style={NO_DRAG_STYLE}
           onClick={onCollapse}
           tooltipSide="bottom"
           size="sm"

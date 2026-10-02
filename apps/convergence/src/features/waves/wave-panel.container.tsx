@@ -44,7 +44,6 @@ import {
 import {
   LOOM_ENTER_CLASS,
   LOOM_ENTER_MS,
-  NO_DRAG_STYLE,
   LOOM_SHELL_CLASS,
   LOOM_SLIDE_MS,
   LOOM_STRIP_WIDTH_PX,
@@ -959,15 +958,13 @@ export const WavePanel: FC<WavePanelProps> = memo(function WavePanel({
       <div
         data-loom-shell
         data-loom-motion={sliding ? 'slide' : 'still'}
+        // The region is the class's `app-no-drag`: a shell that declared
+        // none would hand the moving column to whatever strip is underneath
+        // it (MAR-3284's law).
         className={LOOM_SHELL_CLASS}
-        // `width` and the region, nothing else (R2/R4): an inline
-        // `transition` would out-specify `motion-reduce`, and a shell that
-        // declared no region would hand the moving column to whatever strip
-        // is underneath it (MAR-3284's law).
-        style={{
-          width: column ? column.width : LOOM_STRIP_WIDTH_PX,
-          ...NO_DRAG_STYLE,
-        }}
+        // `width`, nothing else (R2/R4): an inline `transition` would
+        // out-specify `motion-reduce`.
+        style={{ width: column ? column.width : LOOM_STRIP_WIDTH_PX }}
       >
         {column ? (
           <LoomCompactView
