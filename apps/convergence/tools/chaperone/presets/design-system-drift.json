@@ -66,8 +66,8 @@
         "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:focus(?:-visible|-within)?|has-focus-visible):(?:(?:outline|ring)-ring\\b|outline(?![\\w-]))",
-        "message": "A focus ring typed by hand: use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588; MAR-3617; DS-7)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:focus(?:-visible|-within)?|has-focus-visible):(?:(?:outline|ring)-(?:focus|ring)\\b|outline(?![\\w-]))",
+        "message": "A focus ring typed by hand (focus-visible:outline-focus, focus-visible:ring-focus, or the old ring-ring): use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588; MAR-3617; MAR-3618; DS-7)."
       },
       {
         "id": "no-invisible-focus-ring",
