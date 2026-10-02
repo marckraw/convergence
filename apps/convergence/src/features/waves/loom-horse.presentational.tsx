@@ -17,6 +17,7 @@ import {
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TICKET_DOOR_CLASS,
   LOOM_HORSE_TINT_CLASS,
+  LOOM_HORSE_TONE,
   LOOM_SEAT_CARD_DOOR_CLASS,
 } from './wave-panel.styles'
 
@@ -100,6 +101,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
     <div className="px-3 py-0.5" data-loom-horse={horse.key}>
       <Card
         interactive={openable}
+        tone={LOOM_HORSE_TONE[horse.runtime]}
         padding="none"
         className={cn(
           LOOM_HORSE_CARD_CLASS,

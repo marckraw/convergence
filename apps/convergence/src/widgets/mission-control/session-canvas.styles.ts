@@ -55,6 +55,13 @@ export const CANVAS_THEME_VARS = {
   '--xy-selection-border': '1px solid var(--line)',
 } as CSSProperties
 
+/**
+ * A small node's body on the canvas, the chair and a spawn alike: its two
+ * lines stacked in the middle, inside the Card that draws its frame (MC-21).
+ */
+export const CANVAS_NODE_BODY_CLASS =
+  'flex flex-col justify-center gap-0.5 px-3 py-2'
+
 /** A full-height column: the room, the crew canvas and its empty state. */
 export const ROOM_COLUMN_CLASS = 'flex h-full min-h-0 flex-col'
 

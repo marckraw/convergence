@@ -256,6 +256,10 @@ describe('MAR-3361: the PR word opens GitHub, the card opens the detail', () => 
     expect(card).toHaveAttribute('aria-disabled', 'true')
     expect(card).not.toHaveAttribute('role')
     expect(card.tabIndex).toBe(-1)
+    // It draws the edge its openable neighbours draw: a Card, whose border
+    // gives the row card's edge colour a width (N6). Mutation: a bare div.
+    expect(card).toHaveAttribute('data-slot', 'card')
+    expect(card).toHaveClass('border', 'border-hairline')
     expect(within(card).queryByRole('link')).toBeNull()
     expect(card.textContent).toContain('PR #751')
     fireEvent.click(card)
