@@ -3,6 +3,7 @@ import type { Preview } from '@storybook/react-vite'
 import { applyTheme } from '../src/lib/theme'
 import { UiProvider } from '../src/ui-provider'
 import { finishScriptedAnimations, untilIdle } from './motion-testing'
+import { movePointerAway } from './pointer-testing'
 import './preview.css'
 
 /**
@@ -84,8 +85,12 @@ const preview: Preview = {
   ],
   // Runs after each play function and before the accessibility check
   // (Storybook runs the project's afterEach ahead of the addons'), so the
-  // check sees the page at rest: no surface halfway through its pop.
+  // check sees the page at rest: no surface halfway through its pop, and no
+  // :hover under a pointer left resting on it, which Linux applies and macOS
+  // doesn't (MAR-3618). A story that checks a hover asserts it in its own
+  // play function.
   afterEach: async () => {
+    await movePointerAway()
     await finishScriptedAnimations()
     await untilIdle()
   },
