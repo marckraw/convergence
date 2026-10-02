@@ -55,6 +55,9 @@ export const CANVAS_THEME_VARS = {
   '--xy-selection-border': '1px solid var(--line)',
 } as CSSProperties
 
+/** A full-height column: the room, the crew canvas and its empty state. */
+export const ROOM_COLUMN_CLASS = 'flex h-full min-h-0 flex-col'
+
 /**
  * The column a canvas inspector opens in, beside the diagram: 340 px on the
  * spacing scale, one constant for the four panels (MC-11), which wrote it out

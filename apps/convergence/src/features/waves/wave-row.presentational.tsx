@@ -9,6 +9,7 @@ import {
   type WaveRow,
 } from './wave-sections.pure'
 import {
+  LOOM_CARD_HEAD_CLASS,
   LOOM_CHIP_CLASS,
   LOOM_ROW_CARD_CLASS,
   WAVE_ROW_ACTION_CLASS,
@@ -55,12 +56,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
     : WAVE_ROW_PLAIN_CLASS
   const body = (
     <>
-      <span
-        className={cn(
-          'flex w-full items-baseline gap-1.5',
-          loom && 'flex-wrap',
-        )}
-      >
+      <span className={cn(LOOM_CARD_HEAD_CLASS, loom && 'flex-wrap')}>
         {loom && entry.state === 'done' ? (
           <CheckCircle2
             aria-hidden

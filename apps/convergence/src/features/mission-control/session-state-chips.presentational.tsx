@@ -1,6 +1,10 @@
 import type { FC } from 'react'
 import { Button, cn, Toggle } from '@convergence/ui'
-import { FILTER_CLEAR_CLASS, STATE_CHIP_PRESSED } from './session-filter.styles'
+import {
+  FILTER_CHIP_ROW_CLASS,
+  FILTER_CLEAR_CLASS,
+  STATE_CHIP_PRESSED,
+} from './session-filter.styles'
 import {
   SESSION_CARD_STATES,
   formatSessionCardState,
@@ -28,7 +32,7 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
   onClear,
 }) => {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className={FILTER_CHIP_ROW_CLASS}>
       {SESSION_CARD_STATES.map((state) => {
         const active = selected.includes(state)
         const count = counts[state]

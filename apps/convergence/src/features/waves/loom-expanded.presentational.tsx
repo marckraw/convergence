@@ -63,10 +63,7 @@ export const LoomExpandedView: FC<
           It keeps its flex-1 whether or not it has a word to say, so the
           header's spacing does not move with the crew -- and the empty part
           of it is where the window can be picked up. */}
-      <div
-        data-loom-subline
-        className="min-w-0 flex-1 text-xs text-muted-foreground"
-      >
+      <div data-loom-subline className="min-w-0 flex-1 text-xs text-ink-muted">
         <LoomSublineContent subline={props.subline} />
       </div>
       {/* Between the subline and the guide (MAR-3234 R7). */}

@@ -82,7 +82,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-80 rounded-xl bg-card p-2">
+      <div className="w-80 rounded-xl bg-surface p-2">
         <Story />
       </div>
     ),

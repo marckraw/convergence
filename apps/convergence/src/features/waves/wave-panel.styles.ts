@@ -92,7 +92,7 @@ export const LOOM_STRIP_BUTTON_CLASS = 'size-7 shrink-0 p-0'
  * `h-auto` and `flex-col` undo the button size's single-line row.
  */
 export const LOOM_STRIP_SHEET_CLASS =
-  'h-auto w-9 shrink-0 flex-col gap-0.5 rounded-md px-0 py-1.5 text-muted-foreground hover:text-foreground'
+  'h-auto w-9 shrink-0 flex-col gap-0.5 rounded-md px-0 py-1.5 text-ink-muted hover:text-ink'
 
 /** The number under a folded sheet's glyph. */
 export const LOOM_STRIP_COUNT_CLASS = 'text-3xs font-normal tabular-nums'
@@ -122,6 +122,9 @@ export const WAVE_ROW_CLASS =
  * drawn round the whole card).
  */
 export const WAVE_ROW_OPENABLE_CLASS = 'has-focus-visible:bg-fill-hover'
+
+/** A Loom card's first line: the identifier (or glyph) and the words beside it. */
+export const LOOM_CARD_HEAD_CLASS = 'flex w-full items-baseline gap-1.5'
 
 /** Loom's issue card: a quiet fill, a faint edge, its own padding. */
 export const LOOM_ROW_CARD_CLASS =

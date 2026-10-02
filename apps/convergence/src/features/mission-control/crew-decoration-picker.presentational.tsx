@@ -6,6 +6,7 @@ import {
   CREW_EMOJI_CHOICES,
   crewColor,
 } from './session-crew-picker.pure'
+import { CREW_ROW_CLASS } from './session-filter.styles'
 
 interface CrewDecorationPickerProps {
   emoji: string | null
@@ -30,11 +31,7 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
 }) => {
   return (
     <div className="flex flex-col gap-2">
-      <div
-        role="group"
-        aria-label="Crew emoji"
-        className="flex flex-wrap items-center gap-1"
-      >
+      <div role="group" aria-label="Crew emoji" className={CREW_ROW_CLASS}>
         {CREW_EMOJI_CHOICES.map((choice) => (
           <IconButton
             label={`Emoji ${choice}`}
@@ -60,7 +57,7 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
       <div
         role="group"
         aria-label="Crew accent color"
-        className="flex flex-wrap items-center gap-1"
+        className={CREW_ROW_CLASS}
       >
         {CREW_ACCENT_COLORS.map((choice) => (
           <IconButton

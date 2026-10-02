@@ -29,14 +29,14 @@ export const HailPanel: FC<HailPanelProps> = ({ card, onClose }) => {
   )
 
   return (
-    <div className="col-span-full rounded-lg border border-hairline-strong bg-card/60">
+    <div className="col-span-full rounded-lg border border-hairline-strong bg-surface/60">
       <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Radio className="size-4 shrink-0" />
           <span className="truncate text-sm font-medium">
             Hail {card.session.name}
           </span>
-          <span className="truncate text-2xs text-muted-foreground">
+          <span className="truncate text-2xs text-ink-muted">
             {card.projectName} · {card.providerLabel}
             {card.session.model ? ` · ${card.session.model}` : ''} ·{' '}
             {card.activityLabel}

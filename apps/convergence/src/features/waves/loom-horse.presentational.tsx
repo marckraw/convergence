@@ -8,6 +8,7 @@ import {
   type LoomHorseRuntime,
 } from './loom-horses.pure'
 import {
+  LOOM_CARD_HEAD_CLASS,
   LOOM_HORSE_CARD_CLASS,
   LOOM_HORSE_META_CLASS,
   LOOM_HORSE_RUNTIME_CLASS,
@@ -120,7 +121,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
             className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
           />
         ) : null}
-        <span className="flex w-full items-baseline gap-1.5">
+        <span className={LOOM_CARD_HEAD_CLASS}>
           {/* A horse at work turns the kit's Spinner, which stands still
               under reduced motion (MC-25); the others wear their glyph. */}
           {horse.runtime === 'working' ? (
@@ -190,7 +191,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           data-loom-horse-details={horse.key}
           onClick={onShowDetail}
           size="xs"
-          className="px-1 text-muted-foreground"
+          className="px-1 text-ink-muted"
         >
           Details
         </Button>
@@ -201,7 +202,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           variant="ghost"
           onClick={onShowNext}
           size="xs"
-          className="px-1 text-muted-foreground"
+          className="px-1 text-ink-muted"
         >
           View next work →
         </Button>

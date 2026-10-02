@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@convergence/ui'
+import { ROOM_COLUMN_CLASS } from './session-canvas.styles'
 
 interface MissionControlViewProps {
   totalCount: number
@@ -71,7 +72,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   ]
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className={ROOM_COLUMN_CLASS}>
       {/* The room's top strip drags the window (NAV-4): `app-drag` on the
           strip, and every control in it is a part that carries `app-no-drag`
           itself (SegmentedControl, SearchField, SelectTrigger, Toggle,

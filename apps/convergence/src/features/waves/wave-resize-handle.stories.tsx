@@ -22,7 +22,7 @@ const meta = {
   decorators: [
     (Story) => (
       <div className="flex h-64">
-        <div className="w-40 bg-muted" />
+        <div className="w-40 bg-surface-muted" />
         <Story />
         <div className="w-40" />
       </div>

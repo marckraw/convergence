@@ -22,6 +22,6 @@ export const LoomRefreshView: FC<{
     >
       Refresh
     </Button>
-    <span className="text-muted-foreground">{label}</span>
+    <span className="text-ink-muted">{label}</span>
   </span>
 )

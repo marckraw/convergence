@@ -6,6 +6,7 @@ import {
   type LoomMastermind,
 } from './loom-horses.pure'
 import {
+  LOOM_CARD_HEAD_CLASS,
   LOOM_HORSE_CARD_CLASS,
   LOOM_HORSE_META_CLASS,
   LOOM_HORSE_RUNTIME_CLASS,
@@ -56,7 +57,7 @@ export function LoomMastermindCard({
             className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
           />
         ) : null}
-        <span className="flex w-full items-baseline gap-1.5">
+        <span className={LOOM_CARD_HEAD_CLASS}>
           <span id={`${ids}-seat`} className="min-w-0 truncate font-medium">
             {mastermind.seat ?? 'unnamed seat'}
             {showCrewName && mastermind.crewName

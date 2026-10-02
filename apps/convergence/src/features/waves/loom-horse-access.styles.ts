@@ -5,6 +5,6 @@ export const LOOM_HORSE_ACCESS_TONE: Record<
   string
 > = {
   good: 'text-success-ink',
-  muted: 'text-muted-foreground',
+  muted: 'text-ink-muted',
   warn: 'text-warning-ink',
 }

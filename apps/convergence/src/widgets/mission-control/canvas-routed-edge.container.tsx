@@ -192,7 +192,7 @@ export const CanvasRoutedEdge: FC<EdgeProps> = ({
               // happens to be bending.
               transform: `translate(${labelTranslate}) translate(${labelPoint.x}px, ${labelPoint.y}px)`,
             }}
-            className="pointer-events-none absolute rounded bg-background/90 px-1.5 py-0.5 text-3xs text-muted-foreground"
+            className="pointer-events-none absolute rounded bg-canvas/90 px-1.5 py-0.5 text-3xs text-ink-muted"
           >
             {label}
           </div>

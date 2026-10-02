@@ -3,7 +3,10 @@ import { Button, cn, Toggle } from '@convergence/ui'
 import { CrewMark } from './crew-mark.presentational'
 import type { SessionCardCrewFacetOption } from './session-card-facets.pure'
 import { crewColor } from './session-crew-picker.pure'
-import { FILTER_CLEAR_CLASS } from './session-filter.styles'
+import {
+  FILTER_CHIP_ROW_CLASS,
+  FILTER_CLEAR_CLASS,
+} from './session-filter.styles'
 
 interface SessionCrewChipsProps {
   options: readonly SessionCardCrewFacetOption[]
@@ -47,7 +50,7 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
   if (options.length === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className={FILTER_CHIP_ROW_CLASS}>
       {options.map((option) => {
         const active = selected.includes(option.id)
 

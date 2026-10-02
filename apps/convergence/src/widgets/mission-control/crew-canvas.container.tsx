@@ -103,7 +103,10 @@ import type {
   SessionCrewGroup,
 } from '@/features/mission-control'
 import { Button, ConfirmDialog, EmptyState, useConfirm } from '@convergence/ui'
-import { INSPECTOR_COLUMN_CLASS } from './session-canvas.styles'
+import {
+  INSPECTOR_COLUMN_CLASS,
+  ROOM_COLUMN_CLASS,
+} from './session-canvas.styles'
 import { SessionCanvas } from './session-canvas.container'
 import type { SessionCanvasAuthoring } from './session-canvas.container'
 
@@ -1588,7 +1591,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
 
   if (!crew || !selectedGroup) {
     return (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className={ROOM_COLUMN_CLASS}>
         {toolbar}
         <EmptyState
           variant="plain"
@@ -1614,7 +1617,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   return (
     <div
       data-crew-canvas
-      className="flex h-full min-h-0 flex-col"
+      className={ROOM_COLUMN_CLASS}
       onClickCapture={(event) => {
         // Selecting a crew is touching anything in it. Capture rather than
         // bubble so the crew is chosen even when the click also opens a card.

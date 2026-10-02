@@ -33,6 +33,7 @@ import {
   CARD_TONE_WASH,
   STATUS_DOT_TONE,
 } from './session-card.styles'
+import { CREW_ROW_CLASS } from './session-filter.styles'
 
 /** grid: the Flat room's card. node: the canvas's compact face of the same card. */
 export type SessionCardDensity = 'grid' | 'node'
@@ -210,7 +211,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
         )}
 
         {grid && card.crews.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1">
+          <div className={CREW_ROW_CLASS}>
             {card.crews.map((crew) => (
               <CrewMark key={crew.id} crew={crew} variant="chip" />
             ))}
