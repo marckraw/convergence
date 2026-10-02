@@ -55,8 +55,12 @@ Chaperone checks it: a class string's third copy (`repeated-classes`) and a past
   `text-[11px]` were these two sizes typed by hand.
 - **R5 · Anything one click can't undo confirms in ConfirmDialog** (`useConfirm`,
   `variant="danger"`, the focus on Cancel): deleting a conversation, workspace, worktree, crew,
-  recipe, connection, prompt, account or key; clearing a trail or alarms; archiving a Space.
-  Never `window.confirm`. Reversible actions (archive, detach) don't ask. Red is only the
+  recipe, connection, prompt, account or key; clearing a trail or alarms. Archiving something
+  that takes its contents with it asks too, in the default variant: a Space, or a workspace
+  with every session in it (Marcin, 2 Oct 2026). Other reversible actions (archiving one
+  conversation, detaching) don't ask. Never `window.confirm`. A Delete or Remove that asks has
+  one look, the quiet red (`danger-quiet`), and ends in "…" (R10: "Delete…", "Remove token…");
+  an archive that asks keeps its quiet, neutral trigger. Red is only that trigger, the
   destructive menu item and the confirming button, and a quiet red is a Button variant, never a
   className. Why: red warns only while it means one thing, and the system's box doesn't look or
   focus like Convergence.

@@ -115,7 +115,7 @@ export const ProviderCredentialsContainer: FC = () => {
           </div>
           <Button
             type="button"
-            variant="ghost"
+            variant="danger-quiet"
             onClick={handleRemove}
             disabled={isSaving}
             disabledReason={

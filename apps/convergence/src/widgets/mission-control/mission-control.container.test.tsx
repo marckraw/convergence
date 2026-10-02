@@ -2234,7 +2234,7 @@ describe('MissionControl', () => {
       fireEvent.blur(wip)
       expect(await screen.findByText(refused)).toBeInTheDocument()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Remove from crew' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from crew…' }))
       // Removing a seat asks first (R5, MC-22).
       expect(api.removeMember).not.toHaveBeenCalled()
       await answerConfirm('Remove seat')
@@ -2419,27 +2419,30 @@ describe('MissionControl', () => {
       fireEvent.change(screen.getByLabelText('Crew name'), {
         target: { value: ' ' },
       })
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew…' }))
       expect(
-        within(screen.getByRole('region', { name: 'Danger' })).getByText(
-          /Delete “Night shift” with 2 conversations/,
-        ),
+        await screen.findByRole('alertdialog', {
+          name: 'Delete crew “Night shift”?',
+        }),
       ).toBeInTheDocument()
     })
 
     it('asks before deleting, and says the sessions survive (mutation: delete without confirm)', async () => {
       const api = await openCrewSettings()
 
-      fireEvent.click(await screen.findByText('Delete crew'))
+      fireEvent.click(await screen.findByText('Delete crew…'))
 
+      const question = await screen.findByRole('alertdialog')
       expect(
-        screen.getByText(/stay exactly where they are/),
+        within(question).getByText(/stay exactly where they are/),
       ).toBeInTheDocument()
-      expect(
-        within(screen.getByRole('region', { name: 'Danger' })).getByText(
-          /2 conversations/,
-        ),
-      ).toBeInTheDocument()
+      expect(within(question).getByText(/2 conversations/)).toBeInTheDocument()
+      // Danger: the focus starts on Cancel (R5).
+      await waitFor(() =>
+        expect(
+          within(question).getByRole('button', { name: 'Cancel' }),
+        ).toHaveFocus(),
+      )
       expect(api.delete).not.toHaveBeenCalled()
     })
 
@@ -2452,8 +2455,8 @@ describe('MissionControl', () => {
             refuse = reject
           }),
       )
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew…' }))
+      await answerConfirm('Delete crew')
       expect(
         screen.getByRole('region', { name: 'Crew settings' }),
       ).toBeInTheDocument()
@@ -2493,8 +2496,8 @@ describe('MissionControl', () => {
         if (state.error === 'Delete refused') finishUpdate()
       })
       try {
-        fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
-        fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Delete crew…' }))
+        await answerConfirm('Delete crew')
         await waitFor(() =>
           expect(useSessionCrewStore.getState().crews[0]?.name).toBe('Owls'),
         )
@@ -2506,7 +2509,7 @@ describe('MissionControl', () => {
       }
     })
 
-    it('sends one delete while confirmation is busy and unlocks on refusal (mutation: drop confirm disabled)', async () => {
+    it('sends one delete while it is busy and unlocks on refusal (mutation: drop the trigger disabled)', async () => {
       const api = await openCrewSettings()
       let refuse!: (error: Error) => void
       vi.mocked(api.delete).mockImplementationOnce(
@@ -2515,26 +2518,26 @@ describe('MissionControl', () => {
             refuse = reject
           }),
       )
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
-      const confirm = screen.getByRole('button', { name: 'Delete crew' })
-      const cancel = screen.getByRole('button', { name: 'Cancel' })
-      fireEvent.click(confirm)
-      fireEvent.click(confirm)
+      const trigger = screen.getByRole('button', { name: 'Delete crew…' })
+      fireEvent.click(trigger)
+      await answerConfirm('Delete crew')
       expect(api.delete).toHaveBeenCalledExactlyOnceWith('crew-1')
-      expect(confirm).toBeDisabled()
-      expect(cancel).toBeDisabled()
+      // While the delete is under way, the trigger can't ask again.
+      expect(trigger).toBeDisabled()
+      fireEvent.click(trigger)
+      expect(screen.queryByRole('alertdialog')).toBeNull()
       await act(async () => {
         refuse(new Error('Delete refused'))
       })
-      expect(confirm).toBeEnabled()
-      expect(cancel).toBeEnabled()
+      expect(trigger).toBeEnabled()
+      expect(api.delete).toHaveBeenCalledOnce()
     })
 
     it('deletes once confirmed (mutation: omit delete)', async () => {
       const api = await openCrewSettings()
 
-      fireEvent.click(await screen.findByText('Delete crew'))
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      fireEvent.click(await screen.findByText('Delete crew…'))
+      await answerConfirm('Delete crew')
 
       await waitFor(() => expect(api.delete).toHaveBeenCalledWith('crew-1'))
     })
@@ -2542,8 +2545,8 @@ describe('MissionControl', () => {
     it('backs out of the confirm without deleting (mutation: omit cancel)', async () => {
       const api = await openCrewSettings()
 
-      fireEvent.click(await screen.findByText('Delete crew'))
-      fireEvent.click(screen.getByText('Cancel'))
+      fireEvent.click(await screen.findByText('Delete crew…'))
+      await answerConfirm('Cancel')
 
       await waitFor(() =>
         expect(
@@ -2700,7 +2703,7 @@ describe('MissionControl', () => {
         'History',
         'Import crew…',
         'Export crew…',
-        'Delete crew',
+        'Delete crew…',
       ]) {
         expect(screen.getByRole('button', { name })).toBeEnabled()
       }

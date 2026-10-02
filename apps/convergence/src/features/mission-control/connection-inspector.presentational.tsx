@@ -581,7 +581,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             size="sm"
             className="self-start px-0 text-2xs"
           >
-            Delete connection
+            Delete connection…
           </Button>
         )}
       </div>

@@ -179,7 +179,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               size="sm"
               className="px-2.5 text-2xs"
             >
-              Remove seat
+              Remove seat…
             </Button>
           }
         >
@@ -492,7 +492,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           className="shrink-0 gap-1 px-1 text-2xs font-normal disabled:opacity-50"
         >
           <Trash2 aria-hidden className="size-3.5" />
-          {recipe ? 'Delete recipe' : 'Remove from crew'}
+          {recipe ? 'Delete recipe…' : 'Remove from crew…'}
         </Button>
       </div>
     </section>

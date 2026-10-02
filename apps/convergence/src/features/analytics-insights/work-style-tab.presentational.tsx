@@ -199,12 +199,12 @@ function renderGeneratedProfilePanel({
           {generated ? (
             <Button
               type="button"
-              variant="secondary"
+              variant="danger-quiet"
               onClick={onDeleteGeneratedProfile}
               disabled={isGeneratingProfile}
             >
               <Trash2 className="size-4" />
-              Delete
+              Delete…
             </Button>
           ) : null}
           <Button

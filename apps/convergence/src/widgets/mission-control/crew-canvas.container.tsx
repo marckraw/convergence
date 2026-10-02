@@ -177,7 +177,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const [nameDraft, setNameDraft] = useState('')
   const [includePositions, setIncludePositions] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const updateCrew = useSessionCrewStore((state) => state.updateCrew)
   const deleteCrew = useSessionCrewStore((state) => state.deleteCrew)
   /**
@@ -486,7 +485,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const supportsReset = recipientProvider?.supportsConversationReset ?? false
 
   const closePanel = useCallback(() => {
-    setConfirmingDelete(false)
     setPanelState({ kind: 'none' })
     setDraft(null)
     setSavedDraft(null)
@@ -1539,7 +1537,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     resetNameDraft()
     clearCrewError()
     setIncludePositions(false)
-    setConfirmingDelete(false)
   }, [crew?.id, panel.kind, clearCrewError])
 
   const armedCount = relays.filter((relay) => relay.armed).length
@@ -1966,18 +1963,22 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               trackerSection={
                 <TrackerBindingFormContainer key={crew.id} crew={crew} />
               }
-              memberCount={crew.sessionIds.length}
               includePositions={includePositions}
               exporting={exporting}
               lastExportPath={crew.lastExportPath}
-              confirmingDelete={confirmingDelete}
               onIncludePositionsChange={setIncludePositions}
               onExport={() => {
                 void exportCrew()
               }}
-              onRequestDelete={() => setConfirmingDelete(true)}
-              onCancelDelete={() => setConfirmingDelete(false)}
-              onConfirmDelete={async () => {
+              onRequestDelete={async () => {
+                // The saved name, never the draft being typed (R5).
+                const confirmed = await confirm({
+                  title: `Delete crew “${crew.name}”?`,
+                  description: `It holds ${formatCrewMemberCount(crew.sessionIds.length)}. Only the crew disappears; the conversations stay exactly where they are.`,
+                  confirmLabel: 'Delete crew',
+                  variant: 'danger',
+                })
+                if (!confirmed) return
                 setBusy(true)
                 try {
                   if (await deleteCrew(crew.id)) closePanel()
