@@ -192,18 +192,38 @@ export const ReducedMotion: Story = {
   },
 }
 
-/** The conversation on screen, with its Hail open: both marks, separately. */
+/**
+ * The conversation on screen, with its Hail open: both marks, separately, in
+ * R7's looks (ruling 11). The card is the selected row, aria-current on its
+ * door; the Hail is the pressed Toggle, and the card's edge the chosen chip's,
+ * never the focus colour.
+ */
 export const Open: Story = {
   args: { open: true, hailOpen: true },
   play: async ({ canvas }) => {
-    const card = canvas
-      .getByRole('button', { name: 'Open opus-mac' })
-      .closest('[data-session-card]')
-    await expect(card).toHaveAttribute('aria-current', 'true')
+    const door = canvas.getByRole('button', { name: 'Open opus-mac' })
+    await expect(door).toHaveAttribute('aria-current', 'true')
+    const card = door.closest<HTMLElement>('[data-session-card]')!
+    await expect(card).not.toHaveAttribute('aria-current')
+    // The token as this theme draws it, read off a probe in the card.
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--hairline-strong)'
+    card.append(probe)
+    const edge = getComputedStyle(probe).color
+    probe.style.color = 'var(--focus)'
+    const focus = getComputedStyle(probe).color
+    probe.remove()
+    await expect(getComputedStyle(card).outlineColor).toBe(edge)
+    await expect(getComputedStyle(card).outlineColor).not.toBe(focus)
     await expect(
       canvas.getByRole('button', { name: 'Hail opus-mac' }),
     ).toHaveAttribute('aria-pressed', 'true')
   },
+}
+
+export const OpenDark: Story = {
+  ...Open,
+  globals: { theme: 'dark' },
 }
 
 /** Waiting on you: the attention is named on the card. */

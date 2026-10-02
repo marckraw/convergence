@@ -703,10 +703,14 @@ export const Chip: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await expect(trigger).toHaveTextContent('codewalk')
     await expect(trigger).toHaveAttribute('data-chosen')
-    await expect(getComputedStyle(trigger).boxShadow).not.toBe('none')
-    await expect(getComputedStyle(trigger).backgroundColor).toBe(
-      tokenColor('--chip'),
+    // The fill eases in on the colour transition: read it once it lands.
+    // The token is read once, outside: its probe is a DOM change, and inside
+    // waitFor every change runs the check again, so it would never rest.
+    const chip = tokenColor('--chip')
+    await waitFor(() =>
+      expect(getComputedStyle(trigger).backgroundColor).toBe(chip),
     )
+    await expect(getComputedStyle(trigger).boxShadow).not.toBe('none')
   },
 }
 
