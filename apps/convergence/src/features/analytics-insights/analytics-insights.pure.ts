@@ -183,14 +183,21 @@ function resolveDateLabelForTimestamp(
   return timestampToDateKey(timestamp)
 }
 
-export function buildDailyActivityChartOptions(
-  points: DailyActivityPoint[],
-): ChartGPUOptions {
+/**
+ * What the two charts over days share: the palette and grid lines, a time
+ * axis over the points, a value axis from zero, and an axis tooltip titled
+ * by its day (or the chart's name when it has none).
+ */
+function buildDayChartBase(
+  points: ReadonlyArray<{ date: string }>,
+  chartName: string,
+  gridLeft: number,
+): Omit<ChartGPUOptions, 'series'> {
   const { min, max } = buildTimeAxisBounds(points)
 
   return {
     palette: CHART_PALETTE,
-    grid: { left: 40, right: 16, top: 12, bottom: 28 },
+    grid: { left: gridLeft, right: 16, top: 12, bottom: 28 },
     gridLines: {
       color: chartTokens.grid,
       horizontal: { count: 4 },
@@ -204,11 +211,19 @@ export function buildDailyActivityChartOptions(
       trigger: 'axis',
       formatter: createTooltipFormatter((params) => {
         const [first] = params
-        if (!first) return 'Daily activity'
+        if (!first) return chartName
         const date = resolveDateLabelForTimestamp(points, first.value[0])
-        return date ? formatDateLabel(date) : 'Daily activity'
+        return date ? formatDateLabel(date) : chartName
       }),
     },
+  }
+}
+
+export function buildDailyActivityChartOptions(
+  points: DailyActivityPoint[],
+): ChartGPUOptions {
+  return {
+    ...buildDayChartBase(points, 'Daily activity', 40),
     series: [
       {
         type: 'area',
@@ -238,29 +253,9 @@ export function buildConversationBalanceChartOptions(
   overview: AnalyticsOverview,
 ): ChartGPUOptions {
   const points: ConversationBalancePoint[] = overview.conversationBalance
-  const { min, max } = buildTimeAxisBounds(points)
 
   return {
-    palette: CHART_PALETTE,
-    grid: { left: 44, right: 16, top: 12, bottom: 28 },
-    gridLines: {
-      color: chartTokens.grid,
-      horizontal: { count: 4 },
-      vertical: false,
-    },
-    xAxis: { type: 'time', min, max },
-    yAxis: { type: 'value', min: 0 },
-    legend: { show: false },
-    tooltip: {
-      show: true,
-      trigger: 'axis',
-      formatter: createTooltipFormatter((params) => {
-        const [first] = params
-        if (!first) return 'Conversation balance'
-        const date = resolveDateLabelForTimestamp(points, first.value[0])
-        return date ? formatDateLabel(date) : 'Conversation balance'
-      }),
-    },
+    ...buildDayChartBase(points, 'Conversation balance', 44),
     series: [
       {
         type: 'line',

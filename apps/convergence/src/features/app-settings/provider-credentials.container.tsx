@@ -123,7 +123,7 @@ export const ProviderCredentialsContainer: FC = () => {
             }
           >
             <Trash2 className="size-4" />
-            Remove
+            Remove key…
           </Button>
         </div>
 

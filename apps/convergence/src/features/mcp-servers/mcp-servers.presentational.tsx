@@ -7,6 +7,7 @@ import type {
 } from '@/shared/types/mcp.types'
 import {
   Badge,
+  Card,
   Dialog,
   DialogBody,
   DialogContent,
@@ -16,6 +17,7 @@ import {
   DialogTrigger,
   EmptyState,
   IconButton,
+  ListRow,
   Notice,
   SectionLabel,
   TooltipCard,
@@ -120,30 +122,28 @@ function renderServerRow(
   server: McpServerSummary,
 ) {
   return (
-    <div
-      key={`${providerId}-${scope}-${server.name}`}
-      className="rounded-lg border border-border/60 bg-card/40 px-3 py-2"
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        {renderStatusIcon(server.status)}
-        <p className="min-w-0 truncate text-sm font-medium" title={server.name}>
-          {server.name}
-        </p>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <Badge className="uppercase">
-            {server.transportType.replace('_', ' ')}
-          </Badge>
-          {renderStatusBadge(server.status, server.statusLabel)}
-        </div>
-      </div>
-      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="shrink-0">{server.scopeLabel}</span>
-        <span className="text-muted-foreground/50">•</span>
-        <span className="min-w-0 truncate" title={server.description}>
-          {server.description}
-        </span>
-      </div>
-    </div>
+    // A server is a row of the list's own kind: its status, its name, where
+    // it's configured and what it is, with its transport and state at the end.
+    <Card key={`${providerId}-${scope}-${server.name}`} padding="none">
+      <ListRow
+        leading={renderStatusIcon(server.status)}
+        title={server.name}
+        meta={
+          <>
+            <span>{server.scopeLabel}</span>
+            <span>{server.description}</span>
+          </>
+        }
+        trailing={
+          <span className="flex items-center gap-2">
+            <Badge className="uppercase">
+              {server.transportType.replace('_', ' ')}
+            </Badge>
+            {renderStatusBadge(server.status, server.statusLabel)}
+          </span>
+        }
+      />
+    </Card>
   )
 }
 

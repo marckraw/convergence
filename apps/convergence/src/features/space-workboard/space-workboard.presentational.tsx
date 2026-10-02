@@ -59,11 +59,14 @@ import {
   toSelectValue,
 } from '@/shared/lib/select-value.pure'
 import {
-  metricCard,
   fieldCaption,
+  metricCard,
   noteCard,
+  rowActions,
   rowCaption,
   rowCard,
+  rowTop,
+  sectionHead,
   spaceAttentionLabels,
   spaceAttentionOptions,
   spaceStatusLabels,
@@ -409,7 +412,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
+                <div className={sectionHead}>
                   <SectionLabel as="h3">Space brief</SectionLabel>
                   <Button
                     type="button"
@@ -563,7 +566,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
               </section>
 
               <section className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
+                <div className={sectionHead}>
                   <SectionLabel as="h3">Artifacts</SectionLabel>
                   <div className="flex items-center gap-2">
                     <Button
@@ -598,7 +601,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                     <SectionLabel>Suggestions</SectionLabel>
                     {artifactSuggestions.map((suggestion) => (
                       <div key={suggestion.id} className={suggestionBox}>
-                        <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className={rowTop}>
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">
                               {suggestion.title}
@@ -607,7 +610,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                               {suggestion.description}
                             </div>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className={rowActions}>
                             <Button
                               type="button"
                               variant="secondary"
@@ -931,7 +934,7 @@ function renderAttemptRow(input: {
 
   return (
     <div key={attempt.id} className={rowCard}>
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className={rowTop}>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="truncate text-sm font-medium">
@@ -958,7 +961,7 @@ function renderAttemptRow(input: {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className={rowActions}>
           <Select
             items={spaceAttemptRoleLabels}
             value={attempt.role}

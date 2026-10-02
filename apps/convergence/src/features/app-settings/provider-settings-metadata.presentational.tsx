@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { ProviderInfo } from '@/entities/session'
-import { Button } from '@convergence/ui'
+import { Badge, Button, Card } from '@convergence/ui'
 
 interface ProviderSettingsMetadataProps {
   provider: ProviderInfo | null
@@ -41,6 +41,9 @@ function telemetryLabel(value: {
   }
 }
 
+/** One fact about the provider in its small box. */
+const fact = 'rounded-md py-2'
+
 export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
   provider,
 }) => {
@@ -54,12 +57,10 @@ export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
   if (!provider || !hasContent) return null
 
   return (
-    <section className="space-y-3 rounded-lg border border-border/70 bg-card/35 px-4 py-4">
+    <Card render={<section />} padding="md" className="space-y-3">
       <div>
-        <p className="text-sm font-medium text-foreground">
-          {provider.name} behavior
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="text-sm font-medium text-ink">{provider.name} behavior</p>
+        <p className="mt-1 text-xs text-ink-muted">
           Provider-reported settings and telemetry limits.
         </p>
       </div>
@@ -67,42 +68,37 @@ export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
       {configOptions.length > 0 ? (
         <div className="grid gap-2 sm:grid-cols-2">
           {configOptions.map((option) => (
-            <div
-              key={option.id}
-              className="rounded-md border border-border/70 bg-background/40 px-3 py-2"
-            >
+            <Card key={option.id} surface="raised" className={fact}>
               <div className="flex items-start justify-between gap-3">
-                <p className="min-w-0 text-xs font-medium text-foreground">
+                <p className="min-w-0 text-xs font-medium text-ink">
                   {option.label}
                 </p>
-                <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-3xs text-muted-foreground">
+                <Badge shape="label" className="shrink-0">
                   {persistenceLabel(option.persistence)}
-                </span>
+                </Badge>
               </div>
-              <p className="mt-1 break-words text-xs text-muted-foreground">
+              <p className="mt-1 text-xs wrap-break-word text-ink-muted">
                 {valueLabel(option)}
               </p>
-            </div>
+            </Card>
           ))}
         </div>
       ) : null}
 
       {telemetry ? (
         <div className="grid gap-2 sm:grid-cols-2">
-          <div className="rounded-md border border-border/70 bg-background/40 px-3 py-2">
-            <p className="text-xs font-medium text-foreground">
-              Context window
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+          <Card surface="raised" className={fact}>
+            <p className="text-xs font-medium text-ink">Context window</p>
+            <p className="mt-1 text-xs text-ink-muted">
               {telemetryLabel(telemetry.contextWindow)}
             </p>
-          </div>
-          <div className="rounded-md border border-border/70 bg-background/40 px-3 py-2">
-            <p className="text-xs font-medium text-foreground">Usage</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+          </Card>
+          <Card surface="raised" className={fact}>
+            <p className="text-xs font-medium text-ink">Usage</p>
+            <p className="mt-1 text-xs text-ink-muted">
               {telemetryLabel(telemetry.quota)}
             </p>
-          </div>
+          </Card>
         </div>
       ) : null}
 
@@ -110,10 +106,8 @@ export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
         <div className="space-y-2">
           {help.map((item) => (
             <div key={item.label}>
-              <p className="text-xs font-medium text-foreground">
-                {item.label}
-              </p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              <p className="text-xs font-medium text-ink">{item.label}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">
                 {item.value}
               </p>
             </div>
@@ -130,12 +124,12 @@ export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
               variant="secondary"
               onClick={() => window.open(link.url, '_blank')}
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="size-3.5" />
               {link.label}
             </Button>
           ))}
         </div>
       ) : null}
-    </section>
+    </Card>
   )
 }

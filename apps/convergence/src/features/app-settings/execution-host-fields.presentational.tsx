@@ -102,6 +102,9 @@ function connectionProvidersText(
  * test (MAR-2642). Every control is named for its endpoint so nothing on this
  * card can reach another machine's token by accident.
  */
+/** A block's head: its name and status at the start, its actions at the end. */
+const blockHead = 'flex items-start justify-between gap-4'
+
 export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
   endpointId,
   displayName,
@@ -131,7 +134,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
     data-endpoint-id={endpointId}
     className="space-y-4 rounded-2xl border border-border bg-card/45 p-4"
   >
-    <div className="flex items-start justify-between gap-4">
+    <div className={blockHead}>
       <Field className="min-w-0 flex-1">
         <FieldLabel>Endpoint name</FieldLabel>
         <Input
@@ -170,7 +173,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
     </Field>
 
     <div className="rounded-xl border border-border bg-background/40 p-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className={blockHead}>
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <KeyRound className="h-4 w-4 text-muted-foreground" />

@@ -58,3 +58,12 @@ export const rowCaption = 'text-2xs font-medium text-ink-muted'
 
 /** The same caption at a form's size, over a Select that names itself. */
 export const fieldCaption = 'text-sm font-medium'
+
+/** A section's head: its label at the start, its action at the end. */
+export const sectionHead = 'flex items-center justify-between gap-3'
+
+/** A suggestion's top: its words, then its actions. */
+export const rowTop = 'flex min-w-0 items-start justify-between gap-3'
+
+/** The buttons at a row's end, kept whole. */
+export const rowActions = 'flex shrink-0 items-center gap-2'

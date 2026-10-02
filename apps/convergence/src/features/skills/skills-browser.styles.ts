@@ -134,3 +134,6 @@ export const ACTIVATION_CONFIRMATION_LABELS: Record<
   'native-event': 'Native event',
   none: 'None',
 }
+
+/** A group's head over its rows: its label, then its count or action. */
+export const groupHead = 'mb-2 flex items-center justify-between gap-2'

@@ -8,6 +8,7 @@ import {
   renderWarningBadge,
   skillIsDuplicate,
 } from './skills-chips.presentational'
+import { groupHead } from './skills-browser.styles'
 
 interface SkillsListPaneProps {
   groups: SkillBrowserProviderGroup[]
@@ -67,7 +68,7 @@ export const SkillsListPane: FC<SkillsListPaneProps> = ({
           key={group.providerId}
           className="border-t border-line-soft pt-3 first:border-t-0 first:pt-0"
         >
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className={groupHead}>
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold">
                 {group.providerName}

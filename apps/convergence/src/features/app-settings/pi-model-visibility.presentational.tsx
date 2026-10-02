@@ -13,6 +13,9 @@ interface PiModelVisibilityFieldsProps {
   onToggleModel: (modelId: string, next: boolean) => void
 }
 
+/** A list's head: its name and line, then its count. */
+const listHead = 'flex items-center justify-between gap-3'
+
 export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
   providerExists,
   modelsJsonModels,
@@ -30,7 +33,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
   return (
     <div className="space-y-5">
       <section className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
+        <div className={listHead}>
           <div>
             <h4 className="text-sm font-medium">models.json</h4>
             <p className="text-xs text-ink-muted">
@@ -60,7 +63,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
       </section>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className={listHead}>
           <div>
             <h4 className="text-sm font-medium">Additional Pi models</h4>
             <p className="text-xs text-ink-muted">

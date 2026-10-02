@@ -39,6 +39,7 @@ import {
   CATALOG_SOURCE_LABELS,
   DEPENDENCY_STATE_LABELS,
   DEPENDENCY_STATE_TONES,
+  groupHead,
   INVOCATION_SUPPORT_LABELS,
 } from './skills-browser.styles'
 import {
@@ -384,7 +385,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
         </Card>
 
         <Card render={<section />}>
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className={groupHead}>
             <SectionLabel as="h4">Dependencies</SectionLabel>
             {selectedSkillHasMcpDependencies ? (
               <Button

@@ -20,7 +20,12 @@ import {
   getRangeLabel,
   WEEKDAY_LABELS,
 } from './analytics-insights.pure'
-import { iconChip, skeletonBar } from './analytics-insights.styles'
+import {
+  panelHead,
+  cardDetail,
+  iconChip,
+  skeletonBar,
+} from './analytics-insights.styles'
 
 interface WorkStyleTabProps {
   overview: AnalyticsOverview | null
@@ -72,7 +77,7 @@ export function WorkStyleTab({
   return (
     <div className="space-y-4">
       <Card render={<section />} padding="md">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className={panelHead}>
           <div className="max-w-3xl">
             <SectionLabel>Deterministic local profile</SectionLabel>
             <h4 className="mt-2 text-lg font-semibold">
@@ -114,7 +119,7 @@ function renderLoadingState() {
       aria-busy="true"
     >
       <Card render={<section />} padding="md">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className={panelHead}>
           <div className="w-full max-w-3xl space-y-3">
             <div className={cn(skeletonBar, 'h-3 w-44')} />
             <div className={cn(skeletonBar, 'h-6 w-64')} />
@@ -160,7 +165,7 @@ function renderGeneratedProfilePanel({
 
   return (
     <Card render={<section />} padding="md">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className={panelHead}>
         <div className="flex items-start gap-3">
           <span aria-hidden className={iconChip}>
             <Sparkles className="size-4" />
@@ -204,9 +209,7 @@ function renderGeneratedProfilePanel({
           {generated.payload.themes.map((theme) => (
             <Card key={theme.label} surface="raised">
               <p className="text-sm font-medium">{theme.label}</p>
-              <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                {theme.description}
-              </p>
+              <p className={cardDetail}>{theme.description}</p>
             </Card>
           ))}
           {generated.payload.caveats.length > 0 ? (
@@ -281,9 +284,7 @@ function renderFactCard(fact: FactCard) {
         <div className="min-w-0">
           <SectionLabel>{fact.label}</SectionLabel>
           <p className="mt-2 truncate text-base font-semibold">{fact.value}</p>
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            {fact.detail}
-          </p>
+          <p className={cardDetail}>{fact.detail}</p>
         </div>
       </div>
     </Card>

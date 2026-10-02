@@ -7,9 +7,11 @@ import {
 } from '@/entities/space'
 import {
   Button,
+  Card,
   EmptyState,
   FormDialog,
   Input,
+  ListRow,
   SectionLabel,
   Select,
   SelectContent,
@@ -91,15 +93,13 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
       error={error}
     >
       <div className="space-y-5">
-        <div className="rounded-lg border border-border/70 bg-card/30 px-3 py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <GitBranch className="size-4 shrink-0 text-ink-muted" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{sessionName}</div>
-              <div className="text-xs text-ink-muted">Current session</div>
-            </div>
-          </div>
-        </div>
+        <Card padding="none">
+          <ListRow
+            leading={<GitBranch className="text-ink-muted" />}
+            title={sessionName}
+            meta="Current session"
+          />
+        </Card>
 
         <section className="space-y-3">
           <SectionLabel as="h3">Create from session</SectionLabel>

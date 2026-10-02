@@ -92,6 +92,12 @@ function removalDescription(
   return 'This signs the account out of Claude Code and deletes its account directories. Conversation sharing is not fully verified. Linked destinations and Convergence messages remain.'
 }
 
+/** A row of a heading or name and its actions, wrapping when it runs out of room. */
+const spreadRow = 'flex flex-wrap items-center justify-between gap-2'
+
+/** A row of marks or buttons, wrapping when it runs out of room. */
+const wrapRow = 'flex flex-wrap items-center gap-2'
+
 export interface ProviderAccountsFieldsProps {
   loginAttempt: ProviderAccountLoginAttempt | null
   loginCode: string
@@ -306,7 +312,7 @@ export function ProviderAccountsFields({
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className={wrapRow}>
                       <ProviderIcon providerId={providerId} />
                       <h4 className="break-all text-sm font-semibold">
                         {row.identity}
@@ -435,7 +441,7 @@ export function ProviderAccountsFields({
                 </ConfirmDialog>
 
                 {isRenaming ? (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className={wrapRow}>
                     <Input
                       size="lg"
                       aria-label={`Label for ${row.identity}`}
@@ -471,7 +477,7 @@ export function ProviderAccountsFields({
                         aria-label="From ChatGPT"
                         className="space-y-3 pb-3"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className={spreadRow}>
                           <h4 className="text-sm font-medium">From ChatGPT</h4>
                           <Button
                             type="button"
@@ -519,10 +525,7 @@ export function ProviderAccountsFields({
                             appState: app.state,
                           })
                           return (
-                            <div
-                              key={app.id}
-                              className="flex flex-wrap items-center justify-between gap-2"
-                            >
+                            <div key={app.id} className={spreadRow}>
                               <div className="min-w-0">
                                 <p className="text-sm font-medium wrap-break-word">
                                   {app.name}
@@ -630,10 +633,7 @@ export function ProviderAccountsFields({
                         }
                         const action = configuredServerAction(observed)
                         return (
-                          <div
-                            key={connector.name}
-                            className="flex flex-wrap items-center justify-between gap-2"
-                          >
+                          <div key={connector.name} className={spreadRow}>
                             <div className="min-w-0">
                               <p className="text-sm font-medium">
                                 {connector.name}
@@ -802,7 +802,7 @@ export function ProviderAccountsFields({
         </div>
       </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className={spreadRow}>
         <p className="text-xs text-ink-muted">
           Identity checked: {formatCheckedAt(lastCheckedAt)}
           {claudeVersion ? ` · Claude Code ${claudeVersion}` : ''}

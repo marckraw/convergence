@@ -26,3 +26,13 @@ export const heatFill = [
   'bg-chart-heat-3',
   'bg-chart-heat-4',
 ] as const
+
+/** A card's top: its words at the start, its glyph at the end. */
+export const cardTop = 'flex items-start justify-between gap-3'
+
+/** The muted sentence under a card's figure or name. */
+export const cardDetail = 'mt-1 text-xs leading-relaxed text-ink-muted'
+
+/** A panel's head: its words, then its actions beside them on a wide window. */
+export const panelHead =
+  'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'

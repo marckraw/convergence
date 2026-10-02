@@ -27,10 +27,12 @@ import {
   WEEKDAY_LABELS_MONDAY_FIRST,
 } from './analytics-insights.pure'
 import {
+  cardDetail,
+  cardTop,
   heatFill,
   iconChip,
-  type SeriesIndex,
   seriesFill,
+  type SeriesIndex,
   skeletonBar,
 } from './analytics-insights.styles'
 
@@ -178,7 +180,7 @@ function renderLoadingState() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 8 }, (_, index) => (
           <Card key={index} className="min-w-0">
-            <div className="flex items-start justify-between gap-3">
+            <div className={cardTop}>
               <div className="min-w-0 flex-1 space-y-3">
                 <div className={cn(skeletonBar, 'h-3 w-24')} />
                 <div className={cn(skeletonBar, 'h-7 w-20')} />
@@ -208,17 +210,13 @@ function renderLoadingState() {
 function renderMetricCard(card: MetricCard) {
   return (
     <Card key={card.label} render={<article />} className="min-w-0">
-      <div className="flex items-start justify-between gap-3">
+      <div className={cardTop}>
         <div className="min-w-0 flex-1">
           <SectionLabel className="wrap-break-word">{card.label}</SectionLabel>
           <p className="mt-2 text-2xl font-semibold wrap-break-word">
             {card.value}
           </p>
-          {card.detail ? (
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-              {card.detail}
-            </p>
-          ) : null}
+          {card.detail ? <p className={cardDetail}>{card.detail}</p> : null}
         </div>
         <span aria-hidden className={iconChip}>
           {card.icon}
@@ -246,9 +244,7 @@ function renderChartPanel({
       <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h4 className="text-sm font-semibold">{title}</h4>
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            {description}
-          </p>
+          <p className={cardDetail}>{description}</p>
         </div>
         {legend ? renderChartLegend(legend) : null}
       </div>
