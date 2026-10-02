@@ -23,7 +23,7 @@ export interface LeafPaneHandlers {
   onFocusLeaf: (leafId: string) => void
   /** Draws the open tab's terminal; a story passes a still picture of one. */
   renderTerminal: (pane: TerminalPaneSlot) => ReactNode
-  /** The keys for New tab, the splits and Close, in words, for their tooltips (NAV-23). */
+  /** The keys for New tab, the splits and the open tab's ✕, in words, for their tooltips (NAV-23). */
   shortcutLabels?: TerminalShortcutLabels
 }
 
@@ -65,6 +65,7 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
         onCloseTab={(tabId) => onCloseTab(leaf.id, tabId)}
         onNewTab={() => onNewTab(leaf.id)}
         newTabShortcut={shortcutLabels?.['new-tab']}
+        closeTabShortcut={shortcutLabels?.['close-tab']}
         trailingSlot={
           <PaneToolbar
             onSplitHorizontal={() => onSplit(leaf.id, 'horizontal')}

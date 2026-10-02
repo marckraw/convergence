@@ -27,11 +27,9 @@ vi.mock('@/features/terminal-pane', () => ({
   PaneToolbar: ({
     onSplitHorizontal,
     onSplitVertical,
-    onClose,
   }: {
     onSplitHorizontal: () => void
     onSplitVertical: () => void
-    onClose?: () => void
   }) => (
     <div>
       <button
@@ -48,11 +46,6 @@ vi.mock('@/features/terminal-pane', () => ({
       >
         v
       </button>
-      {onClose ? (
-        <button type="button" aria-label="Close tab" onClick={onClose}>
-          x
-        </button>
-      ) : null}
     </div>
   ),
   CloseConfirmDialog: ({
@@ -357,7 +350,7 @@ describe('TerminalDock container', () => {
     )
   })
 
-  it('closes a tab from its own ✕, the only close it has (NAV-9; mutation: pass onClose to the toolbar again)', () => {
+  it('closes a tab from its own ✕, the only close it has (NAV-9, NAV N4: the toolbar has none)', () => {
     useSessionStore.setState({
       sessions: [makeSession()],
       activeSessionId: 's-1',

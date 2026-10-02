@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC, ReactNode } from 'react'
 import { isEditableTarget } from '@/shared/lib/editable-target.pure'
+import {
+  CONVERSATION_DOCK_SHORTCUT,
+  formatShortcutLabel,
+  runningShortcutPlatform,
+} from '@/shared/lib/keyboard-shortcut.pure'
 import { useSessionStore } from '@/entities/session'
 import { useTerminalStore } from '@/entities/terminal'
 import { SessionView } from '@/widgets/session-view'
@@ -36,7 +41,7 @@ export const WorkspaceLayoutContainer: FC = () => {
         (event.metaKey || event.ctrlKey) &&
         !event.shiftKey &&
         !event.altKey &&
-        event.key.toLowerCase() === 'j'
+        event.key.toLowerCase() === CONVERSATION_DOCK_SHORTCUT.key
       if (!isToggle) return
       if (isEditableTarget(event.target)) return
       event.preventDefault()
@@ -54,7 +59,14 @@ export const WorkspaceLayoutContainer: FC = () => {
 
   if (primarySurface === 'terminal') {
     mainSlot = <TerminalDock mode="main" />
-    dockSlot = <ConversationDockPlaceholder />
+    dockSlot = (
+      <ConversationDockPlaceholder
+        hideShortcut={formatShortcutLabel(
+          CONVERSATION_DOCK_SHORTCUT,
+          runningShortcutPlatform(),
+        )}
+      />
+    )
   } else {
     mainSlot = <SessionView />
     dockSlot = <TerminalDock />
