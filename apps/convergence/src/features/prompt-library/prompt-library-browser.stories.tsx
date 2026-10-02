@@ -261,7 +261,7 @@ export const Failed: Story = {
   },
 }
 
-/** Busy: saving says so on Save, and locks Cancel and New. */
+/** Busy: saving says so on Save, and locks Cancel and New, saying why (R2). */
 export const Busy: Story = {
   args: { formDraft: draft, isMutating: true },
   play: async () => {
@@ -269,12 +269,13 @@ export const Busy: Story = {
     await expect(
       within(dialog).getByRole('button', { name: 'Saving…' }),
     ).toHaveAttribute('aria-busy', 'true')
-    await expect(
-      within(dialog).getByRole('button', { name: 'Cancel' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'New' }),
-    ).toBeDisabled()
+    for (const name of ['Cancel', 'New']) {
+      const button = within(dialog).getByRole('button', { name })
+      await expect(button).toHaveAttribute('aria-disabled', 'true')
+      await expect(button).toHaveAccessibleDescription(
+        'Wait for the last change to save.',
+      )
+    }
   },
 }
 

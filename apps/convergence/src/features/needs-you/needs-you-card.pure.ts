@@ -10,10 +10,7 @@ import {
   executionHostEndpointDisplayName,
   isLocalExecutionHost,
 } from '@/entities/execution-host'
-import {
-  formatRelativeTime,
-  parallelWorkStatus,
-} from '@/shared/lib/parallel-work.pure'
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import { needsYouTiming } from './needs-you-timing.pure'
 import { FEED_SECTIONS } from './needs-you-view.pure'
 
@@ -83,9 +80,12 @@ export function needsYouCardModel(
       : endpoint
         ? executionHostEndpointDisplayName(endpoint)
         : 'Unknown endpoint',
-    lastMoved: Number.isFinite(Date.parse(session.updatedAt))
-      ? `${formatRelativeTime(session.updatedAt, context.now)} ago`
-      : 'Time not recorded',
+    // When it last moved, drawn as a relative Timestamp against the feed's
+    // own clock (MC-27); null when the record can't name the moment.
+    lastMovedAt: Number.isFinite(Date.parse(session.updatedAt))
+      ? session.updatedAt
+      : null,
+    now: context.now,
     prLabel: session.pullRequest
       ? `#${session.pullRequest.number} · ${session.pullRequest.state}`
       : null,

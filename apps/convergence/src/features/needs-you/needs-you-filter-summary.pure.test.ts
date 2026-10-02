@@ -11,7 +11,8 @@ it('describes unrestricted host and provider scope explicitly', () => {
 })
 
 it.each<[ActivityFilter, string]>([
-  ['needs-me', 'Needs you'],
+  // Its own name, the section's (ruling 6): "Needs you" is the feed.
+  ['needs-me', 'Waiting on you'],
   ['working', 'Working'],
   ['review', 'Review'],
 ])('names the %s workflow view', (activity, label) => {
@@ -67,7 +68,7 @@ it('names every selected activity in display order and includes the chosen order
     order: 'updated' as const,
   }
   expect(buildFeedFilterSummary(view)).toEqual({
-    activity: 'Needs you + Working + Review',
+    activity: 'Waiting on you + Working + Review',
     scope: 'All hosts · All providers',
     order: 'Updated (latest first)',
   })

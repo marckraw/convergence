@@ -453,7 +453,7 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
         {/* The body takes the focus, so a keyboard can scroll it with nothing in it to reach. */}
         <DialogBody tabIndex={0} className={focusRingInset}>
           {error ? (
-            <Notice tone="danger" title="Couldn't check the providers">
+            <Notice tone="danger" title="Couldn’t check the providers">
               {error}
             </Notice>
           ) : isLoading && statuses.length === 0 ? (

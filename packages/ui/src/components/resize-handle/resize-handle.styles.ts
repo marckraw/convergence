@@ -3,10 +3,15 @@
  * a hairline under the pointer, a stronger one while it is held, and the
  * focus colour for the keyboard, in both themes. ResizeHandle draws it; a
  * handle that keeps a gesture of its own (Loom's column, which commits a width
- * only when the drag ends) wears it too, so the look has one home (MC-18).
+ * only when the drag ends; the terminal's split, NAV-16) wears it too, so the
+ * look has one home (MC-18).
+ *
+ * The 1 px is the content box and the transparent borders are the rest of
+ * the hit area, so the box is `box-content`: under the base layer's
+ * border-box, the borders swallowed the line, which drew nothing at 12 px.
  */
 export const resizeHandleStyles = {
-  base: 'app-no-drag relative z-10 shrink-0 touch-none bg-clip-content outline-none transition-colors select-none hover:bg-hairline active:bg-hairline-strong focus-visible:bg-focus',
+  base: 'app-no-drag relative z-10 box-content shrink-0 touch-none bg-clip-content outline-none transition-colors select-none hover:bg-hairline active:bg-hairline-strong focus-visible:bg-focus',
   /** A line running down between panes side by side: it sizes a width. */
   vertical:
     '-mx-1.5 w-px cursor-col-resize self-stretch border-x-6 border-x-transparent',

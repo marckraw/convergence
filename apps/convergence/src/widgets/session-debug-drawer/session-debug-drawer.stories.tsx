@@ -111,11 +111,12 @@ export const Empty: Story = {
   play: async () => {
     const dialog = await openDialog()
     await expect(
-      within(dialog).getByText('No events captured yet.'),
+      within(dialog).getByText('No events captured yet'),
     ).toBeVisible()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Copy all' }),
-    ).toBeDisabled()
+    // R2: unavailable, and it says why.
+    const copyAll = within(dialog).getByRole('button', { name: 'Copy all' })
+    await expect(copyAll).toHaveAttribute('aria-disabled', 'true')
+    await expect(copyAll).toHaveAccessibleDescription('Nothing captured yet.')
   },
 }
 

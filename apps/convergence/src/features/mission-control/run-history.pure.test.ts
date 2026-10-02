@@ -21,7 +21,7 @@ import {
   historyOutcomeTone,
   historyOutcomeWord,
   historyPanelState,
-  formatEventTime,
+  runTimeFormat,
   runStartingStation,
   runTone,
 } from './run-history.pure'
@@ -495,13 +495,12 @@ describe('buildRunHighlight', () => {
 })
 
 describe('the smaller readers, on their own', () => {
-  it('reads an event clock to the second, and refuses an unreadable one', () => {
-    // Rows are scanned against their neighbours, so seconds are the unit —
-    // two deliveries in one minute must not read as the same moment.
-    expect(formatEventTime('2026-09-06T14:32:10.000Z')).toMatch(
-      /^\d\d:\d\d:\d\d$/,
-    )
-    expect(formatEventTime('nonsense')).toBe('--:--:--')
+  it('tells a run’s moment by the clock today and with its date before (MC-27)', () => {
+    const now = new Date('2026-09-06T15:00:00')
+    expect(runTimeFormat('2026-09-06T14:32:00', now)).toBe('clock')
+    expect(runTimeFormat('2026-09-05T23:59:00', now)).toBe('datetime')
+    // A moment the record can't name never passes for today's.
+    expect(runTimeFormat('not a time', now)).toBe('datetime')
   })
 
   it('gives a run’s own status the tone its rows wear', () => {

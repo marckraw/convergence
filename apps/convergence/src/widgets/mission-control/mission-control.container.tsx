@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import { useCrewHailStore } from '@/entities/crew-hail'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import { useSessionRelayStore } from '@/entities/session-relay'
-import type { SessionSummary } from '@/entities/session'
+import { useSessionStore, type SessionSummary } from '@/entities/session'
 import {
   SessionCrewChips,
   SessionFacetPicker,
@@ -16,6 +16,7 @@ import {
   useMissionControlView,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
+import { needsYouSessions } from '@/features/needs-you'
 import { CrewCanvas } from './crew-canvas.container'
 import { MissionControlView } from './mission-control.presentational'
 import { SessionCardGrid } from './session-card-grid.container'
@@ -62,9 +63,14 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     providerFacets,
     crewFacets,
   } = useMissionControlCards({ filter, order })
+  // "N need you" is one count (ruling 6): every conversation that waits on
+  // you, by the derivation the rail and the status bar read, whatever the
+  // room's filter shows.
+  const globalSessions = useSessionStore((state) => state.globalSessions)
+  const dismissals = useSessionStore((state) => state.needsYouDismissals)
   const attentionCount = useMemo(
-    () => cards.filter((card) => card.session.attention !== 'none').length,
-    [cards],
+    () => needsYouSessions(globalSessions, dismissals).length,
+    [globalSessions, dismissals],
   )
   const runningCount = useMemo(
     () => cards.filter((card) => card.session.status === 'running').length,

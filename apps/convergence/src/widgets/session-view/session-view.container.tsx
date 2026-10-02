@@ -17,6 +17,7 @@ import type { FC } from 'react'
 import { flushSync } from 'react-dom'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
+  FORK_ACTION_LABEL,
   useAnswerInput,
   useSessionStore,
   type SessionContextWindow,
@@ -44,26 +45,20 @@ import {
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
 import {
-  Button,
-  cn,
-  DescriptionList,
-  focusRingInset,
   IconButton,
   MenuCheckboxItem,
   MenuItem,
+  MetaLine,
   ScreenHeader,
 } from '@convergence/ui'
 import {
-  Archive,
   ArrowLeftRight,
-  Cloud,
   GitFork,
   Link2,
   Pin,
   ScrollText,
   Square,
   GitBranch,
-  GitPullRequest,
 } from 'lucide-react'
 import {
   formatConversationTotalDuration,
@@ -76,17 +71,14 @@ import {
   type SpaceContextAttemptView,
 } from './space-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
-import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
+import { SessionDetails } from './session-details.presentational'
 import { useAgentMeterStore, SessionAgentMeter } from '@/entities/agent-meter'
 import {
   ConversationHeader,
   headerFocusTarget,
 } from './conversation-header.container'
 import { parallelWorkInRow } from './conversation-header.pure'
-import {
-  ConversationDetailsMenu,
-  DETAILS_SECTION,
-} from './conversation-details-menu.container'
+import { ConversationDetailsMenu } from './conversation-details-menu.container'
 import { ConversationProjectMenu } from './conversation-project-menu.container'
 import { ConversationViewMenu } from './conversation-view-menu.container'
 import { harnessPill, mcpReconnectUnavailable } from './harness-facts.pure'
@@ -220,11 +212,17 @@ export const SessionView: FC = () => {
       prReading?.pullRequest?.url !== sessionPullRequest.url)
       ? null
       : (prReading?.message ?? null)
-  const pullRequestLabel = pullRequestLoading
-    ? 'PR checking…'
-    : sessionPullRequest
-      ? `#${sessionPullRequest.number} · ${sessionPullRequest.state}`
-      : (pullRequestMessage ?? 'PR unknown')
+  // Its number and state are two facts on a MetaLine (CONV-23).
+  const pullRequestLabel = pullRequestLoading ? (
+    'PR checking…'
+  ) : sessionPullRequest ? (
+    <MetaLine>
+      {`#${sessionPullRequest.number}`}
+      {sessionPullRequest.state}
+    </MetaLine>
+  ) : (
+    (pullRequestMessage ?? 'PR unknown')
+  )
   /**
    * The remote rows, or null on a local session (MAR-2718).
    *
@@ -599,7 +597,7 @@ export const SessionView: FC = () => {
                     node: (
                       <HarnessAlertChip
                         ref={harnessChip}
-                        label={harnessAlert.label}
+                        facts={harnessAlert.facts}
                         expanded={detailsOpen && detailsAt === 'harness'}
                         onOpen={openDetailsAtHarness}
                       />
@@ -638,164 +636,58 @@ export const SessionView: FC = () => {
                   triggerRef={detailsTrigger}
                   contentFocus={focus}
                 >
-                  <section
-                    aria-label="Session"
-                    {...{ [DETAILS_SECTION]: 'session' }}
-                  >
-                    <div className="grid gap-1.5 text-xs">
-                      {session.parentSessionId && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() =>
-                            session.parentSessionId &&
-                            setActiveSession(session.parentSessionId)
+                  <SessionDetails
+                    parent={
+                      session.parentSessionId
+                        ? {
+                            name:
+                              globalSessions.find(
+                                (entry) => entry.id === session.parentSessionId,
+                              )?.name ?? 'parent',
+                            onOpen: () =>
+                              session.parentSessionId &&
+                              setActiveSession(session.parentSessionId),
                           }
-                          size="sm"
-                          className="justify-start gap-2"
-                        >
-                          <GitFork className="h-3.5 w-3.5" />
-                          Forked from:{' '}
-                          {globalSessions.find(
-                            (entry) => entry.id === session.parentSessionId,
-                          )?.name ?? 'parent'}
-                        </Button>
-                      )}
-                      {/* The facts as terms and values (CONV-24). */}
-                      <DescriptionList
-                        layout="inline"
-                        density="compact"
-                        className="gap-1.5"
-                      >
-                        {remoteDetails ? (
-                          <>
-                            <SessionHeaderDetailRow
-                              icon={<Cloud className="h-3.5 w-3.5" />}
-                              label="Execution host"
-                              value="Remote daemon"
-                            />
-                            {/*
-                    What this session was told, above what the daemon says
-                    it did (MAR-2689). A row written before the work address
-                    existed reads "Unknown" rather than a repository
-                    re-derived from a local checkout it may never have
-                    matched.
-                  */}
-                            <SessionHeaderDetailRow
-                              label="Works in"
-                              value={remoteDetails.worksIn}
-                            />
-                            {remoteDetails.remoteRepository && (
-                              <SessionHeaderDetailRow
-                                label="Remote repository"
-                                value={remoteDetails.remoteRepository}
-                              />
-                            )}
-                            {remoteDetails.branch && (
-                              <SessionHeaderDetailRow
-                                icon={<GitBranch className="h-3.5 w-3.5" />}
-                                label="Remote branch"
-                                value={remoteDetails.branch}
-                              />
-                            )}
-                            {remoteDetails.requestedBranch && (
-                              <SessionHeaderDetailRow
-                                label="Branch requested"
-                                value={remoteDetails.requestedBranch}
-                              />
-                            )}
-                            <SessionHeaderDetailRow
-                              icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                              label="Pull request"
-                              value={pullRequestLabel}
-                            />
-                            {remoteDetails.unreadable && (
-                              <SessionHeaderDetailRow
-                                label="Remote workspace"
-                                value={remoteDetails.unreadable}
-                              />
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <SessionHeaderDetailRow
-                              icon={<GitBranch className="h-3.5 w-3.5" />}
-                              label="Checkout branch"
-                              value={branchName ?? 'Unknown'}
-                            />
-                            <SessionHeaderDetailRow
-                              icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                              label="Pull request"
-                              value={pullRequestLabel}
-                            />
-                          </>
-                        )}
-                        {activityLabel && (
-                          <SessionHeaderDetailRow
-                            label="Activity"
-                            value={activityLabel}
-                          />
-                        )}
-                        <SessionElapsedDuration
-                          label={elapsedReading.label}
-                          totalMs={elapsedReading.totalMs}
-                          streamingItem={elapsedReading.streamingItem}
-                          turnSpan={elapsedReading.turnSpan}
-                        />
-                        <SessionHeaderDetailRow
-                          label="Context"
-                          value={formatSessionContextLabel(
-                            session.contextWindow,
-                          )}
-                        />
-                        {session.archivedAt && (
-                          <SessionHeaderDetailRow
-                            icon={<Archive className="h-3.5 w-3.5" />}
-                            label="State"
-                            value="Archived"
-                          />
-                        )}
-                      </DescriptionList>
-                    </div>
-                  </section>
-                  {supportsHarnessFacts && (
-                    // Named by its label, with no heading of its own: the
-                    // harness's own "Harness" section is the one heading
-                    // (lap 2 E). The chip focuses it, and the ring shows
-                    // where focus landed.
-                    <section
-                      aria-label="Harness history"
-                      tabIndex={-1}
-                      className={cn(
-                        'mt-2 rounded-sm border-t border-line-soft px-2 pt-2',
-                        focusRingInset,
-                      )}
-                      {...{ [DETAILS_SECTION]: 'harness' }}
-                    >
-                      <HarnessFactsSections
-                        facts={harness.facts}
-                        error={harness.error}
-                        loading={harness.loading}
-                        onRetry={harness.retry}
-                        mcp={{
-                          unavailable: mcpReconnectUnavailable(canReconnectMcp),
-                          pending: harness.mcpPending,
-                          error: harness.mcpError,
-                          onReconnect: (server) =>
-                            void harness.reconnectMcpServer(server),
-                        }}
+                        : null
+                    }
+                    remote={remoteDetails}
+                    branchName={branchName}
+                    pullRequest={pullRequestLabel}
+                    activity={activityLabel}
+                    elapsed={
+                      <SessionElapsedDuration
+                        label={elapsedReading.label}
+                        totalMs={elapsedReading.totalMs}
+                        streamingItem={elapsedReading.streamingItem}
+                        turnSpan={elapsedReading.turnSpan}
                       />
-                    </section>
-                  )}
-                  {(remote || meterRow?.usage) && (
-                    <section
-                      aria-label="Agent"
-                      className="mt-2 border-t border-line-soft pt-2"
-                      {...{ [DETAILS_SECTION]: 'agent' }}
-                    >
-                      <SessionAgentMeter row={meterRow} remote={remote} />
-                    </section>
-                  )}
+                    }
+                    context={formatSessionContextLabel(session.contextWindow)}
+                    archived={!!session.archivedAt}
+                    harness={
+                      supportsHarnessFacts ? (
+                        <HarnessFactsSections
+                          facts={harness.facts}
+                          error={harness.error}
+                          loading={harness.loading}
+                          onRetry={harness.retry}
+                          mcp={{
+                            unavailable:
+                              mcpReconnectUnavailable(canReconnectMcp),
+                            pending: harness.mcpPending,
+                            error: harness.mcpError,
+                            onReconnect: (server) =>
+                              void harness.reconnectMcpServer(server),
+                          }}
+                        />
+                      ) : null
+                    }
+                    agent={
+                      remote || meterRow?.usage ? (
+                        <SessionAgentMeter row={meterRow} remote={remote} />
+                      ) : null
+                    }
+                  />
                 </ConversationDetailsMenu>
               ),
               entries: [
@@ -873,7 +765,7 @@ export const SessionView: FC = () => {
                   }
                 >
                   <GitFork className="h-3.5 w-3.5" />
-                  Fork session…
+                  {FORK_ACTION_LABEL}
                 </MenuItem>
               )}
               {session.providerId !== 'shell' && (

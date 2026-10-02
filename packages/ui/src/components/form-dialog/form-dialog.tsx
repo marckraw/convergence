@@ -66,8 +66,13 @@ type FormDialogProps = {
   saveShortcut?: string
   /** Saving is under way: Save says so after 300 ms and further presses wait. */
   pending?: boolean
-  /** It didn't save: why, and what to do. Shown above the buttons. */
+  /**
+   * It didn't save, in R10's words ("Couldn’t save the profile."). Shown
+   * above the buttons.
+   */
   error?: ReactNode
+  /** Why it didn't, or what to do next: the line under `error`. */
+  errorDetail?: ReactNode
   /** The form's fields: the dialog's body, which scrolls. */
   children: ReactNode
   /** What gets the focus when it opens, when it isn't the first field. */
@@ -101,6 +106,7 @@ function FormDialog({
   saveShortcut,
   pending = false,
   error,
+  errorDetail,
   children,
   initialFocus,
   finalFocus,
@@ -126,7 +132,9 @@ function FormDialog({
       >
         {children}
       </DialogBody>
-      <DialogError className="pt-3">{error}</DialogError>
+      <DialogError className="pt-3" detail={errorDetail}>
+        {error}
+      </DialogError>
     </>
   )
   return (

@@ -16,6 +16,7 @@ type EditProfileProps = {
   onRefresh?: () => void
   pending?: boolean
   error?: string
+  errorDetail?: string
   /** How many settings the body lists. */
   fields?: number
   saveDisabledReason?: string
@@ -29,6 +30,7 @@ function EditProfile({
   onRefresh,
   pending,
   error,
+  errorDetail,
   fields = 2,
   saveDisabledReason,
   saveShortcut,
@@ -49,6 +51,7 @@ function EditProfile({
         onSave={onSave}
         pending={pending}
         error={error}
+        errorDetail={errorDetail}
         saveDisabledReason={saveDisabledReason}
         saveShortcut={saveShortcut}
         headerActions={
@@ -149,17 +152,29 @@ export const Busy: Story = {
   },
 }
 
-/** Failed: the error is announced over the buttons, and Save tries again. */
+/**
+ * Failed: the error is announced over the buttons, its reason on the line
+ * under it (R10), and Save tries again.
+ */
 export const Failed: Story = {
-  args: { error: "Couldn't save the profile. The port is already in use." },
+  args: {
+    error: 'Couldn’t save the profile.',
+    errorDetail: 'The port is already in use.',
+  },
   play: async ({ args, canvas, userEvent }) => {
     const { dialog } = await open(canvas, userEvent)
+    await arrived(dialog)
     await expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      "Couldn't save the profile.",
+      'Couldn’t save the profile. The port is already in use.',
     )
+    // The reason is its own line, under the failure.
+    await expect(
+      within(within(dialog).getByRole('alert')).getByText(
+        'The port is already in use.',
+      ),
+    ).toBeVisible()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await expect(args.onSave).toHaveBeenCalledOnce()
-    await arrived(dialog)
   },
 }
 

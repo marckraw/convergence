@@ -5,6 +5,8 @@ import {
 } from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
 import { sectionLabelVariants } from '@convergence/ui'
+import type { Tone } from '@convergence/ui'
+import { SESSION_STATE_TONE } from '@/entities/session'
 
 /**
  * Every visual knob of the wave panel (MAR-3097), so "narrower" or "quieter"
@@ -148,10 +150,11 @@ export const WAVE_ROW_ACTION_CLASS = 'text-2xs text-warning-ink'
 /**
  * Loom, compact (MAR-3189): the column beside the conversation. No width
  * here, for the reason above -- the width is the decision's number, rendered
- * inline.
+ * inline. It stands on the canvas, the surface a side panel and expanded
+ * Loom stand on, not the canvas at an alpha over the window's chrome (MC-21).
  */
 export const LOOM_COMPACT_CLASS =
-  'flex h-full shrink-0 flex-col border-r border-hairline bg-canvas/40'
+  'flex h-full shrink-0 flex-col border-r border-hairline bg-canvas'
 
 /**
  * Loom, expanded: the whole content area, the sheets side by side.
@@ -220,6 +223,10 @@ export const LOOM_SHEET_BODY_CLASS =
  */
 export const WAVE_SECTION_HINT_CLASS = 'px-3 pb-1 text-2xs text-ink-muted'
 
+/**
+ * A line under a sheet's list: how many are older, what left the loop. Not
+ * an empty sheet's note, which is EmptyState's (MC-20).
+ */
 export const LOOM_SHEET_NOTE_CLASS = 'px-3 pt-3 text-2xs text-ink-muted'
 
 /** The horses line above the cards (MAR-3191): a section title (MC-34). */
@@ -237,12 +244,23 @@ export const LOOM_HORSES_LINE_CLASS = WAVE_SECTION_TITLE_CLASS
 export const LOOM_HORSE_CARD_CLASS =
   'flex w-full flex-col items-start gap-1.5 whitespace-normal px-3 py-3 text-left text-xs font-normal'
 
+export const LOOM_HORSE_TONE: Readonly<
+  Record<LoomHorseRuntime, Tone | undefined>
+> = {
+  // R1: a horse at work is info, as a working session is everywhere (MC-2);
+  // a failed one is danger. The Card's own `tone` draws them, its edge and
+  // its tint, never typed again here (N6).
+  working: SESSION_STATE_TONE.working,
+  failed: SESSION_STATE_TONE.failed,
+  idle: undefined,
+  'not-seen': undefined,
+}
+
+/** An untoned horse card's own frame: the hairline, quiet or faintly filled. */
 export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
   {
-    // R1: a horse at work is info, as a working session is everywhere
-    // (MC-2); a failed one is danger.
-    working: 'border-info-line bg-info-soft',
-    failed: 'border-danger-line bg-danger-soft',
+    working: '',
+    failed: '',
     idle: 'border-hairline bg-transparent',
     'not-seen': 'border-hairline bg-fill-quiet',
   }
@@ -315,10 +333,6 @@ export const LOOM_SEARCH_TOGGLE_CLASS = 'shrink-0 text-ink-muted'
 
 /** Compact's subline row: the subline, then the search icon. */
 export const LOOM_SEARCH_SUBLINE_ROW_CLASS = 'mb-2 flex items-start gap-2'
-
-/** The "no match here" line in the open sheet (R3, R5). */
-export const LOOM_SEARCH_MISS_CLASS =
-  'px-3 pt-3 text-2xs leading-relaxed text-ink-muted'
 
 /**
  * One "1 in Plan" answer: a link Button that opens that sheet (R3). A link

@@ -6,8 +6,11 @@ import {
   CHAIR_NODE_EMOJI,
   CHAIR_NODE_LABEL,
 } from '@/features/mission-control'
-import { Button, cn, Tooltip } from '@convergence/ui'
-import { CANVAS_HIDDEN_HANDLE } from './session-canvas.styles'
+import { Button, Card, cn, Tooltip } from '@convergence/ui'
+import {
+  CANVAS_HIDDEN_HANDLE,
+  CANVAS_NODE_BODY_CLASS,
+} from './session-canvas.styles'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasChairNodeData } from './session-canvas.types'
 
@@ -25,18 +28,15 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
   const chair = data as unknown as CanvasChairNodeData
 
   return (
-    <div
+    <Card
       data-canvas-chair={chair.crewId}
       data-chair-lit={chair.lit ? 'true' : 'false'}
       style={{ width: CANVAS_NODE_WIDTH, height: CANVAS_CHAIR_NODE_HEIGHT }}
-      className={cn(
-        'flex flex-col justify-center gap-0.5 rounded-lg border px-3 py-2',
-        // Lit, it waits on you: the warning tone (R1), its edge at the
-        // solid so the one node that needs a human reads from across the room.
-        chair.lit
-          ? 'border-warning-solid/70 bg-warning-soft'
-          : 'border-line bg-fill-quiet',
-      )}
+      // Lit, it waits on you: the Card's warning tone (R1), its edge and its
+      // tint, never an alpha typed on the tone (MC-21). Dark, the quiet card.
+      tone={chair.lit ? 'warning' : undefined}
+      padding="none"
+      className={CANVAS_NODE_BODY_CLASS}
     >
       <Handle
         id={CANVAS_HANDLE.in}
@@ -107,6 +107,6 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
       >
         {chair.detail ?? 'nothing is waiting on you here'}
       </p>
-    </div>
+    </Card>
   )
 }

@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   localProviderCatalogs,
@@ -14,6 +21,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useTaskProgressStore } from '@/entities/task-progress'
 import { useAttachmentStore, type Attachment } from '@/entities/attachment'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import { SessionForkDialogContainer } from './session-fork.container'
 
 const TEST_ATTACHMENTS = {
@@ -464,6 +472,38 @@ describe('SessionForkDialogContainer', () => {
     expect(previewFork).toHaveBeenCalledTimes(2)
   })
 
+  it('DLG-31 a failed create says "Couldn’t create the fork." with the reason under it — mutation: show the bare message turns red', async () => {
+    const forkFull = vi
+      .fn()
+      .mockRejectedValue(new Error('The branch fork/x already exists.'))
+    primeStores({ forkFull })
+
+    render(<SessionForkDialogContainer />)
+    expect(await screen.findByText('Fork session')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Create fork$/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Couldn’t create the fork. The branch fork/x already exists.',
+    )
+    expect(
+      within(alert).getByText('The branch fork/x already exists.'),
+    ).toBeInTheDocument()
+  })
+
+  it('DLG-31 a failure with no message still says what failed, and nothing else', async () => {
+    const forkFull = vi.fn().mockRejectedValue({ code: 'EUNKNOWN' })
+    primeStores({ forkFull })
+
+    render(<SessionForkDialogContainer />)
+    expect(await screen.findByText('Fork session')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Create fork$/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /^Couldn’t create the fork\.$/,
+    )
+  })
+
   it('toggling workspace to fork requires a branch and submits it verbatim', async () => {
     const forkFull = vi
       .fn()
@@ -477,7 +517,9 @@ describe('SessionForkDialogContainer', () => {
     fireEvent.click(screen.getByRole('radio', { name: /New workspace/i }))
 
     const confirm = screen.getByRole('button', { name: /^Create fork$/i })
-    expect(confirm).toBeDisabled()
+    // R2: unavailable, and it says why (DLG §4 13).
+    expect(isUnavailable(confirm)).toBe(true)
+    expect(confirm).toHaveAccessibleDescription('Name the new branch first.')
 
     const branchInput = screen.getByPlaceholderText(
       'fork/branch-name',

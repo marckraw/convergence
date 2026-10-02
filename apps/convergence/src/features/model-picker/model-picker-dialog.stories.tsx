@@ -224,10 +224,12 @@ export const Open: Story = {
     )
     await expect(args.onQueryChange).toHaveBeenLastCalledWith('gpt')
     const openai = within(dialog).getByRole('button', { name: /OpenAI/ })
-    await expect(openai).toHaveAttribute('aria-pressed', 'false')
+    // A selected row says aria-current, never aria-pressed (R7, DLG-8).
+    await expect(openai).not.toHaveAttribute('aria-current')
+    await expect(openai).not.toHaveAttribute('aria-pressed')
     await userEvent.click(openai)
     await expect(args.onProviderFilterChange).toHaveBeenCalledWith('codex')
-    await expect(openai).toHaveAttribute('aria-pressed', 'true')
+    await expect(openai).toHaveAttribute('aria-current', 'true')
     // The keyboard's star is the active row's, beside the field.
     await userEvent.hover(
       within(dialog).getByRole('option', { name: /GPT-5\.4/ }),

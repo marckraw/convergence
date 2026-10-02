@@ -89,7 +89,7 @@ describe('UpdatesFields', () => {
     render(<UpdatesFields {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Download v0.17.0' }))
     expect(props.onDownload).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Release notes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Release notes…' }))
     expect(props.onOpenReleaseNotes).toHaveBeenCalled()
   })
 
@@ -143,7 +143,7 @@ describe('describeStatus', () => {
         '0.16.0',
         NOW,
       ),
-    ).toBe("Couldn't check for updates: Offline or GitHub unreachable.")
+    ).toBe('Couldn’t check for updates: Offline or GitHub unreachable.')
   })
 
   it('formats checking', () => {
@@ -225,7 +225,7 @@ describe('describeStatus', () => {
         '0.16.0',
         NOW,
       ),
-    ).toBe("Couldn't check for updates: Offline or GitHub unreachable.")
+    ).toBe('Couldn’t check for updates: Offline or GitHub unreachable.')
   })
 })
 

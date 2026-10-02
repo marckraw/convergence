@@ -64,7 +64,7 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
                 state="failed"
                 variant="plain"
                 layout="centred"
-                title="Couldn't open the preview"
+                title="Couldn’t open the preview"
                 detail={error}
               />
             </div>

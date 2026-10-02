@@ -343,7 +343,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       </div>
 
       <section aria-label="Policy" className="flex flex-col gap-2">
-        <SectionLabel as="h4" size="sm">
+        {/* A seat's own section, under its group's h5 (MC-13). */}
+        <SectionLabel as="h6" size="sm">
           Policy
         </SectionLabel>
         {recipe ? (

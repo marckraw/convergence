@@ -8,7 +8,9 @@ import {
   orderParallelWork,
   parallelWorkParents,
   parallelWorkTime,
+  parallelWorkClock,
   parallelWorkAnchor,
+  type ParallelWorkTime,
   formatRelativeTime,
   archiveParallelWork,
   type ParallelWorkRow,
@@ -215,6 +217,9 @@ it.each(['running', 'unknown'] as const)(
 
 const clock = Date.parse('2026-09-09T12:00:00.000Z')
 const ago = (minutes: number) => new Date(clock - minutes * 60000).toISOString()
+/** A time as the panel tells it: a moment's words and instant, or the label. */
+const told = (time: ParallelWorkTime) =>
+  time.kind === 'moment' ? [time.prefix, time.at] : time.label
 function timedTask(
   id: string,
   status: SessionTask['status'],
@@ -275,11 +280,30 @@ it('RUN64 R2′ formats reported and observed time honestly — mutation age fro
     parallelWorkTime(timedTask('done', 'completed', 120), clock),
     parallelWorkTime(timedTask('legacy', 'running', null), clock),
   ]).toEqual([
-    { at: ago(4), label: 'seen 4 m ago' },
-    { at: ago(8), label: '8 m' },
-    { at: ago(120), label: '2 h ago' },
-    { at: null, label: 'time not reported' },
+    // A moment is Timestamp's to write (CONV-22): what it is, when, and the clock.
+    { kind: 'moment', at: ago(4), prefix: 'seen', now: clock },
+    // A running row's time since it started is a duration, in its own words.
+    { kind: 'duration', at: ago(8), label: '8 m' },
+    { kind: 'moment', at: ago(120), prefix: null, now: clock },
+    { kind: 'none', at: null, label: 'time not reported' },
   ])
+})
+it('CONV-22 tells a moment against a clock never before it — mutation drop the clamp and a clock ahead of ours reads as the future', () => {
+  const ahead = new Date(clock + 90_000).toISOString()
+  expect({
+    clamped: parallelWorkClock(ahead, clock),
+    past: parallelWorkClock(ago(4), clock),
+    told: parallelWorkTime(timedTask('ahead', 'completed', -1.5), clock),
+  }).toEqual({
+    clamped: clock + 90_000,
+    past: clock,
+    told: {
+      kind: 'moment',
+      at: ago(-1.5),
+      prefix: null,
+      now: clock + 90_000,
+    },
+  })
 })
 it('RUN64 R2 relative formatting table — mutation change minute/hour/day divisor turns red', () => {
   expect(
@@ -336,7 +360,7 @@ it('RUN64 round2 anchor unifies unknown order label and archive — mutations un
   expect({
     anchors: [a, b, c, invalid].map(parallelWorkAnchor),
     order: orderParallelWork([a, b, c]).map((row) => row.id),
-    labels: [a, b, c, invalid].map((row) => parallelWorkTime(row, clock).label),
+    labels: [a, b, c, invalid].map((row) => told(parallelWorkTime(row, clock))),
     future: archiveParallelWork([a], clock + 86400000).older,
   }).toEqual({
     anchors: [
@@ -346,7 +370,12 @@ it('RUN64 round2 anchor unifies unknown order label and archive — mutations un
       { at: null, phase: 'none' },
     ],
     order: ['B', 'A', 'C'],
-    labels: ['last seen 1 m ago', '4 m', '2 h ago', 'time not reported'],
+    labels: [
+      ['last seen', ago(1)],
+      '4 m',
+      [null, ago(120)],
+      'time not reported',
+    ],
     future: [],
   })
 })

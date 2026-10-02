@@ -74,7 +74,7 @@ export const Default: Story = {
       screen.getByRole('button', { name: 'Refresh Codex usage' }),
     )
     await expect(args.onRefresh).toHaveBeenCalledOnce()
-    await userEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Settings…' }))
     await expect(args.onOpenSettings).toHaveBeenCalledOnce()
   },
 }

@@ -78,3 +78,30 @@ export const SmallDark: Story = {
   ...Small,
   globals: { theme: 'dark' },
 }
+
+/**
+ * Nested: a label under another takes the rank below it, not a second size
+ * at the same rank (MC-13). Crew settings: "Seats" is an h4, its groups h5
+ * at 10 px, and a seat's own sections h6 at 10 px.
+ */
+export const Nested: Story = {
+  render: () => (
+    <section className="flex w-72 flex-col gap-1.5 rounded-md bg-canvas p-4">
+      <SectionLabel as="h4">Seats</SectionLabel>
+      <SectionLabel as="h5" size="sm">
+        Horses 2
+      </SectionLabel>
+      <SectionLabel as="h6" size="sm">
+        Policy
+      </SectionLabel>
+      <p className="text-sm text-ink">One spawn at a time</p>
+    </section>
+  ),
+  play: async ({ canvas }) => {
+    const sizeOf = (level: number) =>
+      getComputedStyle(canvas.getByRole('heading', { level })).fontSize
+    await expect(sizeOf(4)).toBe('11px')
+    await expect(sizeOf(5)).toBe('10px')
+    await expect(sizeOf(6)).toBe('10px')
+  },
+}

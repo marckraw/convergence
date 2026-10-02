@@ -364,21 +364,23 @@ describe('MAR-3378 F1b R3 — the features still move', () => {
   })
 
   it('the collapsed rail’s badge still counts, and a real change updates it at once', () => {
+    // It counts what waits on you, a failed run included, and not finished
+    // work waiting for review (ruling 6).
     const sessions = [
       running('B'),
-      conversation('R1'),
+      conversation('R1', { status: 'failed', attention: 'failed' }),
       conversation('R2'),
       conversation('W', { attention: 'needs-input', status: 'running' }),
     ]
     seed(sessions)
     render(<Harness collapsed />)
     expect(
-      screen.getByRole('button', { name: '3 need you' }),
+      screen.getByRole('button', { name: '2 need you' }),
     ).toBeInTheDocument()
 
-    summarize({ ...sessions[0], status: 'completed', attention: 'finished' })
+    summarize({ ...sessions[0], status: 'failed', attention: 'failed' })
     expect(
-      screen.getByRole('button', { name: '4 need you' }),
+      screen.getByRole('button', { name: '3 need you' }),
     ).toBeInTheDocument()
   })
 

@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import { Circle, CircleHelp, CircleX, LoaderCircle } from 'lucide-react'
-import { Button, Card, CardAction, cn, Spinner } from '@convergence/ui'
+import { SESSION_STATE_TONE } from '@/entities/session'
+import { Button, Card, CardAction, cn, Spinner, toneInk } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomHorseTicketLine,
@@ -16,6 +17,7 @@ import {
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TICKET_DOOR_CLASS,
   LOOM_HORSE_TINT_CLASS,
+  LOOM_HORSE_TONE,
   LOOM_SEAT_CARD_DOOR_CLASS,
 } from './wave-panel.styles'
 
@@ -99,6 +101,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
     <div className="px-3 py-0.5" data-loom-horse={horse.key}>
       <Card
         interactive={openable}
+        tone={LOOM_HORSE_TONE[horse.runtime]}
         padding="none"
         className={cn(
           LOOM_HORSE_CARD_CLASS,
@@ -107,9 +110,16 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
       >
         <span className={LOOM_CARD_HEAD_CLASS}>
           {/* A horse at work turns the kit's Spinner, which stands still
-              under reduced motion (MC-25); the others wear their glyph. */}
+              under reduced motion (MC-25), in the working tone (R1: info), as
+              Mission Control's card, Needs you and the sidebar's rows draw it
+              (MC-2); the others wear their glyph. */}
           {horse.runtime === 'working' ? (
-            <Spinner size="xs" />
+            <span data-tone={SESSION_STATE_TONE.working} className="flex">
+              <Spinner
+                size="xs"
+                className={toneInk[SESSION_STATE_TONE.working]}
+              />
+            </span>
           ) : (
             <Icon className="size-3 shrink-0" aria-hidden />
           )}

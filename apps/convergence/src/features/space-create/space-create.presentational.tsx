@@ -36,8 +36,8 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
     title="New Space"
     description={
       seeded
-        ? 'Create a durable Chat context, with this session as its seed attempt.'
-        : 'Create a durable Chat context for related attempts.'
+        ? 'Create a durable chat context, with this session as its seed attempt.'
+        : 'Create a durable chat context for related attempts.'
     }
     saves="on-save"
     onSave={onSubmit}

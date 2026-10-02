@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
+import { pressOption } from '@/shared/testing/select-option'
 import {
   FAST_TIER,
+  findPicker,
   installComposerBridge,
+  picker,
+  queryPicker,
   queuedInput,
   seedComposerStores,
   seedQueuedInputs,
@@ -918,7 +922,7 @@ describe('ComposerContainer', () => {
     )
 
     expect(screen.getByText('Runs on')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(picker('Runs on', /Local/))
     fireEvent.click(screen.getByText('backpack-automations'))
 
     // The place is stated before the send, and this is that statement: until
@@ -982,14 +986,12 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(picker('Runs on', /Local/))
     fireEvent.click(screen.getByText('backpack-automations'))
-    expect(
-      screen.getByRole('combobox', { name: /backpack-automations/ }),
-    ).toBeInTheDocument()
+    expect(picker('Runs on', /backpack-automations/)).toBeInTheDocument()
 
     setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
-    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
+    expect(picker('Runs on', /Local/)).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, { target: { value: 'Run it' } })
@@ -1027,7 +1029,7 @@ describe('ComposerContainer', () => {
 
     expect(screen.getByText('Runs on')).toBeInTheDocument()
     expect(screen.getByText('kuba-vps')).toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: /kuba-vps/ })).toBeNull()
+    expect(queryPicker('Runs on', /kuba-vps/)).toBeNull()
   })
 
   it('names the endpoint a live session can no longer reach, id and all', () => {
@@ -1113,22 +1115,16 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    expect(
-      screen.getByRole('combobox', { name: 'Anthropic' }),
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    expect(picker('Provider', 'Anthropic')).toBeInTheDocument()
+    fireEvent.click(picker('Runs on', /Local/))
     fireEvent.click(screen.getByText('kuba-vps'))
 
     // The local-only provider is gone, and the model pill reads the daemon's.
     await waitFor(() => {
-      expect(
-        screen.getByRole('combobox', { name: 'Remote daemon' }),
-      ).toBeInTheDocument()
+      expect(picker('Provider', 'Remote daemon')).toBeInTheDocument()
     })
-    expect(
-      screen.getByRole('combobox', { name: 'Daemon Sonnet' }),
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('combobox', { name: 'Remote daemon' }))
+    expect(picker('Model', 'Daemon Sonnet')).toBeInTheDocument()
+    fireEvent.click(picker('Provider', 'Remote daemon'))
     expect(
       await screen.findByRole('option', { name: /Claude Code/ }),
     ).toBeInTheDocument()
@@ -1160,17 +1156,17 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
-    fireEvent.click(await screen.findByText('Pi'))
+    // A Select takes a press that starts on the option (pressOption).
+    fireEvent.click(picker('Provider', 'Anthropic'))
+    pressOption(await screen.findByRole('option', { name: /Pi/ }))
+    await findPicker('Provider', 'Pi')
 
-    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(picker('Runs on', /Local/))
     const row = screen.getByRole('option', { name: /kuba-vps/ })
     expect(row).not.toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(row)
     await waitFor(() => {
-      expect(
-        screen.getByRole('combobox', { name: /kuba-vps/ }),
-      ).toBeInTheDocument()
+      expect(picker('Runs on', /kuba-vps/)).toBeInTheDocument()
     })
   })
   describe("the strip's second slot: where the session works (MAR-2689)", () => {
@@ -1188,7 +1184,7 @@ describe('ComposerContainer', () => {
     }
 
     async function pickMachine(label: string): Promise<void> {
-      fireEvent.click(await screen.findByRole('combobox', { name: /Local/ }))
+      fireEvent.click(await findPicker('Runs on', /Local/))
       fireEvent.click(screen.getByText(label))
     }
 
@@ -1646,9 +1642,9 @@ describe('ComposerContainer', () => {
       )
     }
 
-    /** The preset control names its own value, so the value is what is read. */
+    /** The preset control shows its value, so the value is what is read. */
     function presetShows(label: 'Ask' | 'Yolo'): boolean {
-      return screen.queryByRole('combobox', { name: label }) !== null
+      return queryPicker('Permissions', label) !== null
     }
 
     it('opens Ask on Local and Yolo once a daemon is named', async () => {
@@ -1666,7 +1662,7 @@ describe('ComposerContainer', () => {
 
       expect(presetShows('Ask')).toBe(true)
 
-      fireEvent.click(await screen.findByRole('combobox', { name: /Local/ }))
+      fireEvent.click(await findPicker('Runs on', /Local/))
       fireEvent.click(screen.getByText('little-monster'))
 
       await waitFor(() => expect(presetShows('Yolo')).toBe(true))
@@ -1694,16 +1690,16 @@ describe('ComposerContainer', () => {
       }
       renderNewSession()
 
-      fireEvent.click(await screen.findByRole('combobox', { name: /Local/ }))
+      fireEvent.click(await findPicker('Runs on', /Local/))
       fireEvent.click(screen.getByText('little-monster'))
       await waitFor(() => expect(presetShows('Yolo')).toBe(true))
 
       // He decides for himself that this run should ask.
-      fireEvent.click(screen.getByRole('combobox', { name: 'Yolo' }))
+      fireEvent.click(picker('Permissions', 'Yolo'))
       fireEvent.click(screen.getByText('Ask'))
       expect(presetShows('Ask')).toBe(true)
 
-      fireEvent.click(screen.getByRole('combobox', { name: /little-monster/ }))
+      fireEvent.click(picker('Runs on', /little-monster/))
       fireEvent.click(screen.getByText('kuba-vps'))
 
       // A default that undid a deliberate choice would be the control below
@@ -1748,7 +1744,7 @@ describe('ComposerContainer', () => {
       // Asserted on the rendered trigger rather than the exported constant:
       // the Button brings `text-sm` and `text-xs` of its own, and what the
       // strip is ruled to be is whatever survives that merge onto the element.
-      const chooser = screen.getByRole('combobox', { name: /Local/ })
+      const chooser = picker('Runs on', /Local/)
       expect(textSizeClasses(chooser)).toEqual([STRIP_TEXT_SIZE_CLASS])
       expect(classTokens(chooser)).toContain('text-ink-muted')
 
@@ -1905,9 +1901,7 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    expect(
-      screen.getByRole('combobox', { name: 'Speed: Standard' }),
-    ).toBeInTheDocument()
+    expect(picker('Speed', 'Standard')).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, {
@@ -1958,9 +1952,7 @@ describe('ComposerContainer', () => {
     )
 
     await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
-    expect(
-      screen.getByRole('combobox', { name: 'Speed: Standard' }),
-    ).toBeInTheDocument()
+    expect(picker('Speed', 'Standard')).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, { target: { value: 'Standard please' } })
@@ -1990,11 +1982,9 @@ describe('ComposerContainer', () => {
     )
 
     await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
-    fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+    fireEvent.click(picker('Speed', 'Standard'))
     fireEvent.click(await screen.findByText('Fast'))
-    expect(
-      screen.getByRole('combobox', { name: 'Speed: Fast' }),
-    ).toBeInTheDocument()
+    expect(picker('Speed', 'Fast')).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, {
@@ -2037,7 +2027,7 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Ask' }))
+    fireEvent.click(picker('Permissions', 'Ask'))
     fireEvent.click(screen.getByText('Yolo'))
 
     const textbox = screen.getByRole('textbox')
@@ -2098,7 +2088,7 @@ describe('ComposerContainer', () => {
     }
 
     function pickHost(currentName: RegExp, nextLabel: string) {
-      fireEvent.click(screen.getByRole('combobox', { name: currentName }))
+      fireEvent.click(picker('Runs on', currentName))
       fireEvent.click(screen.getByText(nextLabel))
     }
 
@@ -2734,9 +2724,7 @@ describe('ComposerContainer', () => {
       await new Promise((resolve) => setTimeout(resolve, 20))
     })
     expect(setSessionServiceTier).not.toHaveBeenCalled()
-    expect(
-      screen.getByRole('combobox', { name: 'Speed: Fast' }),
-    ).toBeInTheDocument()
+    expect(picker('Speed', 'Fast')).toBeInTheDocument()
   })
 
   it('asks about the account the composer would send on, not the ambient default', async () => {
@@ -3548,7 +3536,7 @@ describe('ComposerContainer', () => {
         expect(useSessionStore.getState().error).toBeNull()
         if (stage === 'layout' || stage === 'missing-thread') {
           fireEvent.click(
-            screen.getByRole('button', { name: 'Manage accounts' }),
+            screen.getByRole('button', { name: 'Manage accounts…' }),
           )
           expect(useDialogStore.getState().payload).toEqual({
             appSettingsSection: 'provider-accounts',
@@ -3872,11 +3860,9 @@ describe('ComposerContainer', () => {
       setSessionState({ status: 'completed', attention: 'finished' })
       renderComposer()
 
-      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeDisabled()
-      expect(
-        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
-      ).toBeEnabled()
-      expect(screen.getByRole('combobox', { name: 'Medium' })).toBeEnabled()
+      expect(picker('Provider', 'Anthropic')).toBeDisabled()
+      expect(picker('Model', 'Claude Sonnet')).toBeEnabled()
+      expect(picker('Reasoning effort', 'Medium')).toBeEnabled()
     })
 
     it('locks the model and effort while a turn is running', () => {
@@ -3892,11 +3878,9 @@ describe('ComposerContainer', () => {
         />,
       )
 
-      expect(
-        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
-      ).toBeDisabled()
-      expect(screen.getByRole('combobox', { name: 'Medium' })).toBeDisabled()
-      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeDisabled()
+      expect(picker('Model', 'Claude Sonnet')).toBeDisabled()
+      expect(picker('Reasoning effort', 'Medium')).toBeDisabled()
+      expect(picker('Provider', 'Anthropic')).toBeDisabled()
     })
 
     it('locks the model while the agent is waiting on the human', () => {
@@ -3912,9 +3896,7 @@ describe('ComposerContainer', () => {
         />,
       )
 
-      expect(
-        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
-      ).toBeDisabled()
+      expect(picker('Model', 'Claude Sonnet')).toBeDisabled()
     })
 
     it('writes a model change to the session row rather than only the composer', async () => {
@@ -3924,7 +3906,7 @@ describe('ComposerContainer', () => {
       addSecondModel()
       renderComposer()
 
-      fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+      fireEvent.click(picker('Model', 'Claude Sonnet'))
       fireEvent.click(await screen.findByText('Claude Opus'))
 
       await waitFor(() => {
@@ -3942,8 +3924,8 @@ describe('ComposerContainer', () => {
       setSessionState({ status: 'completed', attention: 'finished' })
       renderComposer()
 
-      fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
-      fireEvent.click(await screen.findByText('High'))
+      fireEvent.click(picker('Reasoning effort', 'Medium'))
+      pressOption(await screen.findByRole('option', { name: 'High' }))
 
       await waitFor(() => {
         expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
@@ -3973,7 +3955,7 @@ describe('ComposerContainer', () => {
       renderComposer()
 
       await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
-      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+      fireEvent.click(picker('Speed', 'Standard'))
       fireEvent.click(await screen.findByText('Fast'))
 
       await waitFor(() => {
@@ -3984,17 +3966,13 @@ describe('ComposerContainer', () => {
       })
       // Nothing optimistic: until the row says Fast, the choice says what the
       // next turn will actually run on.
-      expect(
-        screen.getByRole('combobox', { name: 'Speed: Standard' }),
-      ).toBeInTheDocument()
+      expect(picker('Speed', 'Standard')).toBeInTheDocument()
 
       // The legacy `fast` a CS1 row holds reads as Codex's Fast.
       act(() => setSessionState({ serviceTier: 'fast' }))
-      expect(
-        screen.getByRole('combobox', { name: 'Speed: Fast' }),
-      ).toBeInTheDocument()
+      expect(picker('Speed', 'Fast')).toBeInTheDocument()
 
-      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Fast' }))
+      fireEvent.click(picker('Speed', 'Fast'))
       fireEvent.click(await screen.findByText('Standard'))
       await waitFor(() => {
         expect(setSessionServiceTier).toHaveBeenLastCalledWith('session-1', {
@@ -4006,10 +3984,8 @@ describe('ComposerContainer', () => {
       // Held like the model while a turn runs, not like the provider for the
       // conversation's whole life.
       act(() => setSessionState({ status: 'running', attention: 'none' }))
-      expect(
-        screen.getByRole('combobox', { name: 'Speed: Fast' }),
-      ).toBeDisabled()
-      expect(screen.getByRole('combobox', { name: 'GPT-5.5' })).toBeDisabled()
+      expect(picker('Speed', 'Fast')).toBeDisabled()
+      expect(picker('Model', 'GPT-5.5')).toBeDisabled()
     })
 
     it("MAR-3574 R2: lists exactly the speeds this account is offered, under Codex's names", async () => {
@@ -4036,7 +4012,7 @@ describe('ComposerContainer', () => {
         executionHostId: 'local',
         providerAccountId: null,
       })
-      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+      fireEvent.click(picker('Speed', 'Standard'))
       expect(await screen.findByText('Ultrafast')).toBeInTheDocument()
       expect(screen.getByText('Fast')).toBeInTheDocument()
       expect(
@@ -4061,7 +4037,7 @@ describe('ComposerContainer', () => {
       renderComposer()
 
       await waitFor(() => expect(codexSpeedList).toHaveBeenCalled())
-      fireEvent.click(screen.getByRole('combobox', { name: 'Speed: Standard' }))
+      fireEvent.click(picker('Speed', 'Standard'))
       expect(await screen.findByText('Fast')).toBeInTheDocument()
       expect(screen.queryByText('Ultrafast')).toBeNull()
     })
@@ -4152,14 +4128,10 @@ describe('ComposerContainer', () => {
       const { rerender } = render(
         <ComposerContainer context={context('session-1')} />,
       )
-      expect(
-        await screen.findByRole('combobox', { name: 'Speed: Ultrafast' }),
-      ).toBeInTheDocument()
+      expect(await findPicker('Speed', 'Ultrafast')).toBeInTheDocument()
 
       rerender(<ComposerContainer context={context('session-2')} />)
-      expect(
-        await screen.findByRole('combobox', { name: 'Speed: Fast' }),
-      ).toBeInTheDocument()
+      expect(await findPicker('Speed', 'Fast')).toBeInTheDocument()
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20))
       })
@@ -4178,15 +4150,13 @@ describe('ComposerContainer', () => {
       addSecondModel()
       renderComposer()
 
-      fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+      fireEvent.click(picker('Model', 'Claude Sonnet'))
       fireEvent.click(await screen.findByText('Claude Opus'))
 
       await waitFor(() => {
         expect(setSessionModelSelection).toHaveBeenCalled()
       })
-      expect(
-        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
-      ).toBeInTheDocument()
+      expect(picker('Model', 'Claude Sonnet')).toBeInTheDocument()
     })
 
     it('leaves a draft composer free to pick both provider and model', () => {
@@ -4203,10 +4173,8 @@ describe('ComposerContainer', () => {
         />,
       )
 
-      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeEnabled()
-      expect(
-        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
-      ).toBeEnabled()
+      expect(picker('Provider', 'Anthropic')).toBeEnabled()
+      expect(picker('Model', 'Claude Sonnet')).toBeEnabled()
     })
 
     it('treats a session whose provider cannot continue as a draft', async () => {
@@ -4240,10 +4208,10 @@ describe('ComposerContainer', () => {
         />,
       )
 
-      expect(screen.getByRole('combobox', { name: 'Local' })).toBeEnabled()
+      expect(picker('Provider', 'Local')).toBeEnabled()
 
-      fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
-      fireEvent.click(await screen.findByText('High'))
+      fireEvent.click(picker('Reasoning effort', 'Medium'))
+      pressOption(await screen.findByRole('option', { name: 'High' }))
 
       expect(setSessionModelSelection).not.toHaveBeenCalled()
     })
@@ -4280,13 +4248,9 @@ describe('ComposerContainer', () => {
           />,
         )
 
-        expect(
-          screen.getByRole('combobox', { name: 'claude-code (unavailable)' }),
-        ).toBeDisabled()
-        expect(
-          screen.getByRole('combobox', { name: 'claude-sonnet' }),
-        ).toBeDisabled()
-        expect(screen.getByRole('combobox', { name: 'medium' })).toBeDisabled()
+        expect(picker('Provider', 'claude-code (unavailable)')).toBeDisabled()
+        expect(picker('Model', 'claude-sonnet')).toBeDisabled()
+        expect(picker('Reasoning effort', 'medium')).toBeDisabled()
         expect(setSessionModelSelection).not.toHaveBeenCalled()
       })
 
@@ -4306,7 +4270,7 @@ describe('ComposerContainer', () => {
           />,
         )
 
-        expect(screen.queryByRole('combobox', { name: 'OpenAI' })).toBeNull()
+        expect(queryPicker('Provider', 'OpenAI')).toBeNull()
         expect(screen.queryByText('GPT-5.5')).toBeNull()
       })
 
@@ -4392,7 +4356,7 @@ describe('ComposerContainer', () => {
         addCodexProvider()
         renderComposer()
 
-        fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+        fireEvent.click(picker('Model', 'Claude Sonnet'))
         await screen.findByPlaceholderText('Search models…')
 
         // The filter that names the foreign provider is not there to click.
@@ -4424,7 +4388,7 @@ describe('ComposerContainer', () => {
           />,
         )
 
-        fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+        fireEvent.click(picker('Model', 'Claude Sonnet'))
         await screen.findByPlaceholderText('Search models…')
 
         fireEvent.click(screen.getByRole('button', { name: /^OpenAI/ }))
@@ -4442,8 +4406,8 @@ describe('ComposerContainer', () => {
         addCodexProvider()
         renderComposer()
 
-        fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
-        fireEvent.click(await screen.findByText('High'))
+        fireEvent.click(picker('Reasoning effort', 'Medium'))
+        pressOption(await screen.findByRole('option', { name: 'High' }))
 
         await waitFor(() => {
           expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {

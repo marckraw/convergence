@@ -1,7 +1,7 @@
 import type { FC } from 'react'
-import { Card, CardAction, cn, toneInk } from '@convergence/ui'
+import { Card, CardAction, cn, Timestamp, toneInk } from '@convergence/ui'
 import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
-import { ROW_CARD_DOOR_CLASS, ROW_CARD_PICKED_CLASS } from './row-card.styles'
+import { ROW_CARD_DOOR_CLASS } from './row-card.styles'
 import type { HistoryEventRow } from './run-history.pure'
 
 interface HistoryEventRowViewProps {
@@ -24,9 +24,15 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
   const content = (
     <>
       <span className="flex w-full items-baseline gap-2">
-        <span className="shrink-0 tabular-nums text-3xs text-ink-muted">
-          {event.timeLabel}
-        </span>
+        {/* To the second, as rows are scanned against their neighbours, in
+            a <time> with the whole moment in its tooltip (MC-27). */}
+        <Timestamp
+          date={event.at}
+          format="clock"
+          seconds
+          hour12={false}
+          className="shrink-0 text-3xs text-ink-muted"
+        />
         <span className="min-w-0 flex-1 whitespace-normal break-words text-xs">
           {event.title}
         </span>
@@ -48,24 +54,18 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
       )}
     </>
   )
-  const frame = cn(
-    TONE_FRAME[HISTORY_TONE[event.tone]],
-    // R7: the picked event wears the selected fill.
-    selected && ROW_CARD_PICKED_CLASS,
-  )
+  const frame = TONE_FRAME[HISTORY_TONE[event.tone]]
+  // R7: the picked event is the selected row, the Card's fill and
+  // aria-current (on its door, when it has one), kept under the pointer.
   return (
     <li>
       {event.kind === 'held-group' ? (
-        <Card padding="none" className={frame}>
+        <Card padding="none" selected={selected} className={frame}>
           <div className={ROW_CARD_DOOR_CLASS}>{content}</div>
         </Card>
       ) : (
-        <Card interactive padding="none" className={frame}>
-          <CardAction
-            aria-pressed={selected}
-            onClick={onSelect}
-            className={ROW_CARD_DOOR_CLASS}
-          >
+        <Card interactive padding="none" selected={selected} className={frame}>
+          <CardAction onClick={onSelect} className={ROW_CARD_DOOR_CLASS}>
             {content}
           </CardAction>
         </Card>

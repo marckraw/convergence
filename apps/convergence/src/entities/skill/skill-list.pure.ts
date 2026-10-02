@@ -9,7 +9,7 @@ import type { ProjectSkillCatalog, SkillCatalogEntry } from './skill.types'
  */
 export const SKILL_LIST_COPY = {
   loading: 'Loading skills…',
-  failed: "Couldn't load skills",
+  failed: 'Couldn’t load skills',
   empty: 'No skills available for this agent',
   noMatch: 'No matching skills',
 } as const

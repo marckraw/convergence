@@ -307,6 +307,33 @@
         "message": "Three dots typed in words (\"Loading...\", \"Search options...\", a name cut short with + '...'): R10 writes the ellipsis character, … (U+2026), on busy labels, placeholders, cut-short text and every item that opens a dialog. Code's spread (...props, [...items]) follows a bracket, a comma or a space, never a letter or a quote, and is not reported (MAR-3608; docs/checks/design-system-drift.md)."
       },
       {
+        "id": "no-magic-stroke",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\bstroke-\\[",
+        "message": "A glyph's stroke weight typed by hand (stroke-[2.25]): an icon keeps lucide's own stroke, so every glyph has one weight; a weight the design needs is a token in packages/ui/src/styles/tokens.css with its utility in theme.css. no-magic-values' sibling, for the stroke (NAV-6; DS8, MAR-3608; docs/checks/design-system-drift.md)."
+      },
+      {
+        "id": "no-ascii-couldnt",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)Couldn't",
+        "message": "A failure typed \"Couldn't …\" with the ASCII apostrophe: R10's failure reads \"Couldn’t <verb> <thing>.\" with the typographic one (U+2019), as notify and failureTitle write it, so a toast and a dialog say a failure the same way (DLG-31; MAR-3608; docs/checks/design-system-drift.md)."
+      },
+      {
+        "id": "focus-colour-is-for-focus",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<=^|[\\s'\"`{(])(?:(?![^\\s:'\"`]*focus)[^\\s:'\"`]+:)*(?:outline|ring|border(?:-[trblxy])?|bg|text|fill|stroke|decoration|shadow|divide|from|via|to)-focus(?:/\\d+)?(?=$|[\\s'\"`})])",
+        "message": "The focus colour drawn for something that isn't focus (outline-focus, ring-focus or border-focus with no focus variant before it: an open Hail, a picked row, a current card): R7 keeps that colour for the keyboard's focus. Chosen is the raised chip (Toggle's pressed, SegmentedControl, a Combobox's chosen, IconButton's pressed), selected is the fill and aria-current (Card's or ListRow's selected), and a mark of its own is the chosen chip's edge, outline-hairline-strong. A ring for focus is focusRing's (use-focus-ring) (ruling 11; MAR-3608; docs/checks/design-system-drift.md)."
+      },
+      {
         "id": "use-part-sizes",
         "type": "regex",
         "severity": "error",

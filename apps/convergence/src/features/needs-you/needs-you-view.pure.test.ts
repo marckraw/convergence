@@ -368,8 +368,8 @@ it('holds interaction order while applying live data, removals and arrivals', ()
     {
       title: 'Working',
       cards: [
-        { ...b, lastMoved: 'live' },
-        { ...a, lastMoved: 'live' },
+        { ...b, lastMovedAt: 'live' },
+        { ...a, lastMovedAt: 'live' },
       ],
     },
   ]
@@ -378,7 +378,7 @@ it('holds interaction order while applying live data, removals and arrivals', ()
     'pin',
     'working',
   ])
-  expect(held[0]!.cards.every((card) => card.lastMoved === 'live')).toBe(true)
+  expect(held[0]!.cards.every((card) => card.lastMovedAt === 'live')).toBe(true)
   expect(feedOrderKey(held)).not.toBe(feedOrderKey(current))
   expect(holdFeedOrder(current, null)).toBe(current)
   const removed = holdFeedOrder([{ title: 'Working', cards: [b] }], previous)
@@ -401,7 +401,7 @@ it('RUN77 lap4 zero-count answered says finishing — mutation claim Tasks runni
   expect(view.groups[0].title).toBe('Working')
 })
 
-it('MAR-3366 R1 renders sections Pinned, Needs you, Review, Working, Errands — mutation: swap Review and Working back turns red', () => {
+it('MAR-3366 R1 renders sections Pinned, Waiting on you, Review, Working, Errands — mutation: swap Review and Working back turns red', () => {
   const cards = [
     cardFixtures.working,
     cardFixtures.open,
@@ -412,7 +412,8 @@ it('MAR-3366 R1 renders sections Pinned, Needs you, Review, Working, Errands —
   const view = buildFeedView(groupNeedsYou(cards), defaultFeedView())
   expect(view.groups.map((group) => group.title)).toEqual([
     'Pinned',
-    'Needs you',
+    // Its own name inside the Needs-you feed (ruling 6).
+    'Waiting on you',
     'Review',
     'Working',
     'Errands with a PR',

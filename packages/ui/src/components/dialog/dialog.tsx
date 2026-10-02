@@ -271,14 +271,25 @@ function DialogFooter({ className, ...props }: DialogFooterProps) {
 
 type DialogErrorProps = Omit<ComponentProps<'p'>, 'className' | 'role'> & {
   className?: string
+  /**
+   * Why, or what to do next, on the line underneath in the muted ink (R10:
+   * the reason goes under the failure, never after it on its line).
+   */
+  detail?: ReactNode
 }
 
 /**
- * What went wrong when the dialog tried, above its buttons (R10: "Couldn't
- * delete the prompt."): the danger ink, announced at once as an alert. Pass
- * the error as it is: without one, nothing renders.
+ * What went wrong when the dialog tried, above its buttons (R10: "Couldn’t
+ * delete the prompt."): the danger ink, announced at once as an alert, with
+ * the reason under it when there is one. Pass the error as it is: without
+ * one, nothing renders.
  */
-function DialogError({ className, children, ...props }: DialogErrorProps) {
+function DialogError({
+  className,
+  children,
+  detail,
+  ...props
+}: DialogErrorProps) {
   if (children === null || children === undefined || children === false)
     return null
   if (children === '') return null
@@ -293,6 +304,12 @@ function DialogError({ className, children, ...props }: DialogErrorProps) {
       {...props}
     >
       {children}
+      {detail ? (
+        <>
+          {/* Read as two sentences, drawn as two lines. */}{' '}
+          <span className="mt-0.5 block text-xs text-ink-muted">{detail}</span>
+        </>
+      ) : null}
     </p>
   )
 }

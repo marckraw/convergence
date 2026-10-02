@@ -286,7 +286,7 @@ it('R9 button loads exactly one page; failure shows Retry and clears the failed 
   expect(screen.getByText('Database busy')).toBeInTheDocument()
   // CONV-7: the failure is an alert in R10's words, not a polite status.
   expect(screen.getByRole('alert')).toHaveTextContent(
-    "Couldn't load earlier messages.",
+    'Couldn’t load earlier messages.',
   )
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(resync).toHaveBeenCalledTimes(3)

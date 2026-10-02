@@ -111,7 +111,7 @@ export const Default: Story = {
     ).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: /^tdd/ }))
     await expect(args.onToggleSkill).toHaveBeenCalledWith(skills[1])
-    await userEvent.click(screen.getByRole('button', { name: 'Browse all' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Browse all…' }))
     await expect(args.onBrowseAll).toHaveBeenCalledOnce()
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), {

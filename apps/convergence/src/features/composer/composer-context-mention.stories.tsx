@@ -43,7 +43,6 @@ const meta = {
     highlightedIndex: 1,
     onSelect: fn(),
     onHover: fn(),
-    onDismiss: fn(),
   },
   parameters: { layout: 'padded' },
   decorators: [

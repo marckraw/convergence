@@ -23,7 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@convergence/ui'
-import { ROOM_COLUMN_CLASS } from './session-canvas.styles'
+import {
+  MISSION_CONTROL_TOOLBAR_CLASS,
+  ROOM_COLUMN_CLASS,
+} from './session-canvas.styles'
 
 interface MissionControlViewProps {
   totalCount: number
@@ -75,19 +78,20 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
 
   return (
     <div className={ROOM_COLUMN_CLASS}>
-      {/* The room's top strip (NAV-4): a ScreenHeader, 48 px on the line
-          every other screen's strip draws, so its edge meets the sidebar's.
-          It drags the window, and every control in it is a part that carries
-          `app-no-drag` itself (SegmentedControl, SearchField, SelectTrigger,
-          Toggle, Button, Combobox), so each still takes its click. The
-          search and the filters wrap in the row under it. */}
+      {/* The room's top strip (NAV-4): a ScreenHeader, one 48 px row whose
+          line is drawn where every other screen's strip draws it, so its
+          edge meets the sidebar's (NAV F1). It drags the window, and every
+          control in it is a part that carries `app-no-drag` itself
+          (SegmentedControl, SelectTrigger), so each still takes its click.
+          The search and the filters are the room's toolbar, under that
+          line, never inside the header, where they pushed its line down. */}
       <ScreenHeader
         data-mission-control-header
         start={<Satellite aria-hidden className="size-4" />}
         title="Mission Control"
         subtitle={
           totalCount === 0
-            ? 'no sessions'
+            ? 'No sessions'
             : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${needsYouCount(attentionCount)} · ${runningCount} running`
         }
         end={
@@ -138,25 +142,30 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
             </Select>
           </>
         }
+      />
+
+      {/* On the header's 16 px edge, as the cards below are, so the room
+          lines up with its strip (NAV F1). */}
+      <div
+        data-mission-control-toolbar
+        className={MISSION_CONTROL_TOOLBAR_CLASS}
       >
-        <div className="flex flex-wrap items-center gap-1.5 pb-3">
-          <SearchField
-            size="md"
-            value={query}
-            placeholder="Search cards by name, project, provider, model, status…"
-            aria-label="Search session cards"
-            className="w-full max-w-xs"
-            onChange={(event) => onQueryChange(event.target.value)}
-            onClear={() => onQueryChange('')}
-          />
-          {filters}
-        </div>
-      </ScreenHeader>
+        <SearchField
+          size="md"
+          value={query}
+          placeholder="Search cards by name, project, provider, model, status…"
+          aria-label="Search session cards"
+          className="w-full max-w-xs"
+          onChange={(event) => onQueryChange(event.target.value)}
+          onClear={() => onQueryChange('')}
+        />
+        {filters}
+      </div>
 
       <div
         className={cn(
           'min-h-0 flex-1',
-          fillsContent ? 'overflow-hidden' : 'overflow-y-auto px-5 py-4',
+          fillsContent ? 'overflow-hidden' : 'overflow-y-auto px-4 py-4',
         )}
       >
         {mode === 'canvas' && totalCount === 0 ? (

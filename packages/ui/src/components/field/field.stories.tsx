@@ -49,7 +49,7 @@ export const Failed: Story = {
       <FieldLabel>Branch name</FieldLabel>
       <Input size="lg" defaultValue="feature/one two" />
       <FieldError match>
-        Couldn't use that name. Branch names have no spaces.
+        Couldn’t use that name. Branch names have no spaces.
       </FieldError>
     </Field>
   ),
@@ -57,10 +57,10 @@ export const Failed: Story = {
     const input = canvas.getByLabelText('Branch name')
     await expect(input).toHaveAttribute('aria-invalid', 'true')
     await expect(input).toHaveAccessibleDescription(
-      "Couldn't use that name. Branch names have no spaces.",
+      'Couldn’t use that name. Branch names have no spaces.',
     )
     await expect(await canvas.findByRole('alert')).toHaveTextContent(
-      "Couldn't use that name.",
+      'Couldn’t use that name.',
     )
   },
 }

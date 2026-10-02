@@ -1,7 +1,9 @@
 import { Radio as RadioPrimitive } from '@base-ui/react/radio'
 import { RadioGroup as RadioGroupPrimitive } from '@base-ui/react/radio-group'
+import type { ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 import { focusRing } from '#lib/focus-ring.styles'
+import { tooltipAttributes } from '../tooltip/tooltip'
 
 export type RadioGroupProps<Value> = Omit<
   RadioGroupPrimitive.Props<Value>,
@@ -66,6 +68,62 @@ export function RadioGroupItem<Value>({
         data-slot="radio-group-indicator"
         className="size-2 rounded-full bg-strong"
       />
+    </RadioPrimitive.Root>
+  )
+}
+
+export type RadioSwatchProps<Value> = Omit<
+  RadioPrimitive.Root.Props<Value>,
+  'className' | 'children' | 'aria-label'
+> & {
+  className?: string
+  /**
+   * What the choice is, in a word or two ("Violet", "No emoji"): its
+   * accessible name and its tooltip, since a swatch shows no words (R2).
+   */
+  label: string
+  /** The picture: an emoji, a glyph, a colour's mark. Decorative: the label names it. */
+  children: ReactNode
+}
+
+/**
+ * One choice in a RadioGroup shown as a small picture rather than words: an
+ * emoji, a colour (MC-19, R9). A 24 px tile in a row of them; the chosen one
+ * is R7's raised chip (the chip's fill under the raised shadow, its edge
+ * stronger), never a ring, a scale or the focus colour. Put the group's row
+ * in the RadioGroup's className (`flex-row flex-wrap`), and give a "none"
+ * choice its own swatch, so nothing chosen is a choice too: picking the
+ * chosen one again doesn't clear it, as a radio's never does.
+ */
+export function RadioSwatch<Value>({
+  className,
+  label,
+  children,
+  ...props
+}: RadioSwatchProps<Value>) {
+  return (
+    <RadioPrimitive.Root
+      data-slot="radio-swatch"
+      aria-label={label}
+      {...tooltipAttributes(label)}
+      className={cn(
+        'inline-flex size-control-xs shrink-0 items-center justify-center rounded-md border border-transparent text-ink-muted transition-colors',
+        'hover:border-hairline-strong',
+        'data-checked:border-hairline-strong data-checked:bg-chip data-checked:text-ink data-checked:shadow-raised',
+        focusRing,
+        'data-disabled:pointer-events-none data-disabled:opacity-50',
+        "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        'app-no-drag',
+        className,
+      )}
+      {...props}
+    >
+      <span
+        aria-hidden="true"
+        className="flex items-center justify-center leading-none"
+      >
+        {children}
+      </span>
     </RadioPrimitive.Root>
   )
 }

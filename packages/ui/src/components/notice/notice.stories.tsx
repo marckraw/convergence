@@ -28,7 +28,7 @@ function NoticeSheet() {
       <Notice
         tone="danger"
         icon={<CircleAlert />}
-        title="Couldn't save the project."
+        title="Couldn’t save the project."
       >
         The folder is read-only.
       </Notice>
@@ -58,7 +58,7 @@ export const Default: Story = {
     ])
     await expect(canvas.getAllByRole('status')).toHaveLength(3)
     const failed = canvas.getByRole('alert', {
-      name: "Couldn't save the project.",
+      name: 'Couldn’t save the project.',
     })
     await expect(getComputedStyle(failed).color).toBe(
       tokenColor('--danger-ink'),
@@ -96,7 +96,7 @@ function SaveForm() {
         <Notice
           tone="danger"
           icon={<CircleAlert />}
-          title="Couldn't save the project."
+          title="Couldn’t save the project."
         >
           The folder is read-only.
         </Notice>
@@ -112,7 +112,7 @@ export const Failed: Story = {
     await expect(canvas.queryByRole('alert')).toBeNull()
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }))
     const alert = canvas.getByRole('alert', {
-      name: "Couldn't save the project.",
+      name: 'Couldn’t save the project.',
     })
     await expect(alert).toHaveTextContent('The folder is read-only.')
   },

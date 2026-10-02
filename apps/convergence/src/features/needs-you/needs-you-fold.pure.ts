@@ -166,7 +166,7 @@ export function foldedSectionSummary(
   const counts = new Map<FoldCardState, number>()
   for (const state of states) counts.set(state, (counts.get(state) ?? 0) + 1)
   let line: string | null = null
-  // Needs you has no kind line of its own: every state it said
+  // Waiting on you has no kind line of its own: every state it said
   // (waiting, failed) is an ask now, and `asks` says it once (MAR-3372 R4).
   if (title === 'Pinned') line = countLine(counts)
   else if (title === 'Review') line = reviewLine(cards)

@@ -40,7 +40,6 @@ function renderPicker(
       notice={NOTE}
       onSelect={onSelect}
       onHover={() => {}}
-      onDismiss={() => {}}
       {...overrides}
     />,
   )

@@ -27,17 +27,8 @@ import {
   ParallelWork,
   useParallelWorkPanel,
 } from '@/widgets/session-view'
-import {
-  Card,
-  Checkbox,
-  ChoiceField,
-  CodeBlock,
-  IconButton,
-  ScreenHeader,
-  SectionLabel,
-  useConfirm,
-} from '@convergence/ui'
-import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
+import { IconButton, ScreenHeader, useConfirm } from '@convergence/ui'
+import { Folder, MessageSquareText, Square } from 'lucide-react'
 import {
   SpaceHome,
   type SpaceArtifactDraft,
@@ -48,6 +39,7 @@ import {
   buildSpaceContextBlock,
   type SpaceContextSelection,
 } from './space-context.pure'
+import { SpaceDraftContext } from './space-draft-context.presentational'
 
 interface ChatSurfaceProps {
   selectedSpaceId: string | null
@@ -251,10 +243,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         selection: contextSelection,
       })
     : null
-  const selectedSourceSet = useMemo(
-    () => new Set(contextSelection.selectedSourceIds),
-    [contextSelection.selectedSourceIds],
-  )
 
   const handleGlobalSessionCreated = useCallback(
     async (createdSession: SessionSummary) => {
@@ -495,74 +483,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
               onClick: () => onCancelSpaceAttempt?.(),
             }}
           />
-          <Card className="mb-3 w-full max-w-conversation">
-            <SectionLabel as="h2" className="mb-3 flex items-center gap-2">
-              <CheckSquare aria-hidden className="size-3.5" />
-              <span>Context for this chat</span>
-            </SectionLabel>
-            <div className="space-y-2 text-sm">
-              <ChoiceField label="Space brief">
-                <Checkbox
-                  checked={contextSelection.includeBrief}
-                  onCheckedChange={(checked) =>
-                    setContextSelection({
-                      ...contextSelection,
-                      includeBrief: checked,
-                    })
-                  }
-                />
-              </ChoiceField>
-              <ChoiceField label="Space memory/instructions">
-                <Checkbox
-                  checked={contextSelection.includeMemory}
-                  onCheckedChange={(checked) =>
-                    setContextSelection({
-                      ...contextSelection,
-                      includeMemory: checked,
-                    })
-                  }
-                />
-              </ChoiceField>
-              {activeSpaceSources.length > 0 ? (
-                <div className="space-y-1 border-t border-line-soft pt-2">
-                  <div className="text-xs text-ink-muted">Selected sources</div>
-                  {activeSpaceSources.map((source) => (
-                    <ChoiceField
-                      key={source.id}
-                      label={
-                        <span className="block truncate">
-                          {source.filename}
-                        </span>
-                      }
-                    >
-                      <Checkbox
-                        checked={selectedSourceSet.has(source.id)}
-                        onCheckedChange={(checked) => {
-                          const nextSourceIds = checked
-                            ? [...contextSelection.selectedSourceIds, source.id]
-                            : contextSelection.selectedSourceIds.filter(
-                                (id) => id !== source.id,
-                              )
-                          setContextSelection({
-                            ...contextSelection,
-                            selectedSourceIds: nextSourceIds,
-                          })
-                        }}
-                      />
-                    </ChoiceField>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <CodeBlock
-              label="Space context preview"
-              maxHeight="sm"
-              wrap
-              className="mt-3"
-            >
-              {contextPreview ?? 'No Space context selected.'}
-            </CodeBlock>
-          </Card>
+          <SpaceDraftContext
+            selection={contextSelection}
+            sources={activeSpaceSources}
+            preview={contextPreview}
+            onChange={setContextSelection}
+          />
           <ComposerContainer
             context={{ kind: 'global', activeSessionId: null }}
             onGlobalSessionCreated={handleGlobalSessionCreated}

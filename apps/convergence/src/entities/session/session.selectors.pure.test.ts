@@ -2,11 +2,7 @@ import { EMPTY_CONVERSATION_PREFIX } from '@/entities/session'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS } from '../project'
 import type { Project } from '../project/project.types'
-import type {
-  ConversationItem,
-  NeedsYouDismissals,
-  Session,
-} from './session.types'
+import type { ConversationItem, Session } from './session.types'
 import {
   selectGlobalStatus,
   selectLatestAgentMessageId,
@@ -45,7 +41,7 @@ it('R5 global activity includes answered background work and excludes it from fi
     attention: 'none',
     parallelWork: { running: 1, unknown: 0, failed: 0, stopped: 0 },
   })
-  const result = selectGlobalStatus([session], {}, [])
+  const result = selectGlobalStatus([session], [], [])
   expect({
     running: result.running.map((row) => row.id),
     completed: result.lastCompleted,
@@ -58,7 +54,7 @@ it('MAR-3288 R5 a compacting conversation counts as running and is never the las
     attention: 'finished',
     activity: 'compacting',
   })
-  const result = selectGlobalStatus([session], {}, [])
+  const result = selectGlobalStatus([session], [], [])
   expect({
     running: result.running.map((row) => row.id),
     completed: result.lastCompleted,
@@ -81,7 +77,7 @@ function makeProject(overrides: Partial<Project>): Project {
 
 describe('selectGlobalStatus', () => {
   it('returns empty values when there are no sessions', () => {
-    const result = selectGlobalStatus([], {}, [])
+    const result = selectGlobalStatus([], [], [])
     expect(result.running).toEqual([])
     expect(result.needsAttention).toEqual([])
     expect(result.byProject).toEqual([])
@@ -103,7 +99,7 @@ describe('selectGlobalStatus', () => {
       makeProject({ id: 'project-2', name: 'Project Two' }),
     ]
 
-    const result = selectGlobalStatus(sessions, {}, projects)
+    const result = selectGlobalStatus(sessions, [], projects)
 
     expect(result.byProject).toEqual([])
     expect(result.running).toEqual([])
@@ -137,7 +133,7 @@ describe('selectGlobalStatus', () => {
       makeProject({ id: 'project-2', name: 'Project Two' }),
     ]
 
-    const result = selectGlobalStatus(sessions, {}, projects)
+    const result = selectGlobalStatus(sessions, [sessions[1]], projects)
 
     expect(result.running).toHaveLength(2)
     expect(result.needsAttention).toHaveLength(1)
@@ -150,41 +146,19 @@ describe('selectGlobalStatus', () => {
     expect(projectOne?.needsAttention.map((s) => s.id)).toEqual(['s-2'])
   })
 
-  it('filters attention sessions dismissed at the same updatedAt', () => {
-    const session = makeSession({
+  it('takes what waits on you as the caller derived it, one list for the count and its projects (ruling 6)', () => {
+    const failed = makeSession({
       id: 's-1',
-      attention: 'needs-input',
-      updatedAt: '2026-02-01T00:00:00.000Z',
+      projectId: 'project-1',
+      status: 'failed',
+      attention: 'failed',
     })
-    const dismissals: NeedsYouDismissals = {
-      's-1': {
-        updatedAt: '2026-02-01T00:00:00.000Z',
-        disposition: 'snoozed',
-      },
-    }
+    const result = selectGlobalStatus([failed], [failed], [makeProject({})])
 
-    const result = selectGlobalStatus([session], dismissals, [makeProject({})])
-
-    expect(result.needsAttention).toEqual([])
-    expect(result.byProject).toEqual([])
-  })
-
-  it('keeps attention sessions when the dismissal is stale', () => {
-    const session = makeSession({
-      id: 's-1',
-      attention: 'needs-approval',
-      updatedAt: '2026-02-01T00:00:00.000Z',
-    })
-    const dismissals: NeedsYouDismissals = {
-      's-1': {
-        updatedAt: '2026-01-01T00:00:00.000Z',
-        disposition: 'snoozed',
-      },
-    }
-
-    const result = selectGlobalStatus([session], dismissals, [makeProject({})])
-
-    expect(result.needsAttention).toHaveLength(1)
+    expect(result.needsAttention).toEqual([failed])
+    expect(result.byProject.map((entry) => entry.needsAttention)).toEqual([
+      [failed],
+    ])
   })
 
   it('sorts projects with attention before projects with only running', () => {
@@ -208,7 +182,7 @@ describe('selectGlobalStatus', () => {
       makeProject({ id: 'project-b', name: 'B' }),
     ]
 
-    const result = selectGlobalStatus(sessions, {}, projects)
+    const result = selectGlobalStatus(sessions, [sessions[1]], projects)
 
     expect(result.byProject.map((entry) => entry.projectId)).toEqual([
       'project-b',
@@ -235,7 +209,7 @@ describe('selectGlobalStatus', () => {
       }),
     ]
 
-    const result = selectGlobalStatus(sessions, {}, [makeProject({})])
+    const result = selectGlobalStatus(sessions, [], [makeProject({})])
 
     expect(result.lastCompleted?.id).toBe('s-new')
   })
@@ -249,7 +223,7 @@ describe('selectGlobalStatus', () => {
       }),
     ]
 
-    const result = selectGlobalStatus(sessions, {}, [])
+    const result = selectGlobalStatus(sessions, [], [])
 
     expect(result.byProject).toHaveLength(1)
     expect(result.byProject[0].projectName).toBe('Unknown project')
@@ -264,7 +238,7 @@ describe('selectGlobalStatus', () => {
       attention: 'needs-input',
     })
 
-    const result = selectGlobalStatus([globalSession], {}, [])
+    const result = selectGlobalStatus([globalSession], [globalSession], [])
 
     expect(result.running.map((session) => session.id)).toEqual(['global-1'])
     expect(result.needsAttention.map((session) => session.id)).toEqual([
@@ -346,7 +320,7 @@ it('M5 foreground failure outranks a stranded running monitor in both global fil
     attention: 'failed',
     parallelWork: { running: 1, unknown: 0, failed: 0, stopped: 0 },
   })
-  const result = selectGlobalStatus([failed], {}, [])
+  const result = selectGlobalStatus([failed], [], [])
   expect({
     running: result.running,
     completed: result.lastCompleted?.id,
@@ -359,7 +333,7 @@ it('L9 an answered session with only unknown work remains in last-completed — 
     attention: 'finished',
     parallelWork: { running: 0, unknown: 1, failed: 0, stopped: 0 },
   })
-  const result = selectGlobalStatus([session], {}, [])
+  const result = selectGlobalStatus([session], [], [])
   expect({
     running: result.running,
     completed: result.lastCompleted?.id,
@@ -371,7 +345,7 @@ it('RUN77 answered remains activity at zero counts — mutation infer activity f
     attention: 'none',
     parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
   })
-  const status = selectGlobalStatus([session], {}, [])
+  const status = selectGlobalStatus([session], [], [])
   expect(status.running).toEqual([session])
   expect(status.lastCompleted).toBeNull()
 })

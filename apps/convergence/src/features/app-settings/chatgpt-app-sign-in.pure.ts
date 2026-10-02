@@ -73,7 +73,7 @@ export function chatGptSignInLine(input: {
       }
     case 'failed':
       return {
-        text: `Couldn't check sign-in: ${signIn.reason ?? 'no reason given.'}`,
+        text: `Couldn’t check sign-in: ${signIn.reason ?? 'no reason given.'}`,
         tone: 'muted',
       }
     case 'built-in':
@@ -146,7 +146,7 @@ export function configuredServerSignInLine(input: {
       }
     case 'failed':
       return {
-        text: `Couldn't check sign-in: ${signIn.reason ?? 'no reason given.'}`,
+        text: `Couldn’t check sign-in: ${signIn.reason ?? 'no reason given.'}`,
         tone: 'muted',
       }
     case 'unchecked':

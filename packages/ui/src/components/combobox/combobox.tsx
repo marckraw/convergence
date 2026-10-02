@@ -15,11 +15,14 @@ import {
   fieldTrigger,
   fieldTriggerSize,
 } from '#lib/control-frame.styles'
+import { focusRing } from '#lib/focus-ring.styles'
 import { popupMotion } from '../../motion/popup.styles'
+import { press } from '../../motion/press/press.styles'
 import { Badge } from '../badge/badge'
 import { Button, type ButtonVariant } from '../button/button'
 import { EmptyState } from '../empty-state/empty-state'
 import { SearchField } from '../search-field/search-field'
+import { chipLook, chosenChip } from '../toggle/toggle'
 import { Tooltip } from '../tooltip/tooltip'
 import {
   comboboxFooter,
@@ -90,11 +93,20 @@ type ComboboxSharedProps = {
   error?: string | null
   onRetry?: () => void
   /**
-   * The trigger's look: a Button's, for a toolbar or a chip (`secondary`
-   * unless told otherwise), or `field`, the field frame SelectTrigger and
-   * Input wear, for a form where it sits beside them (DLG-15).
+   * The trigger's look: a Button's, for a toolbar (`secondary` unless told
+   * otherwise); `chip`, a filter chip's (Toggle's), for a filter row where it
+   * sits beside chip Toggles (MC-15); or `field`, the field frame
+   * SelectTrigger and Input wear, for a form where it sits beside them
+   * (DLG-15).
    */
-  variant?: ButtonVariant | 'field'
+  variant?: ComboboxVariant
+  /**
+   * The trigger holds a choice that is on, such as a filter that narrows the
+   * room or a crew the session is in: R7's chosen look, the raised chip, as a
+   * pressed Toggle wears it, never a variant swapped in (DS-28). Not for
+   * `field`, which shows its value instead.
+   */
+  chosen?: boolean
   /** R3: the trigger's height, 24, 28, 32 or 36 px; `md` (32) unless told otherwise. */
   size?: ControlSize
   /** On the trigger: its width, or its place in a row. Never its height (R3). */
@@ -149,6 +161,25 @@ type ComboboxMultipleProps = ComboboxSharedProps & {
 }
 
 type ComboboxProps = ComboboxSingleProps | ComboboxMultipleProps
+
+/** A Button's look, a filter chip's, or the field frame's. */
+type ComboboxVariant = ButtonVariant | 'chip' | 'field'
+
+/**
+ * Chosen on a Button's trigger: the raised chip, held under the pointer, as
+ * a pressed Toggle keeps it (a Button's hover would swap its fill).
+ */
+const CHOSEN_BUTTON = cn(chosenChip, 'hover:bg-chip hover:text-ink')
+
+/** A chip trigger's box, as a Toggle's (R3 sizes and the press come from it). */
+const CHIP_TRIGGER = [
+  'inline-flex min-w-0 select-none items-center justify-between whitespace-nowrap',
+  press,
+  focusRing,
+  'data-disabled:pointer-events-none data-disabled:opacity-50',
+  "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  'app-no-drag',
+].join(' ')
 
 /** The trigger's chevron and icon size, by its size. */
 const CHEVRON = 'size-3 shrink-0 text-ink-muted'
@@ -208,6 +239,7 @@ function Combobox(props: ComboboxProps) {
     error,
     onRetry,
     variant = 'secondary',
+    chosen: holdsChoice = false,
     size = 'md',
     className,
     contentClassName,
@@ -410,6 +442,7 @@ function Combobox(props: ComboboxProps) {
       <ComboboxPrimitive.Trigger
         ref={setTrigger}
         aria-label={name}
+        data-chosen={holdsChoice && variant !== 'field' ? '' : undefined}
         {...(variant === 'field'
           ? {
               'data-slot': 'combobox-trigger',
@@ -421,15 +454,31 @@ function Combobox(props: ComboboxProps) {
                 className,
               ),
             }
-          : {
-              render: (
-                <Button
-                  variant={variant}
-                  size={size}
-                  className={cn('min-w-0 justify-between', className)}
-                />
-              ),
-            })}
+          : variant === 'chip'
+            ? {
+                'data-slot': 'combobox-trigger',
+                'data-size': size,
+                'data-variant': 'chip',
+                className: cn(
+                  CHIP_TRIGGER,
+                  chipLook(size),
+                  holdsChoice && chosenChip,
+                  className,
+                ),
+              }
+            : {
+                render: (
+                  <Button
+                    variant={variant}
+                    size={size}
+                    className={cn(
+                      'min-w-0 justify-between',
+                      holdsChoice && CHOSEN_BUTTON,
+                      className,
+                    )}
+                  />
+                ),
+              })}
       >
         <span className={comboboxNameRow}>
           {triggerIcon}
@@ -541,4 +590,5 @@ export {
   type ComboboxMultipleProps,
   type ComboboxProps,
   type ComboboxSingleProps,
+  type ComboboxVariant,
 }

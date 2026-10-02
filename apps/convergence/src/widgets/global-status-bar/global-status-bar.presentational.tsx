@@ -3,13 +3,21 @@ import type { AgentMeterSnapshot } from '@/shared/types/agent-meter.types'
 import { AgentMeterSummary } from './agent-meter-summary.presentational'
 import type { ProjectActivity } from '@/entities/session'
 import { summarizeAttentionRequests } from '@/entities/session'
-import { needsYouCount, needsYouVerb } from '@/features/needs-you'
+import {
+  needsYouCount,
+  needsYouTone,
+  needsYouVerb,
+  type NeedsYouTone,
+} from '@/features/needs-you'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
 import {
   cn,
   StatusDot,
   StatusPillButton,
+  toneInk,
+  toneLine,
+  toneSoft,
   Tooltip,
   TooltipCard,
 } from '@convergence/ui'
@@ -36,7 +44,10 @@ interface GlobalStatusBarProps {
   meter?: AgentMeterSnapshot
   meterSessions?: SessionSummary[]
   runningCount: number
+  /** What "N need you" counts (ruling 6). */
   attentionCount: number
+  /** Its tone (R1): warning while anything asks, danger for failed runs alone. */
+  attentionTone: NeedsYouTone | null
   byProject: ProjectActivity[]
   recency: RecencyBadge | null
   providers: ProviderInfo[]
@@ -49,6 +60,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
   meterSessions = [],
   runningCount,
   attentionCount,
+  attentionTone,
   byProject,
   recency,
   providers,
@@ -105,21 +117,24 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
               <div
                 className={cn(
                   aggregateChipClass,
-                  attentionCount > 0 &&
-                    'border-warning-line bg-warning-soft text-warning-ink',
+                  attentionTone && [
+                    toneLine[attentionTone],
+                    toneSoft[attentionTone],
+                    toneInk[attentionTone],
+                  ],
                 )}
               >
                 <CircleAlert
                   className={cn(
                     'h-3 w-3',
-                    attentionCount > 0 ? 'text-warning-ink' : 'text-ink-muted',
+                    attentionTone ? toneInk[attentionTone] : 'text-ink-muted',
                   )}
                 />
                 <span>
                   <span
                     className={cn(
                       'font-medium',
-                      attentionCount > 0 ? 'text-warning-ink' : 'text-ink',
+                      attentionTone ? toneInk[attentionTone] : 'text-ink',
                     )}
                   >
                     {attentionCount}
@@ -134,54 +149,50 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
             className={cn(zoneClass, 'min-w-0 flex-1 overflow-hidden')}
             data-testid="global-status-chips"
           >
-            {byProject.map((project) => (
-              <TooltipCard
-                key={project.projectId}
-                side="top"
-                className="max-w-sm"
-                content={
-                  <ProjectSummary
-                    project={project}
-                    providerLabel={providerLabel}
-                  />
-                }
-              >
-                <StatusPillButton
-                  type="button"
-                  onClick={() => onSelectProject(project.projectId)}
-                  data-testid={`global-status-chip-${project.projectId}`}
-                  aria-label={formatProjectChipLabel(project)}
-                  // Something waits on you here: the pill's warning (R1).
-                  tone={
-                    project.needsAttention.length > 0
-                      ? barTone.waiting
-                      : 'neutral'
-                  }
-                  leading={
-                    <StatusDot
-                      size="sm"
-                      tone={
-                        project.needsAttention.length > 0
-                          ? barTone.waiting
-                          : barTone.running
-                      }
+            {byProject.map((project) => {
+              const projectTone = needsYouTone(project.needsAttention)
+              return (
+                <TooltipCard
+                  key={project.projectId}
+                  side="top"
+                  className="max-w-sm"
+                  content={
+                    <ProjectSummary
+                      project={project}
+                      providerLabel={providerLabel}
                     />
                   }
                 >
-                  <span className={chipNameClass}>{project.projectName}</span>{' '}
-                  <span className="text-ink-muted">
-                    {project.running.length > 0 && (
-                      <span>{project.running.length}▸</span>
-                    )}
-                    {project.needsAttention.length > 0 && (
-                      <span className="ml-1 text-warning-ink">
-                        {project.needsAttention.length}!
-                      </span>
-                    )}
-                  </span>
-                </StatusPillButton>
-              </TooltipCard>
-            ))}
+                  <StatusPillButton
+                    type="button"
+                    onClick={() => onSelectProject(project.projectId)}
+                    data-testid={`global-status-chip-${project.projectId}`}
+                    aria-label={formatProjectChipLabel(project)}
+                    // Something waits on you here: warning while anything
+                    // asks, danger when only a failed run waits (R1, ruling 6).
+                    tone={projectTone ?? 'neutral'}
+                    leading={
+                      <StatusDot
+                        size="sm"
+                        tone={projectTone ?? barTone.running}
+                      />
+                    }
+                  >
+                    <span className={chipNameClass}>{project.projectName}</span>{' '}
+                    <span className="text-ink-muted">
+                      {project.running.length > 0 && (
+                        <span>{project.running.length}▸</span>
+                      )}
+                      {projectTone && (
+                        <span className={cn('ml-1', toneInk[projectTone])}>
+                          {project.needsAttention.length}!
+                        </span>
+                      )}
+                    </span>
+                  </StatusPillButton>
+                </TooltipCard>
+              )
+            })}
           </div>
         </>
       )}

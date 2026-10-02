@@ -13,7 +13,6 @@ interface ComposerInjectionRootPickerProps {
   highlightedIndex: number
   onSelect: (item: ComposerInjectionRootItem) => void
   onHover: (index: number) => void
-  onDismiss: () => void
 }
 
 function itemIcon(item: ComposerInjectionRootItem) {
@@ -34,23 +33,11 @@ function itemIcon(item: ComposerInjectionRootItem) {
  */
 export const ComposerInjectionRootPicker: FC<
   ComposerInjectionRootPickerProps
-> = ({
-  open,
-  listId,
-  items,
-  highlightedIndex,
-  onSelect,
-  onHover,
-  onDismiss,
-}) => {
+> = ({ open, listId, items, highlightedIndex, onSelect, onHover }) => {
   if (!open) return null
 
   return (
-    <InlinePicker
-      testId="composer-injection-root-picker"
-      closeLabel="Close injection picker"
-      onDismiss={onDismiss}
-    >
+    <InlinePicker testId="composer-injection-root-picker">
       {items.length === 0 ? (
         <InlinePickerState state="empty" title="No matching injections" />
       ) : (

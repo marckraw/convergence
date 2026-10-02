@@ -104,7 +104,7 @@ export const Empty: Story = {
   args: { space: { ...space, brief: '  ' }, artifacts: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No Space brief yet.')).toBeVisible()
-    await expect(canvas.getByText('No artifacts yet')).toBeVisible()
+    await expect(canvas.getByText('No Artifacts yet')).toBeVisible()
   },
 }
 

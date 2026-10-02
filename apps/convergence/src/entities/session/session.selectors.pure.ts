@@ -4,39 +4,23 @@ import {
 } from './conversation-prefix.pure'
 import { isSessionCompacting } from './session-compacting.pure'
 import type { Project } from '../project/project.types'
-import type {
-  ConversationItem,
-  NeedsYouDismissals,
-  SessionSummary,
-} from './session.types'
+import type { ConversationItem, SessionSummary } from './session.types'
 
 export interface ProjectActivity {
   projectId: string
   projectName: string
   running: SessionSummary[]
+  /** This project's share of what "N need you" counts. */
   needsAttention: SessionSummary[]
   providerIds: string[]
 }
 
 export interface GlobalStatus {
   running: SessionSummary[]
+  /** What "N need you" counts, as the caller passed it. */
   needsAttention: SessionSummary[]
   byProject: ProjectActivity[]
   lastCompleted: SessionSummary | null
-}
-
-function isAttentionSession(
-  session: SessionSummary,
-  dismissals: NeedsYouDismissals,
-): boolean {
-  if (
-    session.attention !== 'needs-input' &&
-    session.attention !== 'needs-approval'
-  ) {
-    return false
-  }
-  const dismissal = dismissals[session.id]
-  return !dismissal || dismissal.updatedAt !== session.updatedAt
 }
 
 function uniqueInOrder(values: string[]): string[] {
@@ -57,9 +41,19 @@ function isProjectSession(
   return session.contextKind === 'project' && session.projectId !== null
 }
 
+/**
+ * The status bar's account of every conversation: what runs, what waits on
+ * you, by project, and the last one to end.
+ *
+ * What waits on you comes in already derived (`needsYou`): "N need you" is one
+ * count, `needsYouSessions` in the Needs-you feature, beside its words, and
+ * the rail and Mission Control read it too (Marcin's ruling 6). An entity
+ * can't import a feature, so the bar hands the list down rather than this
+ * selector keeping a second rule of its own.
+ */
 export function selectGlobalStatus(
   sessions: SessionSummary[],
-  dismissals: NeedsYouDismissals,
+  needsYou: readonly SessionSummary[],
   projects: Project[],
 ): GlobalStatus {
   // A compacting conversation is busy (MAR-3288 R5). Its status still reads
@@ -72,9 +66,7 @@ export function selectGlobalStatus(
       session.status === 'answered' ||
       isSessionCompacting(session),
   )
-  const needsAttention = sessions.filter((session) =>
-    isAttentionSession(session, dismissals),
-  )
+  const needsAttention = [...needsYou]
 
   const projectNameById = new Map(
     projects.map((project) => [project.id, project.name]),

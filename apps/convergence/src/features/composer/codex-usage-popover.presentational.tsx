@@ -11,6 +11,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   Spinner,
+  StatusPillButton,
   Timestamp,
 } from '@convergence/ui'
 import { RefreshCw } from 'lucide-react'
@@ -26,7 +27,7 @@ import {
   renderUsageHeading,
   renderUsageNote,
 } from './usage-popover.presentational'
-import { usagePillTone, usageSection } from './usage-pill.styles'
+import { usageSection } from './usage-pill.styles'
 
 interface CodexUsagePopoverProps {
   snapshot: ProviderQuotaSnapshot | null
@@ -82,37 +83,39 @@ export function CodexUsagePopover({
       }}
     >
       <span onPointerEnter={openPanel} onPointerLeave={closePanelSoon}>
+        {/* A state you press to open what it is about: the pill of the
+            row's size, in its tone (DS-9). */}
         <PopoverTrigger
           render={
-            <Button
+            <StatusPillButton
+              size="sm"
+              tone={tone}
+              leading={
+                <Meter
+                  shape="ring"
+                  value={remaining ?? 0}
+                  label="Codex quota remaining"
+                  tone={tone}
+                  // Asking: the ring beats, and stands still under reduced
+                  // motion.
+                  className={
+                    isLoading || warmingUp
+                      ? 'animate-pulse motion-reduce:animate-none'
+                      : undefined
+                  }
+                />
+              }
               type="button"
-              variant="ghost"
               aria-label={label.ariaLabel}
               onClick={(event) => {
                 event.stopPropagation()
                 openPanel()
               }}
-              size="sm"
-              className={cn(
-                'shrink-0 gap-2 font-semibold',
-                usagePillTone[tone],
-              )}
+              className="shrink-0 font-semibold"
             />
           }
         >
-          <Meter
-            shape="ring"
-            value={remaining ?? 0}
-            label="Codex quota remaining"
-            tone={tone}
-            // Asking: the ring beats, and stands still under reduced motion.
-            className={
-              isLoading || warmingUp
-                ? 'animate-pulse motion-reduce:animate-none'
-                : undefined
-            }
-          />
-          <span>Codex {label.text}</span>
+          Codex {label.text}
         </PopoverTrigger>
       </span>
       <PopoverContent
@@ -206,7 +209,7 @@ export function CodexUsagePopover({
               onOpenSettings()
             }}
           >
-            Settings
+            Settings…
           </Button>
         </div>
       </PopoverContent>
