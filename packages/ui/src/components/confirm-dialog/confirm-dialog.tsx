@@ -46,6 +46,12 @@ type ConfirmDialogProps = {
   error?: ReactNode
   /** Anything the question needs besides its words: the list of what goes. */
   children?: ReactNode
+  /**
+   * Why the action can't go yet (R2), when `children` asks for something
+   * first, like a box to tick: the button stays focusable, says why, and
+   * does nothing until it is answered. Empty or missing: it can go.
+   */
+  confirmDisabledReason?: string
   onConfirm: () => void
   /** What gets the focus back when it closes, when it isn't what opened it: a menu's trigger. */
   finalFocus?: DialogPrimitive.Popup.Props['finalFocus']
@@ -76,6 +82,7 @@ function ConfirmDialog({
   pending = false,
   error,
   children,
+  confirmDisabledReason,
   onConfirm,
   finalFocus,
 }: ConfirmDialogProps) {
@@ -111,8 +118,9 @@ function ConfirmDialog({
             variant={danger ? 'danger' : 'primary'}
             pending={busy}
             pendingLabel={pendingLabel}
+            disabledReason={confirmDisabledReason}
             onClick={() => {
-              if (!pending) onConfirm()
+              if (!pending && !confirmDisabledReason) onConfirm()
             }}
           >
             {confirmLabel}
