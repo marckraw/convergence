@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Card, CardAction, cn, toneInk } from '@convergence/ui'
 import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
-import { ROW_CARD_DOOR_CLASS, ROW_CARD_PICKED_CLASS } from './row-card.styles'
+import { ROW_CARD_DOOR_CLASS } from './row-card.styles'
 import type { HistoryEventRow } from './run-history.pure'
 
 interface HistoryEventRowViewProps {
@@ -48,24 +48,18 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
       )}
     </>
   )
-  const frame = cn(
-    TONE_FRAME[HISTORY_TONE[event.tone]],
-    // R7: the picked event wears the selected fill.
-    selected && ROW_CARD_PICKED_CLASS,
-  )
+  const frame = TONE_FRAME[HISTORY_TONE[event.tone]]
+  // R7: the picked event is the selected row, the Card's fill and
+  // aria-current (on its door, when it has one), kept under the pointer.
   return (
     <li>
       {event.kind === 'held-group' ? (
-        <Card padding="none" className={frame}>
+        <Card padding="none" selected={selected} className={frame}>
           <div className={ROW_CARD_DOOR_CLASS}>{content}</div>
         </Card>
       ) : (
-        <Card interactive padding="none" className={frame}>
-          <CardAction
-            aria-pressed={selected}
-            onClick={onSelect}
-            className={ROW_CARD_DOOR_CLASS}
-          >
+        <Card interactive padding="none" selected={selected} className={frame}>
+          <CardAction onClick={onSelect} className={ROW_CARD_DOOR_CLASS}>
             {content}
           </CardAction>
         </Card>

@@ -29,8 +29,6 @@ import {
   ACTIVITY_TEXT_STYLES,
   CARD_ATTENTION_TONE,
   CARD_HAIL_OPEN_CLASS,
-  CARD_OPEN_CLASS,
-  CARD_TONE_FRAME,
   CARD_TONE_WASH,
   STATUS_DOT_TONE,
 } from './session-card.styles'
@@ -72,8 +70,8 @@ type SessionCardViewProps = Omit<
  * (MC-4): one card, so one session reads the same in every view. The corner
  * says what it needs or what it is doing, read once by
  * `readSessionCardSignal` (the host guard first); attention owns the frame in
- * its R1 tone; the body is the card's one door, its name a stretched action
- * that opens the conversation (or picks it, on an armed canvas).
+ * its R1 tone; the card is one door, its name a CardAction stretched over the
+ * whole card that opens the conversation (or picks it, on an armed canvas).
  *
  * The node drops the Hail, the crews and the footer: the canvas is for reading
  * how sessions are wired to each other, and the card grid is one click away
@@ -109,9 +107,16 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
       // The room measures card positions to open a Hail under the right row.
       data-session-card={grid ? '' : undefined}
       data-density={density}
-      // The conversation on screen, in the semantics a nav marks its current
-      // item with: the selected fill, and the ring below.
+      // One door, the name's CardAction, stretched over the whole card, the
+      // footer included; the controls in it sit above it (N6).
+      interactive
+      // The conversation on screen (MAR-3321), as R7 marks a selected row:
+      // the selected fill, and aria-current on the door. The fill wins over
+      // an attention tint while the tone keeps the edge, so the open card
+      // shows in every frame (ruling 11: no hand-drawn ring).
       selected={open}
+      // Attention owns the frame in its R1 tone: the Card's own `tone`.
+      tone={tone}
       // A working card breathes in its crew's colour, so a glance across the
       // room says who is busy. The stylesheet owns the animation; the card
       // hands it the colour and the knobs. Absent entirely when not working.
@@ -124,19 +129,17 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
       padding="none"
       className={cn(
         'group flex flex-col',
-        'border-hairline',
+        // No attention, no tone: the card's own hairline.
+        !tone && 'border-hairline',
         !grid && 'overflow-hidden',
-        open && CARD_OPEN_CLASS,
-        // After the open mark on purpose: attention owns the frame, its tint
-        // included, so the open card's fill yields to it.
-        tone && (grid ? CARD_TONE_FRAME[tone] : CARD_TONE_WASH[tone]),
+        !grid && tone && CARD_TONE_WASH[tone],
         hailOpen && CARD_HAIL_OPEN_CLASS,
         picked && '!border-info-solid ring-1 ring-info-line',
       )}
     >
       <div
         className={cn(
-          'relative flex flex-col text-left',
+          'flex flex-col text-left',
           grid ? 'gap-2 px-3 pt-3 pb-2' : 'flex-1 gap-1.5 px-3 py-2.5',
         )}
       >
@@ -262,7 +265,8 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
             <span className="truncate">{activity}</span>
           </span>
 
-          <div className="flex shrink-0 items-center gap-1">
+          {/* Raised above the card's door, so each stays its own control. */}
+          <div className="relative flex shrink-0 items-center gap-1">
             {crewAction}
 
             {onHail ? (

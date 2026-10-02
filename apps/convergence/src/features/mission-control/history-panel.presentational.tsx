@@ -14,7 +14,7 @@ import {
 } from '@convergence/ui'
 import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
 import { HistoryEventRowView } from './history-event-row.presentational'
-import { ROW_CARD_DOOR_CLASS, ROW_CARD_PICKED_CLASS } from './row-card.styles'
+import { ROW_CARD_DOOR_CLASS } from './row-card.styles'
 import { HISTORY_FILTERS } from './run-history.pure'
 import type {
   HistoryEventRow,
@@ -207,14 +207,12 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
               <Card
                 interactive
                 padding="none"
-                className={cn(
-                  TONE_FRAME[HISTORY_TONE[run.tone]],
-                  // R7: the picked run wears the selected fill.
-                  run.flowRunId === selectedRunId && ROW_CARD_PICKED_CLASS,
-                )}
+                // R7: the picked run is the selected row, the Card's fill and
+                // aria-current on its door, kept under the pointer.
+                selected={run.flowRunId === selectedRunId}
+                className={TONE_FRAME[HISTORY_TONE[run.tone]]}
               >
                 <CardAction
-                  aria-pressed={run.flowRunId === selectedRunId}
                   onClick={() => onSelectRun(run.flowRunId)}
                   className={ROW_CARD_DOOR_CLASS}
                 >

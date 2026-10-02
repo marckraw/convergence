@@ -145,7 +145,9 @@ export const Default: Story = {
     )
     await expect(args.onFilterChange).toHaveBeenCalledWith('handed-back')
     const selectedRun = canvas.getByRole('button', { name: /^14:32 · Fable/ })
-    await expect(selectedRun).toHaveAttribute('aria-pressed', 'true')
+    // R7: the picked run is the selected row, aria-current on its door.
+    await expect(selectedRun).toHaveAttribute('aria-current', 'true')
+    await expect(selectedRun).not.toHaveAttribute('aria-pressed')
     await userEvent.click(canvas.getByRole('button', { name: /^Yesterday/ }))
     await expect(args.onSelectRun).toHaveBeenCalledWith('run-1')
     await expect(

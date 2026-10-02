@@ -22,40 +22,24 @@ export const CARD_ATTENTION_TONE: Record<AttentionState, Tone | undefined> = {
 }
 
 /**
- * A grid card's attention frame: the tone's edge and its tint. Written after
- * the open mark, so the tint wins over the open card's selected fill.
- */
-export const CARD_TONE_FRAME: Record<Tone, string> = {
-  neutral: 'border-neutral-line bg-neutral-soft',
-  info: 'border-info-line bg-info-soft',
-  success: 'border-success-line bg-success-soft',
-  warning: 'border-warning-line bg-warning-soft',
-  danger: 'border-danger-line bg-danger-soft',
-}
-
-/**
- * A canvas node's attention frame. The node stays opaque over the canvas, so
- * the tint is laid over an opaque colour as an image rather than replacing it.
+ * A canvas node's attention wash. The frame is the Card's own `tone` (its
+ * edge and its tint, N6), as on a grid card; the node stays opaque over the
+ * canvas, so the tint is laid over an opaque colour as an image rather than
+ * replacing it.
  *
  * That colour is the canvas, not the node's own surface. A tone's tint over
  * the surface leaves the node's muted words at 4.4:1 in dark (warning: waiting
  * on you, an unreachable host), under the 4.5:1 text needs; over the canvas
  * they clear it in every tone and both themes (pinned in
  * app/theme-contrast.pure.test.ts). An image hides the colour from the
- * accessibility check, so the pin is the test, not the story. A tinted node
- * also drops the open card's selected fill, as a tinted grid card does: the
- * open mark is its ring.
+ * accessibility check, so the pin is the test, not the story.
  */
 export const CARD_TONE_WASH: Record<Tone, string> = {
-  neutral:
-    'border-neutral-line bg-canvas bg-linear-to-b from-neutral-soft to-neutral-soft',
-  info: 'border-info-line bg-canvas bg-linear-to-b from-info-soft to-info-soft',
-  success:
-    'border-success-line bg-canvas bg-linear-to-b from-success-soft to-success-soft',
-  warning:
-    'border-warning-line bg-canvas bg-linear-to-b from-warning-soft to-warning-soft',
-  danger:
-    'border-danger-line bg-canvas bg-linear-to-b from-danger-soft to-danger-soft',
+  neutral: 'bg-canvas bg-linear-to-b from-neutral-soft to-neutral-soft',
+  info: 'bg-canvas bg-linear-to-b from-info-soft to-info-soft',
+  success: 'bg-canvas bg-linear-to-b from-success-soft to-success-soft',
+  warning: 'bg-canvas bg-linear-to-b from-warning-soft to-warning-soft',
+  danger: 'bg-canvas bg-linear-to-b from-danger-soft to-danger-soft',
 }
 
 /**
@@ -86,22 +70,16 @@ export const STATUS_DOT_TONE: Record<SessionStatus, Tone> = {
 }
 
 /**
- * The card of the conversation open in the main view (MAR-3321). A bright ring
- * standing 2px off the card, so it reads outside every attention frame rather
- * than fighting it, plus the selected fill (R7). The fill is a background, so
- * it yields to an attention tint: the card places this before the attention
- * tone and the frame's colour wins wherever attention has one.
+ * The card whose Hail is open: the chosen chip's stronger edge (R7, ruling
+ * 11), never the focus colour, which marks only focus. An outline, so it is
+ * its own property, apart from the attention frame's border and the open
+ * card's selected fill, and all three can show on one card. Tailwind v4's
+ * `outline-1` carries the outline style as well as the width;
+ * `-outline-offset-1` lays it on the card's edge. Its Hail Toggle beside it
+ * is pressed, the raised chip.
  */
-export const CARD_OPEN_CLASS =
-  'ring-2 ring-ink/70 ring-offset-2 ring-offset-canvas bg-fill-selected'
-
-/**
- * The card whose Hail is open. An outline, not a ring, so it is a different
- * property from the open mark and both can show on one card. Tailwind v4's
- * `outline-1` carries the outline style as well as the width; `-outline-offset-1`
- * pulls it a pixel inside the edge.
- */
-export const CARD_HAIL_OPEN_CLASS = 'outline-1 outline-focus -outline-offset-1'
+export const CARD_HAIL_OPEN_CLASS =
+  'outline-1 outline-hairline-strong -outline-offset-1'
 
 /** The last line's ink: the run's own words, in its tone when it failed. */
 export const ACTIVITY_TEXT_STYLES: Record<SessionStatus, string> = {

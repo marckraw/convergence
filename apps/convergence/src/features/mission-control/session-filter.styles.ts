@@ -18,19 +18,15 @@ export const STATE_CHIP_PRESSED: Record<SessionCardState, string> = {
 /** A filter chip group: the chips in a wrapping row. */
 export const FILTER_CHIP_ROW_CLASS = 'flex flex-wrap items-center gap-1.5'
 
-/** A wrapping row of crew marks or swatches: on a card, in the decoration picker. */
+/** A wrapping row of crew marks on a card. */
 export const CREW_ROW_CLASS = 'flex flex-wrap items-center gap-1'
+
+/**
+ * The decoration picker's row of swatches: a RadioGroup, which stacks its
+ * choices unless told to run them in a row.
+ */
+export const CREW_SWATCH_ROW_CLASS = 'flex-row flex-wrap items-center gap-1'
 
 /** The filter row's "Clear filters": words that act, quiet beside the chips (MC-15, MC-7). */
 export const FILTER_CLEAR_CLASS =
   'px-2 text-2xs font-normal text-ink-muted hover:text-ink'
-
-/**
- * A picker's trigger in the filter row, drawn as the chips beside it: the
- * raised chip (R7's chosen look, a pressed Toggle's) once it narrows the room,
- * a quiet edge until then.
- */
-export const FILTER_CHIP_ON =
-  'border-hairline-strong bg-chip text-ink shadow-raised'
-export const FILTER_CHIP_OFF =
-  'border-hairline text-ink-muted hover:border-hairline-strong'

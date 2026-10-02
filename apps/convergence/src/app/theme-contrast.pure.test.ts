@@ -126,6 +126,10 @@ const PAIRS: ReadonlyArray<readonly [string, Backdrop, number]> = [
   // R7: the chosen chip and the selected row; R8: tooltips and dialogs.
   ['ink', 'chip', TEXT],
   ['ink', 'fill-selected', TEXT],
+  // A selected card's muted words on its fill: Mission Control's and Needs
+  // you's open conversation (R7, ruling 11). No provider wash over it: 6% of
+  // a provider's hue lifts the dark fill until these fall to 4.4:1.
+  ['ink-muted', 'fill-selected', TEXT],
   ['ink', { layer: 'glass', over: 'canvas' }, TEXT],
   ['ink', { layer: 'sheet', over: 'canvas' }, TEXT],
   // A category's word on its own pill (the hue at 10% over a card).
@@ -184,8 +188,8 @@ function colourTokens(): string[] {
 }
 
 describe('MAR-3460: theme color roles are readable in both themes', () => {
-  it('holds 117 pairs in each theme', () => {
-    expect(PAIRS).toHaveLength(117)
+  it('holds 118 pairs in each theme', () => {
+    expect(PAIRS).toHaveLength(118)
   })
 
   describe.each(['light', 'dark'] as const)('%s', (theme) => {
