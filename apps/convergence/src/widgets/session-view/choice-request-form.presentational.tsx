@@ -1,9 +1,17 @@
-import { useMemo, useState, type FC } from 'react'
+import { useId, useMemo, useState, type FC } from 'react'
 import type {
   InteractionQuestion,
   InteractionResponse,
 } from '@/entities/session'
-import { Button } from '@convergence/ui'
+import {
+  Button,
+  Checkbox,
+  ChoiceCard,
+  ChoiceField,
+  Fieldset,
+  FieldsetLegend,
+  RadioGroup,
+} from '@convergence/ui'
 
 interface ChoiceRequestFormProps {
   questions: InteractionQuestion[]
@@ -20,6 +28,7 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
   )
   const [answers, setAnswers] =
     useState<Record<string, string[]>>(initialAnswers)
+  const formId = useId()
 
   const canSubmit = questions.every(
     (question) => (answers[question.id] ?? []).length > 0,
@@ -42,57 +51,78 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
         onSubmit(response, formatChoiceAnswerDisplay(questions, answers))
       }}
     >
-      {questions.map((question) => (
-        <fieldset key={question.id} className="min-w-0 space-y-2">
-          <legend className="text-xs font-medium text-ink">
-            {question.header}
-          </legend>
-          <p className="text-sm text-ink-muted">{question.question}</p>
-          <div className="space-y-2">
-            {question.options.map((option) => {
-              const selected = (answers[question.id] ?? []).includes(
-                option.label,
-              )
-              return (
-                <Button
+      {questions.map((question) => {
+        const chosen = answers[question.id] ?? []
+        const choose = (value: string) =>
+          setAnswers((current) => ({
+            ...current,
+            [question.id]: toggleChoiceAnswer({
+              current: current[question.id] ?? [],
+              value,
+              multiSelect: question.multiSelect,
+            }),
+          }))
+        const questionId = `${formId}-${question.id}`
+        const head = (
+          <>
+            <FieldsetLegend className="text-xs text-ink">
+              {question.header}
+            </FieldsetLegend>
+            <p id={questionId} className="text-sm text-ink-muted">
+              {question.question}
+            </p>
+          </>
+        )
+        // Several answers: checkboxes with their words. One answer: a radio
+        // group of cards, the chosen one raised (R7, R9; CONV-9).
+        return question.multiSelect ? (
+          <Fieldset
+            key={question.id}
+            aria-describedby={questionId}
+            className="gap-2"
+          >
+            {head}
+            <div className="space-y-1">
+              {question.options.map((option) => (
+                <ChoiceField
                   key={option.label}
-                  type="button"
-                  variant="ghost"
-                  size="lg"
-                  aria-pressed={selected}
-                  className={[
-                    'h-auto w-full justify-start whitespace-normal rounded-md border px-3 py-2 text-left text-sm shadow-none',
-                    // R7: the chosen answer is ChoiceCard's chosen look, raised with a
-                    // stronger edge, not a blue tint.
-                    selected
-                      ? 'border-control-line bg-raised text-ink shadow-raised hover:bg-raised'
-                      : 'border-line-soft bg-canvas/60 text-ink-muted hover:bg-fill-hover hover:text-ink',
-                  ].join(' ')}
-                  onClick={() => {
-                    setAnswers((current) => ({
-                      ...current,
-                      [question.id]: toggleChoiceAnswer({
-                        current: current[question.id] ?? [],
-                        value: option.label,
-                        multiSelect: question.multiSelect,
-                      }),
-                    }))
-                  }}
+                  label={<span className="break-words">{option.label}</span>}
+                  hint={option.description}
                 >
-                  <span className="min-w-0 break-words">
-                    <span className="block font-medium">{option.label}</span>
-                    {option.description ? (
-                      <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
-                        {option.description}
-                      </span>
-                    ) : null}
-                  </span>
-                </Button>
-              )
-            })}
-          </div>
-        </fieldset>
-      ))}
+                  <Checkbox
+                    checked={chosen.includes(option.label)}
+                    onCheckedChange={() => choose(option.label)}
+                  />
+                </ChoiceField>
+              ))}
+            </div>
+          </Fieldset>
+        ) : (
+          <Fieldset
+            key={question.id}
+            aria-describedby={questionId}
+            className="gap-2"
+            render={
+              <RadioGroup
+                value={chosen[0] ?? null}
+                onValueChange={(value) => choose(value as string)}
+              />
+            }
+          >
+            {head}
+            <div className="space-y-2">
+              {question.options.map((option) => (
+                <ChoiceCard
+                  key={option.label}
+                  value={option.label}
+                  title={<span className="break-words">{option.label}</span>}
+                  description={option.description}
+                />
+              ))}
+            </div>
+          </Fieldset>
+        )
+      })}
       <Button type="submit" disabled={!canSubmit}>
         Answer
       </Button>
