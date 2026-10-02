@@ -102,6 +102,7 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
         )}
         onChange={onChange}
         disabled={disabled}
+        size="xs"
         className={stripSelectClass}
         searchPlaceholder="Search options..."
         emptyMessage="No matching options."

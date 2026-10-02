@@ -69,6 +69,14 @@ tokens that a test keeps equal to `tokens.css`; it sits under `src/styles`, out 
 reach. The app's xterm theme (`features/terminal-pane/xterm-setup.pure.ts`) still writes the same
 twenty hex values out again, and the sweep replaces them with `terminalTokens`.
 
+A transition that names what moves is a utility too: `transition-[width]` is an arbitrary value,
+which `no-magic-values` reports. Besides Tailwind's `transition-colors`, `transition-opacity` and
+`transition-transform`, the theme names three sets (`theme.css`, DS4): `transition-motion` (opacity,
+scale and translate: a popup, a dialog or a sheet coming and going), `transition-size` (height,
+width and opacity: a panel growing open) and `transition-fill` (width and the stroke's dash: a
+meter's reading). A value that is a CSS keyword rather than a size (`gap: inherit`) goes in
+`style`, as Button's busy label does.
+
 ## 2. Parts own their jobs
 
 `regex` rules over the app, where a hand-built copy drifts. (`no-invisible-focus-ring` reads

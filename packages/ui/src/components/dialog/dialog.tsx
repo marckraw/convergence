@@ -53,16 +53,17 @@ function DialogClose({ className, ...props }: DialogCloseProps) {
 }
 
 /**
- * Widths: 420, 560, 720 (today's, the default), 960 and 1280 px, each at
- * most the window less 1 rem a side, and nearly the whole window.
+ * Widths: 420, 560, 720 (today's, the default), 960 and 1280 px (the
+ * --layout-dialog tokens), each at most the window less 1 rem a side (the
+ * viewport's padding), and the whole window less that.
  */
 const DIALOG_SIZES = {
-  sm: 'w-[min(420px,calc(100vw-2rem))]',
-  md: 'w-[min(560px,calc(100vw-2rem))]',
-  lg: 'w-[min(var(--layout-dialog),calc(100vw-2rem))]',
-  xl: 'w-[min(960px,calc(100vw-2rem))]',
-  '2xl': 'w-[min(1280px,calc(100vw-2rem))]',
-  full: 'w-[96vw]',
+  sm: 'w-full max-w-dialog-sm',
+  md: 'w-full max-w-dialog-md',
+  lg: 'w-full max-w-dialog',
+  xl: 'w-full max-w-dialog-xl',
+  '2xl': 'w-full max-w-dialog-2xl',
+  full: 'w-full',
 } as const
 
 type DialogSize = keyof typeof DIALOG_SIZES
@@ -116,7 +117,7 @@ function DialogContent({
           data-slot="dialog-content"
           data-size={size}
           className={cn(
-            'relative flex max-h-[min(80vh,var(--layout-dialog-height))] min-h-0 flex-col overflow-hidden',
+            'relative flex max-h-dialog min-h-0 flex-col overflow-hidden',
             'rounded-xl border border-line bg-sheet text-ink shadow-overlay outline-none app-no-drag',
             DIALOG_SIZES[size],
             growMotion,

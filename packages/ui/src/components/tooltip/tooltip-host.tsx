@@ -300,9 +300,7 @@ function TooltipBubble({ open, shown, onGone, onLeft }: TooltipBubbleProps) {
     >
       {text.label}
       {text.detail ? (
-        <span className="mt-0.5 block text-[11px] opacity-70">
-          {text.detail}
-        </span>
+        <span className="mt-0.5 block text-2xs opacity-70">{text.detail}</span>
       ) : null}
       {text.shortcut ? (
         <Kbd aria-hidden className="ml-1.5">

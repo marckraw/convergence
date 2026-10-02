@@ -2,7 +2,7 @@ import { memo, useMemo, type FC, type Ref } from 'react'
 import { defaultRehypePlugins, Streamdown, type Components } from 'streamdown'
 import { mermaid as mermaidPlugin } from '@streamdown/mermaid'
 import { code as codePlugin } from '@streamdown/code'
-import { cn } from '@convergence/ui'
+import { cn, TextLink } from '@convergence/ui'
 
 const SHIKI_THEME: ['github-light', 'github-dark'] = [
   'github-light',
@@ -187,12 +187,11 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
     hr: ({ className, ...props }) => (
       <hr className={cn('my-4 border-border', className)} {...props} />
     ),
+    // Links leave for the browser, as every link in a transcript does; no
+    // glyph, so prose reads as prose.
     a: ({ className, ...props }) => (
-      <a
-        className={cn(
-          'break-all text-primary underline decoration-primary/40 underline-offset-4',
-          className,
-        )}
+      <TextLink
+        className={cn('break-all', className)}
         rel="noreferrer"
         target="_blank"
         {...props}
@@ -236,7 +235,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
     inlineCode: ({ className, children, ...props }) => (
       <code
         className={cn(
-          'rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 font-mono text-[0.92em] text-foreground',
+          'rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 font-mono text-code text-foreground',
           className,
         )}
         {...props}

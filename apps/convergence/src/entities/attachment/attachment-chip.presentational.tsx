@@ -1,6 +1,6 @@
 import type { FC } from 'react'
-import { FileText, FileType, Image as ImageIcon, X } from 'lucide-react'
-import { Button, cn, IconButton, Tooltip } from '@convergence/ui'
+import { FileText, FileType, Image as ImageIcon } from 'lucide-react'
+import { Button, Chip, Tooltip } from '@convergence/ui'
 import type { Attachment } from './attachment.types'
 
 interface AttachmentChipProps {
@@ -16,65 +16,62 @@ function truncateMiddle(value: string, max = 22): string {
   return `${value.slice(0, keep)}…${value.slice(-keep)}`
 }
 
+/**
+ * A file attached to a message (Chip): its name opens the preview, its ✕
+ * takes it off. One the provider can't take wears the danger tone, and the
+ * tooltip says why (R1, R2).
+ */
 export const AttachmentChip: FC<AttachmentChipProps> = ({
   attachment,
   capabilityError,
   onOpen,
   onRemove,
 }) => {
-  const hasError = !!capabilityError
   const displayName = truncateMiddle(attachment.filename)
   const kind = attachment.kind
 
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-md border bg-muted/40 py-1 pl-1.5 pr-1 text-xs',
-        hasError
-          ? 'border-destructive text-destructive'
-          : 'border-border text-muted-foreground',
-      )}
-      data-testid="attachment-chip"
-      data-attachment-id={attachment.id}
+  const name = (
+    <Tooltip label={capabilityError ?? attachment.filename}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        aria-label={`Preview ${attachment.filename}`}
+        onClick={() => onOpen(attachment)}
+        className="max-w-full gap-1.5 px-1 text-xs font-normal"
+      >
+        {attachment.thumbnailPath ? (
+          <img
+            src={`file://${attachment.thumbnailPath}`}
+            alt=""
+            className="size-4 rounded bg-background object-contain"
+          />
+        ) : kind === 'image' ? (
+          <ImageIcon className="size-3.5" />
+        ) : kind === 'pdf' ? (
+          <FileType className="size-3.5" />
+        ) : (
+          <FileText className="size-3.5" />
+        )}
+        <span className="min-w-0 truncate">{displayName}</span>
+      </Button>
+    </Tooltip>
+  )
+  const chip = {
+    tone: capabilityError ? ('danger' as const) : undefined,
+    'data-testid': 'attachment-chip',
+    'data-attachment-id': attachment.id,
+  }
+
+  return onRemove ? (
+    <Chip
+      {...chip}
+      onRemove={() => onRemove(attachment.id)}
+      removeLabel={`Remove ${attachment.filename}`}
     >
-      <Tooltip label={capabilityError ?? attachment.filename}>
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label={`Preview ${attachment.filename}. Press to open preview or Delete to remove.`}
-          onClick={() => onOpen(attachment)}
-          className="h-5 gap-1.5 px-1 font-normal"
-        >
-          {attachment.thumbnailPath ? (
-            <img
-              src={`file://${attachment.thumbnailPath}`}
-              alt=""
-              className="h-4 w-4 rounded bg-background object-contain"
-            />
-          ) : kind === 'image' ? (
-            <ImageIcon className="h-3.5 w-3.5" />
-          ) : kind === 'pdf' ? (
-            <FileType className="h-3.5 w-3.5" />
-          ) : (
-            <FileText className="h-3.5 w-3.5" />
-          )}
-          <span className="max-w-[12rem] truncate">{displayName}</span>
-        </Button>
-      </Tooltip>
-      {onRemove && (
-        <IconButton
-          label={`Remove ${attachment.filename}`}
-          type="button"
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove(attachment.id)
-          }}
-          size="xs"
-        >
-          <X className="h-3 w-3" />
-        </IconButton>
-      )}
-    </span>
+      {name}
+    </Chip>
+  ) : (
+    <Chip {...chip}>{name}</Chip>
   )
 }

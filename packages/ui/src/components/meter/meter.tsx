@@ -91,7 +91,7 @@ function Meter({
           <BaseMeter.Indicator
             data-slot="meter-indicator"
             className={cn(
-              'h-full rounded-full transition-all duration-panel motion-reduce:transition-none',
+              'h-full rounded-full transition-fill duration-panel motion-reduce:transition-none',
               toneSolid[wears],
             )}
           />
@@ -121,7 +121,7 @@ function Meter({
             strokeLinecap="round"
             strokeWidth={RING_STROKE}
             className={cn(
-              'transition-all duration-panel motion-reduce:transition-none',
+              'transition-fill duration-panel motion-reduce:transition-none',
               toneStroke[wears],
             )}
           />

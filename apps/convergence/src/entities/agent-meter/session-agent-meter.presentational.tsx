@@ -1,3 +1,4 @@
+import { Tooltip } from '@convergence/ui'
 import type { AgentMeterRow } from '@/shared/types/agent-meter.types'
 import { formatSessionMeter } from './agent-meter.pure'
 
@@ -14,17 +15,21 @@ export function SessionAgentMeter({
   remote?: boolean
 }) {
   if (!remote && !row?.usage) return null
+  // The header's Details row: a 16 px glyph column, an 88 px term, the value.
   return (
-    <div
-      className="grid grid-cols-[1rem_5.5rem_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 text-xs"
-      title="Agent CPU and memory. Standalone one-shot and per-turn agents are not metered."
-      data-testid="session-agent-meter"
-    >
-      <span />
-      <span className="text-muted-foreground">CPU / memory</span>
-      <span className="min-w-0 truncate text-right tabular-nums text-foreground">
-        {formatSessionMeter(row ?? undefined, remote)}
-      </span>
-    </div>
+    <Tooltip label="Agent CPU and memory. Standalone one-shot and per-turn agents are not metered.">
+      <div
+        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+        data-testid="session-agent-meter"
+      >
+        <span className="w-4 shrink-0" />
+        <span className="w-22 shrink-0 text-muted-foreground">
+          CPU / memory
+        </span>
+        <span className="min-w-0 flex-1 truncate text-right tabular-nums text-foreground">
+          {formatSessionMeter(row ?? undefined, remote)}
+        </span>
+      </div>
+    </Tooltip>
   )
 }

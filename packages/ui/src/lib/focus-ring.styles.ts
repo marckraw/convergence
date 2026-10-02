@@ -5,9 +5,8 @@
  * taste, and never type the classes out again.
  *
  * It keeps today's look (R0): 1 px, as the kit's `ring-1` drew it on Button,
- * Input, Textarea and the dialog's close button. The width is one custom
- * property, `--focus-width`, so a redesign raises it in one place; until a
- * theme defines it, the fallback is that 1 px.
+ * Input, Textarea and the dialog's close button. The width is one token,
+ * `--focus-width` in tokens.css, so a redesign raises it in one place.
  *
  * Each recipe names the ring's style (outline-solid) as well as its width. In
  * Tailwind 4, outline-none sets --tw-outline-style to none and a width alone
@@ -20,7 +19,7 @@
 const drawn = [
   'outline-none',
   'focus-visible:outline-solid',
-  'focus-visible:outline-[length:var(--focus-width,1px)]',
+  'focus-visible:outline-(length:--focus-width)',
   'focus-visible:outline-ring',
 ].join(' ')
 
@@ -36,7 +35,7 @@ export const focusRing = [drawn, 'focus-visible:outline-offset-0'].join(' ')
  */
 export const focusRingInset = [
   drawn,
-  'focus-visible:outline-offset-[calc(var(--focus-width,1px)*-1)]',
+  'focus-visible:-outline-offset-(--focus-width)',
 ].join(' ')
 
 /**
@@ -53,7 +52,7 @@ export const focusRingField = [drawn, 'focus-visible:-outline-offset-1'].join(
  */
 export const focusRingWithin = [
   'has-focus-visible:outline-solid',
-  'has-focus-visible:outline-[length:var(--focus-width,1px)]',
+  'has-focus-visible:outline-(length:--focus-width)',
   'has-focus-visible:outline-ring',
   'has-focus-visible:outline-offset-0',
 ].join(' ')

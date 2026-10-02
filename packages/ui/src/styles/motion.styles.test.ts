@@ -86,6 +86,10 @@ describe('MAR-3616: popups move on transitions, on Base UI’s first and last fr
     expect(stylesheet).toMatch(
       /--transition-duration-exit:\s*var\(--motion-exit\);/,
     )
+    // What moves is named: the fade, the grow and the travel, nothing else.
+    expect(stylesheet).toMatch(
+      /--transition-property-motion:\s*opacity, scale, translate;/,
+    )
   })
 
   it('the keyframes the app still plays keep their theme entries (conversation actions’ pop)', () => {
@@ -158,7 +162,7 @@ const fixtures = [
   ],
   [
     'sheet',
-    'transition-[translate,opacity] data-starting-style:translate-x-full motion-reduce:data-starting-style:translate-x-0 motion-reduce:data-starting-style:opacity-0',
+    'transition-motion data-starting-style:translate-x-full motion-reduce:data-starting-style:translate-x-0 motion-reduce:data-starting-style:opacity-0',
     createElement(
       Sheet,
       { open: true },

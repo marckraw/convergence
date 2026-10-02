@@ -1,8 +1,9 @@
-import { create } from 'zustand'
+import { create, type StoreApi } from 'zustand'
 import type {
   Attachment,
   AttachmentIngestFileInput,
   AttachmentIngestRejection,
+  AttachmentIngestResult,
 } from './attachment.types'
 import { attachmentApi } from './attachment.api'
 
@@ -81,6 +82,53 @@ function withResolvedAdded(
   }
 }
 
+/**
+ * One ingest, from dropped files or from the open dialog: the draft is in
+ * flight, then takes the attachments and the refusals that came back, or the
+ * reason the ingest failed as a refusal of its own. A dialog closed without a
+ * choice brings back nothing, and the draft is simply no longer in flight.
+ */
+async function ingestInto(
+  set: StoreApi<AttachmentStore>['setState'],
+  sessionId: string,
+  read: () => Promise<AttachmentIngestResult | null>,
+): Promise<void> {
+  set((state) =>
+    withDraft(state, sessionId, (d) => ({ ...d, ingestInFlight: true })),
+  )
+  try {
+    const result = await read()
+    if (!result) {
+      set((state) =>
+        withDraft(state, sessionId, (d) => ({ ...d, ingestInFlight: false })),
+      )
+      return
+    }
+    set((state) => {
+      const withDraftUpdate = withDraft(state, sessionId, (d) => ({
+        items: [...d.items, ...result.attachments],
+        rejections: [...d.rejections, ...result.rejections],
+        ingestInFlight: false,
+      }))
+      return withResolvedAdded(withDraftUpdate, sessionId, result.attachments)
+    })
+  } catch (err) {
+    set((state) =>
+      withDraft(state, sessionId, (d) => ({
+        ...d,
+        ingestInFlight: false,
+        rejections: [
+          ...d.rejections,
+          {
+            filename: 'ingest',
+            reason: err instanceof Error ? err.message : String(err),
+          },
+        ],
+      })),
+    )
+  }
+}
+
 export const useAttachmentStore = create<AttachmentStore>((set, get) => ({
   drafts: {},
   resolved: {},
@@ -103,77 +151,15 @@ export const useAttachmentStore = create<AttachmentStore>((set, get) => ({
     })
   },
 
-  ingestFiles: async (sessionId, files) => {
-    set((state) =>
-      withDraft(state, sessionId, (d) => ({ ...d, ingestInFlight: true })),
-    )
-    try {
-      const result = await attachmentApi.ingestFiles(sessionId, files)
-      set((state) => {
-        const withDraftUpdate = withDraft(state, sessionId, (d) => ({
-          items: [...d.items, ...result.attachments],
-          rejections: [...d.rejections, ...result.rejections],
-          ingestInFlight: false,
-        }))
-        return withResolvedAdded(withDraftUpdate, sessionId, result.attachments)
-      })
-    } catch (err) {
-      set((state) =>
-        withDraft(state, sessionId, (d) => ({
-          ...d,
-          ingestInFlight: false,
-          rejections: [
-            ...d.rejections,
-            {
-              filename: 'ingest',
-              reason: err instanceof Error ? err.message : String(err),
-            },
-          ],
-        })),
-      )
-    }
-  },
+  ingestFiles: (sessionId, files) =>
+    ingestInto(set, sessionId, () =>
+      attachmentApi.ingestFiles(sessionId, files),
+    ),
 
-  ingestFromOpenDialog: async (sessionId) => {
-    set((state) =>
-      withDraft(state, sessionId, (d) => ({ ...d, ingestInFlight: true })),
-    )
-    try {
-      const result = await attachmentApi.ingestFromOpenDialog(sessionId)
-      if (!result) {
-        set((state) =>
-          withDraft(state, sessionId, (d) => ({
-            ...d,
-            ingestInFlight: false,
-          })),
-        )
-        return
-      }
-
-      set((state) => {
-        const withDraftUpdate = withDraft(state, sessionId, (d) => ({
-          items: [...d.items, ...result.attachments],
-          rejections: [...d.rejections, ...result.rejections],
-          ingestInFlight: false,
-        }))
-        return withResolvedAdded(withDraftUpdate, sessionId, result.attachments)
-      })
-    } catch (err) {
-      set((state) =>
-        withDraft(state, sessionId, (d) => ({
-          ...d,
-          ingestInFlight: false,
-          rejections: [
-            ...d.rejections,
-            {
-              filename: 'ingest',
-              reason: err instanceof Error ? err.message : String(err),
-            },
-          ],
-        })),
-      )
-    }
-  },
+  ingestFromOpenDialog: (sessionId) =>
+    ingestInto(set, sessionId, () =>
+      attachmentApi.ingestFromOpenDialog(sessionId),
+    ),
 
   removeDraft: async (sessionId, attachmentId) => {
     set((state) =>
