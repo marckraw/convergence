@@ -44,7 +44,8 @@
   body {
     @apply text-ink;
     background: transparent;
-    font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;
+    /* The system's own face, read from its token, not a copy of its value. */
+    font-family: var(--type-family-sans);
     -webkit-font-smoothing: antialiased;
   }
 }

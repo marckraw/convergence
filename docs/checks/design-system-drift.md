@@ -69,15 +69,17 @@ tokens and their TypeScript mirrors are written.
 The terminal needs no exclusion. xterm can't read CSS, so `@convergence/ui` exports
 `terminalTokens` (`packages/ui/src/styles/terminal.tokens.ts`), a mirror of the `--terminal-*`
 tokens that a test keeps equal to `tokens.css`; it sits under `src/styles`, out of the rule's
-reach. The app's xterm theme (`features/terminal-pane/xterm-setup.pure.ts`) still writes the same
-twenty hex values out again, and the sweep replaces them with `terminalTokens`.
+reach. The app's xterm theme (`features/terminal-pane/xterm-setup.pure.ts`) reads its colours from
+`terminalTokens`, so no hex value is typed out in the app.
 
 A breakpoint can't be a token's `var()`, since a media query doesn't read custom properties, so a
 breakpoint Tailwind doesn't name is a `--breakpoint-*` in a theme block: Learn Loom's two-column
-point is `--breakpoint-learn-loom: 53.75rem` in the app's `global.css`, worn as `learn-loom:`. The
-breakpoint branch reads viewport breakpoints only: an arbitrary container query (`@min-[56rem]:`,
-the Actions button's placement in `conversation-actions.styles.ts`) is a container size, which
-the placement test reads by its number, and is left for the sweep that names container sizes.
+point is `--breakpoint-learn-loom: 53.75rem` in the app's `global.css`, worn as `learn-loom:`. A
+container query can't read `var()` either, so a container size is a `--container-*` there too (DS8,
+CONV-29): the Actions button moves beside the composer at `--container-actions-beside: 56rem`, the
+conversation column's 42rem and 7rem each side, worn as `@min-actions-beside:`; the placement test
+reads that number from `global.css`. The rule reads `@min-[…]:` and `@max-[…]:` as it reads a
+viewport's `min-[…]:`.
 
 `motion-from-tokens` reads the app's stylesheets as well as its code (DS6): `global.css` had typed
 the notifications pulse's `600ms ease-out` and the working card's `ease-in-out` where the tokens
