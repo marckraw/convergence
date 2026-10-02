@@ -14,6 +14,7 @@ import {
   Button,
   Checkbox,
   cn,
+  focusRingWithin,
   IconButton,
   Input,
   Notice,
@@ -404,9 +405,12 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 Issues this seat may hold at once
               </span>
             </div>
+            {/* The box is the field: it rings while the keyboard is in it,
+                and the number inside is a bare Input (DS-7). */}
             <div
               className={cn(
                 'flex h-control-md items-center rounded-md border',
+                focusRingWithin,
                 problems.wipLimit !== undefined
                   ? 'border-danger-solid'
                   : 'border-hairline-strong',
@@ -433,7 +437,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 aria-invalid={problems.wipLimit !== undefined || undefined}
                 onChange={(event) => onWipChange(event.target.value)}
                 onBlur={onWipCommit}
-                className="w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:outline-none [&::-webkit-inner-spin-button]:appearance-none"
+                variant="bare"
+                className="w-9 p-0 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
               />
               <IconButton
                 label={`Raise the WIP limit for ${label}`}

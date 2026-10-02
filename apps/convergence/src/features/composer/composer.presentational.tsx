@@ -825,7 +825,8 @@ export const Composer: FC<ComposerProps> = ({
               }
               disabled={disabled}
               rows={1}
-              className="min-h-0 resize-none border-0 px-0 py-0 text-ink shadow-none focus-visible:outline-none"
+              variant="bare"
+              className="text-ink"
             />
           </div>
           <div className="mt-2 flex items-center justify-between">

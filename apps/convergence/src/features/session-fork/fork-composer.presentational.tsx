@@ -88,7 +88,8 @@ export const ForkComposer: FC<ForkComposerProps> = ({
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="min-h-0 resize-none border-0 px-0 py-0 text-ink shadow-none focus-visible:outline-none"
+        variant="bare"
+        className="text-ink"
       />
       <div className="mt-2 flex flex-wrap items-center gap-1">
         <Button
