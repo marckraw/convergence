@@ -352,9 +352,10 @@ export const SpaceWorkboardDialogContainer: FC<{
     })
   }, [attemptsBySpaceId, projects, selectedSpace, sessions, workspaces])
 
-  const selectedArtifacts = selectedSpace
-    ? (artifactsBySpaceId[selectedSpace.id] ?? [])
-    : []
+  const selectedArtifacts = useMemo(
+    () => (selectedSpace ? (artifactsBySpaceId[selectedSpace.id] ?? []) : []),
+    [artifactsBySpaceId, selectedSpace],
+  )
 
   const handleAttemptRoleChange = useCallback(
     async (attemptId: string, role: SpaceAttemptRole) => {

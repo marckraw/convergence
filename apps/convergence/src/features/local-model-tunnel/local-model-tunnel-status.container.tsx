@@ -72,7 +72,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
     return localModelTunnelApi.onChanged(ingest)
   }, [load, ingest])
 
-  const profiles = snapshot?.profiles ?? []
+  const profiles = useMemo(() => snapshot?.profiles ?? [], [snapshot])
   const aggregate = useMemo(
     () => selectLocalModelTunnelAggregate(snapshot),
     [snapshot],
