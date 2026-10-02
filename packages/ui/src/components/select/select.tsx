@@ -7,6 +7,7 @@ import {
   fieldTrigger,
   fieldTriggerSize,
 } from '#lib/control-frame.styles'
+import { textStack } from '#lib/text-stack.styles'
 import { Button } from '../button/button'
 import {
   popupItem,
@@ -289,7 +290,7 @@ function SelectItem({
           {children}
         </SelectPrimitive.ItemText>
       ) : (
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className={textStack}>
           <SelectPrimitive.ItemText className={itemText}>
             {children}
           </SelectPrimitive.ItemText>
