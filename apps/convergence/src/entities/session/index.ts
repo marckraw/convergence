@@ -134,6 +134,10 @@ export {
   formatSessionAttentionLabel,
   summarizeAttentionRequests,
 } from './session-attention.pure'
+export {
+  ATTENTION_WORDS,
+  inputRequestWords,
+} from './session-attention-words.pure'
 export { resolveMidRunInputPolicy } from './mid-run-input.pure'
 export type {
   MidRunInputPolicy,

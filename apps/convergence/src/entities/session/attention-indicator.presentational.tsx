@@ -16,24 +16,21 @@ import {
 } from './session-compacting.pure'
 import { SessionBadge } from './session-badge.presentational'
 import { ATTENTION_TONE, type LabelledAttention } from './session-tone.pure'
+import { ATTENTION_WORDS } from './session-attention-words.pure'
 
 /**
  * The words of each attention that has something to say to a human: every
- * `AttentionState` except `'none'`, which by definition has nothing. Its tone
- * is the session's map (`ATTENTION_TONE`, R1).
+ * `AttentionState` except `'none'`, which by definition has nothing. They are
+ * the session's one map (`ATTENTION_WORDS`, CONV-3), which the request cards
+ * and `formatSessionAttentionLabel` read too; its tone is the session's map
+ * (`ATTENTION_TONE`, R1).
  *
- * Written over `LabelledAttention`, an exclusion, so the maps are exhaustive
- * at the type level: a new attention value is a missing key here, and a
+ * Both maps are written over `LabelledAttention`, an exclusion, so they are
+ * exhaustive at the type level: a new attention value is a missing key, and a
  * compile error, rather than a value that reaches the fallback below and
  * renders as nothing (MAR-2590).
  */
-const labelMap = {
-  'needs-approval': 'Needs Approval',
-  'needs-input': 'Needs Input',
-  finished: 'Finished',
-  failed: 'Failed',
-  'host-unreachable': 'Host Unreachable',
-} satisfies Record<LabelledAttention, string>
+const labelMap: Record<LabelledAttention, string> = ATTENTION_WORDS
 
 /**
  * Whether an attention value has an entry of its own in the maps.

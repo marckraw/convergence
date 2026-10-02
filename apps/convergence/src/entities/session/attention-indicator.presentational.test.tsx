@@ -43,13 +43,13 @@ describe('AttentionIndicator', () => {
     it('renders the approval label when the session is blocked on approval', () => {
       render(<AttentionIndicator attention="needs-approval" status="running" />)
 
-      expect(screen.getByText('Needs Approval')).toBeInTheDocument()
+      expect(screen.getByText('Approval needed')).toBeInTheDocument()
     })
 
     it('renders the input label when the session is blocked on input', () => {
       render(<AttentionIndicator attention="needs-input" status="running" />)
 
-      expect(screen.getByText('Needs Input')).toBeInTheDocument()
+      expect(screen.getByText('Input needed')).toBeInTheDocument()
     })
 
     it('renders the finished label when the session finished', () => {
