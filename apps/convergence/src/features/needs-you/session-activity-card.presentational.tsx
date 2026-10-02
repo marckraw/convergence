@@ -4,12 +4,11 @@ import {
   ClipboardList,
   Infinity as InfinityIcon,
   Laptop,
-  Loader2,
   Pin,
   Server,
 } from 'lucide-react'
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { Button, cn, Tooltip } from '@convergence/ui'
+import { Button, cn, Spinner, Tooltip } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
@@ -62,8 +61,8 @@ export function SessionActivityCard({
         } as CSSProperties
       }
       className={cn(
-        'needs-you-card relative flex min-w-0 flex-wrap items-start rounded-lg shadow-sm ring-1 ring-border/60 transition-colors',
-        active && 'ring-foreground/25',
+        'needs-you-card relative flex min-w-0 flex-wrap items-start rounded-lg shadow-control ring-1 ring-line-soft transition-colors',
+        active && 'ring-ink/25',
       )}
     >
       <div className="min-w-0 flex-1 p-2 text-left">
@@ -91,7 +90,7 @@ export function SessionActivityCard({
             aria-current={active ? 'true' : undefined}
             size="lg"
             className={cn(
-              'static h-auto min-w-0 w-full items-start justify-start whitespace-normal rounded-lg p-0 text-left after:absolute after:inset-0 after:rounded-lg hover:bg-transparent hover:text-foreground',
+              'static h-auto min-w-0 w-full items-start justify-start whitespace-normal rounded-lg p-0 text-left after:absolute after:inset-0 after:rounded-lg hover:bg-transparent hover:text-ink',
               compact && 'flex',
             )}
           >
@@ -114,25 +113,20 @@ export function SessionActivityCard({
                   />
                 )}
                 {regeneratingName && (
-                  <Loader2
-                    aria-label="Regenerating name"
-                    className="size-3 shrink-0 animate-spin motion-reduce:animate-none"
-                  />
+                  <span role="img" aria-label="Regenerating name">
+                    <Spinner size="xs" />
+                  </span>
                 )}
               </span>
               {!compact && (
-                <span
-                  className="block truncate text-2xs text-muted-foreground"
-                  title={card.projectName}
-                >
-                  {card.projectName}
-                </span>
+                <Tooltip label={card.projectName} when="truncated">
+                  <span className="block truncate text-2xs text-ink-muted">
+                    {card.projectName}
+                  </span>
+                </Tooltip>
               )}
               {!compact && (
-                <span
-                  className="block break-words text-2xs text-foreground"
-                  title={session.model || 'Model not recorded'}
-                >
+                <span className="block break-words text-2xs text-ink">
                   {session.model || 'Model not recorded'}
                 </span>
               )}
@@ -140,7 +134,7 @@ export function SessionActivityCard({
           </Button>
         </Tooltip>
         {compact && (
-          <div className="mt-1 flex min-w-0 items-center gap-1 text-3xs font-normal leading-3 text-muted-foreground">
+          <div className="mt-1 flex min-w-0 items-center gap-1 text-3xs font-normal leading-3 text-ink-muted">
             <NeedsYouCardIcon label={provider.label} compact>
               <ProviderIcon
                 providerId={session.providerId}
@@ -148,12 +142,14 @@ export function SessionActivityCard({
                 className="size-3"
               />
             </NeedsYouCardIcon>
-            <span
-              className="min-w-0 flex-1 truncate"
-              title={session.model || 'Model not recorded'}
+            <Tooltip
+              label={session.model || 'Model not recorded'}
+              when="truncated"
             >
-              {session.model || 'Model not recorded'}
-            </span>
+              <span className="min-w-0 flex-1 truncate">
+                {session.model || 'Model not recorded'}
+              </span>
+            </Tooltip>
             <NeedsYouCardIcon label={card.host} compact>
               <HostIcon aria-hidden="true" className="size-3" />
             </NeedsYouCardIcon>
@@ -169,8 +165,7 @@ export function SessionActivityCard({
         )}
         {compact && card.hostLiveness && (
           <time
-            className="block text-3xs text-muted-foreground"
-            title={session.executionHostLastEventAt ?? undefined}
+            className="block text-3xs text-ink-muted"
             dateTime={session.executionHostLastEventAt ?? undefined}
           >
             {card.hostLiveness}
@@ -181,22 +176,15 @@ export function SessionActivityCard({
           <div className="mt-1 space-y-1">
             {session.pullRequest && <NeedsYouPr pr={session.pullRequest} />}
             <NeedsYouCardStatus card={card} />
-            <span className="block text-3xs font-normal text-muted-foreground">
+            <span className="block text-3xs font-normal text-ink-muted">
               {card.hostLiveness ? (
-                <time
-                  title={session.executionHostLastEventAt ?? undefined}
-                  dateTime={session.executionHostLastEventAt ?? undefined}
-                >
+                <time dateTime={session.executionHostLastEventAt ?? undefined}>
                   {card.hostLiveness}
                 </time>
               ) : (
                 <>
                   Last moved{' '}
-                  <time
-                    title={session.updatedAt}
-                    dateTime={session.updatedAt}
-                    className="tabular-nums"
-                  >
+                  <time dateTime={session.updatedAt} className="tabular-nums">
                     {card.lastMoved}
                   </time>
                 </>

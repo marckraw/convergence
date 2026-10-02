@@ -49,7 +49,11 @@ it.each(Object.entries(cardFixtures))(
     if (session.executionHost === 'lm')
       expect(screen.getByText('host · not recorded')).toBeInTheDocument()
     else
-      expect(screen.getByTitle(session.updatedAt)).toHaveTextContent('5 m ago')
+      // The moment is the <time>'s dateTime; no raw ISO as a native title
+      // (MC-27, R2).
+      expect(
+        document.querySelector(`time[datetime="${session.updatedAt}"]`),
+      ).toHaveTextContent('5 m ago')
     if (session.pullRequest)
       expect(
         screen.getByRole('link', { name: /Pull request #42/ }),

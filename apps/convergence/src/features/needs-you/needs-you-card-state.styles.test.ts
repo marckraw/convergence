@@ -14,16 +14,23 @@ const home = 'features/needs-you/needs-you-card-state.styles.ts'
  * decision; a new copy of the card tone fails the pin instead.
  */
 const otherFacts: Readonly<Record<string, readonly string[]>> = {
-  // The PR chip colours the pull request's own state (closed, changes asked).
+  // The PR chip colours the pull request's own state (closed, changes asked,
+  // open), in the same tone inks.
   'features/needs-you/needs-you-pr.presentational.tsx': [
-    'text-warning-foreground',
-    'text-destructive',
+    'text-warning-ink',
+    'text-danger-ink',
+    'text-success-ink',
   ],
-  // The Delete items of the sidebar's context menus.
+  // The Delete items of the sidebar's context menus (the danger ink, under
+  // either name while the sweep renames it).
   'widgets/sidebar/global-chat-session-list.presentational.tsx': [
     'text-destructive',
+    'text-danger-ink',
   ],
-  'widgets/sidebar/project-tree.container.tsx': ['text-destructive'],
+  'widgets/sidebar/project-tree.container.tsx': [
+    'text-destructive',
+    'text-danger-ink',
+  ],
 }
 
 function sourceFiles(directory: string): string[] {

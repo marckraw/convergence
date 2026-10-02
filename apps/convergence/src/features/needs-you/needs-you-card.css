@@ -1,19 +1,24 @@
+/*
+ * A Needs-you card is washed in its provider's hue token (--provider-*, R1's
+ * category hues) at 6 % over the surface, and the ink at 4 % more under the
+ * pointer. Its muted words are the app's own --ink-muted: the card no longer
+ * redefines "muted" for itself (MC-4).
+ */
 @layer components {
   .needs-you-card {
-    --needs-you-provider-tint: var(--card);
+    --needs-you-provider-tint: var(--surface);
     --needs-you-card-surface: color-mix(
       in srgb,
       var(--needs-you-provider-tint) 6%,
-      var(--card)
+      var(--surface)
     );
-    --muted-foreground: color-mix(in srgb, var(--foreground) 70%, var(--card));
     background-color: var(--needs-you-card-surface);
   }
 
   .needs-you-card:hover {
     background-color: color-mix(
       in srgb,
-      var(--foreground) 4%,
+      var(--ink) 4%,
       var(--needs-you-card-surface)
     );
   }

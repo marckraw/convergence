@@ -77,7 +77,7 @@ export function NeedsYouCard({
                 type="button"
                 variant="ghost"
                 size="lg"
-                className="w-10 shrink-0 rounded-lg"
+                className="shrink-0 rounded-lg"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </IconButton>
