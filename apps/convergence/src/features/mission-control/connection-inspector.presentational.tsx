@@ -157,6 +157,29 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
   const activeBeforeDelivery = beforeDelivery.find(
     (option) => option.mode === draft.beforeDelivery,
   )
+  // What each picker's trigger says. A picker is named "Field: value" (MC-12),
+  // as the composer's are: its value alone told a screen reader "Opus,
+  // combobox" and never which choice that was.
+  const recipientValue = spawning
+    ? 'Start a new session…'
+    : (recipientName ?? 'Choose a conversation')
+  const hostValue = spec
+    ? (hostOptions.find((option) => option.id === spec.executionHost)?.label ??
+      spec.executionHost)
+    : ''
+  const providerValue =
+    providerOptions.find((option) => option.id === spec?.providerId)?.label ??
+    'Pick a provider'
+  const modelValue =
+    modelOptions.find((option) => option.id === spec?.model)?.label ??
+    'Default model'
+  const effortValue =
+    effortOptions.find((option) => option.id === spec?.effort)?.label ??
+    'Default effort'
+  const projectValue =
+    projectOptions.find(
+      (option) => option.id === (spec?.projectId ?? GLOBAL_PROJECT_OPTION_ID),
+    )?.label ?? 'Pick a project'
 
   return (
     <section
@@ -236,11 +259,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         <SectionLabel as="h4">Recipient</SectionLabel>
         <Combobox
           selectedId={selectedRecipientOptionId(draft)}
-          value={
-            spawning
-              ? 'Start a new session…'
-              : (recipientName ?? 'Choose a conversation')
-          }
+          value={recipientValue}
+          ariaLabel={`Recipient: ${recipientValue}`}
           items={[
             ...recipientOptions,
             // R9: the spawn path survives the redesign. A crew often has no
@@ -274,10 +294,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           <p className="text-2xs text-ink-muted">Execution host</p>
           <Combobox
             selectedId={spec.executionHost}
-            value={
-              hostOptions.find((option) => option.id === spec.executionHost)
-                ?.label ?? spec.executionHost
-            }
+            value={hostValue}
+            ariaLabel={`Execution host: ${hostValue}`}
             items={hostOptions}
             onChange={(executionHost) =>
               onSpawnChange({
@@ -339,10 +357,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           ) : null}
           <Combobox
             selectedId={spec.providerId}
-            value={
-              providerOptions.find((option) => option.id === spec.providerId)
-                ?.label ?? 'Pick a provider'
-            }
+            value={providerValue}
+            ariaLabel={`Provider: ${providerValue}`}
             items={providerOptions}
             onChange={(id) =>
               onSpawnChange({ providerId: id, model: null, effort: null })
@@ -355,10 +371,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           {modelOptions.length > 0 ? (
             <Combobox
               selectedId={spec.model}
-              value={
-                modelOptions.find((option) => option.id === spec.model)
-                  ?.label ?? 'Default model'
-              }
+              value={modelValue}
+              ariaLabel={`Model: ${modelValue}`}
               items={modelOptions}
               onChange={(id) => onSpawnChange({ model: id, effort: null })}
               disabled={busy}
@@ -370,10 +384,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           {effortOptions.length > 0 ? (
             <Combobox
               selectedId={spec.effort}
-              value={
-                effortOptions.find((option) => option.id === spec.effort)
-                  ?.label ?? 'Default effort'
-              }
+              value={effortValue}
+              ariaLabel={`Effort: ${effortValue}`}
               items={effortOptions}
               onChange={(id) => onSpawnChange({ effort: id })}
               disabled={busy}
@@ -394,12 +406,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           />
           <Combobox
             selectedId={spec.projectId ?? GLOBAL_PROJECT_OPTION_ID}
-            value={
-              projectOptions.find(
-                (option) =>
-                  option.id === (spec.projectId ?? GLOBAL_PROJECT_OPTION_ID),
-              )?.label ?? 'Pick a project'
-            }
+            value={projectValue}
+            ariaLabel={`Project: ${projectValue}`}
             items={projectOptions}
             onChange={(id) =>
               onSpawnChange({

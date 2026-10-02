@@ -878,7 +878,9 @@ describe('MissionControl', () => {
         const panel = within(
           await screen.findByRole('region', { name: 'Connection' }),
         )
-        fireEvent.click(panel.getByRole('combobox', { name: 'Opus' }))
+        fireEvent.click(
+          panel.getByRole('combobox', { name: 'Recipient: Opus' }),
+        )
         fireEvent.click(await screen.findByText('Start a new session…'))
         if (beforeHost) {
           const report = panel.getByRole('switch', {
@@ -887,12 +889,14 @@ describe('MissionControl', () => {
           fireEvent.click(report)
           fireEvent.click(report)
         }
-        fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
+        fireEvent.click(
+          panel.getByRole('combobox', { name: 'Execution host: Local' }),
+        )
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
         fireEvent.click(
-          panel.getByRole('combobox', { name: 'Pick a provider' }),
+          panel.getByRole('combobox', { name: 'Provider: Pick a provider' }),
         )
         fireEvent.click(
           await screen.findByRole('option', { name: /claude-code/ }),
@@ -932,13 +936,23 @@ describe('MissionControl', () => {
               name: 'Report back to Fable when it finishes',
             }),
           )
-        fireEvent.click(panel.getByRole('combobox', { name: 'little-monster' }))
+        fireEvent.click(
+          panel.getByRole('combobox', {
+            name: 'Execution host: little-monster',
+          }),
+        )
         fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
-        fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
+        fireEvent.click(
+          panel.getByRole('combobox', { name: 'Execution host: Local' }),
+        )
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
-        fireEvent.click(panel.getByRole('combobox', { name: 'little-monster' }))
+        fireEvent.click(
+          panel.getByRole('combobox', {
+            name: 'Execution host: little-monster',
+          }),
+        )
         fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
         expect(
           panel.getByRole('switch', {
@@ -949,7 +963,9 @@ describe('MissionControl', () => {
           expect(panel.getByLabelText('Return instructions')).toHaveValue(
             'Keep this report instruction.',
           )
-        fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
+        fireEvent.click(
+          panel.getByRole('combobox', { name: 'Execution host: Local' }),
+        )
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
@@ -1042,14 +1058,18 @@ describe('MissionControl', () => {
         const panel = within(
           await screen.findByRole('region', { name: 'Connection' }),
         )
-        fireEvent.click(panel.getByRole('combobox', { name: 'Opus' }))
+        fireEvent.click(
+          panel.getByRole('combobox', { name: 'Recipient: Opus' }),
+        )
         fireEvent.click(await screen.findByText('Start a new session…'))
-        fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
+        fireEvent.click(
+          panel.getByRole('combobox', { name: 'Execution host: Local' }),
+        )
         fireEvent.click(
           await screen.findByRole('option', { name: 'little-monster' }),
         )
         fireEvent.click(
-          panel.getByRole('combobox', { name: 'Pick a provider' }),
+          panel.getByRole('combobox', { name: 'Provider: Pick a provider' }),
         )
         fireEvent.click(
           await screen.findByRole('option', { name: /claude-code/ }),
