@@ -1,5 +1,6 @@
 import { type KeyboardEvent, type PointerEvent, useEffect, useRef } from 'react'
 import { cn } from '#lib/cn.pure'
+import { resizeHandleStyles } from './resize-handle.styles'
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value))
@@ -120,13 +121,10 @@ function ResizeHandle({
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onDoubleClick={onReset}
+      // Its pointer says what it does: a resize, not the hand of a click.
       className={cn(
-        'app-no-drag relative z-10 shrink-0 touch-none bg-clip-content outline-none transition-colors select-none',
-        // Its pointer says what it does: a resize, not the hand of a click.
-        'hover:bg-hairline active:bg-hairline-strong focus-visible:bg-focus',
-        orientation === 'vertical'
-          ? '-mx-1.5 w-px cursor-col-resize self-stretch border-x-6 border-x-transparent'
-          : '-my-1.5 h-px w-full cursor-row-resize border-y-6 border-y-transparent',
+        resizeHandleStyles.base,
+        resizeHandleStyles[orientation],
         className,
       )}
     />

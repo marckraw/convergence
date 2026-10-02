@@ -233,6 +233,7 @@ export {
   ResizeHandle,
   type ResizeHandleProps,
 } from './components/resize-handle/resize-handle'
+export { resizeHandleStyles } from './components/resize-handle/resize-handle.styles'
 export {
   DragRegion,
   type DragRegionProps,

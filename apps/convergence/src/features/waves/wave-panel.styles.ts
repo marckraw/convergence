@@ -1,4 +1,4 @@
-import { durationsMs } from '@convergence/ui'
+import { durationsMs, resizeHandleStyles } from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
 
 /**
@@ -8,13 +8,13 @@ import type { LoomHorseRuntime } from './loom-horses.pure'
 
 /**
  * The column's drag handle (MAR-3155 R4), in the kit's ResizeHandle look
- * (MC-32): a 1 px line in a 13 px hit area that shows a hairline under the
- * pointer, a stronger one while dragged, and the focus colour for the
- * keyboard -- visible in light as in dark, where the white tint it wore was
- * not. Its gesture stays Loom's own (`use-wave-column-resize`).
+ * (MC-32), taken from the kit itself rather than copied (MC-18): a 1 px line
+ * in a 13 px hit area that shows a hairline under the pointer, a stronger one
+ * while dragged, and the focus colour for the keyboard. `app-resize-handle`
+ * is the sidebar's line's sheen, which both wear. Its gesture stays Loom's
+ * own (`use-wave-column-resize`): the width is committed when the drag ends.
  */
-export const WAVE_RESIZE_HANDLE_CLASS =
-  'app-resize-handle app-no-drag relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-6 border-x-transparent bg-clip-content outline-none transition-colors hover:bg-hairline active:bg-hairline-strong focus-visible:bg-focus'
+export const WAVE_RESIZE_HANDLE_CLASS = `app-resize-handle ${resizeHandleStyles.base} ${resizeHandleStyles.vertical}`
 
 /**
  * The ONE element Loom's two narrow shapes share (MAR-3312 R1).
@@ -312,3 +312,19 @@ export const LOOM_SEARCH_ELSEWHERE_CLASS =
 
 /** Expanded Before: keep spare cells and let each card keep its own height. */
 export const LOOM_BEFORE_WIDE_CLASS = 'grid grid-cols-fill-90 items-start gap-3'
+
+/**
+ * The seat card's meta line, by its runtime (DS6): on a card washed in its
+ * runtime's tone (working, failed), --ink-muted falls under 4.5:1 in dark over
+ * the open sheet's surface-muted paper. --ink-muted-on-tint is the token for
+ * muted words on a tint, and holds there; an unwashed card keeps the plain
+ * muted ink.
+ */
+export const LOOM_HORSE_META_INK: Readonly<
+  Record<LoomHorseRuntime, string | undefined>
+> = {
+  working: 'text-ink-muted-on-tint',
+  failed: 'text-ink-muted-on-tint',
+  idle: undefined,
+  'not-seen': undefined,
+}

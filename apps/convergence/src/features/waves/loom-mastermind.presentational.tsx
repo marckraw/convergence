@@ -10,6 +10,7 @@ import {
   LOOM_CARD_HEAD_CLASS,
   LOOM_HORSE_CARD_CLASS,
   LOOM_HORSE_META_CLASS,
+  LOOM_HORSE_META_INK,
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TINT_CLASS,
   LOOM_SEAT_CARD_DOOR_CLASS,
@@ -31,6 +32,10 @@ export function LoomMastermindCard({
 }: LoomMastermindCardProps) {
   const openable = mastermind.openable && onOpenSeat !== undefined
   const ids = loomSeatCardIds('mastermind', mastermind.key)
+  const metaClass = cn(
+    LOOM_HORSE_META_CLASS,
+    LOOM_HORSE_META_INK[mastermind.runtime],
+  )
   return (
     <div className="px-3 py-0.5" data-loom-mastermind={mastermind.key}>
       <div
@@ -76,12 +81,12 @@ export function LoomMastermindCard({
           {loomMastermindVerdictLine(mastermind.waitingReturns)}
         </span>
         {mastermind.hostLabel ? (
-          <span id={`${ids}-host`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-host`} className={metaClass}>
             {mastermind.hostLabel}
           </span>
         ) : null}
         {openable ? (
-          <span id={`${ids}-open`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-open`} className={metaClass}>
             Open →
           </span>
         ) : null}

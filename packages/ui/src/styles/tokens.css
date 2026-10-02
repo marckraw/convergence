@@ -100,8 +100,6 @@
   --line-soft: light-dark(oklch(0.88 0 0 / 0.7), oklch(0.32 0.005 260 / 0.7));
   /* A control's outline: Input, SelectTrigger, Textarea (MAR-3460); was --control-border: 3.4 / 3.4 */
   --control-line: light-dark(oklch(0.62 0 0), oklch(0.55 0.005 260));
-  /* The field hairline shadcn calls --input; also the dark Select's fill (bg-input/30) */
-  --control-fill: light-dark(oklch(0.88 0 0), oklch(0.28 0.005 260));
   /* Focus rings; was --ring: 5.6 / 6.6 */
   --focus: light-dark(oklch(0.5 0 0), oklch(0.72 0 0));
   /*

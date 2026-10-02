@@ -15,9 +15,11 @@ import { IconButton } from '../icon-button/icon-button'
 /**
  * `segmented`: SegmentedControl's look, a raised chip on a muted track (R7),
  * for a few views of one thing. `strip`: a row of document tabs, each with a
- * close slot, like the terminal's.
+ * close slot. `terminal`: the strip on the terminal's own `--terminal-tab*`
+ * tokens, dark in both themes (R12), so the pairs the contrast test reads are
+ * the ones it draws.
  */
-export type TabsVariant = 'segmented' | 'strip'
+export type TabsVariant = 'segmented' | 'strip' | 'terminal'
 
 type TabsLook = { variant: TabsVariant; size: SegmentedSize }
 
@@ -94,12 +96,15 @@ export type TabsTabProps = Omit<TabsPrimitive.Tab.Props, 'className'> & {
   closeLabel?: string
 }
 
-/** The open tab in a strip: today's chip, the canvas over the strip. */
-const stripTab = [
-  'group/tab relative flex min-w-0 items-center gap-1 rounded px-2 py-1 text-2xs transition-colors',
-  'text-ink-muted hover:bg-canvas/60',
-  'has-data-active:bg-canvas has-data-active:text-ink',
-].join(' ')
+const stripChip =
+  'group/tab relative flex min-w-0 items-center gap-1 rounded px-2 py-1 text-2xs transition-colors'
+
+/** A tab in a strip: today's chip, the canvas over the strip when it is open. */
+const stripTab = {
+  strip: `${stripChip} text-ink-muted hover:bg-canvas/60 has-data-active:bg-canvas has-data-active:text-ink`,
+  // The same chip on the terminal's tokens (R12), the dark canvas's values.
+  terminal: `${stripChip} text-terminal-tab-ink-muted hover:bg-terminal-tab-hover has-data-active:bg-terminal-tab has-data-active:text-terminal-tab-ink`,
+} as const
 
 const CLOSE_KEYS = new Set(['Delete', 'Backspace'])
 
@@ -130,7 +135,7 @@ export function TabsTab({
     )
   }
   return (
-    <div data-slot="tabs-strip-tab" className={stripTab}>
+    <div data-slot="tabs-strip-tab" className={stripTab[variant]}>
       <TabsPrimitive.Tab
         data-slot="tabs-tab"
         aria-keyshortcuts={onClose ? 'Delete' : undefined}
