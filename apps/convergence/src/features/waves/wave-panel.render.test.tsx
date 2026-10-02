@@ -2949,11 +2949,16 @@ describe('MAR-3097: through the containers and the real stores', () => {
       ) as HTMLElement
       expect(loom).toBeTruthy()
 
-      const tip = await hover(
+      // Fold Loom wears its words, so no tooltip repeats them (MC-15); the
+      // header's icon-only control is the one that names itself on hover.
+      expect(
         within(loom).getByRole('button', { name: 'Fold Loom' }),
+      ).not.toHaveAttribute('data-tooltip')
+      const tip = await hover(
+        within(loom).getByRole('button', { name: 'Collapse Loom' }),
       )
-      // Mutation: drop the Tooltip from the expanded header's control -> red.
-      expect(tip.textContent).toBe('Fold Loom')
+      // Mutation: drop the IconButton's label tooltip -> red.
+      expect(tip.textContent).toBe('Collapse Loom')
     })
 
     it('R3: a sheet’s icon opens Loom ON that sheet, in one act', async () => {

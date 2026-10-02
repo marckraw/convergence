@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { FC } from 'react'
-import type { TooltipSide } from '@convergence/ui'
+import type { ButtonSize, TooltipSide } from '@convergence/ui'
 import {
   type Theme,
   getStoredTheme,
@@ -11,9 +11,11 @@ import { ThemeToggle } from './theme-toggle.presentational'
 
 const CYCLE: Theme[] = ['dark', 'light', 'system']
 
-export const ThemeToggleButton: FC<{ tooltipSide?: TooltipSide }> = ({
-  tooltipSide,
-}) => {
+export const ThemeToggleButton: FC<{
+  tooltipSide?: TooltipSide
+  /** R3: 28 px in a header, 32 on the rail (NAV-6). */
+  size?: ButtonSize
+}> = ({ tooltipSide, size }) => {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
 
   useEffect(() => {
@@ -37,6 +39,11 @@ export const ThemeToggleButton: FC<{ tooltipSide?: TooltipSide }> = ({
   }, [])
 
   return (
-    <ThemeToggle theme={theme} onToggle={toggle} tooltipSide={tooltipSide} />
+    <ThemeToggle
+      theme={theme}
+      onToggle={toggle}
+      tooltipSide={tooltipSide}
+      size={size}
+    />
   )
 }

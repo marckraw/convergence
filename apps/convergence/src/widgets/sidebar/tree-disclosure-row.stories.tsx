@@ -92,7 +92,8 @@ export const Merged: Story = {
 
 /**
  * While a search holds every branch open, it can't fold: it is dimmed, a
- * click does nothing, and its tooltip says why.
+ * click does nothing, and it stays reachable with its tooltip and
+ * description saying why (R2).
  */
 export const Disabled: Story = {
   args: {
@@ -104,7 +105,11 @@ export const Disabled: Story = {
     const row = canvas.getByRole('button', {
       name: /^feature\/sidebar-overflow/,
     })
-    await expect(row).toBeDisabled()
+    // Unavailable, still reachable, and it says why (R2).
+    await expect(row).toHaveAttribute('aria-disabled', 'true')
+    await expect(row).toHaveAccessibleDescription(
+      'Branches stay open while you search',
+    )
     await expect(row).toHaveAttribute(
       'data-tooltip-detail',
       'Branches stay open while you search',

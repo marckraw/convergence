@@ -27,7 +27,7 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const toggle = canvas.getByRole('button', { name: 'Search conversations' })
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
     await userEvent.hover(toggle)
     const tooltip = await screen.findByRole('tooltip')
     await expect(tooltip).toHaveTextContent('Search conversations')
@@ -50,6 +50,6 @@ export const Open: Story = {
   play: async ({ canvas }) => {
     await expect(
       canvas.getByRole('button', { name: 'Search conversations' }),
-    ).toHaveAttribute('aria-expanded', 'true')
+    ).toHaveAttribute('aria-pressed', 'true')
   },
 }

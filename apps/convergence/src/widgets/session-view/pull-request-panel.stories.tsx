@@ -43,9 +43,13 @@ export const Default: Story = {
     await expect(
       canvas.getByText('https://github.com/marckraw/convergence/pull/915'),
     ).toBeVisible()
+    // A link that looks like a button: it shows where it goes (DS-24).
     await expect(
-      canvas.getByRole('button', { name: 'Open in browser' }),
-    ).toBeVisible()
+      canvas.getByRole('link', { name: 'Open in browser' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/marckraw/convergence/pull/915',
+    )
     await userEvent.click(
       canvas.getByRole('button', { name: 'Refresh PR status' }),
     )

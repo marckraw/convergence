@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { CopyButton } from '@convergence/ui'
+import { copyButtonSlot } from './conversation-item.styles'
 
 interface ConversationItemShellProps {
   copyText: string
@@ -12,7 +13,7 @@ export const ConversationItemShell: FC<ConversationItemShellProps> = ({
 }) => (
   <div className="group/item relative">
     {children}
-    <div className="absolute right-2 top-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover/item:opacity-100">
+    <div className={copyButtonSlot}>
       <CopyButton text={copyText} />
     </div>
   </div>

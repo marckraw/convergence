@@ -34,12 +34,12 @@ export const ConversationActionsRoutines: FC<ConversationActionsViewProps> = ({
     </div>
     {routines.running ? (
       <Button
-        size="lg"
+        size="sm"
         type="button"
         variant="ghost"
         role="menuitem"
         data-actions-item=""
-        className={cn(styles.item, 'mt-1 text-xs text-ink-muted')}
+        className={cn(styles.item, styles.closeItem)}
         onClick={onClose}
       >
         Close menu

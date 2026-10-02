@@ -132,7 +132,9 @@ export {
 } from './session.selectors.pure'
 export {
   formatSessionAttentionLabel,
+  readSessionAttentionSignal,
   summarizeAttentionRequests,
+  type SessionAttentionSignal,
 } from './session-attention.pure'
 export { resolveMidRunInputPolicy } from './mid-run-input.pure'
 export type {
@@ -182,3 +184,10 @@ export {
   workDisplayRows,
 } from './work-blocks.pure'
 export type { WorkBlockItem, WorkDisplayRow, WorkRow } from './work-blocks.pure'
+
+export {
+  ATTENTION_TONE,
+  attentionTone,
+  SESSION_STATE_TONE,
+} from './session-tone.pure'
+export type { LabelledAttention, SessionToneState } from './session-tone.pure'

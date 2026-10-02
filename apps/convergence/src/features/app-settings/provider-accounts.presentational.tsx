@@ -233,7 +233,7 @@ export function ProviderAccountsFields({
     !isCodex && Boolean(removalLayout?.privateEntries.length)
 
   return (
-    <div className="space-y-4 [&_button]:min-h-10">
+    <div className="space-y-4">
       {/* Two providers, one at a time (R9): a SegmentedControl. */}
       <SegmentedControl
         aria-label="Account provider"
@@ -317,14 +317,14 @@ export function ProviderAccountsFields({
                         {row.identity}
                       </h4>
                       {row.isDefault ? (
-                        <Badge shape="label" className="uppercase">
+                        <Badge shape="label" caps>
                           default
                         </Badge>
                       ) : null}
                       <Badge
                         shape="label"
                         tone={STATUS_TONE[row.status.tone]}
-                        className="uppercase"
+                        caps
                       >
                         {row.status.label}
                       </Badge>

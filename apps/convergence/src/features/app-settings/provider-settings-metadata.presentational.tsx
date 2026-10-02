@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { ProviderInfo } from '@/entities/session'
-import { Badge, Button, Card } from '@convergence/ui'
+import { Badge, buttonVariants, Card } from '@convergence/ui'
 
 interface ProviderSettingsMetadataProps {
   provider: ProviderInfo | null
@@ -118,15 +118,17 @@ export const ProviderSettingsMetadata: FC<ProviderSettingsMetadataProps> = ({
       {links.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {links.map((link) => (
-            <Button
+            // A link that looks like a button: it goes somewhere (DS-24).
+            <a
               key={link.url}
-              type="button"
-              variant="secondary"
-              onClick={() => window.open(link.url, '_blank')}
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: 'secondary' })}
             >
               <ExternalLink className="size-3.5" />
               {link.label}
-            </Button>
+            </a>
           ))}
         </div>
       ) : null}

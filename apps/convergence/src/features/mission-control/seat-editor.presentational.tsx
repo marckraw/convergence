@@ -14,6 +14,7 @@ import {
   Button,
   Checkbox,
   cn,
+  focusRingWithin,
   IconButton,
   Input,
   Notice,
@@ -177,7 +178,6 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               disabled={busy}
               onClick={onRemove}
               size="sm"
-              className="px-2.5 text-2xs"
             >
               Remove seat
             </Button>
@@ -298,7 +298,6 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 disabled={busy}
                 onClick={onWriteCard}
                 size="sm"
-                className="px-2.5 text-2xs"
               >
                 Write a card
               </Button>
@@ -314,7 +313,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       </div>
 
       <section aria-label="Policy" className="flex flex-col gap-2">
-        <SectionLabel as="h4" className="text-3xs">
+        <SectionLabel as="h4" size="sm">
           Policy
         </SectionLabel>
         {recipe ? (
@@ -404,9 +403,12 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 Issues this seat may hold at once
               </span>
             </div>
+            {/* The box is the field: it rings while the keyboard is in it,
+                and the number inside is a bare Input (DS-7). */}
             <div
               className={cn(
                 'flex h-control-md items-center rounded-md border',
+                focusRingWithin,
                 problems.wipLimit !== undefined
                   ? 'border-danger-solid'
                   : 'border-hairline-strong',
@@ -420,7 +422,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSeatEdit({ wipLimit: stepBase - 1 })}
                 size="sm"
-                className="px-2 disabled:opacity-40"
+                className="disabled:opacity-40"
               >
                 <Minus aria-hidden className="size-3" />
               </IconButton>
@@ -433,7 +435,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 aria-invalid={problems.wipLimit !== undefined || undefined}
                 onChange={(event) => onWipChange(event.target.value)}
                 onBlur={onWipCommit}
-                className="w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:outline-none [&::-webkit-inner-spin-button]:appearance-none"
+                variant="bare"
+                className="w-9 p-0 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
               />
               <IconButton
                 label={`Raise the WIP limit for ${label}`}
@@ -443,7 +446,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSeatEdit({ wipLimit: stepBase + 1 })}
                 size="sm"
-                className="px-2 disabled:opacity-40"
+                className="disabled:opacity-40"
               >
                 <Plus aria-hidden className="size-3" />
               </IconButton>
@@ -489,7 +492,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           disabled={busy}
           onClick={onRemove}
           size="sm"
-          className="shrink-0 gap-1 px-1 text-2xs font-normal disabled:opacity-50"
+          className="shrink-0 gap-1 font-normal disabled:opacity-50"
         >
           <Trash2 aria-hidden className="size-3.5" />
           {recipe ? 'Delete recipe' : 'Remove from crew'}

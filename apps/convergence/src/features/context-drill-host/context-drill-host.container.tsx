@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@convergence/ui'
+import { notify, type NotifyAction } from '@convergence/ui'
 import { useContextDrillStore } from '@/entities/context-drill'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import {
@@ -18,7 +17,16 @@ interface ContextDrillHostContainerProps {
 }
 
 /**
- * Turns every ending into a toast and automatic failures into a Needs-you card.
+ * One toast per conversation's drill: a new ending takes the last one's place,
+ * so a failure that stays on screen leaves once the next run ends.
+ */
+const drillToastId = (sessionId: string): string => `context-drill:${sessionId}`
+
+/**
+ * Turns every ending into a toast. A failure of the automatic drill stays
+ * until it's answered, with "Run the drill" as its action (CONV-7): nobody
+ * pressed anything, so nobody is waiting for it, and it must not slip away
+ * after a few seconds. It was a card of its own in the toasts' corner.
  *
  * Mounted once beside the `<Toaster>` rather than inside the popover that
  * starts the drill, because the seal beat takes minutes and the popover shuts
@@ -69,15 +77,12 @@ export function ContextDrillHostContainer({
         .getState()
         .globalSessions.find((entry) => entry.id === sessionId)
 
-      const action =
+      const id = drillToastId(sessionId)
+      const open: NotifyAction | null =
         onFocusSession && session
-          ? {
-              action: {
-                label: 'Open',
-                onClick: () => onFocusSession(session),
-              },
-            }
-          : {}
+          ? { label: 'Open', onClick: () => onFocusSession(session) }
+          : null
+      const action = open ? { action: open } : {}
 
       if (record.outcome.ok) {
         const contextWindow = session?.contextWindow
@@ -87,7 +92,8 @@ export function ContextDrillHostContainer({
           contextWindow && contextWindow.availability !== 'unavailable'
             ? contextWindow.usedPercentage
             : null
-        toast.success('The drill finished', {
+        notify.success('The drill finished', {
+          id,
           description: describeDrillSuccess(record.before, after),
           ...action,
         })
@@ -101,51 +107,37 @@ export function ContextDrillHostContainer({
       // the two apart here.
       if (useContextDrillStore.getState().cancelRequested[sessionId]) {
         useContextDrillStore.getState().clearCancelRequested(sessionId)
-        toast('The drill was cancelled', { description: reason, ...action })
+        notify.message('The drill was cancelled', {
+          id,
+          description: reason,
+          ...action,
+        })
         continue
       }
 
-      toast.error(describeDrillFailureTitle(beat), {
+      if (record.automatic) {
+        notify.error(describeDrillFailureTitle(beat), {
+          id,
+          description: reason,
+          persistent: true,
+          action: {
+            label: 'Run the drill',
+            onClick: () => {
+              void useContextDrillStore.getState().run(sessionId)
+            },
+          },
+          ...(open ? { secondaryAction: open } : {}),
+        })
+        continue
+      }
+
+      notify.error(describeDrillFailureTitle(beat), {
+        id,
         description: reason,
         ...action,
       })
     }
   })
 
-  const failures = Object.entries(outcomes).filter(
-    ([, record]) => record.automatic && !record.outcome.ok,
-  )
-  if (failures.length === 0) return null
-  return (
-    <aside
-      aria-label="Needs you"
-      className="fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2"
-    >
-      {failures.map(
-        ([sessionId, record]) =>
-          !record.outcome.ok && (
-            <section
-              key={sessionId}
-              role="alert"
-              className="rounded-lg border border-line bg-raised p-4 text-sm shadow-raised"
-            >
-              <p className="mb-1 font-medium">Needs you</p>
-              <p>
-                The drill stopped while {record.outcome.beat}:{' '}
-                {record.outcome.reason}
-              </p>
-              <Button
-                onClick={() => {
-                  void useContextDrillStore.getState().run(sessionId)
-                }}
-                size="lg"
-                className="mt-3"
-              >
-                Run the drill
-              </Button>
-            </section>
-          ),
-      )}
-    </aside>
-  )
+  return null
 }

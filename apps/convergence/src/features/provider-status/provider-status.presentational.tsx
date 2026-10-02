@@ -62,8 +62,8 @@ interface ProviderStatusDialogProps {
   onUpdateProvider: (providerId: string) => void
 }
 
-/** The badges' print: today's uppercase small caps, on Badge's box. */
-const badgeWords = 'font-medium uppercase tracking-eyebrow'
+/** The badges' weight, over Badge's capitals (`caps`). */
+const badgeWords = 'font-medium'
 
 /** A term in the provider's facts: the eyebrow look, over its value. */
 const renderTerm = (children: ReactNode) => (
@@ -79,7 +79,7 @@ function renderStatusBadge(provider: ProviderStatusInfo) {
       : 'warning'
 
   return (
-    <Badge tone={tone} className={badgeWords}>
+    <Badge tone={tone} caps className={badgeWords}>
       {provider.statusLabel}
     </Badge>
   )
@@ -103,7 +103,7 @@ function renderUpdateBadge(provider: ProviderStatusInfo) {
           : 'Latest unknown'
 
   return (
-    <Badge tone={tone} className={badgeWords}>
+    <Badge tone={tone} caps className={badgeWords}>
       {label}
     </Badge>
   )
@@ -370,7 +370,11 @@ function renderProviderAccounts(
                   <span className="ml-2 text-2xs text-ink-muted">default</span>
                 )}
               </span>
-              <Badge tone={ACCOUNT_TONES[status.tone]} className={badgeWords}>
+              <Badge
+                tone={ACCOUNT_TONES[status.tone]}
+                caps
+                className={badgeWords}
+              >
                 {status.label}
               </Badge>
             </div>

@@ -178,7 +178,7 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
                 void loadOlder()
               }}
               size="xs"
-              className="self-start px-1"
+              className="self-start"
             >
               Load older
             </Button>

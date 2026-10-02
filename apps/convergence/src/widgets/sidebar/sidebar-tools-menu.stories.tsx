@@ -40,7 +40,7 @@ export const Default: Story = {
       'MCP Servers',
       'Skills',
       'Prompt Library',
-      "What's New",
+      'Release notes',
     ]) {
       await expect(screen.getByRole('menuitem', { name })).not.toHaveAttribute(
         'aria-disabled',

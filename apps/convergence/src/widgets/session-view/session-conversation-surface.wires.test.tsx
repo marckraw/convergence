@@ -146,7 +146,7 @@ describe.each(['global', 'project'] as const)(
       useSessionRelayStore.setState({ relays })
       renderSurface()
       expect(
-        screen.getByRole('switch', { name: 'Send quiet' }).nextElementSibling,
+        screen.getByRole('button', { name: 'Send quiet' }).nextElementSibling,
       ).toBe(screen.getByRole('button', { name: summary(relays) }))
     })
 
@@ -154,7 +154,7 @@ describe.each(['global', 'project'] as const)(
       const relays = [wire({ armed: false })]
       useSessionRelayStore.setState({ relays })
       renderSurface()
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Send quiet' })).toBeNull()
       // Grey: the chip says none of its wires is armed (MAR-3617 reads the
       // state, not the class).
       expect(
@@ -167,7 +167,7 @@ describe.each(['global', 'project'] as const)(
         relays: [wire({ sourceSessionId: 'another' })],
       })
       renderSurface()
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Send quiet' })).toBeNull()
       expect(screen.queryByRole('button', { name: /wire/ })).toBeNull()
     })
 
@@ -223,7 +223,7 @@ describe.each(['global', 'project'] as const)(
       act(() =>
         useSessionRelayStore.setState({ relays: [{ ...relay, armed: false }] }),
       )
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Send quiet' })).toBeNull()
       expect(
         screen.getByRole('button', {
           name: summary([{ ...relay, armed: false }]),

@@ -1,7 +1,14 @@
 import { CheckCircle2, ExternalLink } from 'lucide-react'
 import type { FC } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
-import { Card, CardAction, cn, focusRing, Tooltip } from '@convergence/ui'
+import {
+  Badge,
+  Card,
+  CardAction,
+  cn,
+  focusRing,
+  Tooltip,
+} from '@convergence/ui'
 import {
   waveRowKey,
   waveRowMetaWords,
@@ -10,7 +17,6 @@ import {
 } from './wave-sections.pure'
 import {
   LOOM_CARD_HEAD_CLASS,
-  LOOM_CHIP_CLASS,
   LOOM_ROW_CARD_CLASS,
   WAVE_ROW_ACTION_CLASS,
   WAVE_ROW_CLASS,
@@ -132,25 +138,21 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
           ? ` · merged ${entry.fact.merged.headSha.slice(0, 7)}`
           : null}
       </span>
+      {/* Read-only labels, never controls (R6): the kit's outline Badge,
+          not a tint, since a wash on Loom's paper sank the words (MC-6). */}
       {loom ? (
         <span className="flex max-w-full flex-wrap gap-1.5">
-          <span
+          <Badge
+            outline
+            tone={entry.state === 'done' ? 'success' : 'neutral'}
             data-loom-chip="status"
-            className={cn(
-              LOOM_CHIP_CLASS,
-              entry.state === 'done' && 'text-success-ink',
-            )}
           >
             Linear: {entry.trackerStatus || 'not seen'}
-          </span>
+          </Badge>
           {entry.fact.labels?.map((label) => (
-            <span
-              key={label}
-              data-loom-chip="label"
-              className={LOOM_CHIP_CLASS}
-            >
+            <Badge key={label} outline data-loom-chip="label">
               {label}
-            </span>
+            </Badge>
           ))}
         </span>
       ) : null}

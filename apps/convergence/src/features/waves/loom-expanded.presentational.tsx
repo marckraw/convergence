@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Minimize2, PanelLeftClose } from 'lucide-react'
-import { Button, IconButton, Tooltip } from '@convergence/ui'
+import { Button, IconButton } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -18,7 +18,8 @@ import { LoomSearchFieldView } from './loom-search.presentational'
 import { isLoomSearchShortcut } from './loom-search.pure'
 
 /**
- * One string per control, the label and the hint alike (MAR-3311 R1).
+ * One string per control (MAR-3311 R1): Fold's words, and Collapse's name and
+ * tooltip.
  */
 const FOLD_LOOM = 'Fold Loom'
 const COLLAPSE_LOOM = 'Collapse Loom'
@@ -80,25 +81,23 @@ export const LoomExpandedView: FC<
         ref={props.guideRef}
         style={NO_DRAG_STYLE}
         onClick={props.onOpenGuide}
-        size="lg"
+        size="md"
         className={LOOM_GUIDE_ENTRY_CLASS}
       >
         {LEARN_LOOM_ENTRY}
       </Button>
-      <Tooltip label={FOLD_LOOM} side="bottom">
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label={FOLD_LOOM}
-          style={NO_DRAG_STYLE}
-          onClick={onFold}
-          size="lg"
-          className="shrink-0 px-3 text-xs py-0"
-        >
-          <Minimize2 className="size-3.5" />
-          {FOLD_LOOM}
-        </Button>
-      </Tooltip>
+      {/* Its words are on it: no tooltip to say them again (MC-15). */}
+      <Button
+        type="button"
+        variant="ghost"
+        style={NO_DRAG_STYLE}
+        onClick={onFold}
+        size="md"
+        className="shrink-0"
+      >
+        <Minimize2 className="size-3.5" />
+        {FOLD_LOOM}
+      </Button>
       {/* Past Fold Loom, because it goes one step further (MAR-3292 R4):
           Fold gives the column back, Collapse takes it away. `no-drag` like
           every other control in this header row. */}

@@ -1,8 +1,7 @@
 import { useRef, type FC, type Ref } from 'react'
-import { ChevronDown } from 'lucide-react'
 import {
-  Button,
   Menu,
+  MenuButton,
   MenuContent,
   MenuItem,
   MenuSeparator,
@@ -58,19 +57,8 @@ export const ConversationViewMenu: FC<ConversationViewMenuProps> = ({
       }}
     >
       <Tooltip label="How the conversation is drawn, and parallel work">
-        <MenuTrigger
-          render={
-            <Button
-              ref={triggerRef}
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1"
-            />
-          }
-        >
+        <MenuTrigger render={<MenuButton ref={triggerRef} type="button" />}>
           View
-          <ChevronDown className="h-3 w-3" />
         </MenuTrigger>
       </Tooltip>
       <MenuContent

@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { ProviderInfo } from '@/entities/session'
 import { ProviderSettingsMetadata } from './provider-settings-metadata.presentational'
 
@@ -67,8 +67,6 @@ const cursorProvider: ProviderInfo = {
 
 describe('ProviderSettingsMetadata', () => {
   it('renders provider-reported config, telemetry, and help metadata', () => {
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
-
     render(<ProviderSettingsMetadata provider={cursorProvider} />)
 
     expect(screen.getByText('Cursor behavior')).toBeInTheDocument()
@@ -81,11 +79,11 @@ describe('ProviderSettingsMetadata', () => {
       screen.getByText('Cursor ACP does not report quota windows.'),
     ).toBeInTheDocument()
 
-    screen.getByRole('button', { name: 'Cursor dashboard' }).click()
-    expect(openSpy).toHaveBeenCalledWith(
-      'https://cursor.com/dashboard',
-      '_blank',
-    )
-    openSpy.mockRestore()
+    // A link that looks like a button: it shows where it goes and opens in
+    // the browser like every other link (DS-24).
+    const dashboard = screen.getByRole('link', { name: 'Cursor dashboard' })
+    expect(dashboard).toHaveAttribute('href', 'https://cursor.com/dashboard')
+    expect(dashboard).toHaveAttribute('target', '_blank')
+    expect(dashboard).toHaveAttribute('rel', 'noreferrer')
   })
 })

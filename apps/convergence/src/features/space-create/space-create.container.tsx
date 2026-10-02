@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore, type Space } from '@/entities/space'
 import { SpaceCreateDialog } from './space-create.presentational'
@@ -57,7 +57,7 @@ export const SpaceCreateDialogContainer: FC<
         return
       }
 
-      toast.success(`Space ${created.title} created`)
+      notify.success(`Space ${created.title} created`)
       onCreated?.(created)
       closeDialog()
     } catch (nextError) {

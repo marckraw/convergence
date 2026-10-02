@@ -110,7 +110,7 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
           <p className={styles.emptyTitle}>{SKILLS_EMPTY_LABEL}</p>
           <p className={styles.reason}>Routines are still available below.</p>
           <Button
-            size="lg"
+            size="md"
             type="button"
             variant="ghost"
             data-actions-item=""

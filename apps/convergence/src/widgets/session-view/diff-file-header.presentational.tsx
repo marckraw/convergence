@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { Spinner, Tooltip } from '@convergence/ui'
+import { Badge, SectionLabel, Spinner, Tooltip } from '@convergence/ui'
 
 export type DiffFileHeaderSubtitleVariant = 'description' | 'label'
 
@@ -22,10 +22,11 @@ export const DiffFileHeader: FC<DiffFileHeaderProps> = ({
 }) => (
   <div className="shrink-0 border-b border-line px-3 py-2">
     <div className="flex min-w-0 items-center gap-2">
+      {/* The file's git status, a quiet tag (CONV-18). */}
       {status ? (
-        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-3xs text-ink-muted">
+        <Badge shape="label" outline className="font-mono">
           {status}
-        </span>
+        </Badge>
       ) : null}
       <Tooltip label={path} when="truncated">
         <p className="min-w-0 flex-1 truncate font-mono text-xs text-ink">
@@ -36,15 +37,13 @@ export const DiffFileHeader: FC<DiffFileHeaderProps> = ({
       {actions}
     </div>
     {subtitle ? (
-      <p
-        className={
-          subtitleVariant === 'description'
-            ? 'mt-1 text-xs leading-5 text-ink-muted'
-            : 'mt-1 text-3xs uppercase tracking-wider text-ink-muted'
-        }
-      >
-        {subtitle}
-      </p>
+      subtitleVariant === 'description' ? (
+        <p className="mt-1 text-xs leading-5 text-ink-muted">{subtitle}</p>
+      ) : (
+        <SectionLabel size="sm" className="mt-1">
+          {subtitle}
+        </SectionLabel>
+      )
     ) : null}
   </div>
 )
