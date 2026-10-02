@@ -97,14 +97,14 @@ function connectionProvidersText(
     .join(', ')
 }
 
+/** A block's head: its name and status at the start, its actions at the end. */
+const blockHead = 'flex items-start justify-between gap-4'
+
 /**
  * One Endpoint: its name, its address, its own token and its own connection
  * test (MAR-2642). Every control is named for its endpoint so nothing on this
  * card can reach another machine's token by accident.
  */
-/** A block's head: its name and status at the start, its actions at the end. */
-const blockHead = 'flex items-start justify-between gap-4'
-
 export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
   endpointId,
   displayName,
