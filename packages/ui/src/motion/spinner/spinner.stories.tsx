@@ -43,7 +43,7 @@ export const Default: Story = {
     await expect(style.animationName).toBe('spin')
     await expect(style.animationTimingFunction).toBe('linear')
     await expect(style.animationIterationCount).toBe('infinite')
-    await expect(style.color).toBe(tokenColor('--muted-foreground'))
+    await expect(style.color).toBe(tokenColor('--ink-muted'))
     const box = spinner.getBoundingClientRect()
     await expect([box.width, box.height]).toEqual([16, 16])
   },
@@ -96,7 +96,7 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
   play: async ({ canvasElement }) => {
     await expect(getComputedStyle(spinnerIn(canvasElement)).color).toBe(
-      tokenColor('--muted-foreground'),
+      tokenColor('--ink-muted'),
     )
   },
 }

@@ -67,8 +67,8 @@
 
   /*
    * Convergence has no brand hue: its strong colour is the ink, inverted into a fill. The primary
-   * Button, an on Switch, a count. Was --primary. Not called "accent": that is shadcn's name for
-   * the hover fill below, and the legacy bridge still serves it until DS5.
+   * Button, an on Switch, a count. Was --primary. Not called "accent": shadcn gave that name to
+   * the hover fill below, which is --highlight now.
    */
   --strong: light-dark(oklch(0.205 0 0), oklch(0.88 0 0));
   /* Text on --strong; was --primary-foreground: 17.2 / 13.1 */

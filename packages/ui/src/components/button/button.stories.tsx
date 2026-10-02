@@ -84,7 +84,7 @@ export const Default: Story = {
     const ring = getComputedStyle(first)
     await expect(ring.outlineStyle).toBe('solid')
     await expect(ring.outlineWidth).toBe('1px')
-    await expect(ring.outlineColor).toBe(tokenColor('--ring'))
+    await expect(ring.outlineColor).toBe(tokenColor('--focus'))
     // Never a native title (R2).
     for (const button of canvas.getAllByRole('button'))
       await expect(button).not.toHaveAttribute('title')
@@ -97,7 +97,7 @@ export const Dark: Story = {
   play: async ({ canvas }) => {
     const danger = canvas.getByRole('button', { name: 'Delete md' })
     await expect(getComputedStyle(danger).backgroundColor).toBe(
-      tokenColor('--destructive'),
+      tokenColor('--danger-solid'),
     )
   },
 }

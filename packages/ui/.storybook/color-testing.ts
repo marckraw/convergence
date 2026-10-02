@@ -4,7 +4,7 @@
  */
 
 /**
- * A color token (`--ring`) as it resolves here, in this theme, the way
+ * A color token (`--focus`) as it resolves here, in this theme, the way
  * computed styles say it.
  */
 export const tokenColor = (
