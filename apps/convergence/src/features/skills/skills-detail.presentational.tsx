@@ -40,7 +40,7 @@ import {
   toneInk,
   Tooltip,
 } from '@convergence/ui'
-import { Markdown } from '@/shared/ui/markdown.container'
+import { Markdown } from '@/shared/ui'
 import {
   ACTIVATION_CONFIRMATION_LABELS,
   CATALOG_SOURCE_LABELS,

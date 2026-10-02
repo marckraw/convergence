@@ -8,7 +8,7 @@ import {
   type ResolvedProviderSelection,
 } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 import {
   Badge,
   Select,

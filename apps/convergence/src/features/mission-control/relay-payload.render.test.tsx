@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { render } from '@testing-library/react'
-import { Markdown } from '@/shared/ui/markdown.container'
+import { Markdown } from '@/shared/ui'
 // Reaches across into the backend on purpose. The wire compiles its payload in
 // `electron/backend/relay/relay.pure.ts`, but that tree is DOM-free by design
 // (tsconfig.node.json ships no DOM lib), and this format can only be judged

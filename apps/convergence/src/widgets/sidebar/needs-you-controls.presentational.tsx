@@ -34,7 +34,7 @@ import {
   noConversationMatchesLine,
   normalizeNameQuery,
 } from '@/shared/lib/name-search.pure'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 import { FilterChoice } from './activity-filter-choice.presentational'
 import { filterChoices, filterRowLabel } from './sidebar.styles'
 

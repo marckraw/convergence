@@ -40,7 +40,7 @@ import {
   Textarea,
   Tooltip,
 } from '@convergence/ui'
-import { Markdown } from '@/shared/ui/markdown.container'
+import { Markdown } from '@/shared/ui'
 import type { PromptLibraryBrowserFilters } from './prompt-library-browser.pure'
 
 export interface PromptLibraryFormDraft {

@@ -20,7 +20,7 @@ import {
   SearchField,
   Tooltip,
 } from '@convergence/ui'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 import type {
   ModelPickerModelItem,
   ModelPickerProviderFilter,

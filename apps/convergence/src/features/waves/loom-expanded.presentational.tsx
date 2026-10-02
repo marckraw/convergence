@@ -1,26 +1,22 @@
 import type { FC } from 'react'
-import { Minimize2, PanelLeftClose } from 'lucide-react'
-import { Button, cn, IconButton } from '@convergence/ui'
+import { Minimize2 } from 'lucide-react'
+import { Button, cn } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
-  LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_EXPANDED_CLASS,
   LOOM_GUIDE_ENTRY_CLASS,
   LOOM_SEARCH_EXPANDED_CLASS,
 } from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 import { LoomSearchFieldView } from './loom-search.presentational'
-import { isLoomSearchShortcut } from './loom-search.pure'
+import { LoomCollapseButton } from './loom-collapse-button.presentational'
+import { answerLoomKey } from './loom-keys.pure'
 
-/**
- * One string per control (MAR-3311 R1): Fold's words, and Collapse's name and
- * tooltip.
- */
+/** One string per control (MAR-3311 R1): Fold's words. */
 const FOLD_LOOM = 'Fold Loom'
-const COLLAPSE_LOOM = 'Collapse Loom'
 
 /**
  * Opaque cover: the transcript underneath retains its measured box.
@@ -41,17 +37,15 @@ export const LoomExpandedView: FC<
     aria-label="Loom"
     data-loom="expanded"
     className={cn(LOOM_EXPANDED_CLASS, 'app-no-drag')}
-    onKeyDown={(event) => {
-      if (isLoomSearchShortcut(event)) {
-        event.preventDefault()
-        props.field.onShortcut()
-        return
-      }
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        ;(props.onEscape ?? onFold)()
-      }
-    }}
+    // The keys are one rule in both shapes (MC-35). Expanded always answers
+    // Escape: the container's when it has one (a search to clear, a detail
+    // to close), and Fold when it has none.
+    onKeyDown={(event) =>
+      answerLoomKey(event, {
+        onShortcut: props.field.onShortcut,
+        onEscape: props.onEscape ?? onFold,
+      })
+    }
   >
     <div
       data-loom-header
@@ -96,18 +90,7 @@ export const LoomExpandedView: FC<
       {/* Past Fold Loom, because it goes one step further (MAR-3292 R4):
           Fold gives the column back, Collapse takes it away. `app-no-drag`,
           its own, like every other control in this header row. */}
-
-      <IconButton
-        label={COLLAPSE_LOOM}
-        type="button"
-        variant="ghost"
-        onClick={onCollapse}
-        tooltipSide="bottom"
-        size="sm"
-        className={LOOM_COLLAPSE_BUTTON_CLASS}
-      >
-        <PanelLeftClose className="size-3.5" />
-      </IconButton>
+      <LoomCollapseButton onCollapse={onCollapse} />
     </div>
     <div className="shrink-0 px-6 pb-3">
       <LoomStatusView header={props.header} refresh={props.refresh} />

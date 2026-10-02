@@ -1,4 +1,4 @@
-import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
+import { resolveProviderIcon } from '@/entities/provider'
 import {
   activityViews,
   type ActivityView,

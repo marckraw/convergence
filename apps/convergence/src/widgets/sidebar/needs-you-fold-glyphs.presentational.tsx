@@ -1,6 +1,6 @@
 import { cardStateTone, type FoldedSectionSummary } from '@/features/needs-you'
 import { cn, focusRing, TooltipCard } from '@convergence/ui'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 
 /**
  * What a folded section still says on its title row (MAR-3366 R4): one

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AnalyticsOverview } from '@/entities/analytics'
 import { AnalyticsInsights } from './analytics-insights.presentational'
 
-vi.mock('@/shared/ui/chartgpu-chart.container', () => ({
+vi.mock('./chartgpu-chart.container', () => ({
   ChartGpuChart: vi.fn(({ fallbackTitle }: { fallbackTitle?: string }) => (
     <div data-testid="chartgpu-chart">{fallbackTitle ?? 'chart'}</div>
   )),

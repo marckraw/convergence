@@ -41,6 +41,16 @@
             "source": "^(\\.\\./)+(entities|features|widgets)/[^/]+/.+",
             "allowedIn": [],
             "message": "Relative imports into another FSD slice must stop at the slice public API index.ts. An app with no @/ alias of its own (Backpack Studio) reaches its slices this way, and the law is the same one."
+          },
+          {
+            "source": "^@/shared/ui/.+",
+            "allowedIn": [],
+            "message": "Alias imports into shared/ui must stop at its public API, @/shared/ui (index.ts): what the index does not export is private to the folder. An app part belongs in its own slice, a design-system part in the design-system package (DS-31, MAR-3608)."
+          },
+          {
+            "source": "^(\\.\\./)+shared/ui/.+",
+            "allowedIn": [],
+            "message": "Relative imports into shared/ui must stop at its public API index.ts: what the index does not export is private to the folder. An app part belongs in its own slice, a design-system part in the design-system package (DS-31, MAR-3608)."
           }
         ],
         "includeTypeImports": true

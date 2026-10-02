@@ -6,7 +6,7 @@ import {
   Timestamp,
   toneInk,
 } from '@convergence/ui'
-import { Markdown } from '@/shared/ui/markdown.container'
+import { Markdown } from '@/shared/ui'
 import { HistoryFact } from './history-fact.presentational'
 import { HISTORY_TONE } from './hop-tone.styles'
 import { InspectorHeader } from './inspector-header.presentational'

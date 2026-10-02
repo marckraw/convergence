@@ -29,7 +29,7 @@ import {
   Divider,
   MetaLine,
 } from '@convergence/ui'
-import { Markdown } from '@/shared/ui/markdown.container'
+import { Markdown } from '@/shared/ui'
 import { ANNOTATION_MESSAGE_ID_ATTRIBUTE } from '@/features/response-annotations'
 import {
   AttachmentChip,
