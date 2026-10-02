@@ -27,13 +27,17 @@ const sectionLabelVariants = cva(
  */
 const sectionLabel = sectionLabelVariants({ size: 'md' })
 
-type SectionLabelElement = 'p' | 'h2' | 'h3' | 'h4'
+type SectionLabelElement = 'p' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 
 type SectionLabelSize = 'sm' | 'md'
 
 type SectionLabelProps = Omit<ComponentProps<'p'>, 'className'> & {
   className?: string
-  /** A heading when it names a section (h2 to h4), a paragraph when it only labels. */
+  /**
+   * A heading when it names a section (h2 to h6), a paragraph when it only
+   * labels. A label nested under another takes the rank below it, so each
+   * rank in a panel has one size (MC-13): never a second size at one rank.
+   */
   as?: SectionLabelElement
   /** 11 px (`md`, the default), or 10 px (`sm`) for a dense panel's eyebrow (R4). */
   size?: SectionLabelSize

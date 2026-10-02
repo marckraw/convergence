@@ -4,6 +4,7 @@ import {
   Collapsible,
   CollapsiblePanel,
   CollapsibleTrigger,
+  EmptyState,
 } from '@convergence/ui'
 import { LOOM_OUTSIDE_NAME, type LoomOutsideView } from './loom-outside.pure'
 import { LoomIssueCard } from './loom-issue-card.presentational'
@@ -54,8 +55,9 @@ export const LoomOutsideGroupView: FC<{
         {view.title}
       </p>
     )}
+    {/* Nothing outside the loop: EmptyState's note, compact (MC-20). */}
     {view.emptyLine ? (
-      <p className={LOOM_SHEET_NOTE_CLASS}>{view.emptyLine}</p>
+      <EmptyState variant="plain" size="compact" detail={view.emptyLine} />
     ) : null}
     {view.foldable ? (
       <CollapsiblePanel id={LIST_ID} className="flex flex-col">

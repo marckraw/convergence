@@ -6,8 +6,11 @@ import {
   CANVAS_SPAWN_NODE_HEIGHT,
   formatSpawnNodeSpec,
 } from '@/features/mission-control'
-import { cn } from '@convergence/ui'
-import { CANVAS_HIDDEN_HANDLE } from './session-canvas.styles'
+import { Card, cn } from '@convergence/ui'
+import {
+  CANVAS_HIDDEN_HANDLE,
+  CANVAS_NODE_BODY_CLASS,
+} from './session-canvas.styles'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasSpawnNodeData } from './session-canvas.types'
 
@@ -24,17 +27,16 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
   const spawn = data as unknown as CanvasSpawnNodeData
 
   return (
-    <div
+    <Card
       data-canvas-spawn-node={spawn.relayId}
       style={{ width: CANVAS_NODE_WIDTH, height: CANVAS_SPAWN_NODE_HEIGHT }}
-      className={cn(
-        'flex flex-col justify-center gap-0.5 rounded-lg border border-dashed px-3 py-2',
-        // Armed, it will open a session: the success tone, as a delivered
-        // hop wears it (R1).
-        spawn.armed
-          ? 'border-success-line bg-success-soft'
-          : 'border-line bg-fill-quiet opacity-70',
-      )}
+      // A place held for a session that isn't there yet: the dashed Card.
+      // Armed, it will open one: the success tone, as a delivered hop wears
+      // it (R1); unarmed, dimmer.
+      surface="dashed"
+      tone={spawn.armed ? 'success' : undefined}
+      padding="none"
+      className={cn(CANVAS_NODE_BODY_CLASS, !spawn.armed && 'opacity-70')}
     >
       <Handle
         id={CANVAS_HANDLE.in}
@@ -83,6 +85,6 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
       <p className="truncate pl-4.5 text-2xs text-ink-muted">
         starts a new session · {formatSpawnNodeSpec(spawn)}
       </p>
-    </div>
+    </Card>
   )
 }

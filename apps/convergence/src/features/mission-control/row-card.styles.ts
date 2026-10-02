@@ -7,5 +7,9 @@
 export const ROW_CARD_DOOR_CLASS =
   'flex w-full min-w-0 flex-col items-start gap-0.5 px-3 py-2'
 
-/** A picked row keeps its selected fill under the pointer (R7). */
+/**
+ * A row picked among several, each on or off (a conversation to add to a
+ * crew), keeps its selected fill under the pointer (R7). A row that is THE
+ * one picked is the Card's `selected` instead, which says aria-current.
+ */
 export const ROW_CARD_PICKED_CLASS = 'bg-fill-selected hover:bg-fill-selected'

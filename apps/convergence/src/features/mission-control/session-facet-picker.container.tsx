@@ -1,12 +1,11 @@
 import { useMemo } from 'react'
 import type { FC } from 'react'
-import { Button, cn, Combobox } from '@convergence/ui'
+import { Button, Combobox } from '@convergence/ui'
 import {
   filterFacetOptions,
   formatFacetSummary,
 } from './session-card-facets.pure'
 import type { SessionCardFacetOption } from './session-card-facets.pure'
-import { FILTER_CHIP_OFF, FILTER_CHIP_ON } from './session-filter.styles'
 
 interface SessionFacetPickerProps {
   label: string
@@ -71,12 +70,12 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
       disabled={options.length === 0}
       searchPlaceholder={searchPlaceholder}
       emptyMessage={(query) => `Nothing matches “${query}”`}
-      variant="ghost"
+      // A chip beside the state and crew chips (MC-15), in R7's chosen look
+      // once it narrows the room: the kit's, never typed here (MC-19).
+      variant="chip"
       size="sm"
-      className={cn(
-        'max-w-56 rounded-full border px-2.5 text-2xs font-normal',
-        selected.length > 0 ? FILTER_CHIP_ON : FILTER_CHIP_OFF,
-      )}
+      chosen={selected.length > 0}
+      className="max-w-56"
       contentClassName="w-64"
       footer={
         selected.length > 0 ? (

@@ -256,10 +256,11 @@ function seedRelays(relays: SessionRelay[]) {
 
 /**
  * A History row's door (DS-21): each run or event is a Card in its list
- * item, and its CardAction is the pressable row.
+ * item, and its CardAction is the row; the picked one says aria-current
+ * (R7, ruling 11).
  */
 const HISTORY_ROW_DOORS =
-  'ul > li > [data-slot="card"] > [data-slot="card-action"][aria-pressed]'
+  'ul > li > [data-slot="card"][data-surface] > [data-slot="card-action"]'
 
 describe('MissionControl', () => {
   beforeEach(() => {
@@ -612,12 +613,15 @@ describe('MissionControl', () => {
   })
 
   describe('the card of the conversation open on screen (MAR-3321)', () => {
+    /**
+     * The card's door, its name's CardAction: the one place the card says
+     * aria-current (R7, N6), as a selected row's door does.
+     */
     function cardOf(name: string): HTMLElement {
-      const card = screen
-        .getByLabelText(`Open ${name}`)
-        .closest<HTMLElement>('[data-session-card]')
-      if (!card) throw new Error(`no card rendered for ${name}`)
-      return card
+      const door = screen.getByLabelText(`Open ${name}`)
+      if (!door.closest('[data-session-card]'))
+        throw new Error(`no card rendered for ${name}`)
+      return door
     }
 
     function seedTwo() {
@@ -2459,10 +2463,14 @@ describe('MissionControl', () => {
       )
     })
 
-    it('clears a decoration by picking the active choice again (mutation: always choose emoji)', async () => {
+    it('clears a decoration with its "none" choice, a radio of its own (MC-19; mutation: always choose emoji)', async () => {
       const api = await openCrewSettings()
 
+      // The crew wears 🌙: a radio group, so picking it again keeps it, and
+      // "No emoji" is how it goes.
       fireEvent.click(await screen.findByLabelText('Emoji 🌙'))
+      expect(api.update).not.toHaveBeenCalledWith('crew-1', { emoji: null })
+      fireEvent.click(screen.getByLabelText('No emoji'))
 
       await waitFor(() =>
         expect(api.update).toHaveBeenCalledWith('crew-1', { emoji: null }),
@@ -2764,7 +2772,7 @@ describe('MissionControl', () => {
       expect(
         screen.getByRole('region', { name: 'Decoration' }),
       ).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Emoji 🐎' })).toBeEnabled()
+      expect(screen.getByRole('radio', { name: 'Emoji 🐎' })).toBeEnabled()
     })
 
     it('cancel keeps Recipe open without a toast or a changed last path (mutation: treat cancel as an export)', async () => {
@@ -3271,7 +3279,7 @@ describe('MissionControl', () => {
           await act(async () => {})
           const freshCursor = listRuns.mock.calls.at(-1)?.[1]
           const preserved = {
-            pressed: selected.getAttribute('aria-pressed'),
+            current: selected.getAttribute('aria-current'),
             connected: selected.isConnected,
             scroll: scroll.scrollTop,
             rows: document.querySelectorAll(HISTORY_ROW_DOORS).length,
@@ -3300,7 +3308,7 @@ describe('MissionControl', () => {
                 : { ...cursor, asOf: '2026-09-10T10:56:00.000Z' },
             },
             preserved: {
-              pressed: 'true',
+              current: 'true',
               connected: true,
               scroll: 72,
               rows: retainDeeper ? 4 : 3,
@@ -3522,7 +3530,7 @@ describe('MissionControl', () => {
         ).not.toBeInTheDocument()
       })
       expect(
-        document.querySelectorAll('[aria-pressed]').length,
+        document.querySelectorAll(HISTORY_ROW_DOORS).length,
       ).toBeGreaterThan(0)
     })
 

@@ -1,7 +1,7 @@
 import type { DispatchPlan } from '@/shared/types/tracker.types'
 import type { ReactNode, UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, EmptyState } from '@convergence/ui'
 import {
   loomNowRows,
   loomSheetCounts,
@@ -54,7 +54,6 @@ import {
   LOOM_SHEET_BODY_CLASS,
   LOOM_SHEET_NOTE_CLASS,
   LOOM_SEARCH_ELSEWHERE_CLASS,
-  LOOM_SEARCH_MISS_CLASS,
 } from './wave-panel.styles'
 
 /** The Awaiting QA section, so its own control can point at it (lap 2, D). */
@@ -215,32 +214,41 @@ export const LoomSheetView = <TSession,>({
           closeRef={detail.closeRef}
         />
       ) : missed ? (
-        <p data-loom-search-miss="" className={LOOM_SEARCH_MISS_CLASS}>
-          {missed.summary.elsewhere.length > 0 ? (
-            <>
-              {loomSearchElsewherePrefix(sheet)}
-              {missed.summary.elsewhere.map((place, at) => (
-                <span key={place.sheet}>
-                  {at > 0 ? ', ' : null}
-                  <Button
-                    type="button"
-                    variant="link"
-                    onClick={() => onSelectSheet?.(place.sheet)}
-                    className={LOOM_SEARCH_ELSEWHERE_CLASS}
-                  >
-                    {loomSearchElsewhereLabel(place)}
-                  </Button>
-                </span>
-              ))}
-            </>
-          ) : (
-            missed.nowhere
-          )}
-        </p>
+        // A one-line note in the sheet is EmptyState's, at its compact size
+        // (MC-20): nothing here, and where it is instead.
+        <div data-loom-search-miss="">
+          <EmptyState
+            variant="plain"
+            size="compact"
+            detail={
+              missed.summary.elsewhere.length > 0 ? (
+                <>
+                  {loomSearchElsewherePrefix(sheet)}
+                  {missed.summary.elsewhere.map((place, at) => (
+                    <span key={place.sheet}>
+                      {at > 0 ? ', ' : null}
+                      <Button
+                        type="button"
+                        variant="link"
+                        onClick={() => onSelectSheet?.(place.sheet)}
+                        className={LOOM_SEARCH_ELSEWHERE_CLASS}
+                      >
+                        {loomSearchElsewhereLabel(place)}
+                      </Button>
+                    </span>
+                  ))}
+                </>
+              ) : (
+                missed.nowhere
+              )
+            }
+          />
+        </div>
       ) : (
         <>
+          {/* An empty sheet's note is EmptyState's, compact (MC-20). */}
           {note && sheet !== 'now' ? (
-            <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p>
+            <EmptyState variant="plain" size="compact" detail={note} />
           ) : null}
           {sheet === 'before' ? (
             <>
@@ -381,7 +389,7 @@ export const LoomSheetView = <TSession,>({
             </div>
           ) : null}
           {note && sheet === 'now' ? (
-            <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p>
+            <EmptyState variant="plain" size="compact" detail={note} />
           ) : null}
           {sheet === 'next' ? (
             <>

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { SESSION_STATE_TONE } from '@/entities/session'
 import { LoomHorseCard } from './loom-horse.presentational'
 import {
   loomDispatchClock,
@@ -57,6 +58,18 @@ describe('MAR-3289 R3: the card of a compacting seat', () => {
     expect(screen.getByText('Idle')).toBeTruthy()
     expect(container.querySelector('.animate-spin')).toBeNull()
     expect(screen.getByText('View next work →')).toBeTruthy()
+  })
+})
+
+describe('MC-2: a working horse wears the working tone', () => {
+  it('turns its spinner in info, as every surface draws a working session', () => {
+    const { container } = cardFor({ status: 'running' })
+    const spinner = container.querySelector('.animate-spin')
+    // Mutation: drop the tone from the horse's Spinner -> it draws in the
+    // card's ink while Mission Control, Needs you and the rail draw info.
+    expect(spinner?.closest('[data-tone]')?.getAttribute('data-tone')).toBe(
+      SESSION_STATE_TONE.working,
+    )
   })
 })
 

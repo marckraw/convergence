@@ -468,6 +468,13 @@ export {
   ComposerCard,
   type ComposerCardProps,
 } from './components/composer-card/composer-card'
+// DS8 lane mission (MAR-3608): appended, so the parallel lanes' additions merge as unions.
+export {
+  RadioSwatch,
+  type RadioSwatchProps,
+} from './components/radio-group/radio-group'
+export { type ToggleHue } from './components/toggle/toggle'
+export { type ComboboxVariant } from './components/combobox/combobox'
 // DS8 lane words (MAR-3608): appended, so the parallel lanes' additions merge as unions.
 export { failureTitle, reasonOf } from './components/toaster/notify.pure'
 // DS8 lane rest (MAR-3608): appended, so the parallel lanes' additions merge as unions.

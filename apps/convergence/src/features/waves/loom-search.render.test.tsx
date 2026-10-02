@@ -351,6 +351,8 @@ describe('MAR-3234 R3: the place is kept, and the match is one click away', () =
     // sheet holding the match -> no Now body, red.
     expect(body('now')).toBeTruthy()
     expect(miss()?.textContent).toBe('No match in Now — 1 in Plan')
+    // The miss is EmptyState's compact note (MC-20).
+    expect(miss()?.querySelector('[data-slot="empty-state"]')).not.toBeNull()
     // A filtered sheet is shorter: Chromium clamps and fires a scroll.
     // Mutation: do not freeze the memory while searched -> 0 is recorded
     // over 240, red below.

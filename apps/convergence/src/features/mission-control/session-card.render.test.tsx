@@ -10,8 +10,6 @@ import {
   CARD_ATTENTION_TONE,
   CARD_BREATHE,
   CARD_HAIL_OPEN_CLASS,
-  CARD_OPEN_CLASS,
-  CARD_TONE_FRAME,
 } from './session-card.styles'
 
 /**
@@ -115,10 +113,13 @@ describe('a working session card breathes', () => {
  * The conversation on screen, marked on its card (MAR-3321).
  *
  * Two marks live on one card and must never be one: "this is the conversation
- * you have open" (a bright ring standing off the card) and "this card's Hail is
- * open" (a thin outline). Both can be true at once, and the attention frame
- * must still read under either. The tests read the rendered class list and
- * `aria-current`, because a mark the DOM does not carry is not on screen.
+ * you have open" and "this card's Hail is open". Both can be true at once,
+ * and the attention frame must still read under either. Since ruling 11 both
+ * are R7's looks, never hand-drawn: the open card is a selected row (the
+ * selected fill, aria-current on its door), and the hailed card wears the
+ * chosen chip's stronger edge, never the focus colour. The tests read the
+ * rendered class list and `aria-current`, because a mark the DOM does not
+ * carry is not on screen.
  */
 function classesOf(root: HTMLElement): string[] {
   return root.className.split(/\s+/).filter(Boolean)
@@ -131,62 +132,83 @@ function withAttention(
   return { ...card, session: { ...card.session, attention } }
 }
 
-describe('the card of the open conversation is marked', () => {
-  const OPEN = CARD_OPEN_CLASS.split(' ')
-  const HAIL = CARD_HAIL_OPEN_CLASS.split(' ')
-  // Pinned as written, not read from the constant: the open mark must stay a
-  // bright ring standing off the card. A quiet `ring-1 ring-focus` -- the old
-  // Hail mark -- is the failure this ticket was filed for. In token names
-  // since MAR-3617: the ink at 70%, offset on the canvas.
-  const OPEN_RING = [
-    'ring-2',
-    'ring-ink/70',
-    'ring-offset-2',
-    'ring-offset-canvas',
-  ]
+/** The card's one door: the name's CardAction. */
+function doorOf(root: HTMLElement): HTMLElement {
+  const door = root.querySelector<HTMLElement>('[data-slot="card-action"]')
+  if (!door) throw new Error('the card has no door.')
+  return door
+}
 
-  it('wears the open ring, the lift and aria-current when it is on screen', () => {
+describe('the card of the open conversation is marked', () => {
+  const HAIL = CARD_HAIL_OPEN_CLASS.split(' ')
+  const SELECTED = 'bg-fill-selected'
+
+  it('wears the selected fill and aria-current on its door when it is on screen', () => {
     const root = renderCard(makeCard('idle'), { open: true })
 
-    expect(classesOf(root)).toEqual(expect.arrayContaining(OPEN))
-    expect(classesOf(root)).toEqual(expect.arrayContaining(OPEN_RING))
-    expect(root.getAttribute('aria-current')).toBe('true')
+    expect(classesOf(root)).toContain(SELECTED)
+    expect(doorOf(root).getAttribute('aria-current')).toBe('true')
+    // One aria-current, on the door: the card itself carries none (N6).
+    expect(root.hasAttribute('aria-current')).toBe(false)
+    // No hand-drawn ring (ruling 11). Mutation: put the ring back -> red.
+    expect(root.className).not.toMatch(/(?:^|\s)ring-(?:2|ink|offset)/)
   })
 
-  it('wears neither the ring nor aria-current when it is not on screen', () => {
+  it('wears neither the fill nor aria-current when it is not on screen', () => {
     const root = renderCard(makeCard('idle'))
-    const classes = classesOf(root)
 
-    for (const token of OPEN) expect(classes).not.toContain(token)
-    expect(root.hasAttribute('aria-current')).toBe(false)
+    expect(classesOf(root)).not.toContain(SELECTED)
+    expect(doorOf(root).hasAttribute('aria-current')).toBe(false)
   })
 
   it('shows both marks when it is open and hailed, over its attention frame', () => {
     // Waiting on you is warning, whether it asks a question or an approval (R1).
     const tone = CARD_ATTENTION_TONE['needs-input']
     expect(tone).toBe('warning')
-    const attention = CARD_TONE_FRAME[tone!].split(' ')
     const root = renderCard(withAttention(makeCard('idle'), 'needs-input'), {
       open: true,
       hailOpen: true,
     })
     const classes = classesOf(root)
 
-    // The ring and the outline are two properties, so both survive the merge.
-    expect(classes).toEqual(expect.arrayContaining(OPEN_RING))
+    // The Hail's edge is an outline, its own property, so it survives.
     expect(classes).toEqual(expect.arrayContaining(HAIL))
-    // Attention owns the frame, tint included: the open lift yields to it.
-    expect(classes).toEqual(expect.arrayContaining(attention))
-    expect(root.getAttribute('aria-current')).toBe('true')
+    // Attention keeps the frame's edge; the open card's fill wins over the
+    // tint, so the open mark shows in every frame.
+    expect(classes).toContain('border-warning-line')
+    expect(classes).toContain(SELECTED)
+    expect(classes).not.toContain('bg-warning-soft')
+    expect(doorOf(root).getAttribute('aria-current')).toBe('true')
   })
 
-  it('marks a hailed card that is not on screen with the outline alone', () => {
+  it('wears its attention tint when it is not on screen', () => {
+    const root = renderCard(withAttention(makeCard('idle'), 'needs-input'))
+    const classes = classesOf(root)
+
+    expect(classes).toEqual(
+      expect.arrayContaining(['border-warning-line', 'bg-warning-soft']),
+    )
+    expect(classes).not.toContain(SELECTED)
+  })
+
+  it('marks a hailed card that is not on screen with the edge alone, never the focus colour', () => {
     const root = renderCard(makeCard('idle'), { hailOpen: true })
     const classes = classesOf(root)
 
     expect(classes).toEqual(expect.arrayContaining(HAIL))
-    for (const token of OPEN) expect(classes).not.toContain(token)
-    expect(root.hasAttribute('aria-current')).toBe(false)
+    // R7: the focus colour marks only focus. Mutation: outline-focus -> red.
+    expect(root.className).not.toMatch(/\bfocus\b/)
+    expect(classes).not.toContain(SELECTED)
+    expect(doorOf(root).hasAttribute('aria-current')).toBe(false)
+  })
+
+  it('stretches its door over the whole card, the footer included (N6)', () => {
+    const root = renderCard(makeCard('idle'))
+    // The door's hit area covers the nearest positioned box: the card, not
+    // an inner body. Mutation: drop `interactive` -> red.
+    expect(root.dataset.slot).toBe('card')
+    expect(classesOf(root)).toContain('relative')
+    expect(doorOf(root).parentElement?.closest('.relative')).toBe(root)
   })
 })
 

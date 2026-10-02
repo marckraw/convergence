@@ -1,6 +1,7 @@
 import { Toggle as TogglePrimitive } from '@base-ui/react/toggle'
 import { cn } from '#lib/cn.pure'
 import type { ControlSize } from '#lib/control-frame.styles'
+import type { CrewTokenName } from '../../styles/crew.tokens'
 import { focusRing } from '#lib/focus-ring.styles'
 import { press } from '../../motion/press/press.styles'
 
@@ -23,6 +24,39 @@ export type ToggleProps = Omit<TogglePrimitive.Props, 'className'> & {
    * already names it). Empty or missing: available, unless `disabled`.
    */
   disabledReason?: string
+  /**
+   * A chip that stands for a crew wears its crew's hue on its edge (R1's
+   * category hues, Badge's crew mix: the hue at 40%), at rest and pressed;
+   * pressed is still the raised chip (R7). Only for `variant="chip"`.
+   */
+  hue?: ToggleHue
+}
+
+/** A crew's hue, as a chip's edge: `crew-violet` … `crew-slate`. */
+export type ToggleHue = `crew-${CrewTokenName}`
+
+/**
+ * The hue's edge at Badge's crew mix (/40), in every state the chip's own
+ * edge changes in (hover, pressed), so the hue holds under the pointer and
+ * when chosen.
+ */
+const HUE_EDGES: Record<ToggleHue, string> = {
+  'crew-violet':
+    'border-crew-violet/40 hover:border-crew-violet/40 data-pressed:border-crew-violet/40',
+  'crew-blue':
+    'border-crew-blue/40 hover:border-crew-blue/40 data-pressed:border-crew-blue/40',
+  'crew-cyan':
+    'border-crew-cyan/40 hover:border-crew-cyan/40 data-pressed:border-crew-cyan/40',
+  'crew-green':
+    'border-crew-green/40 hover:border-crew-green/40 data-pressed:border-crew-green/40',
+  'crew-amber':
+    'border-crew-amber/40 hover:border-crew-amber/40 data-pressed:border-crew-amber/40',
+  'crew-red':
+    'border-crew-red/40 hover:border-crew-red/40 data-pressed:border-crew-red/40',
+  'crew-pink':
+    'border-crew-pink/40 hover:border-crew-pink/40 data-pressed:border-crew-pink/40',
+  'crew-slate':
+    'border-crew-slate/40 hover:border-crew-slate/40 data-pressed:border-crew-slate/40',
 }
 
 type TooltipData = {
@@ -84,6 +118,7 @@ export function Toggle({
   size = 'md',
   variant = 'button',
   disabledReason,
+  hue,
   disabled,
   onClick,
   onPressedChange,
@@ -101,6 +136,7 @@ export function Toggle({
         variants[variant],
         sizes[variant][size],
         'data-pressed:bg-chip data-pressed:text-ink data-pressed:shadow-raised',
+        variant === 'chip' && hue !== undefined && HUE_EDGES[hue],
         focusRing,
         'data-disabled:pointer-events-none data-disabled:opacity-50',
         // Unavailable with a reason keeps the pointer, so its tooltip shows (R2).
@@ -123,3 +159,19 @@ export function Toggle({
     />
   )
 }
+
+/**
+ * A filter chip's look at a size, for a control that sits in a filter row
+ * beside chip Toggles but isn't one: a Combobox's chip trigger (MC-15). One
+ * recipe, so the row's chips can't drift apart.
+ */
+export const chipLook = (size: ControlSize): string =>
+  cn(variants.chip, sizes.chip[size])
+
+/**
+ * R7's chosen look, the raised chip, for a control whose "on" isn't
+ * Toggle's `data-pressed`: a Combobox trigger that holds a choice. A chip
+ * Toggle wears the same when pressed.
+ */
+export const chosenChip =
+  'border-hairline-strong bg-chip text-ink shadow-raised'

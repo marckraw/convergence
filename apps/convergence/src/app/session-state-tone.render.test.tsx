@@ -137,3 +137,30 @@ describe('a session state wears one tone on every surface (NAV-1, MC-1)', () => 
     },
   )
 })
+
+describe('unreachable wears its own glyph on Mission Control’s card (R1, MC-2)', () => {
+  it('draws the glyph the sidebar’s row draws, never a dot', () => {
+    const record = session({ status: 'running', attention: 'host-unreachable' })
+    const { container } = render(
+      <SessionCardView
+        card={{
+          session: record,
+          projectName: 'Convergence',
+          providerLabel: 'Codex',
+          activityLabel: 'working',
+          crews: [],
+          searchText: 'walk',
+        }}
+        onOpen={() => {}}
+      />,
+      { wrapper: TooltipProvider },
+    )
+    // Mutation: put the warning StatusDot back in the corner -> red.
+    expect(container.querySelector('[data-slot="status-dot"]')).toBeNull()
+    expect(
+      container.querySelector(
+        `svg[data-tone="${SESSION_STATE_TONE.unreachable}"]`,
+      ),
+    ).not.toBeNull()
+  })
+})

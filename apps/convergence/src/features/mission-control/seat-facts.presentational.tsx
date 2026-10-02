@@ -26,7 +26,8 @@ interface SeatFactsProps {
  */
 export const SeatFacts: FC<SeatFactsProps> = ({ heading, facts }) => (
   <section aria-label="Facts" data-seat-facts className="flex flex-col gap-1.5">
-    <SectionLabel as="h4" size="sm">
+    {/* A seat's own section, under its group's h5 (MC-13). */}
+    <SectionLabel as="h6" size="sm">
       {heading}
     </SectionLabel>
     <DescriptionList layout="inline" density="compact">

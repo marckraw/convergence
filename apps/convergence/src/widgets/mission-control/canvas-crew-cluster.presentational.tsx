@@ -1,7 +1,7 @@
 import type { CSSProperties, FC } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { CrewMark, crewColor } from '@/features/mission-control'
-import { cn } from '@convergence/ui'
+import { Card } from '@convergence/ui'
 import type { CanvasCrewClusterData } from './session-canvas.types'
 
 /**
@@ -23,19 +23,16 @@ export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
     : undefined
 
   return (
-    <div
+    <Card
       data-canvas-crew={cluster.crewId}
       data-canvas-crew-id={cluster.crewId}
       data-crew-parked={cluster.parked ? 'true' : 'false'}
       style={{ width: cluster.width, height: cluster.height, ...accentStyle }}
-      className={cn(
-        'rounded-xl border bg-fill-quiet',
-        // Parked waits on you: the warning tone (R1), its edge at the solid.
-        cluster.parked
-          ? 'border-warning-solid/70 bg-warning-soft'
-          : 'border-line',
-        'pointer-events-none',
-      )}
+      // Parked waits on you: the Card's warning tone (R1), never an alpha
+      // typed on the tone (MC-21). The frame's larger corner is the room's.
+      tone={cluster.parked ? 'warning' : undefined}
+      padding="none"
+      className="pointer-events-none rounded-xl"
     >
       <div className="pointer-events-auto flex items-center gap-2 px-4 py-3">
         <CrewMark
@@ -46,6 +43,6 @@ export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
         <CrewMark crew={cluster} variant="dot" />
         <h2 className="truncate text-xs font-medium">{cluster.name}</h2>
       </div>
-    </div>
+    </Card>
   )
 }

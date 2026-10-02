@@ -10,7 +10,8 @@ import type {
 const runs: HistoryRunRow[] = [
   {
     flowRunId: 'run-2',
-    timeLabel: '14:32',
+    startedAt: '2026-09-06T14:32:00',
+    timeFormat: 'clock',
     lastActivityLabel: '2m ago',
     debt: null,
     activityLine: 'last activity 2m ago',
@@ -21,7 +22,8 @@ const runs: HistoryRunRow[] = [
   },
   {
     flowRunId: 'run-1',
-    timeLabel: 'Yesterday · 17:46',
+    startedAt: '2026-09-05T17:46:00',
+    timeFormat: 'datetime',
     lastActivityLabel: 'yesterday',
     debt: null,
     activityLine: 'last activity yesterday',
@@ -39,7 +41,7 @@ const event = (
 ): HistoryEventRow => ({
   id,
   kind: 'hop',
-  timeLabel: '14:32',
+  at: '2026-09-06T14:32:10',
   title,
   outcome: 'delivered',
   outcomeLabel: 'Delivered',
@@ -56,7 +58,7 @@ const laps: HistoryLapGroup[] = [
     deliveries: 2,
     events: [
       event('hop-1', 'Fable → opus-mac'),
-      event('hop-2', 'opus-mac → Fable', { timeLabel: '14:40' }),
+      event('hop-2', 'opus-mac → Fable', { at: '2026-09-06T14:40:02' }),
     ],
   },
   {
@@ -65,7 +67,7 @@ const laps: HistoryLapGroup[] = [
     deliveries: 1,
     events: [
       event('hop-3', 'Fable → opus-mac', {
-        timeLabel: '14:52',
+        at: '2026-09-06T14:52:30',
         outcome: 'handed-back',
         outcomeLabel: 'Handed back',
         tone: 'terminal',
@@ -78,7 +80,7 @@ const laps: HistoryLapGroup[] = [
 const calls: HistoryEventRow[] = [
   event('hail-1', 'Fable asked for Marcin', {
     kind: 'hail',
-    timeLabel: '14:53',
+    at: '2026-09-06T14:53:00',
     outcome: 'held',
     outcomeLabel: 'Held',
     tone: 'held',
@@ -145,8 +147,15 @@ export const Default: Story = {
     )
     await expect(args.onFilterChange).toHaveBeenCalledWith('handed-back')
     const selectedRun = canvas.getByRole('button', { name: /^14:32 · Fable/ })
-    await expect(selectedRun).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(canvas.getByRole('button', { name: /^Yesterday/ }))
+    // R7: the picked run is the selected row, aria-current on its door.
+    await expect(selectedRun).toHaveAttribute('aria-current', 'true')
+    await expect(selectedRun).not.toHaveAttribute('aria-pressed')
+    // Each run's start is a <time>, told by the clock today and with its
+    // date before (MC-27).
+    await expect(selectedRun.querySelector('time[datetime]')).toHaveTextContent(
+      '14:32',
+    )
+    await userEvent.click(canvas.getByRole('button', { name: /^Sep 5, 17:46/ }))
     await expect(args.onSelectRun).toHaveBeenCalledWith('run-1')
     await expect(
       canvas.getByText('The lap cap of 2 was reached; the next move is yours.'),
