@@ -31,10 +31,13 @@ describe('ChangedFilesTree', () => {
     treeModel.renderInstances = []
   })
 
-  it('renders a loading state without mounting Pierre Tree', () => {
+  it('renders a loading state without mounting Pierre Tree', async () => {
     render(<ChangedFilesTree files={[]} selectedFile={null} loading />)
 
-    expect(screen.getByText('Loading changed files...')).toBeInTheDocument()
+    // EmptyState's loading (CONV-19): its words once a quick load has passed.
+    expect(
+      await screen.findByText('Loading changed files…', {}, { timeout: 2000 }),
+    ).toBeInTheDocument()
   })
 
   it('renders an empty state without replacing the active changed-files UI', () => {

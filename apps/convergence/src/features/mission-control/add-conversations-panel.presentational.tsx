@@ -6,6 +6,7 @@ import {
   CardAction,
   cn,
   Combobox,
+  EmptyState,
   SearchField,
   SectionLabel,
 } from '@convergence/ui'
@@ -122,11 +123,16 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
     <SectionLabel as="h4">Available conversations</SectionLabel>
 
     {available.length === 0 ? (
-      <p className="text-2xs text-ink-muted">
-        {query.trim() || selectedProjectId
-          ? 'No conversations match this search.'
-          : 'Every conversation is already in this crew.'}
-      </p>
+      // An empty list says so as every list does (MC-9), in the same words.
+      <EmptyState
+        size="compact"
+        variant="plain"
+        detail={
+          query.trim() || selectedProjectId
+            ? 'No conversations match this search.'
+            : 'Every conversation is already in this crew.'
+        }
+      />
     ) : (
       <ul className="flex flex-col gap-1">
         {available.map((entry) => {

@@ -1,3 +1,4 @@
+import { formatTimestamp } from '@convergence/ui'
 import type {
   ProviderAccountChatGptApps,
   ProviderAccountChatGptSignIns,
@@ -236,5 +237,5 @@ export function describeConnectionsCheckedAt(
   if (!checkedAt) return null
   const at = new Date(checkedAt)
   if (Number.isNaN(at.getTime())) return null
-  return `Checked at ${at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  return `Checked at ${formatTimestamp(at, 'clock')}`
 }

@@ -8,6 +8,7 @@ import {
   cn,
   EmptyState,
   IconButton,
+  MetaLine,
   Notice,
   PanelHeader,
   SectionLabel,
@@ -100,9 +101,10 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
 
         {pullRequest ? (
           <Card render={<section />} className="text-sm">
-            <p className="font-medium">
-              #{pullRequest.number} · {pullRequest.state}
-            </p>
+            <MetaLine className="font-medium">
+              {`#${pullRequest.number}`}
+              {pullRequest.state}
+            </MetaLine>
             <p className="mt-2 break-all text-ink-muted">{pullRequest.url}</p>
             {/* It goes somewhere, so it is a link that looks like a button,
                 and opens like every other link (DS-24). Only an https

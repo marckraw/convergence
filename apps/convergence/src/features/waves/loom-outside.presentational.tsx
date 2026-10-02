@@ -1,6 +1,14 @@
 import type { FC } from 'react'
-import { ChevronRight } from 'lucide-react'
-import { Badge, Button, Card, cn, focusRing, Tooltip } from '@convergence/ui'
+import {
+  Badge,
+  Card,
+  cn,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+  focusRing,
+  Tooltip,
+} from '@convergence/ui'
 import { LOOM_OUTSIDE_NAME, type LoomOutsideView } from './loom-outside.pure'
 import {
   LOOM_ROW_CARD_CLASS,
@@ -19,38 +27,31 @@ const LIST_ID = 'loom-not-in-the-loop'
  * A row is a plain link to the issue in Linear -- no button, no detail: an
  * issue outside the loop has no ledger row for Loom to read in place.
  * Folded means ABSENT, not hidden: the rows are not in the document until
- * the group is open, so a screen reader meets one line, not a backlog.
+ * the group is open, so a screen reader meets one line, not a backlog. A
+ * Collapsible (MC-17), whose panel unmounts while folded.
  */
 export const LoomOutsideGroupView: FC<{
   view: LoomOutsideView
   open: boolean
   onToggle: () => void
 }> = ({ view, open, onToggle }) => (
-  <section
+  <Collapsible
+    render={<section />}
+    open={open}
+    onOpenChange={() => onToggle()}
     aria-label={LOOM_OUTSIDE_NAME}
     data-loom-outside=""
     className="mt-2 flex flex-col"
   >
     {view.foldable ? (
-      // A link Button: the section title's own words and box act, with no
-      // control box of their own to undo.
-      <Button
-        type="button"
-        variant="link"
-        aria-expanded={open}
-        aria-controls={LIST_ID}
-        onClick={onToggle}
+      <CollapsibleTrigger
         className={cn(
           WAVE_SECTION_TITLE_CLASS,
-          'justify-start gap-1 rounded-md hover:bg-fill-hover hover:no-underline',
+          'w-full rounded-md hover:bg-fill-hover',
         )}
       >
-        <ChevronRight
-          aria-hidden
-          className={cn('size-3 transition-transform', open && 'rotate-90')}
-        />
         {view.title}
-      </Button>
+      </CollapsibleTrigger>
     ) : (
       // Never a heading: Plan's headings are its stages (MAR-3194), and this
       // group is not one -- its title is its control when there is anything
@@ -62,8 +63,8 @@ export const LoomOutsideGroupView: FC<{
     {view.emptyLine ? (
       <p className={LOOM_SHEET_NOTE_CLASS}>{view.emptyLine}</p>
     ) : null}
-    {view.foldable && open ? (
-      <div id={LIST_ID} className="flex flex-col">
+    {view.foldable ? (
+      <CollapsiblePanel id={LIST_ID} className="flex flex-col">
         {view.rows.map((issue) => (
           // The whole card is the link to Linear: a Card drawn as an <a>
           // (its `render`), in Loom's own card look with its own chips
@@ -105,7 +106,7 @@ export const LoomOutsideGroupView: FC<{
         {view.moreLine ? (
           <p className={LOOM_SHEET_NOTE_CLASS}>{view.moreLine}</p>
         ) : null}
-      </div>
+      </CollapsiblePanel>
     ) : null}
-  </section>
+  </Collapsible>
 )

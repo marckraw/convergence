@@ -310,6 +310,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
                           label={`${expanded ? 'Collapse' : 'Expand'} Space ${space.title}`}
                           type="button"
                           variant="ghost"
+                          aria-expanded={expanded}
                           onClick={() => onToggleSpace(space.id)}
                           size="xs"
                           className="shrink-0"

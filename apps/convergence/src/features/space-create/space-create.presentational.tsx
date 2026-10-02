@@ -11,6 +11,8 @@ interface SpaceCreateDialogProps {
   onTitleChange: (value: string) => void
   onBriefChange: (value: string) => void
   onSubmit: () => void
+  /** The key that also creates it, in words ("⌘↵"), for Create's tooltip. */
+  submitShortcut?: string
 }
 
 export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
@@ -23,6 +25,7 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
   onTitleChange,
   onBriefChange,
   onSubmit,
+  submitShortcut,
 }) => (
   <FormDialog
     open={open}
@@ -31,6 +34,7 @@ export const SpaceCreateDialog: FC<SpaceCreateDialogProps> = ({
     description="Create a durable Chat context for related attempts."
     saves="on-save"
     onSave={onSubmit}
+    saveShortcut={submitShortcut}
     saveLabel="Create Space"
     pendingLabel="Creating…"
     pending={isSubmitting}

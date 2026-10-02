@@ -403,8 +403,8 @@ export const SpaceWorkboardDialogContainer: FC<{
     }
   }, [addArtifact, artifactDraft, selectedSpace])
 
-  // Enable cmd+Enter to submit the Add Artifact form
-  useFormSubmitShortcut(
+  // Enable cmd+Enter to submit the Add Artifact form; Add says so (DS-34)
+  const artifactShortcut = useFormSubmitShortcut(
     artifactDialogOpen &&
       !!artifactDraft.label.trim() &&
       !!artifactDraft.value.trim(),
@@ -649,6 +649,7 @@ export const SpaceWorkboardDialogContainer: FC<{
       onArtifactDraftChange={setArtifactDraft}
       onArtifactDialogOpenChange={setArtifactDialogOpen}
       onCreateArtifact={handleCreateArtifact}
+      artifactShortcut={artifactShortcut}
       onArtifactKindChange={handleArtifactKindChange}
       onArtifactStatusChange={handleArtifactStatusChange}
       onArtifactSourceSessionChange={handleArtifactSourceSessionChange}

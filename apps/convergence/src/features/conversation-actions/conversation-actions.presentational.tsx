@@ -1,6 +1,11 @@
 import type { FC } from 'react'
 import { Sparkles } from 'lucide-react'
-import { cn, Button } from '@convergence/ui'
+import { cn, Button, Tooltip } from '@convergence/ui'
+import {
+  ACTIONS_SHORTCUT,
+  formatShortcutLabel,
+  runningShortcutPlatform,
+} from '@/shared/lib/keyboard-shortcut.pure'
 import { ConversationActionsFan } from './conversation-actions-fan.presentational'
 import { ConversationActionsPanel } from './conversation-actions-panel.presentational'
 import {
@@ -8,6 +13,12 @@ import {
   conversationActionsStyles as styles,
 } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
+
+/** ⌘. (Ctrl+. off the Mac), the key the container listens for, in words (CONV-35). */
+const ACTIONS_SHORTCUT_LABEL = formatShortcutLabel(
+  ACTIONS_SHORTCUT,
+  runningShortcutPlatform(),
+)
 
 /** Render-only: the Actions button, its fan and one group's compact list. */
 export const ConversationActionsView: FC<ConversationActionsViewProps> = (
@@ -24,21 +35,23 @@ export const ConversationActionsView: FC<ConversationActionsViewProps> = (
       data-testid="conversation-actions"
     >
       <div ref={anchorRef} className={styles.anchor}>
-        <Button
-          size="lg"
-          ref={triggerRef}
-          type="button"
-          variant="ghost"
-          className={cn(styles.trigger, fanOpen && styles.triggerHidden)}
-          aria-haspopup="menu"
-          aria-expanded={level !== 'closed'}
-          aria-hidden={fanOpen || undefined}
-          tabIndex={fanOpen ? -1 : undefined}
-          onClick={onToggle}
-        >
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-          Actions
-        </Button>
+        <Tooltip label="Actions" shortcut={ACTIONS_SHORTCUT_LABEL}>
+          <Button
+            size="lg"
+            ref={triggerRef}
+            type="button"
+            variant="ghost"
+            className={cn(styles.trigger, fanOpen && styles.triggerHidden)}
+            aria-haspopup="menu"
+            aria-expanded={level !== 'closed'}
+            aria-hidden={fanOpen || undefined}
+            tabIndex={fanOpen ? -1 : undefined}
+            onClick={onToggle}
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            Actions
+          </Button>
+        </Tooltip>
         {fanOpen ? <ConversationActionsFan {...props} /> : null}
         {group ? <ConversationActionsPanel {...props} group={group} /> : null}
       </div>

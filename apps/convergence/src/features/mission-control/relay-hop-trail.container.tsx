@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
-import { ChevronRight, TriangleAlert } from 'lucide-react'
+import { TriangleAlert } from 'lucide-react'
 import {
   selectHopTrailForCrew,
   useSessionRelayStore,
 } from '@/entities/session-relay'
-import { Badge, Button, cn, Tooltip } from '@convergence/ui'
+import {
+  Badge,
+  Button,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+  Tooltip,
+} from '@convergence/ui'
 import { RelayHopRow } from './relay-hop-row.presentational'
 import {
   buildRelayHopLine,
@@ -88,22 +95,20 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    // A Collapsible: its trigger says aria-expanded, its chevron turns, and the
+    // folded list is absent, not hidden (MC-17).
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="flex flex-col gap-1"
+    >
       <div className="flex items-center gap-1.5">
-        <Button
-          type="button"
-          variant="quiet"
-          aria-expanded={open}
-          onClick={() => setOpen((current) => !current)}
-          size="xs"
+        <CollapsibleTrigger
+          render={<Button type="button" variant="quiet" size="xs" />}
         >
-          {/* One chevron that turns (MC-31). */}
-          <ChevronRight
-            className={cn('size-3 transition-transform', open && 'rotate-90')}
-          />
           Trail
           <span className="tabular-nums">{formatHopCount(hops.length)}</span>
-        </Button>
+        </CollapsibleTrigger>
 
         {alarming > 0 ? (
           <Tooltip label={formatAlarmSummary(alarming)}>
@@ -150,13 +155,14 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
 
       {keptNote ? <p className="text-2xs text-ink-muted">{keptNote}</p> : null}
 
-      {open ? (
-        <>
+      <CollapsiblePanel>
+        <div className="flex flex-col gap-1">
           <ul className="flex flex-col gap-0.5">
             {hops.map((hop) => (
               <RelayHopRow
                 key={hop.id}
                 line={buildRelayHopLine(hop, resolveName, now)}
+                now={now}
                 expanded={expandedHopId === hop.id}
                 onToggle={() => toggleHop(hop.id)}
               />
@@ -177,8 +183,8 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
               Load older
             </Button>
           ) : null}
-        </>
-      ) : null}
-    </div>
+        </div>
+      </CollapsiblePanel>
+    </Collapsible>
   )
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { matchShortcut, type KeyEventLike } from './keymap.pure'
+import {
+  matchShortcut,
+  TERMINAL_BUTTON_BINDINGS,
+  terminalShortcutLabels,
+  type KeyEventLike,
+} from './keymap.pure'
 
 function ev(
   key: string,
@@ -136,5 +141,44 @@ describe('matchShortcut (other platforms use Ctrl)', () => {
     expect(
       matchShortcut(ev('ArrowLeft', { ctrlKey: true, altKey: true }), 'other'),
     ).toEqual({ kind: 'focus-adjacent', direction: 'left' })
+  })
+})
+
+describe('the pane buttons say the keys matchShortcut answers to (NAV-23)', () => {
+  const expected = {
+    'new-tab': { kind: 'new-tab' },
+    'split-vertical': { kind: 'split', direction: 'vertical' },
+    'split-horizontal': { kind: 'split', direction: 'horizontal' },
+    'close-tab': { kind: 'close-tab' },
+  } as const
+
+  for (const platform of ['mac', 'other'] as const) {
+    it(`every binding is a key the keymap takes (${platform})`, () => {
+      for (const [button, binding] of Object.entries(
+        TERMINAL_BUTTON_BINDINGS,
+      )) {
+        const event = ev(binding.key, {
+          metaKey: platform === 'mac',
+          ctrlKey: platform === 'other',
+          shiftKey: binding.shiftKey,
+          altKey: binding.altKey,
+        })
+        expect(matchShortcut(event, platform)).toEqual(
+          expected[button as keyof typeof expected],
+        )
+      }
+    })
+  }
+
+  it('writes them as each platform does', () => {
+    expect(terminalShortcutLabels('mac')).toEqual({
+      'new-tab': '⌘T',
+      'split-vertical': '⌘D',
+      'split-horizontal': '⌘⇧D',
+      'close-tab': '⌘W',
+    })
+    expect(terminalShortcutLabels('other')['split-horizontal']).toBe(
+      'Ctrl+Shift+D',
+    )
   })
 })

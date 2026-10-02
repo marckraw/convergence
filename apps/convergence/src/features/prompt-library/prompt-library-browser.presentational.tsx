@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  Tooltip,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import type { PromptLibraryBrowserFilters } from './prompt-library-browser.pure'
@@ -80,6 +81,8 @@ interface PromptLibraryBrowserDialogProps {
   onCancelForm: () => void
   onFormChange: (patch: Partial<PromptLibraryFormDraft>) => void
   onSubmitForm: () => void
+  /** The key that also saves the form, in words ("⌘↵"), for Save's tooltip. */
+  submitShortcut?: string
   onDeletePrompt: (prompt: PromptLibraryEntry) => void
 }
 
@@ -176,6 +179,7 @@ function renderDetailsPane({
   onCancelForm,
   onFormChange,
   onSubmitForm,
+  submitShortcut,
   onDeletePrompt,
 }: Pick<
   PromptLibraryBrowserDialogProps,
@@ -191,6 +195,7 @@ function renderDetailsPane({
   | 'onCancelForm'
   | 'onFormChange'
   | 'onSubmitForm'
+  | 'submitShortcut'
   | 'onDeletePrompt'
 >) {
   if (!projectName) {
@@ -212,6 +217,7 @@ function renderDetailsPane({
       onCancel: onCancelForm,
       onChange: onFormChange,
       onSubmit: onSubmitForm,
+      submitShortcut,
     })
   }
 
@@ -306,6 +312,7 @@ function renderDetailsPane({
                 />
               </div>
               {/* The prompt's own text: it scrolls, so the keyboard can reach it. */}
+              {/* raw-element: a prompt is prose, kept in the body font as it was written; CodeBlock is monospace */}
               <pre
                 tabIndex={0}
                 aria-label="Prompt text"
@@ -339,6 +346,7 @@ function renderPromptForm({
   onCancel,
   onChange,
   onSubmit,
+  submitShortcut,
 }: {
   draft: PromptLibraryFormDraft
   error: string | null
@@ -346,6 +354,7 @@ function renderPromptForm({
   onCancel: () => void
   onChange: (patch: Partial<PromptLibraryFormDraft>) => void
   onSubmit: () => void
+  submitShortcut?: string
 }) {
   return (
     <div className={paneScroll}>
@@ -368,15 +377,20 @@ function renderPromptForm({
             <X className="size-3.5" />
             Cancel
           </Button>
-          <Button
-            type="button"
-            onClick={onSubmit}
-            pending={isMutating}
-            pendingLabel="Saving…"
+          <Tooltip
+            label={submitShortcut ? 'Save' : undefined}
+            shortcut={submitShortcut}
           >
-            <Save className="size-3.5" />
-            Save
-          </Button>
+            <Button
+              type="button"
+              onClick={onSubmit}
+              pending={isMutating}
+              pendingLabel="Saving…"
+            >
+              <Save className="size-3.5" />
+              Save
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -527,6 +541,7 @@ export const PromptLibraryBrowserDialog: FC<
   onCancelForm,
   onFormChange,
   onSubmitForm,
+  submitShortcut,
   onDeletePrompt,
 }) => {
   const selectedPromptId = selectedPrompt?.id ?? null
@@ -694,6 +709,7 @@ export const PromptLibraryBrowserDialog: FC<
             onCancelForm,
             onFormChange,
             onSubmitForm,
+            submitShortcut,
             onDeletePrompt,
           })}
         </div>

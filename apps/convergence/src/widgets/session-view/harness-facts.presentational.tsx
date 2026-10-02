@@ -1,5 +1,18 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { Button, FormError } from '@convergence/ui'
+import {
+  Button,
+  CodeBlock,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+  DescriptionItem,
+  DescriptionList,
+  EmptyState,
+  FormError,
+  formatTimestamp,
+  MetaLine,
+  Timestamp,
+} from '@convergence/ui'
 import {
   compactionLabel,
   hiddenPluginSentence,
@@ -8,6 +21,10 @@ import {
   mcpReconnectErrorFor,
   mcpStatusHeading,
 } from './harness-facts.pure'
+
+/** The MCP status's time: Timestamp's clock, to the second (use-timestamp). */
+const writeStatusTime = (at: Date) =>
+  formatTimestamp(at, 'clock', { seconds: true })
 
 /** What Details can do with a server of the running process (MAR-3206 R3). */
 export interface McpReconnectView {
@@ -70,40 +87,59 @@ export function HarnessFactsSections({
           </Button>
         </div>
       ) : loading ? (
-        <p>Loading harness facts…</p>
+        <EmptyState
+          state="loading"
+          size="compact"
+          variant="plain"
+          title="Loading harness facts…"
+        />
       ) : !hasFacts ? (
-        <p>No harness facts yet</p>
+        <EmptyState
+          size="compact"
+          variant="plain"
+          title="No harness facts yet"
+        />
       ) : null}
       {!!current?.hooks.length && (
         <section aria-label="Hooks" className="mb-3">
           <h3 className="mb-1 font-medium">Hooks · current turn</h3>
           {current.hooks.map((hook) => (
             <div key={hook.id} className="mb-2 rounded border border-line p-2">
-              <div>
-                {hook.name ?? 'Name not reported'} ·{' '}
+              <MetaLine wrap>
+                {hook.name ?? 'Name not reported'}
                 {hook.event ?? 'Event not reported'}
-              </div>
-              <div>
+              </MetaLine>
+              <MetaLine wrap>
                 {hook.status}
-                {hook.truncated ? ' · record truncated' : ''}
-                {hook.durationMs !== null ? ` · ${hook.durationMs} ms` : ''}
-              </div>
+                {hook.truncated ? 'record truncated' : null}
+                {hook.durationMs !== null ? `${hook.durationMs} ms` : null}
+              </MetaLine>
               {hook.fieldBounds && <p>Hook text truncated</p>}
               {hook.output !== null && (
-                <details>
-                  <summary>
-                    Output
-                    {typeof hook.output === 'object' ? ' · truncated' : ''}
-                  </summary>
-                  <pre className="whitespace-pre-wrap break-words">
-                    {typeof hook.output === 'string'
-                      ? hook.output
-                      : hook.output.preview}
-                  </pre>
-                  {typeof hook.output === 'object' && (
-                    <span>{hook.output.bytes} bytes reported</span>
-                  )}
-                </details>
+                // The output folds in a Collapsible, in a CodeBlock (CONV-12, CONV-32).
+                <Collapsible>
+                  <CollapsibleTrigger className="text-ink-muted hover:text-ink">
+                    <MetaLine>
+                      Output
+                      {typeof hook.output === 'object' ? 'truncated' : null}
+                    </MetaLine>
+                  </CollapsibleTrigger>
+                  <CollapsiblePanel keepMounted>
+                    <CodeBlock
+                      label="Hook output"
+                      maxHeight="sm"
+                      wrap
+                      className="mt-1"
+                    >
+                      {typeof hook.output === 'string'
+                        ? hook.output
+                        : hook.output.preview}
+                    </CodeBlock>
+                    {typeof hook.output === 'object' && (
+                      <span>{hook.output.bytes} bytes reported</span>
+                    )}
+                  </CollapsiblePanel>
+                </Collapsible>
               )}
             </div>
           ))}
@@ -112,22 +148,25 @@ export function HarnessFactsSections({
       {current?.retries && (
         <section aria-label="Retries" className="mb-3">
           <h3 className="font-medium">Retries · current turn</h3>
-          <p>
-            {current.retries.last.truncated
-              ? 'Retry record truncated'
-              : `${current.retries.attempts} attempts · ${current.retries.state}`}
-          </p>
+          {current.retries.last.truncated ? (
+            <p>Retry record truncated</p>
+          ) : (
+            <MetaLine wrap>
+              {`${current.retries.attempts} attempts`}
+              {current.retries.state}
+            </MetaLine>
+          )}
           {current.retries.last.fieldBounds && <p>Retry text truncated</p>}
           {current.retries.last.phase === 'attempt' ? (
-            <p>
+            <MetaLine wrap>
               {current.retries.last.message}
               {current.retries.last.retryDelayMs !== null
-                ? ` · delay ${current.retries.last.retryDelayMs} ms`
-                : ''}
+                ? `delay ${current.retries.last.retryDelayMs} ms`
+                : null}
               {current.retries.last.errorStatus !== null
-                ? ` · HTTP ${current.retries.last.errorStatus}`
-                : ''}
-            </p>
+                ? `HTTP ${current.retries.last.errorStatus}`
+                : null}
+            </MetaLine>
           ) : current.retries.last.phase === 'resolved' &&
             current.retries.last.errorSubtype ? (
             <p>{current.retries.last.errorSubtype}</p>
@@ -140,13 +179,13 @@ export function HarnessFactsSections({
             Denials · current turn ({current.denials.length})
           </h3>
           {current.denials.map((denial, index) => (
-            <p key={index}>
+            <MetaLine wrap key={index}>
               {denial.toolName ?? 'Tool not reported'}
-              {denial.truncated ? ' · record truncated' : ''}
-              {denial.fieldBounds ? ' · text truncated' : ''}
-              {denial.reasonType ? ` · ${denial.reasonType}` : ''}
-              {denial.reason ? ` · ${denial.reason}` : ''}
-            </p>
+              {denial.truncated ? 'record truncated' : null}
+              {denial.fieldBounds ? 'text truncated' : null}
+              {denial.reasonType}
+              {denial.reason}
+            </MetaLine>
           ))}
         </section>
       )}
@@ -154,10 +193,10 @@ export function HarnessFactsSections({
         <section aria-label="Compactions" className="mb-3">
           <h3 className="font-medium">Compactions</h3>
           {facts.compactions.map((fact) => (
-            <p key={fact.sequence}>
+            <MetaLine wrap key={fact.sequence}>
               {compactionLabel(fact)}
-              {fact.durationMs !== null ? ` · ${fact.durationMs} ms` : ''}
-            </p>
+              {fact.durationMs !== null ? `${fact.durationMs} ms` : null}
+            </MetaLine>
           ))}
         </section>
       )}
@@ -166,54 +205,68 @@ export function HarnessFactsSections({
           <h3 className="font-medium">Rate limit · last reported</h3>
           {rate.truncated && <p>Rate limit record truncated</p>}
           {rate.fieldBounds && <p>Rate limit text truncated</p>}
-          {[
-            ['Status', rate.status],
-            ['Limit', rate.type],
-            [
-              'Utilization',
-              rate.utilization === null
-                ? null
-                : `${Math.round(rate.utilization * 100)}%`,
-            ],
-            [
-              'Resets',
-              rate.resetsAt === null
-                ? null
-                : new Date(rate.resetsAt * 1000).toLocaleString(),
-            ],
-            ['Overage status', rate.overageStatus],
-            [
-              'Overage resets',
-              rate.overageResetsAt === null
-                ? null
-                : new Date(rate.overageResetsAt * 1000).toLocaleString(),
-            ],
-            ['Overage unavailable', rate.overageDisabledReason],
-            [
-              'Using overage',
-              rate.isUsingOverage === null
-                ? null
-                : rate.isUsingOverage
-                  ? 'Yes'
-                  : 'No',
-            ],
-            [
-              'Overage in use',
-              rate.overageInUse === null
-                ? null
-                : rate.overageInUse
-                  ? 'Yes'
-                  : 'No',
-            ],
-            ['Threshold exceeded', rate.surpassedThreshold],
-            ['Reported', rate.at],
-          ]
-            .filter(([, value]) => value !== null)
-            .map(([label, value]) => (
-              <p key={label}>
-                {label}: {value}
-              </p>
-            ))}
+          {/* Its readings as terms and values, its times as Timestamps (CONV-24, CONV-22). */}
+          <DescriptionList layout="inline" density="compact">
+            {(
+              [
+                ['Status', rate.status],
+                ['Limit', rate.type],
+                [
+                  'Utilization',
+                  rate.utilization === null
+                    ? null
+                    : `${Math.round(rate.utilization * 100)}%`,
+                ],
+                [
+                  'Resets',
+                  rate.resetsAt === null ? null : (
+                    <Timestamp
+                      date={new Date(rate.resetsAt * 1000)}
+                      format="datetime"
+                    />
+                  ),
+                ],
+                ['Overage status', rate.overageStatus],
+                [
+                  'Overage resets',
+                  rate.overageResetsAt === null ? null : (
+                    <Timestamp
+                      date={new Date(rate.overageResetsAt * 1000)}
+                      format="datetime"
+                    />
+                  ),
+                ],
+                ['Overage unavailable', rate.overageDisabledReason],
+                [
+                  'Using overage',
+                  rate.isUsingOverage === null
+                    ? null
+                    : rate.isUsingOverage
+                      ? 'Yes'
+                      : 'No',
+                ],
+                [
+                  'Overage in use',
+                  rate.overageInUse === null
+                    ? null
+                    : rate.overageInUse
+                      ? 'Yes'
+                      : 'No',
+                ],
+                ['Threshold exceeded', rate.surpassedThreshold],
+                [
+                  'Reported',
+                  <Timestamp key="at" date={rate.at} format="datetime" />,
+                ],
+              ] as const
+            )
+              .filter(([, value]) => value !== null)
+              .map(([label, value]) => (
+                <DescriptionItem key={label} term={label}>
+                  {value}
+                </DescriptionItem>
+              ))}
+          </DescriptionList>
         </section>
       )}
       {init && (
@@ -224,9 +277,17 @@ export function HarnessFactsSections({
           {init.claudeCodeVersion !== null && (
             <p>Claude Code {init.claudeCodeVersion}</p>
           )}
-          {init.model !== null && <p>Model: {init.model}</p>}
-          {init.permissionMode !== null && (
-            <p>Permission mode: {init.permissionMode}</p>
+          {(init.model !== null || init.permissionMode !== null) && (
+            <DescriptionList layout="inline" density="compact">
+              {init.model !== null && (
+                <DescriptionItem term="Model">{init.model}</DescriptionItem>
+              )}
+              {init.permissionMode !== null && (
+                <DescriptionItem term="Permission mode">
+                  {init.permissionMode}
+                </DescriptionItem>
+              )}
+            </DescriptionList>
           )}
           {status ? (
             <div className="mt-2" aria-label="MCP servers">
@@ -234,6 +295,7 @@ export function HarnessFactsSections({
                 {mcpStatusHeading(
                   status,
                   mcp ? mcp.unavailable === null : null,
+                  writeStatusTime,
                 )}
               </p>
               {hidden.map((entry) => (
@@ -255,11 +317,12 @@ export function HarnessFactsSections({
                       isMcpAlertStatus(server.status) ? 'text-danger-ink' : ''
                     }
                   >
-                    {server.name}
-                    {server.nameTruncated ? '…' : ''} ·{' '}
-                    {server.status ?? 'Not reported'} ·{' '}
-                    {server.scope ?? 'scope not reported'} ·{' '}
-                    {server.origin ?? 'no address'}
+                    <MetaLine wrap>
+                      {`${server.name}${server.nameTruncated ? '…' : ''}`}
+                      {server.status ?? 'Not reported'}
+                      {server.scope ?? 'scope not reported'}
+                      {server.origin ?? 'no address'}
+                    </MetaLine>
                   </p>
                   {mcp &&
                     isMcpAlertStatus(server.status) &&
@@ -314,7 +377,10 @@ export function HarnessFactsSections({
                       isMcpAlertStatus(server.status) ? 'text-danger-ink' : ''
                     }
                   >
-                    {server.name} · {server.status ?? 'Not reported'}
+                    <MetaLine wrap>
+                      {server.name}
+                      {server.status ?? 'Not reported'}
+                    </MetaLine>
                   </p>
                 ))}
                 {init.mcpServers.omitted > 0 && (
@@ -335,18 +401,38 @@ export function HarnessFactsSections({
             </div>
           )}
           {init.capabilities !== null && (
-            <p className="mt-2">
-              Capabilities:{' '}
-              {init.capabilities.values.join(', ') || 'None reported'}
-              {init.capabilities.omitted > 0 && (
-                <> · {init.capabilities.omitted} more capabilities</>
-              )}
-            </p>
+            // A long list: its value wraps under its term.
+            <DescriptionList density="compact" className="mt-2">
+              <DescriptionItem term="Capabilities">
+                <MetaLine wrap>
+                  {init.capabilities.values.join(', ') || 'None reported'}
+                  {init.capabilities.omitted > 0
+                    ? `${init.capabilities.omitted} more capabilities`
+                    : null}
+                </MetaLine>
+              </DescriptionItem>
+            </DescriptionList>
           )}
-          {init.tools !== null && <p>Tools: {init.tools.count}</p>}
-          {init.skills !== null && <p>Skills: {init.skills.count}</p>}
-          {init.slashCommands !== null && (
-            <p>Slash commands: {init.slashCommands.count}</p>
+          {(init.tools !== null ||
+            init.skills !== null ||
+            init.slashCommands !== null) && (
+            <DescriptionList layout="inline" density="compact" className="mt-2">
+              {init.tools !== null && (
+                <DescriptionItem term="Tools">
+                  {init.tools.count}
+                </DescriptionItem>
+              )}
+              {init.skills !== null && (
+                <DescriptionItem term="Skills">
+                  {init.skills.count}
+                </DescriptionItem>
+              )}
+              {init.slashCommands !== null && (
+                <DescriptionItem term="Slash commands">
+                  {init.slashCommands.count}
+                </DescriptionItem>
+              )}
+            </DescriptionList>
           )}
         </section>
       )}

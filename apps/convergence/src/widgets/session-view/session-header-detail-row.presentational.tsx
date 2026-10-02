@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from 'react'
+import { DescriptionItem } from '@convergence/ui'
 
 interface SessionHeaderDetailRowProps {
   icon?: ReactNode
@@ -7,18 +8,23 @@ interface SessionHeaderDetailRowProps {
   testId?: string
 }
 
+/**
+ * One of the header's Details: a DescriptionItem in the inline list Details
+ * draws (CONV-24), its glyph before the term and its slot kept when it has
+ * none, so the terms line up. It sits in a DescriptionList.
+ */
 export const SessionHeaderDetailRow: FC<SessionHeaderDetailRowProps> = ({
   icon,
   label,
   value,
   testId,
 }) => (
-  <div
-    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+  <DescriptionItem
+    term={label}
+    icon={icon ?? null}
+    className="rounded-md px-2 py-1.5"
     data-testid={testId}
   >
-    <span className="flex w-4 shrink-0 text-ink-muted">{icon}</span>
-    <span className="w-22 shrink-0 text-ink-muted">{label}</span>
-    <span className="min-w-0 flex-1 truncate text-right text-ink">{value}</span>
-  </div>
+    {value}
+  </DescriptionItem>
 )

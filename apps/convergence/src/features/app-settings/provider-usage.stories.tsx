@@ -125,7 +125,7 @@ export const Default: Story = {
     await expect(canvas.getByText('Cursor usage unavailable')).toBeVisible()
     await expect(canvas.getByText('Unlimited')).toBeVisible()
     await expect(
-      canvas.getByText('No active rate-limit windows were reported.'),
+      canvas.getByText('No active rate-limit windows were reported'),
     ).toBeVisible()
     // A usage page is a link that looks like a button (DS-24).
     await expect(canvas.getByRole('link', { name: 'Credits' })).toBeVisible()

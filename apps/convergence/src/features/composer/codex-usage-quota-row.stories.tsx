@@ -28,7 +28,11 @@ export const Default: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('5 hours')).toBeVisible()
     await expect(canvas.getByText('64%')).toBeVisible()
-    await expect(canvas.getByText(/^Resets /)).toBeVisible()
+    // The reset is a Timestamp (CONV-22): a <time> after the word.
+    await expect(canvas.getByText(/^Resets/)).toBeVisible()
+    await expect(
+      canvas.getByText(/^Resets/).querySelector('time'),
+    ).not.toBeNull()
   },
 }
 

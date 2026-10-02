@@ -10,12 +10,7 @@ import type {
   DailyActivityPoint,
   WeekdayHourActivityPoint,
 } from '@/entities/analytics'
-import { chartTokens } from '@convergence/ui'
-
-const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-})
+import { chartTokens, formatTimestamp } from '@convergence/ui'
 
 const INTEGER_FORMATTER = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
@@ -132,8 +127,9 @@ export function hasUsageActivity(overview: AnalyticsOverview | null): boolean {
   )
 }
 
+/** A day on a chart's axis: "Sep 30", with the year when it isn't this year's. */
 export function formatDateLabel(date: string): string {
-  return DATE_FORMATTER.format(new Date(`${date}T00:00:00`))
+  return formatTimestamp(new Date(`${date}T00:00:00`), 'date')
 }
 
 export function formatHour(hour: number): string {

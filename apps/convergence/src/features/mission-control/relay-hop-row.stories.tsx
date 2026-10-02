@@ -42,6 +42,7 @@ const meta = {
       payloadPreview:
         'Implement the brief. Return your result and verification evidence.',
     }),
+    now: NOW,
     expanded: false,
     onToggle: fn(),
   },
@@ -68,6 +69,10 @@ export const Default: Story = {
     await expect(row).toHaveTextContent('Fable')
     await expect(row).toHaveTextContent('opus-mac')
     await expect(row).toHaveTextContent('round 3')
+    // The time is a Timestamp: Timestamp's words, the instant in its <time> (MC-13).
+    const time = row.querySelector('time') as HTMLTimeElement
+    await expect(time).toHaveTextContent('4 minutes ago')
+    await expect(time).toHaveAttribute('dateTime', '2026-09-17T12:06:00.000Z')
     const show = canvas.getByRole('button', {
       name: 'Show the message carried',
     })

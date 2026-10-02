@@ -22,6 +22,11 @@ interface WorkBlockRowProps {
  * One line for a run of tool calls (MAR-3391 CV1). Controlled: whether it is
  * open lives outside the row (R3), so a row the virtualizer drops and draws
  * again comes back as it was.
+ *
+ * Not a Collapsible, on purpose (CONV-12): what it opens is not a panel
+ * inside it but the transcript's own rows after it, each its own virtualized
+ * entry, so there is no panel for Collapsible to own. It says aria-expanded
+ * itself, and its one chevron turns.
  */
 export const WorkBlockRow: FC<WorkBlockRowProps> = ({
   label,

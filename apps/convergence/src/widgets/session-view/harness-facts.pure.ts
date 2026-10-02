@@ -177,16 +177,19 @@ export function mcpReconnectUnavailable(
  * whenever none runs. `running` is null when the caller cannot tell.
  *
  * The time is the status's own: an unchanged re-read records nothing, so the
- * time is when the list last changed, never when it was last read.
+ * time is when the list last changed, never when it was last read. The
+ * renderer writes it (`writeTime`, Timestamp's clock): this module is read by
+ * the backend's tests too, which have no design system to write times with.
  */
 export function mcpStatusHeading(
   status: Extract<HarnessFact, { kind: 'harness.mcpStatus' }>,
   running: boolean | null,
+  writeTime: (at: Date) => string,
 ): string {
   const since = new Date(status.at)
   const parts = [
     `MCP servers · ${status.connected} connected of ${status.servers.length + status.omitted}`,
-    `unchanged since ${Number.isNaN(since.getTime()) ? status.at : since.toLocaleTimeString()}`,
+    `unchanged since ${Number.isNaN(since.getTime()) ? status.at : writeTime(since)}`,
   ]
   if (running !== null) parts.push(running ? 'process running' : NO_PROCESS)
   return parts.join(' · ')

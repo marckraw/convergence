@@ -425,6 +425,10 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export {
+  calendarDaysBefore,
+  exactDateLabel,
+} from './components/timestamp/timestamp.pure'
 // DS6 sweep E (MAR-3608): appended, so the parallel sweeps' additions merge as unions.
 export { type InputVariant } from './components/input/input'
 export { type TextareaVariant } from './components/textarea/textarea'

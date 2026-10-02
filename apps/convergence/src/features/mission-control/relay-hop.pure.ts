@@ -1,3 +1,4 @@
+import { formatTimestamp } from '@convergence/ui'
 import type { RelayHop, RelayHopOutcome } from '@/entities/session-relay'
 import type { ResolveSessionName } from './relay-sentence.pure'
 import { MISSING_SESSION_LABEL } from './relay-sentence.pure'
@@ -106,26 +107,17 @@ export function formatRelayHopOutcome(outcome: string): string {
   }
 }
 
-const MINUTE_MS = 60_000
-const HOUR_MS = 60 * MINUTE_MS
-const DAY_MS = 24 * HOUR_MS
-
 /**
- * How long ago a hop fired, at a glance. A trail is scanned, not studied, so
- * anything older than a day drops to a date rather than a growing number.
+ * How long ago a hop fired, at a glance: Timestamp's relative words, so a hop
+ * reads the same in the trail, the wire popover and anywhere else a moment is
+ * told (MC-13). A trail is scanned, not studied.
  */
 export function formatHopTime(firedAt: string, now: Date): string {
   const fired = new Date(firedAt)
-  const elapsed = now.getTime() - fired.getTime()
-
-  if (Number.isNaN(elapsed)) return firedAt
-  if (elapsed < MINUTE_MS) return 'just now'
-  if (elapsed < HOUR_MS) return `${Math.floor(elapsed / MINUTE_MS)}m ago`
-  if (elapsed < DAY_MS) return `${Math.floor(elapsed / HOUR_MS)}h ago`
-  return fired.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })
+  if (Number.isNaN(fired.getTime()) || Number.isNaN(now.getTime())) {
+    return firedAt
+  }
+  return formatTimestamp(fired, 'relative', { now })
 }
 
 export interface RelayHopLine {
@@ -141,6 +133,8 @@ export interface RelayHopLine {
   rawOutcome: string | null
   tone: RelayHopTone
   timeLabel: string
+  /** When it fired, as stored: the row's Timestamp, with the whole moment in its tooltip. */
+  firedAt: string
   /**
    * Which round of the loop this was, in words. Null on the rows that belong
    * to the settle rather than the loop (a quiet send, a failed source) — and
@@ -179,6 +173,7 @@ export function buildRelayHopLine(
     rawOutcome: tone === 'unknown' ? hop.outcome : null,
     tone,
     timeLabel: formatHopTime(hop.firedAt, now),
+    firedAt: hop.firedAt,
     roundLabel: hop.roundNumber === null ? null : `round ${hop.roundNumber}`,
     batonLabel: hop.baton === null ? null : `⚡ ${hop.baton}`,
     payloadPreview: hop.payloadPreview,

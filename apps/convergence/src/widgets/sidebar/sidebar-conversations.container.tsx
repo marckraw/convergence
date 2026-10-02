@@ -15,6 +15,7 @@ import {
   type ChatSidebarSpace,
 } from './global-chat-session-list.presentational'
 import { NeedsYou } from './needs-you.container'
+import { EmptyState } from '@convergence/ui'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { ProjectTree } from './project-tree.container'
 import { useSidebarConversationSearch } from './sidebar-search.container'
@@ -267,8 +268,8 @@ export const SidebarConversations = memo(function SidebarConversations({
                 onOpenCreateWorkspace={onOpenCreateWorkspace}
               />
             ) : (
-              <div className="px-3 text-center">
-                <p className="mb-3 text-sm text-ink-muted">No project loaded</p>
+              <div className="mb-3 px-3">
+                <EmptyState size="compact" title="No project loaded" />
               </div>
             )}
           </>

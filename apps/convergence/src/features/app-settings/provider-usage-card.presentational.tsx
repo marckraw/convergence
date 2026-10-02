@@ -3,19 +3,11 @@ import type {
   ProviderQuotaSnapshot,
   ProviderQuotaWindow,
 } from '@/entities/provider-quota'
-import { buttonVariants, Card } from '@convergence/ui'
+import { buttonVariants, Card, EmptyState, Timestamp } from '@convergence/ui'
 import { ProviderUsageWindowRow } from './provider-usage-window-row.presentational'
 
 interface ProviderUsageCardProps {
   snapshot: ProviderQuotaSnapshot
-}
-
-function formatCheckedAt(value: string | null): string {
-  if (!value) return 'Never checked'
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))
 }
 
 function sortedWindows(windows: ProviderQuotaWindow[]) {
@@ -119,7 +111,12 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
             {snapshot.planType ? <span>Plan: {snapshot.planType}</span> : null}
             <span>
-              Last checked: {formatCheckedAt(snapshot.lastCheckedAt)}
+              Last checked:{' '}
+              {snapshot.lastCheckedAt ? (
+                <Timestamp date={snapshot.lastCheckedAt} format="clock" />
+              ) : (
+                'Never checked'
+              )}
               {snapshot.stale ? ' (stale)' : ''}
             </span>
             {snapshot.limitReachedType ? (
@@ -137,9 +134,10 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
               ))}
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-ink-muted">
-              No active rate-limit windows were reported.
-            </p>
+            <EmptyState
+              size="compact"
+              title="No active rate-limit windows were reported"
+            />
           )}
 
           {snapshot.credits ? (
@@ -154,14 +152,11 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
           ) : null}
         </>
       ) : (
-        <div className="rounded-lg border border-dashed border-line px-4 py-4">
-          <p className="text-sm font-medium text-ink">
-            {getProviderName(snapshot.providerId)} usage unavailable
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            {snapshot.reason}
-          </p>
-        </div>
+        <EmptyState
+          size="compact"
+          title={`${getProviderName(snapshot.providerId)} usage unavailable`}
+          detail={snapshot.reason}
+        />
       )}
     </Card>
   )

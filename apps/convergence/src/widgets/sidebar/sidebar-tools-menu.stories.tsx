@@ -108,3 +108,22 @@ export const Rail: Story = {
     await expect(trigger).toHaveFocus()
   },
 }
+
+/**
+ * The way into the Command Center (NAV-23): its item says the key that opens
+ * it from anywhere, at the item's end (MenuShortcut).
+ */
+export const CommandCenter: Story = {
+  args: { commandCenter: { shortcut: '⌘K', onOpen: fn() } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Open sidebar tools' }),
+    )
+    await screen.findByRole('menu')
+    const item = screen.getByRole('menuitem', { name: /^Command Center…/ })
+    await expect(item).toHaveTextContent('⌘K')
+    await userEvent.click(item)
+    await expect(args.commandCenter?.onOpen).toHaveBeenCalledOnce()
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  },
+}

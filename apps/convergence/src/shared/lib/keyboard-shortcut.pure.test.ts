@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bindingFromKeyEvent,
   DEFAULT_COMMAND_CENTER_SHORTCUT,
+  ACTIONS_SHORTCUT,
   detectShortcutPlatform,
   findShortcutConflict,
   formatShortcutLabel,
@@ -10,7 +11,9 @@ import {
   matchPaletteShortcut,
   parseCommandCenterShortcut,
   resolveShortcutRecording,
+  runningShortcutPlatform,
   shortcutPlatformFromOs,
+  SUBMIT_SHORTCUT,
   validateCommandCenterShortcut,
   type KeyEventLike,
 } from './keyboard-shortcut.pure'
@@ -70,6 +73,16 @@ describe('matchKeyboardShortcut', () => {
   })
 })
 
+describe('runningShortcutPlatform', () => {
+  it('is other where there is no browser to ask (Node)', () => {
+    expect(runningShortcutPlatform()).toBe(
+      detectShortcutPlatform(
+        typeof navigator === 'undefined' ? undefined : navigator.platform,
+      ),
+    )
+  })
+})
+
 describe('formatShortcutLabel', () => {
   it('formats mac default', () => {
     expect(formatShortcutLabel(DEFAULT_COMMAND_CENTER_SHORTCUT, mac)).toBe('⌘K')
@@ -79,6 +92,22 @@ describe('formatShortcutLabel', () => {
     expect(
       formatShortcutLabel({ key: 'p', shiftKey: true, altKey: false }, other),
     ).toBe('Ctrl+Shift+P')
+  })
+
+  it('writes a named key as each platform does: ⌘↵ on the Mac, Ctrl+Enter elsewhere', () => {
+    expect(formatShortcutLabel(SUBMIT_SHORTCUT, mac)).toBe('⌘↵')
+    expect(formatShortcutLabel(SUBMIT_SHORTCUT, other)).toBe('Ctrl+Enter')
+    expect(
+      formatShortcutLabel(
+        { key: 'arrowleft', shiftKey: false, altKey: true },
+        mac,
+      ),
+    ).toBe('⌘⌥←')
+  })
+
+  it('writes the Actions key as a dot', () => {
+    expect(formatShortcutLabel(ACTIONS_SHORTCUT, mac)).toBe('⌘.')
+    expect(formatShortcutLabel(ACTIONS_SHORTCUT, other)).toBe('Ctrl+.')
   })
 })
 

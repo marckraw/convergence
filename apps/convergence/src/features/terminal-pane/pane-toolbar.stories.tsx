@@ -60,3 +60,26 @@ export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
 }
+
+/** Each button's tooltip says the key that does the same (NAV-23). */
+export const Shortcuts: Story = {
+  args: {
+    shortcuts: {
+      'new-tab': '⌘T',
+      'split-vertical': '⌘D',
+      'split-horizontal': '⌘⇧D',
+      'close-tab': '⌘W',
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('button', { name: 'Split horizontal' }),
+    ).toHaveAttribute('data-tooltip-shortcut', '⌘⇧D')
+    await expect(
+      canvas.getByRole('button', { name: 'Split vertical' }),
+    ).toHaveAttribute('data-tooltip-shortcut', '⌘D')
+    await expect(
+      canvas.getByRole('button', { name: 'Close tab' }),
+    ).toHaveAttribute('data-tooltip-shortcut', '⌘W')
+  },
+}

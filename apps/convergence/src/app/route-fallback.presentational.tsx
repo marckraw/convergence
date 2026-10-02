@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button, DragRegion } from '@convergence/ui'
+import { Button, DragRegion, EmptyState } from '@convergence/ui'
 import type { MainViewRouteFallback } from './routes/main-view-route-resolution.pure'
 
 interface RouteFallbackViewProps {
@@ -19,18 +19,19 @@ export const RouteFallbackView: FC<RouteFallbackViewProps> = ({
 }) => (
   <div className="flex h-full flex-col">
     <DragRegion />
-    <div className="flex flex-1 flex-col items-center justify-center px-6 pb-12 text-center">
-      <div className="max-w-md">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {fallback.title}
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-ink-muted">
-          {fallback.message}
-        </p>
-        <Button type="button" onClick={onAction} size="lg" className="mt-6">
+    {/* The welcome's page-sized EmptyState: one title weight for both (NAV-19). */}
+    <EmptyState
+      size="page"
+      variant="plain"
+      layout="centred"
+      title={fallback.title}
+      detail={fallback.message}
+      action={
+        <Button type="button" onClick={onAction} size="lg">
           {fallback.actionLabel}
         </Button>
-      </div>
-    </div>
+      }
+      className="pb-12"
+    />
   </div>
 )

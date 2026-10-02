@@ -57,7 +57,7 @@ import {
 } from 'lucide-react'
 import { type ChatSidebarSpace } from './global-chat-session-list.presentational'
 import { SidebarConversations } from './sidebar-conversations.container'
-import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
+import { SidebarToolsMenuContainer } from './sidebar-tools-menu.container'
 import { SurfaceSwitcher } from './surface-switcher.presentational'
 import { peekHandleClass, railMarkRing } from './sidebar.styles'
 import { notify } from '@convergence/ui'
@@ -986,7 +986,7 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
 
         <div className="app-sidebar-footer flex w-full flex-col items-center gap-1 border-t border-hairline py-3">
-          <SidebarToolsMenu
+          <SidebarToolsMenuContainer
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
             tooltipSide="right"
@@ -1024,7 +1024,7 @@ export const Sidebar: FC<SidebarProps> = ({
               <BarChart3 className="h-4 w-4" />
             </IconButton>
 
-            <SidebarToolsMenu
+            <SidebarToolsMenuContainer
               activeSurface={activeSurface}
               hasActiveProject={!!activeProject}
               onOpenDialog={openDialog}

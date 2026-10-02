@@ -13,6 +13,7 @@ import {
   Notice,
   Switch,
   Textarea,
+  Tooltip,
 } from '@convergence/ui'
 
 interface ProjectContextFormProps {
@@ -26,6 +27,8 @@ interface ProjectContextFormProps {
   onBodyChange: (value: string) => void
   onReinjectModeChange: (mode: ProjectContextReinjectMode) => void
   onSubmit: () => void
+  /** The key that also submits it, in words ("⌘↵"), for the button's tooltip. */
+  submitShortcut?: string
   onCancel: () => void
 }
 
@@ -40,8 +43,10 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
   onBodyChange,
   onReinjectModeChange,
   onSubmit,
+  submitShortcut,
   onCancel,
 }) => {
+  const submitLabel = mode === 'create' ? 'Add context item' : 'Save changes'
   const isEveryTurn = reinjectMode === 'every-turn'
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -119,17 +124,22 @@ export const ProjectContextForm: FC<ProjectContextFormProps> = ({
         >
           Cancel
         </Button>
-        <Button
-          type="submit"
-          disabledReason={
-            body.trim().length === 0 ? 'Write the body first.' : undefined
-          }
-          pending={isSaving}
-          pendingLabel="Saving…"
-          size="lg"
+        <Tooltip
+          label={submitShortcut ? submitLabel : undefined}
+          shortcut={submitShortcut}
         >
-          {mode === 'create' ? 'Add context item' : 'Save changes'}
-        </Button>
+          <Button
+            type="submit"
+            disabledReason={
+              body.trim().length === 0 ? 'Write the body first.' : undefined
+            }
+            pending={isSaving}
+            pendingLabel="Saving…"
+            size="lg"
+          >
+            {submitLabel}
+          </Button>
+        </Tooltip>
       </div>
     </Card>
   )

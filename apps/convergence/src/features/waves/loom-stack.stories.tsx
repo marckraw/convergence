@@ -248,7 +248,12 @@ export const Before: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Before · 3 done' }),
     ).toHaveAttribute('aria-expanded', 'true')
-    await expect(canvas.getAllByRole('group')).toHaveLength(2)
+    // Each wave is a Collapsible section, named by its wave (MC-17).
+    await expect(
+      canvas
+        .getAllByRole('region')
+        .filter((group) => group.hasAttribute('data-wave-group')),
+    ).toHaveLength(2)
   },
 }
 

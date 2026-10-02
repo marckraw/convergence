@@ -105,6 +105,7 @@ mapping in its message is the DS5 codemod's table
 | `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
 | `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`; there also a text size, a padding, a min/max height or a height token, and `[&_button]:` resizing every button in a box                          | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
+| `use-timestamp`           | a time written by hand: `Intl.DateTimeFormat`, `Intl.RelativeTimeFormat`, `toLocaleDateString(`, `toLocaleTimeString(`, a Date's own `toLocaleString(`, or `toLocaleString(` with a date's parts in its options                            | `<Timestamp>` (`relative`, `clock`, `date`, `datetime`, `log`): a `<time>`, the whole moment in our Tooltip; `formatTimestamp` where it must be a string                                     | CONV-22     |
 | `no-native-title`         | `title=` on any lowercase JSX element (`title=""` is no hint) or an SVG `<title>`, in the app and `packages/ui/src`                                                                                                                        | `<Tooltip label>` (`when="truncated"` for text cut short); an icon-only button is an IconButton, whose `label` is its tooltip (R2)                                                           | NAV-20      |
 | `no-buttons-as-rows`      | `h-auto` in a `<Button>`'s or `<IconButton>`'s `className`: a button stretched so more lines fit, as a row or a card                                                                                                                       | `ListRow` for a row, `Card` with a `CardAction` for a box that opens, `ChoiceCard` for an option with a sentence, a link Button for words                                                    | DS-21       |
 | `use-notify`              | an import of `sonner` (its `toast`, its `Toaster`, or a type) anywhere in the app, tests too                                                                                                                                               | `notify` from `@convergence/ui`: `notify.failure("update Codex", error)` reads "Couldn’t update Codex." with the reason under it (R10); `toast` for the rest                                 | DS-8        |
@@ -118,6 +119,18 @@ the tag, past arrow functions"), so attribute order and line breaks don't matter
 a variant (`[&_svg]:size-4`, the size of the icon inside) is not the button's size, and doesn't
 count. Every regex rule skips a line that starts with a comment (`//`, `*`, `/*` or `{/*`), so a doc
 comment may name the recipe it replaced.
+
+`use-timestamp` (DS6, MAR-3608) reads the app and `packages/ui/src`, but not
+`packages/ui/src/components/timestamp/`, where Timestamp and its helpers (`formatTimestamp`,
+`fullDateLabel`, `exactDateLabel`, `calendarDaysBefore`) write every time through Intl. It is as
+precise as a regex can be about a type it can't see. `toLocaleDateString` and `toLocaleTimeString`
+are always times, and so is `Intl.DateTimeFormat`. `toLocaleString` is a number's too (`1,234`), so
+the rule reports it only where the text shows a date: called on `new Date(…)`, or with options that
+name a date's parts (`month:`, `hour:`, `dateStyle:` …). A bare `when.toLocaleString()` on a Date
+held in a variable reads exactly like a count's, and passes; review catches that one. A time built
+from `getHours()` and `padStart` is not a call the rule can name either. Five formats cover the app:
+`relative`, `clock` and `date`, `datetime`, and `log` (the transcript's "Today, 14:07:33"); `seconds`
+writes a clock to the second, and `hour12: false` keeps Mission Control's and Loom's 24-hour clocks.
 
 DS6 (MAR-3608) widened three of these after sweeping each to zero. `use-focus-ring` also fails on
 `focus-visible:outline-none` (and its `focus:`, `focus-within:` and `has-focus-visible:` twins):
@@ -189,6 +202,11 @@ Containers keep theirs, `no-raw-button-outside-shared` and `no-raw-input-outside
 take no reason: a container wires state, and a control it draws belongs in a presentational part
 or the design system.
 
+A raw `<pre` is the rule's since DS6 (MAR-3608): a block of preformatted text is CodeBlock's job,
+scrolling inside itself and focusable while it does (CONV-32). Three keep theirs with a reason: a
+run's live log, whose stdout and stderr each wear their own ink (CodeBlock takes one string), a
+prompt shown in the body font as it was written, and the debug drawer's payloads, dozens to a page.
+
 ## 4. Every part has stories
 
 Storybook is where the design system and the app's parts are seen, in both themes, and every story
@@ -256,9 +274,10 @@ An allowlist entry that stops matching is reported, so the lists stay true.
   `space-workboard`, drawn with `buttonVariants` as an icon button, which TextLink can't be. That
   link is the case for the helper: if the sweep wants it, `externalLinkProps` goes into
   `@convergence/ui` first, and the rule after it.
-- **`use-timestamp`, `no-cursor-pointer`, `no-tap-highlight-per-element`.** Not part of DS4's
-  brief. `Timestamp` exists (DS3d) and can take the first when the sweep wants it; the cursor is
-  DS5's base layer's job (DS-35); and Convergence is a desktop app with no tap highlight.
+- **`no-cursor-pointer`, `no-tap-highlight-per-element`.** Not part of DS4's brief. The cursor is
+  DS5's base layer's job (DS-35), and Convergence is a desktop app with no tap highlight.
+  (`use-timestamp` was in this list until DS6 ported it, as hand-formatted times rather than
+  accent.'s `<time title>`: see section 2.)
 
 ## When one fires
 
@@ -308,6 +327,7 @@ Streamdown name.
 | `use-notify`                 | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
+| `use-timestamp`              | `design-system-drift.json`      | error    |
 | `no-native-title`            | `design-system-drift.json`      | error    |
 | `no-buttons-as-rows`         | `design-system-drift.json`      | error    |
 | `use-section-label`          | `design-system-drift.json`      | error    |

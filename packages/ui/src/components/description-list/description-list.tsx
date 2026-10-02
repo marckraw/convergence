@@ -74,6 +74,11 @@ type DescriptionItemProps = Omit<ComponentProps<'div'>, 'className'> & {
   className?: string
   /** What the value is: "Branch", "Model". */
   term: ReactNode
+  /**
+   * A small glyph before the term, muted, in a 16 px slot. Pass `null` to keep
+   * the slot empty, so terms with and without a glyph line up in one list.
+   */
+  icon?: ReactNode
   /** The value itself. */
   children: ReactNode
 }
@@ -84,6 +89,7 @@ type DescriptionItemProps = Omit<ComponentProps<'div'>, 'className'> & {
  */
 function DescriptionItem({
   term,
+  icon,
   children,
   className,
   ...props
@@ -100,8 +106,18 @@ function DescriptionItem({
           'text-ink-muted',
           TERMS[density],
           layout === 'inline' && 'shrink-0',
+          icon !== undefined && 'flex items-center gap-2',
         )}
       >
+        {icon !== undefined ? (
+          <span
+            aria-hidden
+            data-slot="description-icon"
+            className="flex w-4 shrink-0 [&_svg]:size-3.5"
+          >
+            {icon}
+          </span>
+        ) : null}
         {term}
       </dt>
       <dd

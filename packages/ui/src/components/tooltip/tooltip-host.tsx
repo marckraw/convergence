@@ -90,6 +90,7 @@ export function TooltipHost() {
           anchor.hasAttribute('data-popup-open') ||
           anchor.hasAttribute('data-tooltip-card'),
         expanded: anchor.getAttribute('aria-expanded'),
+        hasPopup: anchor.getAttribute('aria-haspopup'),
         onlyWhenTruncated:
           anchor.getAttribute('data-tooltip-when') === 'truncated',
         truncated: anchor.scrollWidth > anchor.clientWidth,

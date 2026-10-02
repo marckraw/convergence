@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import { Kbd } from '@convergence/ui'
 import { ConversationActionItem } from './conversation-action-item.presentational'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
@@ -15,6 +16,8 @@ export const ConversationActionsProject: FC<ConversationActionsViewProps> = ({
       ))}
     </div>
     <p className={styles.hint}>{"Current conversation's seat"}</p>
-    <p className={styles.hint}>Esc closes</p>
+    <p className={styles.hint}>
+      <Kbd>Esc</Kbd> closes
+    </p>
   </>
 )

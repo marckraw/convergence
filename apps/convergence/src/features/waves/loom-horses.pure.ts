@@ -1,3 +1,4 @@
+import { formatTimestamp } from '@convergence/ui'
 import {
   entryBelongsToSeat,
   seatTicket,
@@ -265,13 +266,14 @@ export function loomSeatCardIds(
   return `loom-${kind}-${key.replace(/[^A-Za-z0-9_-]/g, '_')}`
 }
 
-/** `21:40`: the clock a dispatch record is read in, 24-hour, local time. */
+/**
+ * `21:40`: the clock a dispatch record is read in, 24-hour, local time:
+ * Timestamp's clock (MC-13). A record that names no moment reads as stored.
+ */
 export function loomDispatchClock(sentAt: string): string {
-  return new Date(sentAt).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+  const sent = new Date(sentAt)
+  if (Number.isNaN(sent.getTime())) return sentAt
+  return formatTimestamp(sent, 'clock', { hour12: false })
 }
 
 /** What a card says when its seat holds no ticket and was sent none. */
