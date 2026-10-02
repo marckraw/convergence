@@ -145,7 +145,7 @@ export const Expanded: Story = {
       within(activity).getByRole('button', { name: 'All activity' }),
     ).toHaveAttribute('aria-pressed', 'true')
     await userEvent.click(
-      within(activity).getByRole('button', { name: 'Needs you' }),
+      within(activity).getByRole('button', { name: 'Waiting on you' }),
     )
     await expect(args.onChange).toHaveBeenLastCalledWith(needsMe)
 
@@ -188,7 +188,7 @@ export const Filtered: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('2 of 5')).toBeVisible()
     await expect(
-      canvas.getByRole('button', { name: 'Needs you' }),
+      canvas.getByRole('button', { name: 'Waiting on you' }),
     ).toHaveAttribute('aria-pressed', 'true')
     // The pinned card is not lost: the feed says the filters hide it.
     await expect(

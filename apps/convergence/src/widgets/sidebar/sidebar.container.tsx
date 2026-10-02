@@ -37,6 +37,8 @@ import {
   groupNeedsYou,
   needsYouCardModel,
   needsYouCount,
+  needsYouSessions,
+  needsYouTone,
 } from '@/features/needs-you'
 import {
   Badge,
@@ -367,9 +369,13 @@ export const Sidebar: FC<SidebarProps> = ({
       Boolean(selectedProjectCard?.timing.live),
   )
 
-  const attentionCards = cardGroups
-    .flatMap((group) => group.cards)
-    .filter((card) => !card.dismissed && card.attentionGroup)
+  // What "N need you" counts, by the one derivation the status bar and
+  // Mission Control read too (ruling 6): what waits on you, not finished work
+  // waiting for review.
+  const needsYou = useMemo(
+    () => needsYouSessions(globalSessions, needsYouDismissals),
+    [globalSessions, needsYouDismissals],
+  )
 
   const handleSelectNeedsYouSession = useStableCallback(
     async (sessionId: string) => {
@@ -878,16 +884,10 @@ export const Sidebar: FC<SidebarProps> = ({
   )
 
   if (collapsed) {
-    // R1: the loudest card waiting decides the rail's tone, and its count
-    // wears the same one (no red count beside a green ring), in the
+    // R1: the loudest of what waits on you decides the rail's tone, and its
+    // count wears the same one (no red count beside a green ring), in the
     // session's own tones (NAV-1).
-    const railTone = attentionCards.some(
-      (card) => card.attentionGroup === 'Waiting on you',
-    )
-      ? SESSION_STATE_TONE.waiting
-      : attentionCards.some(({ session }) => session.attention === 'failed')
-        ? SESSION_STATE_TONE.failed
-        : SESSION_STATE_TONE.finished
+    const railTone = needsYouTone(needsYou) ?? SESSION_STATE_TONE.finished
     return (
       // As wide as the layout's collapsed sidebar, which sizes it (NAV-17).
       <div className="relative flex h-full w-full flex-col items-center">
@@ -932,7 +932,7 @@ export const Sidebar: FC<SidebarProps> = ({
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
           {/* Opens the sidebar over the content, where the Needs you feed is (NAV-17). */}
           <IconButton
-            label={needsYouCount(attentionCards.length)}
+            label={needsYouCount(needsYou.length)}
             type="button"
             variant="ghost"
             tooltipSide="right"
@@ -947,13 +947,13 @@ export const Sidebar: FC<SidebarProps> = ({
                 railMarkRing[railTone],
               )}
             />
-            {attentionCards.length > 0 ? (
+            {needsYou.length > 0 ? (
               <Badge
                 shape="count"
                 tone={railTone}
                 className="absolute -top-1 -right-1"
               >
-                {attentionCards.length}
+                {needsYou.length}
               </Badge>
             ) : null}
           </IconButton>

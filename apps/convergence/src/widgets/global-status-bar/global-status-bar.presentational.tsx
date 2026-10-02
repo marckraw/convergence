@@ -3,10 +3,24 @@ import type { AgentMeterSnapshot } from '@/shared/types/agent-meter.types'
 import { AgentMeterSummary } from './agent-meter-summary.presentational'
 import type { ProjectActivity } from '@/entities/session'
 import { summarizeAttentionRequests } from '@/entities/session'
-import { needsYouCount, needsYouVerb } from '@/features/needs-you'
+import {
+  needsYouCount,
+  needsYouTone,
+  needsYouVerb,
+  type NeedsYouTone,
+} from '@/features/needs-you'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
-import { Button, cn, StatusDot, Tooltip, TooltipCard } from '@convergence/ui'
+import {
+  Button,
+  cn,
+  StatusDot,
+  toneInk,
+  toneLine,
+  toneSoft,
+  Tooltip,
+  TooltipCard,
+} from '@convergence/ui'
 import { AggregateSummary } from './aggregate-summary.presentational'
 import { ProjectSummary } from './project-summary.presentational'
 import {
@@ -14,8 +28,8 @@ import {
   aggregateZoneClass,
   barClass,
   barTone,
-  projectChipAttentionClass,
   projectChipClass,
+  projectChipNeedsYouClass,
   recencyBadgeClass,
   statusChipButtonClass,
   zoneClass,
@@ -31,7 +45,10 @@ interface GlobalStatusBarProps {
   meter?: AgentMeterSnapshot
   meterSessions?: SessionSummary[]
   runningCount: number
+  /** What "N need you" counts (ruling 6). */
   attentionCount: number
+  /** Its tone (R1): warning while anything asks, danger for failed runs alone. */
+  attentionTone: NeedsYouTone | null
   byProject: ProjectActivity[]
   recency: RecencyBadge | null
   providers: ProviderInfo[]
@@ -44,6 +61,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
   meterSessions = [],
   runningCount,
   attentionCount,
+  attentionTone,
   byProject,
   recency,
   providers,
@@ -100,21 +118,24 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
               <div
                 className={cn(
                   aggregateChipClass,
-                  attentionCount > 0 &&
-                    'border-warning-line bg-warning-soft text-warning-ink',
+                  attentionTone && [
+                    toneLine[attentionTone],
+                    toneSoft[attentionTone],
+                    toneInk[attentionTone],
+                  ],
                 )}
               >
                 <CircleAlert
                   className={cn(
                     'h-3 w-3',
-                    attentionCount > 0 ? 'text-warning-ink' : 'text-ink-muted',
+                    attentionTone ? toneInk[attentionTone] : 'text-ink-muted',
                   )}
                 />
                 <span>
                   <span
                     className={cn(
                       'font-medium',
-                      attentionCount > 0 ? 'text-warning-ink' : 'text-ink',
+                      attentionTone ? toneInk[attentionTone] : 'text-ink',
                     )}
                   >
                     {attentionCount}
@@ -129,55 +150,53 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
             className={cn(zoneClass, 'min-w-0 flex-1 overflow-hidden')}
             data-testid="global-status-chips"
           >
-            {byProject.map((project) => (
-              <TooltipCard
-                key={project.projectId}
-                side="top"
-                className="max-w-sm"
-                content={
-                  <ProjectSummary
-                    project={project}
-                    providerLabel={providerLabel}
-                  />
-                }
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => onSelectProject(project.projectId)}
-                  data-testid={`global-status-chip-${project.projectId}`}
-                  aria-label={formatProjectChipLabel(project)}
-                  className={cn(
-                    statusChipButtonClass,
-                    projectChipClass,
-                    project.needsAttention.length > 0 &&
-                      projectChipAttentionClass,
-                  )}
+            {byProject.map((project) => {
+              const projectTone = needsYouTone(project.needsAttention)
+              return (
+                <TooltipCard
+                  key={project.projectId}
+                  side="top"
+                  className="max-w-sm"
+                  content={
+                    <ProjectSummary
+                      project={project}
+                      providerLabel={providerLabel}
+                    />
+                  }
                 >
-                  <StatusDot
-                    size="sm"
-                    tone={
-                      project.needsAttention.length > 0
-                        ? barTone.waiting
-                        : barTone.running
-                    }
-                  />
-                  <span className="max-w-32 truncate">
-                    {project.projectName}
-                  </span>
-                  <span className="text-ink-muted">
-                    {project.running.length > 0 && (
-                      <span>{project.running.length}▸</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => onSelectProject(project.projectId)}
+                    data-testid={`global-status-chip-${project.projectId}`}
+                    aria-label={formatProjectChipLabel(project)}
+                    className={cn(
+                      statusChipButtonClass,
+                      projectChipClass,
+                      projectTone && projectChipNeedsYouClass[projectTone],
                     )}
-                    {project.needsAttention.length > 0 && (
-                      <span className="ml-1 text-warning-ink">
-                        {project.needsAttention.length}!
-                      </span>
-                    )}
-                  </span>
-                </Button>
-              </TooltipCard>
-            ))}
+                  >
+                    <StatusDot
+                      size="sm"
+                      tone={projectTone ?? barTone.running}
+                    />
+                    <span className="max-w-32 truncate">
+                      {project.projectName}
+                    </span>
+                    <span className="text-ink-muted">
+                      {project.running.length > 0 && (
+                        <span>{project.running.length}▸</span>
+                      )}
+                      {projectTone && (
+                        <span className={cn('ml-1', toneInk[projectTone])}>
+                          {project.needsAttention.length}!
+                        </span>
+                      )}
+                    </span>
+                  </Button>
+                </TooltipCard>
+              )
+            })}
           </div>
         </>
       )}
