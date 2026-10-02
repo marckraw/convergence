@@ -32,7 +32,11 @@ import {
 import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
 import { useAppSettingsStore } from '@/entities/app-settings'
-import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
+import {
+  groupNeedsYou,
+  needsYouCardModel,
+  needsYouCount,
+} from '@/features/needs-you'
 import {
   Badge,
   Button,
@@ -915,9 +919,9 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
-          {/* Opens the sidebar over the content, where the Activity feed is (NAV-17). */}
+          {/* Opens the sidebar over the content, where the Needs you feed is (NAV-17). */}
           <IconButton
-            label={`Needs You (${attentionCards.length})`}
+            label={needsYouCount(attentionCards.length)}
             type="button"
             variant="ghost"
             tooltipSide="right"

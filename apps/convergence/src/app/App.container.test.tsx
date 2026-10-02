@@ -624,8 +624,11 @@ describe('App', () => {
         ).toBeInTheDocument(),
       )
       fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
-      const indicator = screen.getByRole('button', { name: /^Needs You/ })
-      expect(indicator).toHaveAccessibleName(`Needs You (${count})`)
+      // Its name is the queue's count phrase: "1 needs you", "0 need you" (NAV-32).
+      const indicator = screen.getByRole('button', { name: /^\d+ needs? you$/ })
+      expect(indicator).toHaveAccessibleName(
+        `${count} ${count === 1 ? 'needs' : 'need'} you`,
+      )
       expect(indicator.querySelector('[data-tone]')).toHaveAttribute(
         'data-tone',
         tone,

@@ -373,12 +373,12 @@ describe('MAR-3378 F1b R3 — the features still move', () => {
     seed(sessions)
     render(<Harness collapsed />)
     expect(
-      screen.getByRole('button', { name: 'Needs You (3)' }),
+      screen.getByRole('button', { name: '3 need you' }),
     ).toBeInTheDocument()
 
     summarize({ ...sessions[0], status: 'completed', attention: 'finished' })
     expect(
-      screen.getByRole('button', { name: 'Needs You (4)' }),
+      screen.getByRole('button', { name: '4 need you' }),
     ).toBeInTheDocument()
   })
 

@@ -8,6 +8,7 @@ import type {
   MissionControlViewMode,
   SessionCardOrderPreset,
 } from '@/features/mission-control'
+import { needsYouCount } from '@/features/needs-you'
 import {
   Button,
   cn,
@@ -89,7 +90,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
           <p className="text-xs text-ink-muted">
             {totalCount === 0
               ? 'no sessions'
-              : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${attentionCount} need${attentionCount === 1 ? 's' : ''} you · ${runningCount} running`}
+              : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${needsYouCount(attentionCount)} · ${runningCount} running`}
           </p>
         </div>
 

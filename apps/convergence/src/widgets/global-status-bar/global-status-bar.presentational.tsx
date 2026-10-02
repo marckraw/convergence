@@ -3,6 +3,7 @@ import type { AgentMeterSnapshot } from '@/shared/types/agent-meter.types'
 import { AgentMeterSummary } from './agent-meter-summary.presentational'
 import type { ProjectActivity } from '@/entities/session'
 import { summarizeAttentionRequests } from '@/entities/session'
+import { needsYouCount, needsYouVerb } from '@/features/needs-you'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
 import { Button, cn, StatusDot, Tooltip, TooltipCard } from '@convergence/ui'
@@ -85,7 +86,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
             <div
               role="group"
               tabIndex={0}
-              aria-label={`Agents: ${runningCount} running, ${attentionCount} need you`}
+              aria-label={`Agents: ${runningCount} running, ${needsYouCount(attentionCount)}`}
               className={aggregateZoneClass}
               data-testid="global-status-aggregate"
             >
@@ -118,7 +119,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                   >
                     {attentionCount}
                   </span>{' '}
-                  need you
+                  {needsYouVerb(attentionCount)}
                 </span>
               </div>
             </div>

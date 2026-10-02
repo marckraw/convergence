@@ -15,6 +15,7 @@ import {
   buildFeedFilterSummary,
   feedOrders,
   feedOrderLabels,
+  NEEDS_YOU,
   toggleFeedChoice,
   type ActivityView,
   type FeedView,
@@ -64,11 +65,11 @@ export function NeedsYouControls({
     <div
       role="group"
       className="space-y-2.5 border-b border-line-soft pb-3 text-2xs"
-      aria-label="Activity controls"
+      aria-label={`${NEEDS_YOU} controls`}
     >
       <div className="flex h-control-sm items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <span className="font-medium">Activity</span>
+          <span className="font-medium">{NEEDS_YOU}</span>
           <span
             className="tabular-nums text-ink-muted"
             aria-label={`${result.shown} of ${result.total} cards shown`}

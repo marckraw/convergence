@@ -8,6 +8,7 @@ import {
 } from 'react'
 import {
   buildFeedView,
+  currentSectionTitle,
   defaultFeedView,
   readFeedView,
   holdFeedOrder,
@@ -29,7 +30,9 @@ function readFoldedTitles(): Set<string> {
     const value: unknown = JSON.parse(localStorage.getItem(foldedKey) ?? '[]')
     return new Set(
       Array.isArray(value)
-        ? value.filter((title): title is string => typeof title === 'string')
+        ? value
+            .filter((title): title is string => typeof title === 'string')
+            .map(currentSectionTitle)
         : [],
     )
   } catch {
