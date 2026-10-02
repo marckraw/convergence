@@ -1,4 +1,4 @@
-import type { ProviderBrand } from '@/shared/ui/provider-icon.pure'
+import type { ProviderBrand } from '@/entities/provider'
 
 /**
  * Selected Whisper palette, as the provider hue tokens (R1's category hues,

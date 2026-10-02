@@ -28,7 +28,7 @@ import {
   Timestamp,
   type Tone,
 } from '@convergence/ui'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 import {
   CONFIGURED_SERVERS_SENTENCE,
   chatGptLinkCopiedMessage,

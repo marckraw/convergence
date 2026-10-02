@@ -1,4 +1,4 @@
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 import { useId } from 'react'
 import type {
   FC,

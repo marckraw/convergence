@@ -9,7 +9,7 @@ import {
   Spinner,
   TextLink,
 } from '@convergence/ui'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { ProviderIcon } from '@/entities/provider'
 
 export function ProviderAccountLoginProgress({
   attempt,

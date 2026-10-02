@@ -1,5 +1,5 @@
 import { isLocalExecutionHost } from '@/entities/execution-host'
-import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
+import { resolveProviderIcon } from '@/entities/provider'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
 import { NEEDS_YOU } from './needs-you-words.pure'
 import {
