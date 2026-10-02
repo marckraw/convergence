@@ -29,7 +29,11 @@ import {
   useSessionStore,
   type SessionSummary,
 } from '@/entities/session'
-import { remoteSkillsNotice, useSkillStore } from '@/entities/skill'
+import {
+  remoteSkillsNotice,
+  resolveSkillListState,
+  useSkillStore,
+} from '@/entities/skill'
 import {
   ACTIONS_SHORTCUT,
   matchKeyboardShortcut,
@@ -44,7 +48,6 @@ import {
   placeActionsPanel,
   projectSkillsNeedLoad,
   resolveRoutineRows,
-  resolveSkillListState,
   visibleSkillActions,
   type ActionsMenuGroup,
   type ActionsMenuLevel,

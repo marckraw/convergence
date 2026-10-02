@@ -66,10 +66,19 @@ describe('ComposerSkillInjectionPicker remote skills note', () => {
   })
 
   it('shows the note when no skills match', () => {
-    renderPicker({ items: [] })
+    renderPicker({ items: [], query: 'lint' })
 
     expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
     expect(screen.getByText('No matching skills')).toBeInTheDocument()
+  })
+
+  it('says the agent has none, not that nothing matches, before a search (CONV-10)', () => {
+    renderPicker({ items: [] })
+
+    expect(
+      screen.getByText('No skills available for this agent'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No matching skills')).toBeNull()
   })
 
   it('shows the note above an error', () => {

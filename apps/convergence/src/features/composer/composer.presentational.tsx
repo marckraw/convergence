@@ -244,6 +244,8 @@ interface ComposerProps {
   onRootInjectionDismiss?: () => void
   skillInjectionPickerOpen?: boolean
   skillInjectionItems?: SkillCatalogEntry[]
+  /** What follows `::skill::`, so an empty list says which kind of empty. */
+  skillInjectionQuery?: string
   skillInjectionHighlightedIndex?: number
   onSkillInjectionSelect?: (skill: SkillCatalogEntry) => void
   onSkillInjectionHover?: (index: number) => void
@@ -361,6 +363,7 @@ export const Composer: FC<ComposerProps> = ({
   onRootInjectionDismiss,
   skillInjectionPickerOpen = false,
   skillInjectionItems = [],
+  skillInjectionQuery = '',
   skillInjectionHighlightedIndex = 0,
   onSkillInjectionSelect,
   onSkillInjectionHover,
@@ -747,6 +750,7 @@ export const Composer: FC<ComposerProps> = ({
               listId={pickerLists.skill}
               open={skillInjectionPickerOpen}
               items={skillInjectionItems}
+              query={skillInjectionQuery}
               selectedSkills={selectedSkills}
               highlightedIndex={skillInjectionHighlightedIndex}
               activeProviderLabel={selection.providerLabel}

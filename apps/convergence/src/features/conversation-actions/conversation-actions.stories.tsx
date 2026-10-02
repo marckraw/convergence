@@ -218,8 +218,10 @@ export const SkillsBusy: Story = {
     skills: { state: { kind: 'loading' }, rows: [], notice: null, query: '' },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Loading skills…',
+    // The shared skill-list status (CONV-10): its words wait 300 ms, so a
+    // quick read flashes nothing.
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent('Loading skills…'),
     )
   },
 }
@@ -237,9 +239,10 @@ export const SkillsFailed: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('alert')).toHaveTextContent(
-      "Couldn't load this agent's skills: claude exited with code 1",
-    )
+    // Every skill list's failure (CONV-10): what failed, then why.
+    const alert = canvas.getByRole('alert')
+    await expect(alert).toHaveTextContent("Couldn't load skills")
+    await expect(alert).toHaveTextContent('claude exited with code 1')
     await waitFor(() =>
       expect(canvas.getByText('Skills on grok-mac.')).toBeVisible(),
     )

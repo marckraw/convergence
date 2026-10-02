@@ -21,8 +21,6 @@ import {
   placeActionsPanel,
   projectSkillsNeedLoad,
   resolveRoutineRows,
-  resolveSkillListState,
-  skillsFailedLabel,
   visibleSkillActions,
 } from './conversation-actions-menu.pure'
 
@@ -148,87 +146,6 @@ describe('nextFocusIndex (R6)', () => {
     expect(nextFocusIndex('End', 0, 3)).toBe(2)
     expect(nextFocusIndex('a', 0, 3)).toBeNull()
     expect(nextFocusIndex('ArrowDown', 0, 0)).toBeNull()
-  })
-})
-
-describe('resolveSkillListState (R3)', () => {
-  const base = {
-    catalogId: 'project-1',
-    isCatalogLoading: false,
-    loadingProviderIds: [] as string[],
-    catalogError: null,
-    failedProviders: {},
-    providerId: 'claude-code',
-  }
-
-  it('is loading while this agent’s provider has not arrived', () => {
-    expect(
-      resolveSkillListState({
-        ...base,
-        catalog: catalog([]),
-        isCatalogLoading: true,
-        loadingProviderIds: ['claude-code'],
-      }),
-    ).toEqual({ kind: 'loading' })
-    expect(
-      resolveSkillListState({ ...base, catalog: null, isCatalogLoading: true }),
-    ).toEqual({ kind: 'loading' })
-  })
-
-  it('reads a catalog of another project or chat as not yet this one’s', () => {
-    expect(
-      resolveSkillListState({
-        ...base,
-        catalog: catalog([provider([skill('a')])], 'project-2'),
-      }),
-    ).toEqual({ kind: 'loading' })
-  })
-
-  it('is a failure, never empty, when this provider’s scan failed', () => {
-    expect(
-      resolveSkillListState({
-        ...base,
-        catalog: catalog([]),
-        failedProviders: { 'claude-code': 'EACCES: skills dir' },
-      }),
-    ).toEqual({ kind: 'failed', message: 'EACCES: skills dir' })
-    expect(
-      resolveSkillListState({
-        ...base,
-        catalog: catalog([provider([], { error: 'Codex app-server exited' })]),
-      }),
-    ).toEqual({ kind: 'failed', message: 'Codex app-server exited' })
-    expect(
-      resolveSkillListState({
-        ...base,
-        catalog: null,
-        catalogError: 'Failed to load skills',
-      }),
-    ).toEqual({ kind: 'failed', message: 'Failed to load skills' })
-  })
-
-  it('names a failure as a failure, with the store’s own message', () => {
-    expect(skillsFailedLabel('EACCES: skills dir')).toBe(
-      "Couldn't load this agent's skills: EACCES: skills dir",
-    )
-  })
-
-  it('is empty only when the scan succeeded with none', () => {
-    expect(
-      resolveSkillListState({
-        ...base,
-        catalog: catalog([provider([skill('a')], { providerId: 'codex' })]),
-      }),
-    ).toEqual({ kind: 'empty' })
-  })
-
-  it('is listed when this provider has skills', () => {
-    expect(
-      resolveSkillListState({
-        ...base,
-        catalog: catalog([provider([skill('a')])]),
-      }),
-    ).toEqual({ kind: 'listed' })
   })
 })
 

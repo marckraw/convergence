@@ -1,23 +1,24 @@
 import type { FC } from 'react'
-import { AlertTriangle, Check, Library } from 'lucide-react'
+import { Library } from 'lucide-react'
 import {
+  composerSkillListState,
   hasSkillSelection,
+  SkillListStatus,
+  SkillRow,
   type SkillCatalogEntry,
   type SkillSelection,
 } from '@/entities/skill'
-import { Badge, Listbox, ListboxOption } from '@convergence/ui'
-import { InlinePicker, InlinePickerState } from './inline-picker.presentational'
-import {
-  inlinePickerRow,
-  inlinePickerRowDetail,
-  inlinePickerRowLine,
-} from './inline-picker.styles'
+import { Listbox, ListboxOption } from '@convergence/ui'
+import { InlinePicker } from './inline-picker.presentational'
+import { inlinePickerRow } from './inline-picker.styles'
 
 interface ComposerSkillInjectionPickerProps {
   open: boolean
   /** The list's id: the message field names it (aria-controls) and its active row. */
   listId: string
   items: SkillCatalogEntry[]
+  /** What follows `::skill::`: with none, an empty list is the agent having none. */
+  query?: string
   selectedSkills: SkillSelection[]
   highlightedIndex: number
   activeProviderLabel: string | null
@@ -44,6 +45,7 @@ export const ComposerSkillInjectionPicker: FC<
   open,
   listId,
   items,
+  query = '',
   selectedSkills,
   highlightedIndex,
   activeProviderLabel,
@@ -55,6 +57,13 @@ export const ComposerSkillInjectionPicker: FC<
   onDismiss,
 }) => {
   if (!open) return null
+  // One list's words and looks for loading, failed and empty (CONV-10).
+  const listState = composerSkillListState({
+    error,
+    isLoading,
+    count: items.length,
+    query,
+  })
 
   return (
     <InlinePicker
@@ -76,69 +85,35 @@ export const ComposerSkillInjectionPicker: FC<
           {notice}
         </p>
       ) : null}
-      {error ? (
-        <InlinePickerState
-          state="failed"
-          title="Couldn't load skills"
-          detail={error}
-        />
-      ) : isLoading ? (
-        <InlinePickerState state="loading" title="Loading skills…" />
-      ) : items.length === 0 ? (
-        <InlinePickerState state="empty" title="No matching skills" />
-      ) : (
+      {listState.kind === 'listed' ? (
         <Listbox
           id={listId}
           aria-label="Skills"
           active={highlightedIndex}
           multiline
         >
-          {items.map((skill, index) => {
-            const selected = hasSkillSelection(selectedSkills, skill.id)
-            const warningCount = skill.warnings.length
-            return (
-              <ListboxOption
-                key={skill.id}
-                index={index}
-                disabled={!skill.enabled}
-                onHover={() => onHover(index)}
-                onPick={() => onSelect(skill)}
-                data-testid={`composer-skill-injection-item-${skill.id}`}
-                // One highlight, the active row's (CONV-6): an added skill
-                // says so with its check, not a second tint.
-                className={inlinePickerRow}
-              >
-                <span className={inlinePickerRowLine}>
-                  <span className="truncate font-medium">
-                    {skill.displayName}
-                  </span>
-                  {selected ? (
-                    <>
-                      <Check aria-hidden className="size-3.5 shrink-0" />
-                      <span className="sr-only">(added)</span>
-                    </>
-                  ) : null}
-                  {warningCount > 0 ? (
-                    <AlertTriangle
-                      aria-hidden
-                      className="size-3.5 shrink-0 text-warning-ink"
-                    />
-                  ) : null}
-                  {!skill.enabled ? (
-                    <Badge caps className="ml-auto">
-                      Disabled
-                    </Badge>
-                  ) : null}
-                </span>
-                <span className={inlinePickerRowDetail}>
-                  {skill.shortDescription ||
-                    skill.description ||
-                    'No description.'}
-                </span>
-              </ListboxOption>
-            )
-          })}
+          {items.map((skill, index) => (
+            <ListboxOption
+              key={skill.id}
+              index={index}
+              disabled={!skill.enabled}
+              onHover={() => onHover(index)}
+              onPick={() => onSelect(skill)}
+              data-testid={`composer-skill-injection-item-${skill.id}`}
+              // One highlight, the active row's (CONV-6): an added skill
+              // says so with its check, not a second tint.
+              className={inlinePickerRow}
+            >
+              <SkillRow
+                skill={skill}
+                selected={hasSkillSelection(selectedSkills, skill.id)}
+                form="compact"
+              />
+            </ListboxOption>
+          ))}
         </Listbox>
+      ) : (
+        <SkillListStatus state={listState} />
       )}
     </InlinePicker>
   )

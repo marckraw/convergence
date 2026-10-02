@@ -2170,6 +2170,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         onRootInjectionDismiss={handleRootInjectionDismiss}
         skillInjectionPickerOpen={skillInjectionPickerOpen}
         skillInjectionItems={skillInjectionItems}
+        skillInjectionQuery={skillInjectionTrigger?.query ?? ''}
         skillInjectionHighlightedIndex={skillInjectionHighlightedIndex}
         onSkillInjectionSelect={handleSkillInjectionSelect}
         onSkillInjectionHover={setSkillInjectionHighlightedIndex}

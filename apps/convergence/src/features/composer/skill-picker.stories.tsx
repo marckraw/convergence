@@ -151,7 +151,16 @@ export const Failed: Story = {
 export const Empty: Story = {
   args: { open: true, skills: [], selectedSkills: [] },
   play: async () => {
-    const shown = await screen.findByText('No skills match this provider')
+    const shown = await screen.findByText('No skills available for this agent')
+    await waitFor(() => expect(shown).toBeVisible())
+  },
+}
+
+/** A search that matches none of them. */
+export const NoMatch: Story = {
+  args: { open: true, skills: [], selectedSkills: [], query: 'lint' },
+  play: async () => {
+    const shown = await screen.findByText('No matching skills')
     await waitFor(() => expect(shown).toBeVisible())
   },
 }

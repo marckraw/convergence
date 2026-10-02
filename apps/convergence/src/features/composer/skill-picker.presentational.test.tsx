@@ -65,13 +65,19 @@ describe('SkillPicker remote skills note', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows the note when no skills match', () => {
+  it('shows the note when the agent has no skills', () => {
     renderPicker({ skills: [] })
 
     expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
     expect(
-      screen.getByText('No skills match this provider'),
+      screen.getByText('No skills available for this agent'),
     ).toBeInTheDocument()
+  })
+
+  it('says nothing matches once a search hides every skill (CONV-10)', () => {
+    renderPicker({ skills: [], query: 'lint' })
+
+    expect(screen.getByText('No matching skills')).toBeInTheDocument()
   })
 
   it('shows the note above an error', () => {
