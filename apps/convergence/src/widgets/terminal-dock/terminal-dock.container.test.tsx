@@ -31,7 +31,7 @@ vi.mock('@/features/terminal-pane', () => ({
   }: {
     onSplitHorizontal: () => void
     onSplitVertical: () => void
-    onClose: () => void
+    onClose?: () => void
   }) => (
     <div>
       <button
@@ -48,9 +48,11 @@ vi.mock('@/features/terminal-pane', () => ({
       >
         v
       </button>
-      <button type="button" aria-label="Close tab" onClick={onClose}>
-        x
-      </button>
+      {onClose ? (
+        <button type="button" aria-label="Close tab" onClick={onClose}>
+          x
+        </button>
+      ) : null}
     </div>
   ),
   CloseConfirmDialog: ({
@@ -320,7 +322,7 @@ describe('TerminalDock container', () => {
     )
   })
 
-  it('clicking "Close tab" closes the active tab of the leaf', () => {
+  it('closes a tab from its own ✕, the only close it has (NAV-9; mutation: pass onClose to the toolbar again)', () => {
     useSessionStore.setState({
       sessions: [makeSession()],
       activeSessionId: 's-1',
@@ -334,7 +336,13 @@ describe('TerminalDock container', () => {
       .mockResolvedValue(undefined)
 
     render(<TerminalDock />)
-    fireEvent.click(screen.getByRole('button', { name: /^close tab$/i }))
+    // The pane's toolbar draws no second close for the open tab.
+    expect(screen.queryByRole('button', { name: /^close tab$/i })).toBeNull()
+    // The tab's ✕ is the pointer's (Delete is the keyboard's), so it is out of
+    // the accessibility tree.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close tab zsh', hidden: true }),
+    )
 
     expect(closeSpy).toHaveBeenCalledWith('s-1', 'l1', 't-1')
   })

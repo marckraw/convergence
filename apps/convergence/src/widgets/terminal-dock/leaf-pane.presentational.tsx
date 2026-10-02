@@ -15,7 +15,6 @@ export interface LeafPaneHandlers {
   onSelectTab: (leafId: string, tabId: string) => void
   onNewTab: (leafId: string) => void
   onSplit: (leafId: string, direction: SplitDirection) => void
-  onCloseActiveTab: (leafId: string) => void
   onCloseTab: (leafId: string, tabId: string) => void
   onFocusLeaf: (leafId: string) => void
   /** Draws the open tab's terminal; a story passes a still picture of one. */
@@ -27,8 +26,9 @@ interface LeafPaneViewProps extends LeafPaneHandlers {
 }
 
 /**
- * One pane of the terminal dock: its tab strip, the split and close buttons,
- * and the open tab's terminal under them.
+ * One pane of the terminal dock: its tab strip, the split buttons, and the
+ * open tab's terminal under them. Each tab carries its own ✕, so the toolbar
+ * draws no second close for the open one (NAV-9).
  */
 export const LeafPaneView: FC<LeafPaneViewProps> = ({
   leaf,
@@ -36,7 +36,6 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
   onSelectTab,
   onNewTab,
   onSplit,
-  onCloseActiveTab,
   onCloseTab,
   onFocusLeaf,
   renderTerminal,
@@ -62,7 +61,6 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
           <PaneToolbar
             onSplitHorizontal={() => onSplit(leaf.id, 'horizontal')}
             onSplitVertical={() => onSplit(leaf.id, 'vertical')}
-            onClose={() => onCloseActiveTab(leaf.id)}
           />
         }
       />
