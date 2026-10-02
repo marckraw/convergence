@@ -4654,6 +4654,32 @@ describe('ComposerContainer', () => {
     ).toBeEnabled()
   })
 
+  it('says why a row on its way can no longer be cancelled (R2, MAR-3608)', async () => {
+    // Unavailable is said, never only greyed: the button stays reachable and
+    // its description is the reason. Mutation: back to a bare `disabled`
+    // (no reason) -> the description is gone and this is red.
+    seedQueuedInputs([queuedInput({ state: 'dispatching' })])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    await screen.findByTestId('queued-inputs')
+    const cancel = screen.getByRole('button', { name: 'Cancel queued input' })
+    expect(cancel).toHaveAttribute('aria-disabled', 'true')
+    expect(cancel).toHaveAttribute(
+      'aria-description',
+      'It is being delivered now.',
+    )
+  })
+
   it('drops Deliver now the moment a redelivery is reported, without a reload (MAR-2971 lap 6)', async () => {
     // The live path, which is where this actually bit. `redeliveredBy` is a
     // fact about ANOTHER row, so only a read that asks about both can carry

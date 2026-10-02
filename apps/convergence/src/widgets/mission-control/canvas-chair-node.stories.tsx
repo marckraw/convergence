@@ -72,9 +72,12 @@ export const Busy: Story = {
     detail: 'Fable: two laps in, the reviewer still wants the cap discussed',
   },
   play: async ({ args, canvas, userEvent }) => {
-    const seen = await canvas.findByRole('button', {
-      name: 'Answer the hails for this crew',
-    })
+    // Named by its word, label in name (WCAG 2.5.3); what it does is its
+    // description.
+    const seen = await canvas.findByRole('button', { name: 'Seen' })
+    await expect(seen).toHaveAccessibleDescription(
+      'Answer the hails for this crew',
+    )
     await waitFor(() => expect(seen).toBeVisible())
     await expect(canvas.getByText(args.detail!)).toBeVisible()
     await userEvent.click(seen)

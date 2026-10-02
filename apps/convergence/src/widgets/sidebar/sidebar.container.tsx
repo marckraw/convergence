@@ -807,6 +807,7 @@ export const Sidebar: FC<SidebarProps> = ({
           variant="ghost"
           onClick={pinPeek}
           tooltipSide="bottom"
+          size="sm"
         >
           <Pin className="h-4 w-4" />
         </IconButton>
@@ -817,6 +818,7 @@ export const Sidebar: FC<SidebarProps> = ({
           variant="ghost"
           onClick={collapse}
           tooltipSide="bottom"
+          size="sm"
         >
           <PanelLeftClose className="h-4 w-4" />
         </IconButton>
@@ -854,12 +856,14 @@ export const Sidebar: FC<SidebarProps> = ({
     </>
   )
 
+  // R3: 28 px in the header, the rail's one size (32) on the rail (NAV-6).
   const settingsGear = (side: 'right' | 'bottom') => (
     <IconButton
       label="Open settings"
       variant="ghost"
       onClick={() => openDialog('app-settings')}
       tooltipSide={side}
+      size={side === 'bottom' ? 'sm' : 'md'}
     >
       <Settings className="h-4 w-4" />
     </IconButton>
@@ -900,7 +904,7 @@ export const Sidebar: FC<SidebarProps> = ({
             variant="ghost"
             onClick={onExpand}
             tooltipSide="right"
-            size="lg"
+            size="md"
           >
             <PanelLeftOpen className="h-4 w-4" />
           </IconButton>
@@ -921,7 +925,7 @@ export const Sidebar: FC<SidebarProps> = ({
             type="button"
             variant="ghost"
             tooltipSide="right"
-            size="lg"
+            size="md"
             className="relative"
             onClick={onPeek}
           >
@@ -953,7 +957,7 @@ export const Sidebar: FC<SidebarProps> = ({
             variant="ghost"
             onClick={() => onSelectSurface(activeSurface)}
             tooltipSide="right"
-            size="lg"
+            size="md"
           >
             {activeSurface === 'chat' ? (
               <MessageSquareText className="h-4 w-4" />
@@ -970,7 +974,7 @@ export const Sidebar: FC<SidebarProps> = ({
               activeSurface === 'chat' ? onNewGlobalSession : openProjectDialog
             }
             tooltipSide="right"
-            size="lg"
+            size="md"
           >
             <Plus className="h-4 w-4" />
           </IconButton>
@@ -1010,6 +1014,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 openDialog('app-settings', { appSettingsSection: 'insights' })
               }
               tooltipSide="bottom"
+              size="sm"
             >
               <BarChart3 className="h-4 w-4" />
             </IconButton>
@@ -1018,9 +1023,10 @@ export const Sidebar: FC<SidebarProps> = ({
               activeSurface={activeSurface}
               hasActiveProject={!!activeProject}
               onOpenDialog={openDialog}
+              size="sm"
             />
             {settingsGear('bottom')}
-            <ThemeToggleButton tooltipSide="bottom" />
+            <ThemeToggleButton tooltipSide="bottom" size="sm" />
           </>
         }
       />

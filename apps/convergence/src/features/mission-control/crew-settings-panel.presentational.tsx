@@ -540,7 +540,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 min={1}
                 value={attentionMinutes ?? ''}
                 placeholder={String(defaultAttentionMinutes)}
-                aria-label="Minutes without a reply before this crew asks for attention"
+                // Named by its visible label, label in name (WCAG 2.5.3); the
+                // unit and what it counts are its description.
+                aria-description="Minutes without a reply before this crew asks for attention"
                 disabled={busy}
                 onChange={(event) =>
                   onAttentionMinutesChange(readLimit(event.target.value))

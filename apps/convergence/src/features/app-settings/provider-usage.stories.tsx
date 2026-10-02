@@ -127,7 +127,8 @@ export const Default: Story = {
     await expect(
       canvas.getByText('No active rate-limit windows were reported.'),
     ).toBeVisible()
-    await expect(canvas.getByRole('button', { name: 'Credits' })).toBeVisible()
+    // A usage page is a link that looks like a button (DS-24).
+    await expect(canvas.getByRole('link', { name: 'Credits' })).toBeVisible()
   },
 }
 

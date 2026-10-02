@@ -3,7 +3,7 @@ import type {
   ProviderQuotaSnapshot,
   ProviderQuotaWindow,
 } from '@/entities/provider-quota'
-import { Button } from '@convergence/ui'
+import { buttonVariants } from '@convergence/ui'
 import { ProviderUsageWindowRow } from './provider-usage-window-row.presentational'
 
 interface ProviderUsageCardProps {
@@ -99,15 +99,17 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
         </div>
         <div className="flex flex-wrap gap-2">
           {usageLinks.map((link) => (
-            <Button
+            // A link that looks like a button: it goes somewhere (DS-24).
+            <a
               key={link.url}
-              type="button"
-              variant="ghost"
-              onClick={() => window.open(link.url, '_blank')}
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: 'ghost' })}
             >
               <ExternalLink className="h-3.5 w-3.5" />
               {link.label}
-            </Button>
+            </a>
           ))}
         </div>
       </div>

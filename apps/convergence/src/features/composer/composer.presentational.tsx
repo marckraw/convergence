@@ -1092,7 +1092,7 @@ export const Composer: FC<ComposerProps> = ({
                     size="sm"
                     pressed={relaysMuted}
                     aria-label="Send quiet"
-                    onPressedChange={onRelaysMutedChange}
+                    onPressedChange={(muted) => onRelaysMutedChange(muted)}
                     disabled={disabled}
                   >
                     {relaysMuted ? (
