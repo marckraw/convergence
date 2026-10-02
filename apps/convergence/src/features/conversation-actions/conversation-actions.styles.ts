@@ -3,7 +3,7 @@ import { focusRing } from '@convergence/ui'
 import {
   FLOATING_CORNER_CLEAR_BOTTOM,
   FLOATING_CORNER_CLEAR_RIGHT,
-} from '@/shared/ui/floating-corner.pure'
+} from '@/entities/feedback'
 import type { ActionsMenuGroup } from './conversation-actions-menu.pure'
 
 /**

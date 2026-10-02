@@ -3,9 +3,9 @@
  *
  * One source for two readers: the feedback button that sits there, and every
  * floating control that must stay clear of it (the conversation's Actions
- * button). Features cannot import each other, so the corner lives in shared.
- * All numbers are CSS pixels measured from the window's right and bottom
- * edges.
+ * button). Features cannot import each other, so the corner lives in the
+ * feedback entity, a layer below both (DS-31). All numbers are CSS pixels
+ * measured from the window's right and bottom edges.
  */
 export const FLOATING_CORNER = {
   /** The button's distance from the window's right edge (`right-4`). */

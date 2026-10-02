@@ -20,7 +20,7 @@ import {
   cornerRectsIntersect,
   floatingCornerReservedRect,
   type CornerRect,
-} from '@/shared/ui/floating-corner.pure'
+} from '@/entities/feedback'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 
 /** Every draw of the Actions menu's view, i.e. every render of its container. */

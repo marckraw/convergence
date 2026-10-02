@@ -6,8 +6,7 @@ import {
   SessionStateBadge,
 } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
-import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
-import { ProviderModel } from '@/shared/ui/provider-model.presentational'
+import { ProviderIcon, ProviderModel } from '@/entities/provider'
 import {
   Card,
   CardAction,

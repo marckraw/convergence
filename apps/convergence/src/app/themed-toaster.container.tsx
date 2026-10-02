@@ -1,5 +1,5 @@
 import { Toaster } from '@convergence/ui'
-import { FLOATING_CORNER_CLEAR_BOTTOM } from '@/shared/ui/floating-corner.pure'
+import { FLOATING_CORNER_CLEAR_BOTTOM } from '@/entities/feedback'
 
 /**
  * Where the stack starts: clear above the feedback button's corner (and the
