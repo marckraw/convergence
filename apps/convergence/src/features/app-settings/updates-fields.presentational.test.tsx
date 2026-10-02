@@ -143,7 +143,7 @@ describe('describeStatus', () => {
         '0.16.0',
         NOW,
       ),
-    ).toBe("Couldn't check for updates: Offline or GitHub unreachable.")
+    ).toBe('Couldn’t check for updates: Offline or GitHub unreachable.')
   })
 
   it('formats checking', () => {
@@ -225,7 +225,7 @@ describe('describeStatus', () => {
         '0.16.0',
         NOW,
       ),
-    ).toBe("Couldn't check for updates: Offline or GitHub unreachable.")
+    ).toBe('Couldn’t check for updates: Offline or GitHub unreachable.')
   })
 })
 

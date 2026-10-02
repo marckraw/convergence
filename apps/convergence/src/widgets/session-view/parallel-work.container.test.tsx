@@ -1116,7 +1116,7 @@ it('MAR-3310 O0b R2 a failed detail read says so beside what is loaded — mutat
   render(<ParallelWork {...props()} selectedId="agent:agent" />)
   await act(async () => {})
   expect(screen.getByRole('alert').textContent).toBe(
-    "Couldn't read the earlier part of this work: database is locked",
+    'Couldn’t read the earlier part of this work: database is locked',
   )
 })
 

@@ -207,7 +207,7 @@ describe('MAR-3518 Check all accounts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check all accounts' }))
     await screen.findByText(/^Checked at /)
     expect(rowOf('marcin@ef.design')).toHaveTextContent(
-      "Couldn't check: Codex is not available",
+      'Couldn’t check: Codex is not available',
     )
     expect(
       within(rowOf('marckraw@proton.me')).getAllByRole('cell')[0],

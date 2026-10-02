@@ -121,7 +121,7 @@ export function describeStatus(
   switch (status.phase) {
     case 'idle':
       if (status.lastError)
-        return `Couldn't check for updates: ${status.lastError}`
+        return `Couldn’t check for updates: ${status.lastError}`
       if (!status.lastChecked) return 'Never checked.'
       return `Up to date. Last checked ${formatRelative(status.lastChecked, now)}.`
     case 'checking':
@@ -135,7 +135,7 @@ export function describeStatus(
     case 'not-available':
       return `Up to date (last check ${formatRelative(status.lastChecked, now)}).`
     case 'error':
-      return `Couldn't check for updates: ${status.message}`
+      return `Couldn’t check for updates: ${status.message}`
   }
 }
 

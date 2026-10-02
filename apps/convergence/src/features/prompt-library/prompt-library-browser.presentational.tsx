@@ -656,7 +656,7 @@ export const PromptLibraryBrowserDialog: FC<
             ) : catalogError && !hasCatalog ? (
               <EmptyState
                 state="failed"
-                title="Couldn't read the prompts"
+                title="Couldn’t read the prompts"
                 detail={catalogError}
                 onRetry={onRefresh}
                 retrying={isCatalogLoading}

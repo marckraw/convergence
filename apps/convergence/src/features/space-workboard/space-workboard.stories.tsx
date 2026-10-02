@@ -397,7 +397,7 @@ export const Loading: Story = {
 
 /** Failed: the error is announced above the footer. */
 export const Failed: Story = {
-  args: { error: "Couldn't save the Space: the title is already used." },
+  args: { error: 'Couldn’t save the Space: the title is already used.' },
   play: async () => {
     const dialog = await openWorkboard()
     await expect(within(dialog).getByRole('alert')).toHaveTextContent(

@@ -122,7 +122,7 @@ export const Failed: Story = {
   play: async ({ canvas }) => {
     await expect(
       canvas.getByText(
-        "Couldn't check for updates: getaddrinfo ENOTFOUND api.github.com",
+        'Couldn’t check for updates: getaddrinfo ENOTFOUND api.github.com',
       ),
     ).toBeVisible()
     await expect(

@@ -61,7 +61,7 @@ describe('SKILL_LIST_COPY (CONV-10)', () => {
   it('says each state in R10’s words, the ellipsis character included', () => {
     expect(SKILL_LIST_COPY).toEqual({
       loading: 'Loading skills…',
-      failed: "Couldn't load skills",
+      failed: 'Couldn’t load skills',
       empty: 'No skills available for this agent',
       noMatch: 'No matching skills',
     })

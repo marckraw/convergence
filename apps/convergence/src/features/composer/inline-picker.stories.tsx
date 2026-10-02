@@ -21,7 +21,7 @@ function Picker({ state }: PickerProps) {
         {state === 'failed' ? (
           <InlinePickerState
             state="failed"
-            title="Couldn't load skills"
+            title="Couldn’t load skills"
             detail="The provider didn't answer."
           />
         ) : state === 'loading' ? (
@@ -78,7 +78,7 @@ export const Failed: Story = {
   args: { state: 'failed' },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      "Couldn't load skills",
+      'Couldn’t load skills',
     )
   },
 }

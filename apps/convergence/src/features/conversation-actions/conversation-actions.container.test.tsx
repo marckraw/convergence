@@ -763,7 +763,7 @@ describe('ConversationActionsContainer', () => {
       const list = await openGroup('Skills')
       // Every skill list's failure (CONV-10): what failed, then why.
       const alert = within(list).getByRole('alert')
-      expect(alert).toHaveTextContent("Couldn't load skills")
+      expect(alert).toHaveTextContent('Couldn’t load skills')
       expect(alert).toHaveTextContent('EACCES: ~/.claude/skills')
       expect(
         within(list).queryByText('No skills available for this agent'),

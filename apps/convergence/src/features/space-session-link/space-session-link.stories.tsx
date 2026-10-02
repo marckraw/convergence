@@ -193,7 +193,7 @@ export const Busy: Story = {
 
 /** Failed: the error is announced above the footer. */
 export const Failed: Story = {
-  args: { error: "Couldn't link the session: the Space was archived." },
+  args: { error: 'Couldn’t link the session: the Space was archived.' },
   play: async () => {
     const dialog = await openDialog()
     await expect(within(dialog).getByRole('alert')).toHaveTextContent(

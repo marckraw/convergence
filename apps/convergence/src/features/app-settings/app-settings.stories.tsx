@@ -201,7 +201,7 @@ export const Empty: Story = {
 export const Failed: Story = {
   args: {
     activeSection: 'shortcuts',
-    error: "Couldn't save the settings. The disk is full.",
+    error: 'Couldn’t save the settings. The disk is full.',
   },
   play: async () => {
     const dialog = await openSettings()

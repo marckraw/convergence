@@ -739,7 +739,7 @@ describe('SessionView', () => {
     const failed = {
       main: !!screen.queryByText('main immediately'),
       child: !!screen.queryByText('child hidden'),
-      error: !!screen.queryByText("Couldn't read parallel work."),
+      error: !!screen.queryByText('Couldn’t read parallel work.'),
     }
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() =>
@@ -747,7 +747,7 @@ describe('SessionView', () => {
     )
     expect({
       failed,
-      errorAfterRetry: !!screen.queryByText("Couldn't read parallel work."),
+      errorAfterRetry: !!screen.queryByText('Couldn’t read parallel work.'),
       reads: vi.mocked(window.electronAPI.session.listAgentRuns).mock.calls
         .length,
     }).toEqual({

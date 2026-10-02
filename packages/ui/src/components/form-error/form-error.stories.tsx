@@ -6,7 +6,7 @@ const meta = {
   title: 'Components/FormError',
   component: FormError,
   args: {
-    children: "Couldn't save the project.",
+    children: 'Couldn’t save the project.',
     detail: 'The folder moved or was deleted. Pick it again and save.',
   },
   decorators: [
@@ -26,7 +26,7 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ canvas }) => {
     const alert = canvas.getByRole('alert')
-    await expect(alert).toHaveTextContent("Couldn't save the project.")
+    await expect(alert).toHaveTextContent('Couldn’t save the project.')
     await expect(alert).toHaveTextContent('The folder moved or was deleted.')
   },
 }
@@ -34,7 +34,7 @@ export const Default: Story = {
 /** Long: a long reason wraps, even a path with no spaces. */
 export const Long: Story = {
   args: {
-    children: "Couldn't create the workspace.",
+    children: 'Couldn’t create the workspace.',
     detail:
       'git worktree add failed for /Users/marckraw/Projects/Private/convergence/.claude/worktrees/agent-abdaa619e1e6cfc7d: the branch is already checked out in another worktree.',
   },

@@ -81,7 +81,7 @@ export function HarnessFactsSections({
       {error ? (
         // R10: what failed, the reason under it, and one Retry (CONV-7).
         <div className="flex flex-col items-start gap-1">
-          <FormError detail={error}>Couldn't read the harness facts.</FormError>
+          <FormError detail={error}>Couldn’t read the harness facts.</FormError>
           <Button variant="link" onClick={onRetry}>
             Retry
           </Button>
@@ -352,7 +352,7 @@ export function HarnessFactsSections({
               )}
               {mcpError && (
                 <FormError>
-                  Couldn't reconnect {mcpError.server}: {mcpError.message}
+                  Couldn’t reconnect {mcpError.server}: {mcpError.message}
                 </FormError>
               )}
             </div>
