@@ -103,8 +103,9 @@ mapping in its message is the DS5 codemod's table
 | `use-spinner`             | `animate-spin`                                                                                                                                                                                                                             | Button's `pending` (with `pendingLabel`), or `Spinner`: both run on the motion tokens and stand still under reduced motion                                                                   | DS-12       |
 | `use-form-error`          | `<p … role="alert"`                                                                                                                                                                                                                        | `FormError` (`FieldError` in a `Field`, DS3c)                                                                                                                                                | DS-5, DS-13 |
 | `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
-| `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
+| `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`; there also a text size, a padding, a min/max height or a height token, and `[&_button]:` resizing every button in a box                          | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
+| `no-native-title`         | `title=` on any lowercase JSX element (`title=""` is no hint) or an SVG `<title>`, in the app and `packages/ui/src`                                                                                                                        | `<Tooltip label>` (`when="truncated"` for text cut short); an icon-only button is an IconButton, whose `label` is its tooltip (R2)                                                           | NAV-20      |
 
 A regex reads text, not code, so it sees only what's written where it looks: a size override kept
 in a `*.styles.ts` constant passes `use-button-sizes`, and `repeated-classes` is what catches that
@@ -113,6 +114,20 @@ the tag, past arrow functions"), so attribute order and line breaks don't matter
 a variant (`[&_svg]:size-4`, the size of the icon inside) is not the button's size, and doesn't
 count. Every regex rule skips a line that starts with a comment (`//`, `*`, `/*` or `{/*`), so a doc
 comment may name the recipe it replaced.
+
+DS6 (MAR-3608) widened three of these after sweeping each to zero. `use-focus-ring` also fails on
+`focus-visible:outline-none` (and its `focus:`, `focus-within:` and `has-focus-visible:` twins):
+tailwind-merge puts it and a part's own `outline-solid` in one group, so a className that carries
+it cancels the part's ring. A field inside a box that rings for it is `Input` or `Textarea`
+`variant="bare"`, with `focusRingWithin` on the box. `use-button-sizes` reads a size the scale
+doesn't name, typed over a `size`: a text size, a padding, a min or max height or a height token
+(`size="sm" className="px-3 text-2xs"`, `min-h-10`), and `[&_button]:` raising every button in a
+box. Two kinds are left out on purpose: a `variant="link"` Button, which has no box, so its words
+may take the sentence's size; and a Button with `h-auto`, grown into a row, which
+`no-buttons-as-rows` reports. `no-native-title` replaced the sidebar-only walk in
+`sidebar-tooltip-sites.test.ts`: it reads every `.tsx` in the app and `packages/ui/src`, not only the
+app, since the browser's hint is wrong wherever it's typed; a part's `title` prop (EmptyState's,
+Notice's) is its words, so only a lowercase element counts.
 
 ## 3. A raw element needs a reason
 
@@ -261,6 +276,7 @@ Streamdown name.
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
+| `no-native-title`            | `design-system-drift.json`      | error    |
 
 A rule is never relaxed to reach zero, and never turned back into a warning to let a change
 through. When one fires, fix what it found ([When one fires](#when-one-fires)). When it can't be
