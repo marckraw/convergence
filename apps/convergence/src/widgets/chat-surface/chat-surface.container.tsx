@@ -377,7 +377,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const handleDeleteArtifact = useCallback(
     async (artifactId: string) => {
       if (!selectedSpaceId) return
-      const artifact = selectedSpaceArtifacts.find(
+      const artifact = (artifactsBySpaceId[selectedSpaceId] ?? []).find(
         (item) => item.id === artifactId,
       )
       const confirmed = await confirm({
@@ -395,10 +395,10 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       }
     },
     [
+      artifactsBySpaceId,
       confirm,
       deleteArtifact,
       editingArtifactId,
-      selectedSpaceArtifacts,
       selectedSpaceId,
     ],
   )
