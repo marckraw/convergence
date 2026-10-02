@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { cn, Button, FormError, Kbd } from '@convergence/ui'
+import { Button, FormError, Kbd } from '@convergence/ui'
 import { ConversationRoutineRow } from './conversation-routine-row.presentational'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
@@ -39,7 +39,7 @@ export const ConversationActionsRoutines: FC<ConversationActionsViewProps> = ({
         variant="ghost"
         role="menuitem"
         data-actions-item=""
-        className={cn(styles.item, styles.closeItem)}
+        className={styles.closeItem}
         onClick={onClose}
       >
         Close menu

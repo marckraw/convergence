@@ -463,12 +463,13 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             onStop={onStop}
             onRestart={onRestart}
           />
+          {/* One size for the row's buttons, TunnelActionButtons' md (R3). */}
           <Button
             type="button"
             onClick={onSave}
             pending={isMutating}
             pendingLabel="Saving…"
-            size="lg"
+            size="md"
           >
             Save profile
           </Button>
@@ -478,7 +479,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
           variant="danger-quiet"
           onClick={onDelete}
           disabled={isMutating}
-          size="lg"
+          size="md"
         >
           <Trash2 className="size-4" />
           Delete…

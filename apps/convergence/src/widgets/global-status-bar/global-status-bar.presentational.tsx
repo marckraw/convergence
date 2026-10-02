@@ -6,7 +6,13 @@ import { summarizeAttentionRequests } from '@/entities/session'
 import { needsYouCount, needsYouVerb } from '@/features/needs-you'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
-import { Button, cn, StatusDot, Tooltip, TooltipCard } from '@convergence/ui'
+import {
+  cn,
+  StatusDot,
+  StatusPillButton,
+  Tooltip,
+  TooltipCard,
+} from '@convergence/ui'
 import { AggregateSummary } from './aggregate-summary.presentational'
 import { ProjectSummary } from './project-summary.presentational'
 import {
@@ -14,10 +20,9 @@ import {
   aggregateZoneClass,
   barClass,
   barTone,
-  projectChipAttentionClass,
-  projectChipClass,
+  chipNameClass,
   recencyBadgeClass,
-  statusChipButtonClass,
+  recencyNameClass,
   zoneClass,
 } from './global-status-bar.styles'
 
@@ -141,30 +146,29 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                   />
                 }
               >
-                <Button
+                <StatusPillButton
                   type="button"
-                  variant="ghost"
                   onClick={() => onSelectProject(project.projectId)}
                   data-testid={`global-status-chip-${project.projectId}`}
                   aria-label={formatProjectChipLabel(project)}
-                  className={cn(
-                    statusChipButtonClass,
-                    projectChipClass,
-                    project.needsAttention.length > 0 &&
-                      projectChipAttentionClass,
-                  )}
+                  // Something waits on you here: the pill's warning (R1).
+                  tone={
+                    project.needsAttention.length > 0
+                      ? barTone.waiting
+                      : 'neutral'
+                  }
+                  leading={
+                    <StatusDot
+                      size="sm"
+                      tone={
+                        project.needsAttention.length > 0
+                          ? barTone.waiting
+                          : barTone.running
+                      }
+                    />
+                  }
                 >
-                  <StatusDot
-                    size="sm"
-                    tone={
-                      project.needsAttention.length > 0
-                        ? barTone.waiting
-                        : barTone.running
-                    }
-                  />
-                  <span className="max-w-32 truncate">
-                    {project.projectName}
-                  </span>
+                  <span className={chipNameClass}>{project.projectName}</span>{' '}
                   <span className="text-ink-muted">
                     {project.running.length > 0 && (
                       <span>{project.running.length}▸</span>
@@ -175,7 +179,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                       </span>
                     )}
                   </span>
-                </Button>
+                </StatusPillButton>
               </TooltipCard>
             ))}
           </div>
@@ -189,22 +193,23 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
           label={recency.session.name}
           detail={`${recency.kind === 'completed' ? 'Completed' : 'Failed'} · ${providerLabel(recency.session.providerId)}\n${recency.projectName}`}
         >
-          <Button
+          <StatusPillButton
             type="button"
-            variant="ghost"
             onClick={() => onSelectProject(recency.session.projectId)}
             data-testid="global-status-recency"
             aria-label={`Switch to project ${recency.projectName}`}
-            className={cn(statusChipButtonClass, recencyBadgeClass)}
+            className={recencyBadgeClass}
+            leading={
+              recency.kind === 'completed' ? (
+                <CheckCircle2 className="h-3 w-3 text-success-ink" />
+              ) : (
+                <CircleAlert className="h-3 w-3 text-danger-ink" />
+              )
+            }
           >
-            {recency.kind === 'completed' ? (
-              <CheckCircle2 className="h-3 w-3 text-success-ink" />
-            ) : (
-              <CircleAlert className="h-3 w-3 text-danger-ink" />
-            )}
-            <span className="max-w-28 truncate">{recency.session.name}</span>
+            <span className={recencyNameClass}>{recency.session.name}</span>{' '}
             <span className="text-ink-muted">· {recency.projectName}</span>
-          </Button>
+          </StatusPillButton>
         </Tooltip>
       ) : (
         <span className="ml-auto" aria-hidden />

@@ -19,19 +19,20 @@ const FOCUS_RING = focusRing
 const POP = 'animate-pop-in motion-reduce:animate-none'
 
 /**
- * Overrides on the shared Button (ghost): a pill, as frames 01 and 02 draw,
- * on the one opaque popup surface (R8: glass is the tooltip's alone). Its
- * height is the lg control, 36 px (R11: the frames' 34 px to the nearest).
+ * The pill's look on the shared Button (ghost, `lg`), as frames 01 and 02
+ * draw it, on the one opaque popup surface (R8: glass is the tooltip's
+ * alone). Its height, padding and words are the lg size's, 36 px (R11: the
+ * frames' 34 px to the nearest; R3: a size is a prop, never a className).
  */
 const PILL =
-  'h-control-lg gap-1.5 rounded-full border border-line bg-raised px-4 text-sm font-medium text-ink shadow-raised hover:bg-fill-hover'
+  'gap-1.5 rounded-full border border-line bg-raised font-medium text-ink shadow-raised hover:bg-fill-hover'
 
 export const conversationActionsStyles = {
   /**
    * Below the composer, right-aligned, while the surface is narrow; in the
-   * right gutter beside the composer column once there is room for it
-   * (the column is `max-w-conversation`, 42rem, so 56rem leaves 7rem each
-   * side).
+   * right gutter beside the composer column once there is room for it: the
+   * app's container size `actions-beside` (global.css: the column is
+   * `max-w-conversation`, 42rem, so 56rem leaves 7rem each side; CONV-29).
    *
    * Never under the feedback button (MAR-3416 R2): narrow, the button stops
    * short of the feedback button's corner (`--actions-clear-right`); in the
@@ -43,32 +44,35 @@ export const conversationActionsStyles = {
    * and tooltips (`z-50`). Covered content is `inert` (the expanded Loom),
    * and a layer this high would show through the cover, so it hides there.
    */
-  row: 'relative z-45 mt-2 flex justify-end pr-(--actions-clear-right) in-[[inert]]:invisible @min-[56rem]:absolute @min-[56rem]:bottom-(--actions-clear-bottom) @min-[56rem]:right-4 @min-[56rem]:mt-0 @min-[56rem]:pr-0',
+  row: 'relative z-45 mt-2 flex justify-end pr-(--actions-clear-right) in-[[inert]]:invisible @min-actions-beside:absolute @min-actions-beside:bottom-(--actions-clear-bottom) @min-actions-beside:right-4 @min-actions-beside:mt-0 @min-actions-beside:pr-0',
+  /** The button's place, 96 px: the trigger and the fan's Close each fill it. */
   anchor: 'relative h-control-lg w-24',
-  trigger: `${PILL} w-24 px-0 ${FOCUS_RING}`,
+  trigger: `${PILL} w-full ${FOCUS_RING}`,
   triggerHidden: 'invisible',
-  fan: 'absolute bottom-0 right-0 h-0 w-0 outline-none',
+  /** The anchor's box: the entries are placed from its bottom-right corner, Close over it. */
+  fan: 'absolute inset-0 outline-none',
   fanItem: `absolute ${PILL} ${FOCUS_RING} ${POP}`,
-  fanClose: `absolute bottom-0 right-0 ${PILL} w-24 px-0 ${FOCUS_RING} ${POP}`,
+  fanClose: `absolute bottom-0 right-0 w-full ${PILL} ${FOCUS_RING} ${POP}`,
   panel: `absolute z-40 flex flex-col overflow-hidden rounded-2xl border border-line bg-raised text-ink shadow-floating ${FOCUS_RING} ${POP}`,
   panelScroll: 'min-h-0 flex-1 overflow-y-auto overscroll-contain p-3',
   /**
-   * The panel's way back, its title beside it: on the 28 px (sm) Button,
-   * which its title's line and 2 px above and below fill exactly.
+   * The panel's way back, its title beside it: the 36 px (lg) Button's own
+   * height, padding and words (R3), drawn out by its padding so the chevron
+   * stands on the panel's edge of words.
    */
-  back: `-ml-1 mb-1 gap-1 px-1 text-base font-medium text-ink ${FOCUS_RING}`,
+  back: `-ml-4 mb-1 gap-1 font-medium text-ink ${FOCUS_RING}`,
   /** The Skills search is a SearchField, every skill list's one search (CONV-10): placed, not restyled. */
   search: 'mb-1',
   notice: 'mb-1 px-2 text-xs leading-relaxed text-ink-muted',
   list: 'flex flex-col',
   /**
-   * One command of the menu, on the 32 px (md) Button: a line of words and
-   * 6 px above and below, which its height holds exactly. Its words are a
-   * routine's or a group's name, short enough for one line.
+   * One command of the menu: a dense ListRow (a line of words in a 32 px
+   * row, 8 px in), a row and never a Button resized into one (R3). One not
+   * offered keeps its place and its focus, in the muted ink, with no hover.
    */
-  item: `w-full justify-start rounded-md px-2 text-left text-sm font-normal text-ink ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-ink-muted aria-disabled:hover:bg-transparent`,
-  /** Close menu, under a running routine: a quieter, smaller row (a row, so its words are the row's, not a Button size). */
-  closeItem: 'mt-1 text-xs text-ink-muted',
+  item: 'rounded-md has-aria-disabled:cursor-not-allowed has-aria-disabled:text-ink-muted has-aria-disabled:hover:bg-transparent',
+  /** Close menu, under a running routine: the 28 px (sm) Button's own row, quieter. */
+  closeItem: `mt-1 w-full justify-start text-left font-normal text-ink-muted ${FOCUS_RING}`,
   reason: 'px-2 pb-1.5 text-xs leading-relaxed text-ink-muted',
   /**
    * A Skills row (MAR-3616 DS3e): a ListboxOption the search drives, its

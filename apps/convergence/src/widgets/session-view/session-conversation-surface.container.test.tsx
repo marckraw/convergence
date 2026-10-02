@@ -1,4 +1,6 @@
 import type { FC } from 'react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   act,
@@ -431,10 +433,11 @@ function placementTokens(
   for (const token of (element.getAttribute('class') ?? '').split(/\s+/)) {
     if (!token) continue
     let utility = token
-    const query = token.match(/^@min-\[(\d+)rem\]:(.+)$/)
+    const query = token.match(/^@min-(?:\[(\d+(?:\.\d+)?)rem\]|([\w-]+)):(.+)$/)
     if (query) {
-      if (containerWidth < Number(query[1]) * 16) continue
-      utility = query[2]
+      const rem = query[1] ?? containerRem(query[2]!)
+      if (containerWidth < Number(rem) * 16) continue
+      utility = query[3]!
     } else if (token.includes(':')) {
       continue // a state variant (hover, focus, inert, ...): not in play
     }
@@ -442,10 +445,27 @@ function placementTokens(
       active.set('position', utility)
       continue
     }
-    const length = utility.match(/^(bottom|right|pr|pb|px|py|w|h)-(.+)$/)
+    const length = utility.match(/^(bottom|right|inset|pr|pb|px|py|w|h)-(.+)$/)
     if (length) active.set(length[1], length[2])
   }
   return active
+}
+
+/**
+ * A container size the app's stylesheet names (`@min-actions-beside:`), in
+ * rem, read from global.css's theme, never a second copy of the number
+ * (CONV-29). A name it can't find throws.
+ */
+const GLOBAL_CSS = readFileSync(
+  resolve(__dirname, '../../app/global.css'),
+  'utf8',
+)
+function containerRem(name: string): string {
+  const size = new RegExp(
+    `--container-${name}:\\s*(\\d+(?:\\.\\d+)?)rem;`,
+  ).exec(GLOBAL_CSS)
+  if (!size) throw new Error(`global.css names no --container-${name}`)
+  return size[1]!
 }
 
 /** The R3 control heights the theme names (h-control-lg …), in px. */
@@ -569,7 +589,14 @@ describe('the Actions layer and the feedback corner (MAR-3416)', () => {
     expect(closeTokens.get('position')).toBe('absolute')
     expect(lengthPx(closeTokens.get('bottom'), close)).toBe(0)
     expect(lengthPx(closeTokens.get('right'), close)).toBe(0)
-    expect(lengthPx(closeTokens.get('w'), close)).toBe(96)
+    // Close fills the fan, and the fan is the anchor's own box, 96 px wide:
+    // the button's place, never a width of its own (R3, DS8).
+    expect(closeTokens.get('w')).toBe('full')
+    const fan = close.parentElement!
+    expect(placementTokens(fan, 0).get('position')).toBe('absolute')
+    expect(lengthPx(placementTokens(fan, 0).get('inset'), fan)).toBe(0)
+    const anchor = fan.parentElement!
+    expect(lengthPx(placementTokens(anchor, 0).get('w'), anchor)).toBe(96)
 
     const height = 800
     const layouts: Record<number, 'row' | 'gutter'> = {
@@ -583,7 +610,7 @@ describe('the Actions layer and the feedback corner (MAR-3416)', () => {
       const surface = { width: Number(width), height }
       const button = actionsButtonRect(root, surface)
       expect(button.layout, `layout at ${width}px`).toBe(layout)
-      // Close takes the button's own box (bottom-0 right-0 w-24 in the anchor).
+      // Close takes the button's own box (the fan is the anchor's, w-24).
       expect(
         cornerRectsIntersect(button.rect, floatingCornerReservedRect(surface)),
         `the Actions button at ${width}px: ${JSON.stringify(button.rect)}`,
