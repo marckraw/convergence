@@ -109,6 +109,14 @@ const config: StorybookConfig = {
           'chartgpu-react',
           'streamdown',
           'zustand',
+          // The terminal dock's stories (NAV, DS4) reach xterm and the panels.
+          '@xterm/addon-clipboard',
+          '@xterm/addon-fit',
+          '@xterm/addon-unicode11',
+          '@xterm/addon-web-links',
+          '@xterm/addon-webgl',
+          '@xterm/xterm',
+          'react-resizable-panels',
         ],
       },
     })
