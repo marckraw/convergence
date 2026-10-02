@@ -33,6 +33,8 @@ interface ModelPickerDialogPresentationalProps {
   providerFilterId: string
   selectedValue: string | undefined
   value: string
+  /** The field it picks for: the trigger's name, the value its description. */
+  label?: string
   providers: ModelPickerProviderFilter[]
   models: ModelPickerModelItem[]
   totalModelCount: number
@@ -77,6 +79,7 @@ export const ModelPickerDialogPresentational: FC<
   providerFilterId,
   selectedValue,
   value,
+  label,
   providers,
   models,
   totalModelCount,
@@ -93,6 +96,7 @@ export const ModelPickerDialogPresentational: FC<
   onToggleFavorite,
 }) => {
   const listId = useId()
+  const valueId = useId()
   const selectedIndex = models.findIndex((item) => item.value === selectedValue)
   const active = models.length === 0 ? null : Math.max(selectedIndex, 0)
   const hasModels = models.length > 0
@@ -108,12 +112,15 @@ export const ModelPickerDialogPresentational: FC<
         role="combobox"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={value}
+        aria-label={label ?? value}
+        aria-describedby={label ? valueId : undefined}
         className={cn('justify-between', triggerClassName)}
         onClick={() => onOpenChange(true)}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate">{value}</span>
+          <span id={valueId} className="truncate">
+            {value}
+          </span>
         </span>
         <ChevronDown className="h-3 w-3 shrink-0" />
       </Button>

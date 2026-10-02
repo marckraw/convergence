@@ -146,6 +146,36 @@ describe('ModelPickerDialog', () => {
     primeSettings()
   })
 
+  it('is named by its field when it has one, the model as its description (DLG-7)', () => {
+    render(
+      <ModelPickerDialog
+        providers={providers}
+        selectedProviderId="claude-code"
+        selectedModelId="sonnet"
+        value="Claude Sonnet"
+        label="Model"
+        onChange={vi.fn()}
+      />,
+    )
+    const trigger = screen.getByRole('combobox', { name: 'Model' })
+    expect(trigger).toHaveAccessibleDescription('Claude Sonnet')
+  })
+
+  it('is named by the model it shows when it has no field, as the composer chip is', () => {
+    render(
+      <ModelPickerDialog
+        providers={providers}
+        selectedProviderId="claude-code"
+        selectedModelId="sonnet"
+        value="Claude Sonnet"
+        onChange={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+    ).not.toHaveAccessibleDescription()
+  })
+
   it('toggles a favorite without selecting or closing the picker', async () => {
     const onChange = vi.fn()
     render(

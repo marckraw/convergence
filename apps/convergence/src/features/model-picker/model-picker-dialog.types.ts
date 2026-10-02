@@ -7,6 +7,12 @@ export interface ModelPickerDialogProps {
   selectedProviderId: string | null
   selectedModelId: string | null
   value: string
+  /**
+   * The field it picks for ("Model", "Default model"): the trigger's name,
+   * with the chosen model read as its description (DLG-7). Without one, as
+   * in the composer's chip, the trigger is named by the model it shows.
+   */
+  label?: string
   onChange: (providerId: string, modelId: string) => void
   disabled?: boolean
   triggerVariant?: ButtonProps['variant']

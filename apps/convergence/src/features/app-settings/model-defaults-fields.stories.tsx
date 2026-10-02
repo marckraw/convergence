@@ -108,12 +108,16 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('Pi')).toBeVisible()
+    // Each picker is named by its task and provider, the model it shows
+    // its description (DLG-7).
     await expect(
-      canvas.getByRole('combobox', { name: 'GPT-5.5 mini' }),
-    ).toBeVisible()
-    await userEvent.click(
-      canvas.getByRole('combobox', { name: 'Claude Haiku 4.5' }),
-    )
+      canvas.getByRole('combobox', { name: 'Session naming model: OpenAI' }),
+    ).toHaveAccessibleDescription('GPT-5.5 mini')
+    const anthropic = canvas.getByRole('combobox', {
+      name: 'Session naming model: Anthropic',
+    })
+    await expect(anthropic).toHaveAccessibleDescription('Claude Haiku 4.5')
+    await userEvent.click(anthropic)
     const picker = await screen.findByRole('dialog', { name: 'Select model' })
     await userEvent.click(
       within(picker).getByRole('option', { name: /Claude Sonnet 5/ }),
@@ -135,11 +139,13 @@ export const Forking: Story = {
   },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('combobox', { name: 'Claude Opus 5.5' }),
-    ).toBeVisible()
+      canvas.getByRole('combobox', {
+        name: 'Session forking model: Anthropic',
+      }),
+    ).toHaveAccessibleDescription('Claude Opus 5.5')
     await expect(
-      canvas.getByRole('combobox', { name: 'gpt-oss 120B' }),
-    ).toBeVisible()
+      canvas.getByRole('combobox', { name: 'Session forking model: Pi' }),
+    ).toHaveAccessibleDescription('gpt-oss 120B')
   },
 }
 

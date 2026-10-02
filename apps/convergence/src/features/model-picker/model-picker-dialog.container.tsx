@@ -21,6 +21,7 @@ export function ModelPickerDialog({
   selectedProviderId,
   selectedModelId,
   value,
+  label,
   onChange,
   disabled = false,
   triggerVariant = 'secondary',
@@ -128,6 +129,7 @@ export function ModelPickerDialog({
       providerFilterId={providerFilterId}
       selectedValue={selectedValue}
       value={value}
+      label={label}
       providers={providerFilters}
       models={modelItems}
       totalModelCount={totalModelCount}

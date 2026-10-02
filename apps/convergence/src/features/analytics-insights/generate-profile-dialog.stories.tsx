@@ -93,9 +93,9 @@ export const Default: Story = {
     await expect(dialog).toHaveAccessibleDescription(
       'Create an optional profile from local aggregate usage data.',
     )
-    await userEvent.click(
-      within(dialog).getByRole('combobox', { name: 'GPT-5.5' }),
-    )
+    const model = within(dialog).getByRole('combobox', { name: 'Model' })
+    await expect(model).toHaveAccessibleDescription('GPT-5.5')
+    await userEvent.click(model)
     const picker = await screen.findByRole('dialog', { name: 'Select model' })
     await userEvent.click(
       within(picker).getByRole('option', { name: /GPT-5.5 mini/ }),
