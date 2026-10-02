@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { Button, Tooltip } from '@convergence/ui'
+import { Button, StatusPill, Tooltip } from '@convergence/ui'
 
 interface DraftStartProps {
   /** Where the conversation will start: the project's or the Space's name. */
@@ -35,26 +35,33 @@ export const DraftStart: FC<DraftStartProps> = ({
       What would you like to work on?
     </p>
     {place == null ? null : (
-      <div className="mb-5 flex items-center gap-2 rounded-full border border-line bg-surface-muted/40 px-3 py-1 text-xs text-ink-muted">
-        {icon == null ? null : (
-          <span aria-hidden className="flex shrink-0 [&_svg]:size-3">
-            {icon}
-          </span>
-        )}
-        <span>
-          {place}
-          {placeName ? (
-            <>
-              : <span className="font-medium text-ink">{placeName}</span>
-            </>
-          ) : null}
-        </span>
-        {action ? (
-          <Button variant="link" onClick={action.onClick} className="ml-1">
-            {action.label}
-          </Button>
+      // Where it starts is a fact in a pill, the neutral StatusPill of the
+      // composer's row size (DS-9), with its way out at its end.
+      <StatusPill
+        size="sm"
+        className="mb-5"
+        leading={
+          icon == null ? undefined : (
+            <span aria-hidden className="flex [&_svg]:size-3">
+              {icon}
+            </span>
+          )
+        }
+        action={
+          action ? (
+            <Button variant="link" onClick={action.onClick}>
+              {action.label}
+            </Button>
+          ) : undefined
+        }
+      >
+        {place}
+        {placeName ? (
+          <>
+            : <span className="font-medium text-ink">{placeName}</span>
+          </>
         ) : null}
-      </div>
+      </StatusPill>
     )}
   </>
 )

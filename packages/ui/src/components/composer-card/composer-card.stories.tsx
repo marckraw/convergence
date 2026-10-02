@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect } from 'storybook/test'
+import { expect, waitFor } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
+import { Button } from '../button/button'
 import { Textarea } from '../textarea/textarea'
 import { ComposerCard } from './composer-card'
 
@@ -85,7 +86,56 @@ export const Long: Story = {
   },
 }
 
+/**
+ * The keyboard in the field: the card rings over its edge, as a field's
+ * border does (ruling 5). On a button in the card, the button rings, and the
+ * card doesn't.
+ */
+export const Focus: Story = {
+  render: (args) => (
+    <div className="w-96 bg-canvas p-4">
+      <ComposerCard {...args} data-testid="card">
+        <Textarea
+          aria-label="Message"
+          placeholder="Ask anything…"
+          variant="bare"
+          autoGrow
+          maxRows={9}
+          rows={1}
+        />
+        <Button variant="quiet" size="sm" className="mt-2">
+          Attach
+        </Button>
+      </ComposerCard>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const card = canvas.getByTestId('card')
+    await expect(getComputedStyle(card).outlineStyle).toBe('none')
+    await userEvent.tab()
+    await expect(canvas.getByRole('textbox', { name: 'Message' })).toHaveFocus()
+    await expect(getComputedStyle(card).outlineStyle).toBe('solid')
+    await expect(getComputedStyle(card).outlineOffset).toBe('-1px')
+    // The ring's colour fades in with the card's colours. (The token is read
+    // outside waitFor: reading it adds a probe to the page, which would wake
+    // waitFor again, for ever.)
+    const focus = tokenColor('--focus')
+    await waitFor(() => expect(getComputedStyle(card).outlineColor).toBe(focus))
+
+    await userEvent.tab()
+    const attach = canvas.getByRole('button', { name: 'Attach' })
+    await expect(attach).toHaveFocus()
+    await expect(getComputedStyle(attach).outlineStyle).toBe('solid')
+    await expect(getComputedStyle(card).outlineStyle).toBe('none')
+  },
+}
+
 export const Dark: Story = {
   ...Default,
+  globals: { theme: 'dark' },
+}
+
+export const FocusDark: Story = {
+  ...Focus,
   globals: { theme: 'dark' },
 }

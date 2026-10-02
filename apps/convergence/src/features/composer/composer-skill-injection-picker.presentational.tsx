@@ -28,7 +28,6 @@ interface ComposerSkillInjectionPickerProps {
   notice: string | null
   onSelect: (skill: SkillCatalogEntry) => void
   onHover: (index: number) => void
-  onDismiss: () => void
 }
 
 /**
@@ -54,7 +53,6 @@ export const ComposerSkillInjectionPicker: FC<
   notice,
   onSelect,
   onHover,
-  onDismiss,
 }) => {
   if (!open) return null
   // One list's words and looks for loading, failed and empty (CONV-10).
@@ -73,8 +71,6 @@ export const ComposerSkillInjectionPicker: FC<
         title: 'Skills',
         detail: activeProviderLabel ?? 'Active provider',
       }}
-      closeLabel="Close skill injection picker"
-      onDismiss={onDismiss}
       tall
     >
       {notice ? (

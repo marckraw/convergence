@@ -41,7 +41,6 @@ import {
   Chip,
   ComposerCard,
   Kbd,
-  cn,
   IconButton,
   listboxOptionId,
   listboxStep,
@@ -69,12 +68,22 @@ import {
 } from 'lucide-react'
 import { CatalogNotice } from './catalog-notice.presentational'
 import { composerAttachedRow, composerToolbarControl } from './composer.styles'
-import { ComposerSelect } from './composer-select.presentational'
+import { ComposerCombobox } from './composer-combobox.presentational'
+import {
+  ComposerSelect,
+  type ComposerSelectItem,
+} from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
 import { SUBMIT_SHORTCUT_LABEL } from '@/shared/lib/use-form-submit-shortcut.pure'
 import type { ExecutionBarView } from './execution-bar.pure'
 import type { WorkAddressSlotView } from '@/entities/execution-host'
 import { composerCanSend } from './composer-send.pure'
+import {
+  composerDrivenList,
+  composerKeyedPicker,
+  type ComposerPickerKind,
+  type ComposerPickers,
+} from './composer-pickers.pure'
 import { composerCardDepthClassByMode } from './execution-bar.styles'
 import { relayMuteTitle } from './relay-mute.pure'
 import { ProviderAccountPicker } from '@/entities/provider-account'
@@ -388,44 +397,40 @@ export const Composer: FC<ComposerProps> = ({
   // The `::` and `@` pickers' lists (MAR-3616 DS3e): the message field drives
   // whichever one is showing rows, naming it (aria-controls) and its active
   // row (aria-activedescendant), so a screen reader hears the row the arrows
-  // reach while the caret stays in the message.
+  // reach while the caret stays in the message. Which one, and which takes
+  // the keys, is composer-pickers.pure.ts's (CONV-30).
   const pickerListId = useId()
-  const pickerLists = {
+  const pickerLists: Record<ComposerPickerKind, string> = {
     root: `${pickerListId}-injections`,
     mention: `${pickerListId}-context`,
     skill: `${pickerListId}-skills`,
     prompt: `${pickerListId}-prompts`,
   }
-  const drivenList = (
-    [
-      [
-        rootInjectionPickerOpen,
-        pickerLists.root,
-        rootInjectionItems.length,
-        rootInjectionHighlightedIndex,
-      ],
-      [
-        projectContextEnabled && mentionPickerOpen,
-        pickerLists.mention,
-        mentionItems.length,
-        mentionHighlightedIndex,
-      ],
-      [
-        skillInjectionPickerOpen && !skillCatalogError && !skillCatalogLoading,
-        pickerLists.skill,
-        skillInjectionItems.length,
-        skillInjectionHighlightedIndex,
-      ],
-      [
-        promptInjectionPickerOpen &&
-          !promptInjectionError &&
-          !promptInjectionLoading,
-        pickerLists.prompt,
-        promptInjectionItems.length,
-        promptInjectionHighlightedIndex,
-      ],
-    ] as const
-  ).find(([showing, , count, index]) => showing && index >= 0 && index < count)
+  const pickers: ComposerPickers = {
+    root: {
+      open: rootInjectionPickerOpen,
+      count: rootInjectionItems.length,
+      active: rootInjectionHighlightedIndex,
+    },
+    mention: {
+      open: projectContextEnabled && mentionPickerOpen,
+      count: mentionItems.length,
+      active: mentionHighlightedIndex,
+    },
+    skill: {
+      open: skillInjectionPickerOpen,
+      count: skillInjectionItems.length,
+      active: skillInjectionHighlightedIndex,
+      waiting: Boolean(skillCatalogError) || skillCatalogLoading,
+    },
+    prompt: {
+      open: promptInjectionPickerOpen,
+      count: promptInjectionItems.length,
+      active: promptInjectionHighlightedIndex,
+      waiting: Boolean(promptInjectionError) || promptInjectionLoading,
+    },
+  }
+  const drivenList = composerDrivenList(pickers)
   // The choices always carry the chosen tier (MAR-3574), so the label never
   // falls back to a speed the next turn is not running at.
   const codexSpeedLabel =
@@ -443,94 +448,79 @@ export const Composer: FC<ComposerProps> = ({
     hasPendingAnnotations,
   })
 
-  /**
-   * The picker the message field drives, if one is open (CONV-6): its rows,
-   * its active row, and what its keys do. One at a time is open; the root
-   * and mention pickers take keys only while they show rows, the skill and
-   * prompt pickers take Escape even while they're empty.
-   */
-  const pickerKeys = ((): {
-    count: number
-    active: number
-    hover?: (index: number) => void
-    pick: (index: number) => void
-    dismiss?: () => void
-  } | null => {
-    if (rootInjectionPickerOpen && rootInjectionItems.length > 0)
-      return {
-        count: rootInjectionItems.length,
-        active: rootInjectionHighlightedIndex,
-        hover: onRootInjectionHover,
-        pick: (index) => {
-          const item = rootInjectionItems[index]
-          if (item) onRootInjectionSelect?.(item)
-        },
-        dismiss: onRootInjectionDismiss,
-      }
-    if (skillInjectionPickerOpen)
-      return {
-        count: skillInjectionItems.length,
-        active: skillInjectionHighlightedIndex,
-        hover: onSkillInjectionHover,
-        pick: (index) => {
-          const skill = skillInjectionItems[index]
-          if (skill) onSkillInjectionSelect?.(skill)
-        },
-        dismiss: onSkillInjectionDismiss,
-      }
-    if (promptInjectionPickerOpen)
-      return {
-        count: promptInjectionItems.length,
-        active: promptInjectionHighlightedIndex,
-        hover: onPromptInjectionHover,
-        pick: (index) => {
-          const prompt = promptInjectionItems[index]
-          if (prompt) onPromptInjectionSelect?.(prompt)
-        },
-        dismiss: onPromptInjectionDismiss,
-      }
-    if (mentionPickerOpen && mentionItems.length > 0)
-      return {
-        count: mentionItems.length,
-        active: mentionHighlightedIndex,
-        hover: onMentionHover,
-        pick: (index) => {
-          const item = mentionItems[index]
-          if (item) onMentionSelect?.(item)
-        },
-        dismiss: onMentionDismiss,
-      }
-    return null
-  })()
+  /** What each picker does with the field's keys: its rows by index. */
+  const pickerKeyActions: Record<
+    ComposerPickerKind,
+    {
+      hover?: (index: number) => void
+      pick: (index: number) => void
+      dismiss?: () => void
+    }
+  > = {
+    root: {
+      hover: onRootInjectionHover,
+      pick: (index) => {
+        const item = rootInjectionItems[index]
+        if (item) onRootInjectionSelect?.(item)
+      },
+      dismiss: onRootInjectionDismiss,
+    },
+    mention: {
+      hover: onMentionHover,
+      pick: (index) => {
+        const item = mentionItems[index]
+        if (item) onMentionSelect?.(item)
+      },
+      dismiss: onMentionDismiss,
+    },
+    skill: {
+      hover: onSkillInjectionHover,
+      pick: (index) => {
+        const skill = skillInjectionItems[index]
+        if (skill) onSkillInjectionSelect?.(skill)
+      },
+      dismiss: onSkillInjectionDismiss,
+    },
+    prompt: {
+      hover: onPromptInjectionHover,
+      pick: (index) => {
+        const prompt = promptInjectionItems[index]
+        if (prompt) onPromptInjectionSelect?.(prompt)
+      },
+      dismiss: onPromptInjectionDismiss,
+    },
+  }
+  const keyedPicker = composerKeyedPicker(pickers)
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (pickerKeys) {
+    if (keyedPicker) {
+      const keys = pickerKeyActions[keyedPicker.kind]
       // Escape dismisses; the arrows (and Home, End, Control-N and -P) move
       // the active row, wrapping round the ends, as every Listbox the field
       // drives does; Enter picks it. ⌘↵ still sends.
       if (e.key === 'Escape') {
         e.preventDefault()
-        pickerKeys.dismiss?.()
+        keys.dismiss?.()
         return
       }
       const next = listboxStep(
-        pickerKeys.active >= 0 ? pickerKeys.active : null,
-        pickerKeys.count,
+        keyedPicker.active >= 0 ? keyedPicker.active : null,
+        keyedPicker.count,
         e,
       )
       if (next !== undefined) {
         e.preventDefault()
-        pickerKeys.hover?.(next)
+        keys.hover?.(next)
         return
       }
       if (
         e.key === 'Enter' &&
         !e.metaKey &&
         !e.ctrlKey &&
-        pickerKeys.count > 0
+        keyedPicker.count > 0
       ) {
         e.preventDefault()
-        pickerKeys.pick(pickerKeys.active)
+        keys.pick(keyedPicker.active)
         return
       }
     }
@@ -550,14 +540,27 @@ export const Composer: FC<ComposerProps> = ({
   // treatment the strip beneath already gives). The fork dialog lists them
   // from the same mapping (CONV-17); the mark is drawn here.
   const providerItems = providerSelectItems(providerCatalog).map(
-    ({ vendorLabel, name, ...item }) => ({
-      ...item,
-      icon: (
-        <ProviderIcon
-          providerId={item.id}
-          vendorLabel={vendorLabel}
-          name={name}
-        />
+    (item): ComposerSelectItem => ({
+      id: item.id,
+      label: item.label,
+      description: item.description,
+      disabled: item.disabled,
+      choice: (
+        <span className="flex min-w-0 items-center gap-2">
+          <ProviderIcon
+            providerId={item.id}
+            vendorLabel={item.vendorLabel}
+            name={item.name}
+          />
+          <span className="truncate">{item.label}</span>
+          {item.badge ? (
+            <Tooltip label={item.badge.title}>
+              <Badge tone="warning" shape="label">
+                {item.badge.label}
+              </Badge>
+            </Tooltip>
+          ) : null}
+        </span>
       ),
     }),
   )
@@ -696,7 +699,6 @@ export const Composer: FC<ComposerProps> = ({
               highlightedIndex={rootInjectionHighlightedIndex}
               onSelect={(item) => onRootInjectionSelect?.(item)}
               onHover={(index) => onRootInjectionHover?.(index)}
-              onDismiss={() => onRootInjectionDismiss?.()}
             />
             <ComposerContextMentionPicker
               listId={pickerLists.mention}
@@ -705,7 +707,6 @@ export const Composer: FC<ComposerProps> = ({
               highlightedIndex={mentionHighlightedIndex}
               onSelect={(item) => onMentionSelect?.(item)}
               onHover={(index) => onMentionHover?.(index)}
-              onDismiss={() => onMentionDismiss?.()}
             />
             <ComposerSkillInjectionPicker
               listId={pickerLists.skill}
@@ -720,7 +721,6 @@ export const Composer: FC<ComposerProps> = ({
               notice={remoteSkillsNotice}
               onSelect={(skill) => onSkillInjectionSelect?.(skill)}
               onHover={(index) => onSkillInjectionHover?.(index)}
-              onDismiss={() => onSkillInjectionDismiss?.()}
             />
             <ComposerPromptInjectionPicker
               listId={pickerLists.prompt}
@@ -731,7 +731,6 @@ export const Composer: FC<ComposerProps> = ({
               error={promptInjectionError}
               onSelect={(prompt) => onPromptInjectionSelect?.(prompt)}
               onHover={(index) => onPromptInjectionHover?.(index)}
-              onDismiss={() => onPromptInjectionDismiss?.()}
             />
             <Textarea
               ref={textareaRef}
@@ -755,10 +754,15 @@ export const Composer: FC<ComposerProps> = ({
               // defect on its own terms.
               aria-label="Message"
               aria-autocomplete={drivenList ? 'list' : undefined}
-              aria-controls={drivenList?.[1]}
+              aria-controls={
+                drivenList ? pickerLists[drivenList.kind] : undefined
+              }
               aria-activedescendant={
                 drivenList
-                  ? listboxOptionId(drivenList[1], drivenList[3])
+                  ? listboxOptionId(
+                      pickerLists[drivenList.kind],
+                      drivenList.active,
+                    )
                   : undefined
               }
               disabled={disabled}
@@ -883,14 +887,18 @@ export const Composer: FC<ComposerProps> = ({
                   {optionRow.notice ? (
                     <CatalogNotice notice={optionRow.notice} />
                   ) : null}
+                  {/*
+                    The provider and the effort are a few fixed choices, so
+                    Selects (R9, ruling 12), as the fork's are.
+                  */}
                   <ComposerSelect
-                    size="sm"
+                    label="Provider"
                     selectedId={selection.providerId}
-                    value={selection.providerLabel || 'Select provider'}
+                    placeholder="Select provider"
+                    fallback={selection.providerLabel}
                     items={providerItems}
                     onChange={onProviderChange}
                     disabled={selectionDisabled}
-                    className={cn('gap-1.5', composerToolbarControl)}
                   />
                   <ModelPickerDialog
                     providers={modelCatalogProviders}
@@ -905,19 +913,20 @@ export const Composer: FC<ComposerProps> = ({
                       onModelChange(modelId, providerId)
                     }
                     disabled={modelSelectionDisabled || !selection.provider}
+                    label="Model"
                     triggerVariant="ghost"
                     triggerSize="sm"
                     triggerClassName={composerToolbarControl}
                   />
                   {effortItems.length > 0 && (
                     <ComposerSelect
-                      size="sm"
+                      label="Reasoning effort"
                       selectedId={selection.effortId}
-                      value={selection.effort?.label ?? 'Select effort'}
+                      placeholder="Select effort"
+                      fallback={selection.effort?.label}
                       items={effortItems}
                       onChange={(id) => onEffortChange(id as ReasoningEffort)}
                       disabled={modelSelectionDisabled || !selection.model}
-                      className={composerToolbarControl}
                     />
                   )}
                   {(providerAccountPickerVisible ??
@@ -946,13 +955,17 @@ export const Composer: FC<ComposerProps> = ({
                     provider: a speed change reaches the conversation's next
                     turn, so it is only held while a turn is in flight
                     (MAR-3572). Its rows are the account's own offer (MAR-3574).
+                    It shows its value like every other picker, without a tint
+                    of its own for "not Standard": that was the old "on" look
+                    typed by hand, and R7's chosen look belongs to toggles
+                    (ruling 11, CONV-14).
                   */}
                   {codexBillingControlsAvailable ? (
-                    <ComposerSelect
+                    <ComposerCombobox
+                      label="Speed"
                       size="sm"
                       selectedId={codexSpeedId}
                       value={codexSpeedLabel}
-                      ariaLabel={`Speed: ${codexSpeedLabel}`}
                       items={codexSpeedChoices.map((choice) => ({
                         id: choice.id,
                         label: choice.label,
@@ -963,11 +976,7 @@ export const Composer: FC<ComposerProps> = ({
                       icon={<Zap className="h-3.5 w-3.5" />}
                       onChange={onCodexSpeedChange}
                       disabled={disabled || modelSelectionDisabled}
-                      className={cn(
-                        composerToolbarControl,
-                        codexSpeedId !== 'default' &&
-                          'bg-surface-muted text-ink',
-                      )}
+                      className={composerToolbarControl}
                     />
                   ) : null}
                   {/*
@@ -984,7 +993,8 @@ export const Composer: FC<ComposerProps> = ({
                   */}
                   {!selectionDisabled ? (
                     <>
-                      <ComposerSelect
+                      <ComposerCombobox
+                        label="Permissions"
                         size="sm"
                         selectedId={simplePermissionPreset}
                         value={
@@ -1105,7 +1115,8 @@ export const Composer: FC<ComposerProps> = ({
             <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-line-soft pt-2">
               {selection.providerId === 'codex' ? (
                 <>
-                  <ComposerSelect
+                  <ComposerCombobox
+                    label="Approval policy"
                     size="sm"
                     selectedId={codexConfig.approvalPolicy}
                     value={
@@ -1120,7 +1131,8 @@ export const Composer: FC<ComposerProps> = ({
                     disabled={disabled}
                     className={composerToolbarControl}
                   />
-                  <ComposerSelect
+                  <ComposerCombobox
+                    label="Sandbox"
                     size="sm"
                     selectedId={codexConfig.sandbox}
                     value={
@@ -1137,7 +1149,8 @@ export const Composer: FC<ComposerProps> = ({
                   />
                 </>
               ) : (
-                <ComposerSelect
+                <ComposerCombobox
+                  label="Permission mode"
                   size="sm"
                   selectedId={claudeCodeConfig.permissionMode}
                   value={

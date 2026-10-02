@@ -33,7 +33,15 @@ export const Default: Story = {
       canvas.getByText('What would you like to work on?'),
     ).toBeVisible()
     await expect(canvas.getByText('ui/ds4-sweep-conv')).toBeVisible()
-    await userEvent.click(canvas.getByRole('button', { name: 'Use main repo' }))
+    // The place is a neutral pill of the composer's row size, its way out
+    // inside it (DS-9).
+    const pill = canvas
+      .getByText('ui/ds4-sweep-conv')
+      .closest('[data-slot="status-pill"]') as HTMLElement
+    await expect(pill.getBoundingClientRect().height).toBe(28)
+    const useMain = canvas.getByRole('button', { name: 'Use main repo' })
+    await expect(pill).toContainElement(useMain)
+    await userEvent.click(useMain)
     await expect(args.action?.onClick).toHaveBeenCalledOnce()
   },
 }

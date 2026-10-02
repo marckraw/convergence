@@ -44,7 +44,6 @@ const meta = {
     error: null,
     onSelect: fn(),
     onHover: fn(),
-    onDismiss: fn(),
   },
   parameters: { layout: 'padded' },
   decorators: [
