@@ -1,9 +1,8 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Button, Card, cn, focusRing, Tooltip } from '@convergence/ui'
+import { Badge, Button, Card, cn, focusRing, Tooltip } from '@convergence/ui'
 import { LOOM_OUTSIDE_NAME, type LoomOutsideView } from './loom-outside.pure'
 import {
-  LOOM_CHIP_CLASS,
   LOOM_ROW_CARD_CLASS,
   LOOM_SHEET_NOTE_CLASS,
   WAVE_ROW_CLASS,
@@ -93,13 +92,11 @@ export const LoomOutsideGroupView: FC<{
               </Tooltip>
             </span>
             <span className="flex max-w-full flex-wrap gap-1.5">
-              <span className={LOOM_CHIP_CLASS}>
-                Linear: {issue.status || 'not seen'}
-              </span>
+              <Badge outline>Linear: {issue.status || 'not seen'}</Badge>
               {issue.labels.map((label) => (
-                <span key={label} className={LOOM_CHIP_CLASS}>
+                <Badge key={label} outline>
                   {label}
-                </span>
+                </Badge>
               ))}
             </span>
           </Card>
