@@ -253,6 +253,7 @@
   --spacing-control-sm: var(--control-sm);
   --spacing-control-md: var(--control-md);
   --spacing-control-lg: var(--control-lg);
+  --spacing-control-xl: var(--control-xl);
 
   /*
    * Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog(-sm|-md|-xl|-2xl),

@@ -3,13 +3,15 @@ import { expect } from 'storybook/test'
 
 /**
  * One height scale for every control (R3). A part's `size` prop picks the
- * step; the app never writes these classes itself.
+ * step; the app never writes these classes itself. `xl` is the Button's own
+ * step, for a title you press (ruling 9); fields stop at `lg`.
  */
 const STEPS = [
   ['xs', 'h-control-xs', 24, 'Icon buttons in rows'],
   ['sm', 'h-control-sm', 28, 'Icon buttons in headers, compact fields'],
   ['md', 'h-control-md', 32, 'The default control'],
   ['lg', 'h-control-lg', 36, 'Prominent actions and fields'],
+  ['xl', 'h-control-xl', 44, 'A title you press: the Button’s alone'],
 ] as const
 
 function ControlHeights() {

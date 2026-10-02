@@ -47,9 +47,12 @@ Chaperone checks it: a class string's third copy (`repeated-classes`) and a past
   is slow, unstyled and never shows on focus (105 of them); one label keeps what a screen reader
   says and what the eye reads the same.
 - **R3 · One size scale for every control**: `xs` 24, `sm` 28, `md` 32 (the default), `lg` 36 px.
-  Icon buttons are 24 in rows, chips and toolbars, 28 in headers and panels. Size is a prop,
-  never a className. Why: 264 Button heights were set by hand, and controls side by side line up
-  only on one scale.
+  Icon buttons are 24 in rows, chips and toolbars, 28 in headers and panels. The Button alone
+  has `xl`, 44 px, for a title you press, such as Loom's sheet titles and its folded strip
+  (Marcin, 2 Oct 2026). Size is a prop, never a className, and that holds for the words too:
+  Notice takes `size` (`sm` 12 px, `xs` 11 px) and the field frame `density="compact"` (12 px
+  words at any height) where a dense panel wants smaller print (Marcin, 2 Oct 2026). Why: 264
+  Button heights were set by hand, and controls side by side line up only on one scale.
 - **R4 · Small text is `text-2xs` (11 px) or `text-3xs` (10 px)**, today's two sizes, so nothing
   moves; an 11 px floor waits for the redesign. Why: 477 arbitrary `text-[10px]` and
   `text-[11px]` were these two sizes typed by hand.

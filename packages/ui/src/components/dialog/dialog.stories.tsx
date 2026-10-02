@@ -330,6 +330,49 @@ export const HeaderActions: Story = {
   },
 }
 
+/**
+ * A picker's dialog: a toolbar header, one row with the search where the title
+ * would be (the title is for a screen reader), the line under it and room for
+ * the ✕, at the tall height (DS-17: the model picker's shape).
+ */
+function PickModel() {
+  return (
+    <Dialog defaultOpen>
+      <DialogContent size="xl" height="tall">
+        <DialogTitle className="sr-only">Select model</DialogTitle>
+        <DialogHeader variant="toolbar">
+          <Input
+            aria-label="Search models"
+            placeholder="Search models…"
+            className="min-w-0 flex-1"
+          />
+        </DialogHeader>
+        <DialogBody>
+          <p className="text-sm">Claude Opus 5.5</p>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export const ToolbarHeader: Story = {
+  render: () => <PickModel />,
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: 'Select model' })
+    await arrived(dialog)
+    const header = dialog.querySelector('[data-slot="dialog-header"]')!
+    await expect(header).toHaveAttribute('data-variant', 'toolbar')
+    // The search ends before the ✕: the header keeps room for it.
+    const search = within(dialog).getByRole('textbox', {
+      name: 'Search models',
+    })
+    const close = within(dialog).getByRole('button', { name: 'Close' })
+    await expect(search.getBoundingClientRect().right).toBeLessThanOrEqual(
+      close.getBoundingClientRect().left,
+    )
+  },
+}
+
 /** A dialog over a dialog: Escape closes the top one, and the focus goes back underneath. */
 function NestedDialogs() {
   return (

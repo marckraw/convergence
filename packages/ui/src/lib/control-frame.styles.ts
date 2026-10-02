@@ -51,6 +51,21 @@ export const fieldTrigger = [
   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 ].join(' ')
 
+/**
+ * How big a field's words are (ruling 10, 2 Oct 2026). `default` is its
+ * size's own; `compact` is 12 px at any height, for a dense panel whose
+ * fields keep their height but print small (Mission Control's inspectors,
+ * Settings' rows, the fork's pickers): the pairing 29 fields typed as
+ * `className="text-xs"`. A text size is a prop, never a className (R3).
+ */
+export type ControlDensity = 'default' | 'compact'
+
+/** The words' size by density, laid over the size's own. */
+export const controlDensity: Record<ControlDensity, string> = {
+  default: '',
+  compact: 'text-xs',
+}
+
 /** The trigger's height, padding and type by size (R3): today's SelectTrigger (R0). */
 export const fieldTriggerSize: Record<ControlSize, string> = {
   xs: 'h-6 px-2 text-xs',

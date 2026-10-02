@@ -285,3 +285,33 @@ export const ReducedMotion: Story = {
     await arrived(panel)
   },
 }
+
+/**
+ * Compact (ruling 10): a dense panel's Select, as tall as its size and in
+ * 12 px words, as the fork's and Settings' pickers sit. A text size is this
+ * prop, never a className.
+ */
+export const Compact: Story = {
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      <Select items={args.models} defaultValue={args.models[0]?.value}>
+        <SelectTrigger aria-label="Model" density="compact" className="w-56">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {args.models.map((model) => (
+            <SelectItem key={model.value} value={model.value}>
+              {model.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Model' })
+    await expect(trigger).toHaveAttribute('data-density', 'compact')
+    await expect(getComputedStyle(trigger).fontSize).toBe('12px')
+    await expect(trigger.getBoundingClientRect().height).toBe(32)
+  },
+}
