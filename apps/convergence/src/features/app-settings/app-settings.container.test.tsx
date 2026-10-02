@@ -704,7 +704,10 @@ describe('AppSettingsDialogContainer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Usage/ }))
 
-    expect(await screen.findByText('5 hour usage limit')).toBeInTheDocument()
+    // Each window is a meter named for it (DLG-25).
+    expect(
+      await screen.findByRole('meter', { name: '5 hour usage limit' }),
+    ).toBeInTheDocument()
     expect(screen.getByText(/96%/)).toBeInTheDocument()
     expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
       false,

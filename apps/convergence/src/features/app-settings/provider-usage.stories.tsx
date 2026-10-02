@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, waitFor, within } from 'storybook/test'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
 import { ProviderUsageFields } from './provider-usage.presentational'
 
@@ -105,14 +105,6 @@ type Story = StoryObj<typeof meta>
  * credits, a provider that cannot report, and links to each usage page.
  */
 export const Default: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: each usage bar is a div with an aria-label and no role (a meter would carry it) — fixed by the sweep (DS4)
-        rules: [{ id: 'aria-prohibited-attr', enabled: false }],
-      },
-    },
-  },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Refresh' }))
     await expect(args.onRefresh).toHaveBeenCalledOnce()
@@ -123,6 +115,11 @@ export const Default: Story = {
       '19% remaining',
       '62% remaining',
     ])
+    // Each window is a meter, named and read out (DLG-25).
+    const meters = within(codexCard as HTMLElement).getAllByRole('meter')
+    await expect(
+      meters.map((meter) => meter.getAttribute('aria-valuetext')),
+    ).toEqual(['19% remaining', '62% remaining'])
     await expect(canvas.getByText('412k tokens')).toBeVisible()
     await expect(canvas.getByText(/\(stale\)/)).toBeVisible()
     await expect(canvas.getByText('Cursor usage unavailable')).toBeVisible()
@@ -134,14 +131,16 @@ export const Default: Story = {
   },
 }
 
-/** Busy, the first check: nothing to show yet, and Refresh waits. */
+/** Busy, the first check: nothing to show yet, and Refresh waits, saying so. */
 export const Busy: Story = {
   args: { snapshots: [], isLoading: true },
   play: async ({ canvas }) => {
+    await waitFor(() =>
+      expect(canvas.getByText('Checking provider usage limits…')).toBeVisible(),
+    )
     await expect(
-      canvas.getByText('Checking provider usage limits...'),
-    ).toBeVisible()
-    await expect(canvas.getByRole('button', { name: 'Refresh' })).toBeDisabled()
+      canvas.getByRole('button', { name: 'Refreshing…' }),
+    ).toBeDisabled()
   },
 }
 
@@ -172,7 +171,7 @@ export const Empty: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: 'Refresh' })).toBeEnabled()
     await expect(
-      canvas.queryByText('Checking provider usage limits...'),
+      canvas.queryByText('Checking provider usage limits…'),
     ).toBeNull()
   },
 }

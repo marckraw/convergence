@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
-import { Button, cn } from '@convergence/ui'
+import { Button, Card, EmptyState } from '@convergence/ui'
 import { ProviderUsageCard } from './provider-usage-card.presentational'
 
 interface ProviderUsageFieldsProps {
@@ -16,10 +16,13 @@ export function ProviderUsageFields({
 }: ProviderUsageFieldsProps) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card/45 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card
+        padding="md"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
-          <p className="text-sm font-medium text-foreground">Provider usage</p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-sm font-medium text-ink">Provider usage</p>
+          <p className="mt-1 text-sm text-ink-muted">
             Live quota windows, plus manual links for providers that do not
             expose usage limits reliably.
           </p>
@@ -30,20 +33,18 @@ export function ProviderUsageFields({
             variant="secondary"
             onClick={onRefresh}
             disabled={isLoading}
+            pending={isLoading}
+            pendingLabel="Refreshing…"
           >
-            <RefreshCw
-              className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')}
-            />
+            <RefreshCw className="size-3.5" />
             Refresh
           </Button>
         </div>
-      </div>
+      </Card>
 
       <div className="space-y-3">
         {snapshots.length === 0 && isLoading ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
-            Checking provider usage limits...
-          </p>
+          <EmptyState state="loading" title="Checking provider usage limits…" />
         ) : null}
         {snapshots.map((snapshot) => (
           <ProviderUsageCard key={snapshot.providerId} snapshot={snapshot} />
