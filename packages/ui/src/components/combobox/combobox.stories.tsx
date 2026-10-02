@@ -10,6 +10,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../dialog/dialog'
+import { Field, FieldDescription, FieldLabel } from '../field/field'
+import { Input } from '../input/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../select/select'
 import {
   Combobox,
   type ComboboxItem,
@@ -543,6 +552,87 @@ export const InDialog: Story = {
       expect(screen.queryByRole('dialog', { name: 'Project' })).toBeNull(),
     )
     await expect(dialogChanged).not.toHaveBeenCalled()
+    await expect(trigger).toHaveFocus()
+  },
+}
+
+/**
+ * In a form (DLG-15): `variant="field"` wears the field frame, so it sits
+ * beside an Input and a Select as one family, where the Button look (last,
+ * for toolbars and chips) has a fill and a hover of its own. In a Field it
+ * needs no aria-label: the Field's label names it and its description
+ * describes it; the popup takes that name, and the search inside keeps its
+ * own name and id.
+ */
+export const InField: Story = {
+  render: (args) => (
+    <div className="flex w-64 flex-col gap-4">
+      <Field>
+        <FieldLabel>Branch name</FieldLabel>
+        <Input defaultValue="feature/fields" />
+      </Field>
+      <Field>
+        <FieldLabel nativeLabel={false} render={<div />}>
+          Create from
+        </FieldLabel>
+        <ProjectPicker {...args} ariaLabel={undefined} variant="field" />
+        <FieldDescription>Only used for a new branch.</FieldDescription>
+      </Field>
+      <Field>
+        <FieldLabel nativeLabel={false} render={<div />}>
+          Kind
+        </FieldLabel>
+        <Select
+          items={[{ value: 'worktree', label: 'Worktree' }]}
+          defaultValue="worktree"
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="worktree">Worktree</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <ProjectPicker {...args} ariaLabel="Project, toolbar" />
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Create from' })
+    await expect(trigger).toHaveAccessibleDescription(
+      'Only used for a new branch.',
+    )
+    const input = canvas.getByRole('textbox', { name: 'Branch name' })
+    const select = canvas.getByRole('combobox', { name: 'Kind' })
+    for (const field of [input, select]) {
+      for (const property of [
+        'borderTopColor',
+        'backgroundColor',
+        'height',
+      ] as const) {
+        await expect(getComputedStyle(trigger)[property]).toBe(
+          getComputedStyle(field)[property],
+        )
+      }
+    }
+    const toolbar = canvas.getByRole('combobox', { name: 'Project, toolbar' })
+    await expect(getComputedStyle(toolbar).backgroundColor).not.toBe(
+      getComputedStyle(trigger).backgroundColor,
+    )
+
+    await userEvent.click(trigger)
+    const dialog = await screen.findByRole('dialog', { name: 'Create from' })
+    await waitFor(() => expect(dialog).toBeVisible())
+    const search = within(dialog).getByRole('combobox', {
+      name: 'Search projects…',
+    })
+    await waitFor(() => expect(search).toHaveFocus())
+    await expect(search.id).not.toBe(trigger.id)
+    await expect(within(dialog).getByRole('listbox')).toHaveAccessibleName(
+      'Create from',
+    )
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await expect(trigger).toHaveFocus()
   },
 }

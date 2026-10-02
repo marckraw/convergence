@@ -1,4 +1,5 @@
 import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox'
+import { Field as FieldPrimitive } from '@base-ui/react/field'
 import { CheckIcon, ChevronDownIcon } from 'lucide-react'
 import {
   Fragment,
@@ -9,7 +10,11 @@ import {
   type ReactNode,
 } from 'react'
 import { cn } from '#lib/cn.pure'
-import type { ControlSize } from '#lib/control-frame.styles'
+import {
+  type ControlSize,
+  fieldTrigger,
+  fieldTriggerSize,
+} from '#lib/control-frame.styles'
 import { popupMotion } from '../../motion/popup.styles'
 import { Badge } from '../badge/badge'
 import { Button, type ButtonVariant } from '../button/button'
@@ -84,8 +89,12 @@ type ComboboxSharedProps = {
   /** It couldn't load: an alert says why, with Try again if `onRetry` is given. */
   error?: string | null
   onRetry?: () => void
-  /** The trigger's look, as a Button's; `secondary` unless told otherwise. */
-  variant?: ButtonVariant
+  /**
+   * The trigger's look: a Button's, for a toolbar or a chip (`secondary`
+   * unless told otherwise), or `field`, the field frame SelectTrigger and
+   * Input wear, for a form where it sits beside them (DLG-15).
+   */
+  variant?: ButtonVariant | 'field'
   /** R3: the trigger's height, 24, 28, 32 or 36 px; `md` (32) unless told otherwise. */
   size?: ControlSize
   /** On the trigger: its width, or its place in a row. Never its height (R3). */
@@ -96,7 +105,11 @@ type ComboboxSharedProps = {
   icon?: ReactNode
   /** Whether the trigger ends in a chevron. A chip-like trigger may leave it out. */
   chevron?: boolean
-  /** The trigger's accessible name; defaults to its visible value. */
+  /**
+   * The trigger's accessible name; defaults to its visible value. In a Field
+   * it needs none: the Field's label names it and its description describes
+   * it, and the popup takes the same name.
+   */
   ariaLabel?: string
   /** One more thing to do, as a row under the list. */
   action?: ComboboxAction
@@ -139,6 +152,8 @@ type ComboboxProps = ComboboxSingleProps | ComboboxMultipleProps
 
 /** The trigger's chevron and icon size, by its size. */
 const CHEVRON = 'size-3 shrink-0 text-ink-muted'
+/** The field look's chevron: SelectTrigger's. */
+const FIELD_CHEVRON = 'size-4 shrink-0 text-ink-muted'
 
 /**
  * A Radix dialog (until every dialog is on Base UI) holds the focus and the
@@ -171,8 +186,10 @@ function useEscapeStaysInList(active: boolean) {
  * Select; this is for the rest. It replaces SearchableSelect and keeps its
  * props, on Base UI's Combobox.
  *
- * The trigger is a Button (`variant`, R3 `size`) with `role="combobox"`,
- * named by its value (or `ariaLabel`). It opens a popup on the one raised
+ * The trigger is a Button (`variant`, R3 `size`), or the field frame
+ * (`variant="field"`), with `role="combobox"`, named by its value (or
+ * `ariaLabel`), or by its Field's label when it sits in one: the search in
+ * the popup keeps its own name. It opens a popup on the one raised
  * surface (R8) as wide as the trigger, holding a SearchField that keeps the
  * focus while the arrow keys move the highlight (aria-activedescendant), Enter
  * picks and Escape closes, putting the focus back on the trigger. The list
@@ -239,6 +256,12 @@ function Combobox(props: ComboboxProps) {
   useEscapeStaysInList(open && container !== undefined)
   const message =
     typeof emptyMessage === 'function' ? emptyMessage(query) : emptyMessage
+  // In a Field, Base UI names the trigger by the Field's label; the popup and
+  // its list take that name too, so they are announced as the field.
+  const fieldLabelId = trigger?.getAttribute('aria-labelledby') ?? undefined
+  const naming = fieldLabelId
+    ? { 'aria-labelledby': fieldLabelId }
+    : { 'aria-label': name }
 
   const renderItem = (item: ComboboxItem) => {
     const picked = selectedIds.includes(item.id)
@@ -342,7 +365,7 @@ function Combobox(props: ComboboxProps) {
       <ComboboxPrimitive.List
         ref={listRef}
         id={listId}
-        aria-label={name}
+        {...naming}
         className={comboboxList}
       >
         {groups.map((group, index) =>
@@ -387,13 +410,26 @@ function Combobox(props: ComboboxProps) {
       <ComboboxPrimitive.Trigger
         ref={setTrigger}
         aria-label={name}
-        render={
-          <Button
-            variant={variant}
-            size={size}
-            className={cn('min-w-0 justify-between', className)}
-          />
-        }
+        {...(variant === 'field'
+          ? {
+              'data-slot': 'combobox-trigger',
+              'data-size': size,
+              className: cn(
+                'w-fit min-w-0',
+                fieldTrigger,
+                fieldTriggerSize[size],
+                className,
+              ),
+            }
+          : {
+              render: (
+                <Button
+                  variant={variant}
+                  size={size}
+                  className={cn('min-w-0 justify-between', className)}
+                />
+              ),
+            })}
       >
         <span className={comboboxNameRow}>
           {triggerIcon}
@@ -406,7 +442,12 @@ function Combobox(props: ComboboxProps) {
             </Tooltip>
           ) : null}
         </span>
-        {chevron ? <ChevronDownIcon aria-hidden className={CHEVRON} /> : null}
+        {chevron ? (
+          <ChevronDownIcon
+            aria-hidden
+            className={variant === 'field' ? FIELD_CHEVRON : CHEVRON}
+          />
+        ) : null}
       </ComboboxPrimitive.Trigger>
       <ComboboxPrimitive.Portal container={container}>
         <ComboboxPrimitive.Positioner
@@ -418,14 +459,16 @@ function Combobox(props: ComboboxProps) {
           <ComboboxPrimitive.Popup
             // The popup is a dialog to assistive tech; it takes its trigger's
             // name, so it is announced as the field it belongs to.
-            aria-label={name}
+            {...naming}
             // With no search, the list takes the focus, so its arrows and
             // Enter work from the keyboard.
             initialFocus={searchable ? undefined : listRef}
             className={cn(comboboxPopup, popupMotion, contentClassName)}
           >
             {searchable ? (
-              <div className={comboboxSearch}>
+              // Its own Field: in a Field, the search would take that
+              // Field's label and its control's id (its trigger's) too.
+              <FieldPrimitive.Root className={comboboxSearch}>
                 <ComboboxPrimitive.Input
                   aria-label={searchPlaceholder}
                   placeholder={searchPlaceholder}
@@ -435,7 +478,7 @@ function Combobox(props: ComboboxProps) {
                     <SearchField {...inputProps} size="sm" />
                   )}
                 />
-              </div>
+              </FieldPrimitive.Root>
             ) : null}
             {body()}
             {action ? (

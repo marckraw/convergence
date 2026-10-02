@@ -2,7 +2,11 @@ import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
-import { focusRingField } from '#lib/focus-ring.styles'
+import {
+  type ControlSize,
+  fieldTrigger,
+  fieldTriggerSize,
+} from '#lib/control-frame.styles'
 import {
   popupItem,
   popupItemCheck,
@@ -58,25 +62,19 @@ function Select<Value>({ onValueChange, ...props }: SelectProps<Value>) {
   )
 }
 
-/** Heights on the one control scale (R3): 24, 28, 32 and 36 px. */
-const TRIGGER_SIZES = {
-  xs: 'h-6 px-2 text-xs',
-  sm: 'h-7 px-2.5 text-xs',
-  md: 'h-8 px-3 text-sm',
-  lg: 'h-9 px-3 text-sm',
-} as const
-
 type SelectTriggerProps = Omit<SelectPrimitive.Trigger.Props, 'className'> & {
   className?: string
   /** 24, 28, 32 or 36 px; `md` (32) unless told otherwise. Never a className (R3). */
-  size?: keyof typeof TRIGGER_SIZES
+  size?: ControlSize
 }
 
 /**
  * The field that shows the choice and opens the list. Give it a name
- * (aria-label, or a label that points at it). It wears Input's frame: the
- * control border, the ring over it, the danger border when `aria-invalid`.
- * It is `app-no-drag`.
+ * (aria-label, or a FieldLabel in its Field). It wears Input's frame, from
+ * the same constant (`fieldTrigger`, DS-15): the control border, the ring
+ * over it, and the danger border when it is invalid, by `aria-invalid` or
+ * its Field's `invalid`. It is as wide as its value unless told otherwise,
+ * and `app-no-drag`.
  */
 function SelectTrigger({
   className,
@@ -88,15 +86,7 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
-      className={cn(
-        'flex w-fit items-center justify-between gap-2 whitespace-nowrap rounded-md border border-control-line bg-transparent shadow-control app-no-drag',
-        'transition-colors select-none aria-invalid:border-danger-ink',
-        focusRingField,
-        'data-disabled:pointer-events-none data-disabled:opacity-50',
-        "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        TRIGGER_SIZES[size],
-        className,
-      )}
+      className={cn('w-fit', fieldTrigger, fieldTriggerSize[size], className)}
       {...props}
     >
       {children}
