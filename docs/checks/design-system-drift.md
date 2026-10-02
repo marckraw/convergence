@@ -303,6 +303,15 @@ review's: a space before the dots (`'Loading ...'`), and words that reach the sc
 21 to zero before it turned on, as an error (MAR-3608). Its canary is
 `canaries/chaperone/apps/convergence/src/widgets/sidebar/rename-session.container.tsx`.
 
+`no-ascii-couldnt`, a `regex` rule over the same files: a failure typed "Couldn't …" with the
+ASCII apostrophe. R10's failure reads "Couldn’t <verb> <thing>." with the typographic one (U+2019),
+which is how `notify.failure` and `failureTitle` write it, so a toast, a dialog's error and a
+Notice say a failure the same way (DLG-31). It reads only the capital "Couldn't" that starts a
+failure, skips comment lines, and, like the ellipsis rule, can't see a message that comes from
+`apps/convergence/electron`. DS8 swept 66 to zero, stories included, before it turned on, as an
+error (MAR-3608). Its canary is
+`canaries/chaperone/apps/convergence/src/widgets/sidebar/sync-env-failure.container.tsx`.
+
 ## Rules not ported, and why
 
 - **`use-external-link-props`.** accent. has a props helper, `externalLinkProps(href)`, and the
@@ -378,6 +387,7 @@ its new pattern is taken out.
 | `use-section-label`          | `design-system-drift.json`      | error    |
 | `use-badge-caps`             | `design-system-drift.json`      | error    |
 | `no-magic-stroke`            | `design-system-drift.json`      | error    |
+| `no-ascii-couldnt`           | `design-system-drift.json`      | error    |
 
 A rule is never relaxed to reach zero, and never turned back into a warning to let a change
 through. When one fires, fix what it found ([When one fires](#when-one-fires)). When it can't be

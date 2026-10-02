@@ -64,7 +64,7 @@ export const Failed: Story = {
     await expect(alert).toHaveAccessibleName(/^Not sent\s*,\s*\S/)
     await expect(canvas.getByText(metaText(/^Not sent · /))).toBeVisible()
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Manage accounts' }),
+      canvas.getByRole('button', { name: 'Manage accounts…' }),
     )
     await expect(args.onManageAccounts).toHaveBeenCalledOnce()
   },

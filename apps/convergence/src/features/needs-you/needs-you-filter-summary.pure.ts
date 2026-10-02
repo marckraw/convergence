@@ -5,11 +5,11 @@ import {
   type FeedView,
 } from './needs-you-view.pure'
 import { feedOrderLabels } from './needs-you-order.pure'
-import { NEEDS_YOU } from './needs-you-words.pure'
+import { WAITING_ON_YOU } from './needs-you-words.pure'
 
 export const activityViewLabels: Record<ActivityView, string> = {
   all: 'All activity',
-  'needs-me': NEEDS_YOU,
+  'needs-me': WAITING_ON_YOU,
   working: 'Working',
   review: 'Review',
 }

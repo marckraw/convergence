@@ -102,7 +102,7 @@ export const SpaceContextPanel: FC<SpaceContextPanelProps> = ({
         <section className="space-y-2">
           <SectionLabel as="h3">Artifacts</SectionLabel>
           {artifacts.length === 0 ? (
-            <EmptyState size="compact" title="No artifacts yet" />
+            <EmptyState size="compact" title="No Artifacts yet" />
           ) : (
             <div className="space-y-2">
               {artifacts.map((artifact) => (

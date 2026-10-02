@@ -198,7 +198,7 @@ export const Failed: Story = {
   },
   play: async ({ args, canvas, userEvent }) => {
     const alert = canvas.getByRole('alert')
-    await expect(alert).toHaveTextContent("Couldn't read the harness facts.")
+    await expect(alert).toHaveTextContent('Couldn’t read the harness facts.')
     await expect(alert).toHaveTextContent('The session database is locked.')
     await userEvent.click(canvas.getByRole('button', { name: 'Retry' }))
     await expect(args.onRetry).toHaveBeenCalledOnce()
@@ -318,7 +318,7 @@ export const McpReconnectFailed: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      "Couldn't reconnect sentry: spawn sentry-mcp ENOENT",
+      'Couldn’t reconnect sentry: spawn sentry-mcp ENOENT',
     )
   },
 }

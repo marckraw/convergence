@@ -1,5 +1,6 @@
 import { focusRing, type Tone } from '@convergence/ui'
 import { SESSION_STATE_TONE } from '@/entities/session'
+import type { NeedsYouTone } from '@/features/needs-you'
 
 /** The window's last line: a hairline over it, 11 px muted words in it. */
 export const barClass =
@@ -20,9 +21,16 @@ export const statusChipButtonClass =
 export const projectChipClass =
   'flex items-center gap-1 rounded-md border border-line-soft bg-canvas/60 px-1.5 py-0.5 text-ink transition-colors hover:bg-highlight'
 
-/** Something waits on you in this project (R1: warning, never red). */
-export const projectChipAttentionClass =
-  'border-warning-line bg-warning-soft text-warning-ink hover:bg-warning-soft'
+/**
+ * Something waits on you in this project, in R1's tone for it: warning while
+ * anything asks for an answer, danger when only a failed run waits (ruling 6).
+ */
+export const projectChipNeedsYouClass = {
+  warning:
+    'border-warning-line bg-warning-soft text-warning-ink hover:bg-warning-soft',
+  danger:
+    'border-danger-line bg-danger-soft text-danger-ink hover:bg-danger-soft',
+} as const satisfies Record<NeedsYouTone, string>
 
 export const recencyBadgeClass =
   'ml-auto flex items-center gap-1 rounded-md border border-line/40 bg-canvas/40 px-1.5 py-0.5 text-ink-muted transition-colors hover:bg-highlight'

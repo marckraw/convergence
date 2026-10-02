@@ -755,7 +755,7 @@ describe('ConversationItemView', () => {
       )
 
       fireEvent.click(
-        screen.getByRole('button', { name: 'Authorize for this account' }),
+        screen.getByRole('button', { name: 'Authorize for this account…' }),
       )
       expect(onNoteAction).toHaveBeenCalledWith(action)
     })
@@ -773,7 +773,7 @@ describe('ConversationItemView', () => {
       )
 
       expect(
-        screen.queryByRole('button', { name: 'Authorize for this account' }),
+        screen.queryByRole('button', { name: 'Authorize for this account…' }),
       ).not.toBeInTheDocument()
     })
 
@@ -878,7 +878,7 @@ describe('ConversationItemView', () => {
       )
 
       expect(
-        screen.queryByRole('button', { name: 'Authorize for this account' }),
+        screen.queryByRole('button', { name: 'Authorize for this account…' }),
       ).not.toBeInTheDocument()
     })
   })

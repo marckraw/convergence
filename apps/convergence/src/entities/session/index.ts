@@ -203,3 +203,4 @@ export {
   SESSION_STATE_TONE,
 } from './session-tone.pure'
 export type { LabelledAttention, SessionToneState } from './session-tone.pure'
+export { FORK_ACTION_LABEL } from './session-fork-words.pure'

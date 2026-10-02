@@ -854,7 +854,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
       />,
     )
     expect(screen.getByRole('alert').textContent).toBe(
-      "Couldn't reconnect claude.ai Figma: needs authentication",
+      'Couldn’t reconnect claude.ai Figma: needs authentication',
     )
   })
 
@@ -882,7 +882,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
       />,
     )
     expect({ before, after: screen.queryByRole('alert') }).toEqual({
-      before: "Couldn't reconnect claude.ai Figma: needs authentication",
+      before: 'Couldn’t reconnect claude.ai Figma: needs authentication',
       after: null,
     })
   })

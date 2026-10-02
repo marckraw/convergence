@@ -5,7 +5,7 @@ describe('attachmentRejectionsTitle (R10, CONV-7)', () => {
   it('names the one file it couldn’t attach', () => {
     expect(
       attachmentRejectionsTitle([{ filename: 'notes.pdf', reason: 'Too big' }]),
-    ).toBe("Couldn't attach notes.pdf.")
+    ).toBe('Couldn’t attach notes.pdf.')
   })
 
   it('counts the files when there are more', () => {
@@ -14,6 +14,6 @@ describe('attachmentRejectionsTitle (R10, CONV-7)', () => {
         { filename: 'a.bin', reason: 'Unsupported' },
         { filename: 'b.bin', reason: 'Unsupported' },
       ]),
-    ).toBe("Couldn't attach 2 files.")
+    ).toBe('Couldn’t attach 2 files.')
   })
 })

@@ -206,7 +206,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
       }))
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : 'Failed to load Attempts',
+        error: err instanceof Error ? err.message : 'Failed to load attempts',
       })
     }
   },
@@ -226,7 +226,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
         error:
           err instanceof Error
             ? err.message
-            : 'Failed to load session Attempts',
+            : 'Failed to load session attempts',
       })
     }
   },
@@ -254,7 +254,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
       return attempt
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : 'Failed to link Attempt',
+        error: err instanceof Error ? err.message : 'Failed to link attempt',
       })
       return null
     }
@@ -283,7 +283,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
       return attempt
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : 'Failed to update Attempt',
+        error: err instanceof Error ? err.message : 'Failed to update attempt',
       })
       return null
     }
@@ -306,7 +306,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
       }))
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : 'Failed to unlink Attempt',
+        error: err instanceof Error ? err.message : 'Failed to unlink attempt',
       })
     }
   },
@@ -336,7 +336,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
     } catch (err) {
       set({
         error:
-          err instanceof Error ? err.message : 'Failed to set primary Attempt',
+          err instanceof Error ? err.message : 'Failed to set primary attempt',
       })
       return null
     }

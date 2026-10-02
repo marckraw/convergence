@@ -241,7 +241,7 @@ export const SkillsFailed: Story = {
   play: async ({ canvas }) => {
     // Every skill list's failure (CONV-10): what failed, then why.
     const alert = canvas.getByRole('alert')
-    await expect(alert).toHaveTextContent("Couldn't load skills")
+    await expect(alert).toHaveTextContent('Couldn’t load skills')
     await expect(alert).toHaveTextContent('claude exited with code 1')
     await waitFor(() =>
       expect(canvas.getByText('Skills on grok-mac.')).toBeVisible(),

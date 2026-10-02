@@ -88,6 +88,9 @@ interface PromptLibraryBrowserDialogProps {
   onDeletePrompt: (prompt: PromptLibraryEntry) => void
 }
 
+/** Why a prompt's buttons wait while a change saves (R2, DLG §4 13). */
+const SAVING_REASON = 'Wait for the last change to save.'
+
 const SCOPE_LABELS: Record<PromptLibraryScope, string> = {
   project: 'Project',
   global: 'Global',
@@ -252,7 +255,7 @@ function renderDetailsPane({
               type="button"
               variant="secondary"
               onClick={() => onStartEdit(selectedPrompt)}
-              disabled={isMutating}
+              disabledReason={isMutating ? SAVING_REASON : undefined}
             >
               <Pencil className="size-3.5" />
               Edit
@@ -262,7 +265,7 @@ function renderDetailsPane({
             type="button"
             variant="danger-quiet"
             onClick={() => onDeletePrompt(selectedPrompt)}
-            disabled={isMutating}
+            disabledReason={isMutating ? SAVING_REASON : undefined}
           >
             <Trash2 className="size-3.5" />
             Delete…
@@ -371,7 +374,7 @@ function renderPromptForm({
             type="button"
             variant="secondary"
             onClick={onCancel}
-            disabled={isMutating}
+            disabledReason={isMutating ? SAVING_REASON : undefined}
           >
             <X className="size-3.5" />
             Cancel
@@ -575,8 +578,13 @@ export const PromptLibraryBrowserDialog: FC<
             variant="secondary"
             size="sm"
             onClick={onStartCreate}
-            disabledReason={projectName ? undefined : 'Open a project first.'}
-            disabled={isMutating}
+            disabledReason={
+              !projectName
+                ? 'Open a project first.'
+                : isMutating
+                  ? SAVING_REASON
+                  : undefined
+            }
           >
             <Plus className="size-3.5" />
             New
@@ -656,7 +664,7 @@ export const PromptLibraryBrowserDialog: FC<
             ) : catalogError && !hasCatalog ? (
               <EmptyState
                 state="failed"
-                title="Couldn't read the prompts"
+                title="Couldn’t read the prompts"
                 detail={catalogError}
                 onRetry={onRefresh}
                 retrying={isCatalogLoading}
@@ -672,7 +680,7 @@ export const PromptLibraryBrowserDialog: FC<
                     type="button"
                     variant="secondary"
                     onClick={onStartCreate}
-                    disabled={isMutating}
+                    disabledReason={isMutating ? SAVING_REASON : undefined}
                   >
                     <Plus className="size-3.5" />
                     New prompt

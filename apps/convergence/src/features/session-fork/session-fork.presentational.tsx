@@ -11,6 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  failureTitle,
   Field,
   FieldLabel,
   Input,
@@ -32,8 +33,12 @@ import {
 } from '@/entities/attachment'
 import { ForkComposer } from './fork-composer.presentational'
 import { ModelSelectorRow } from './model-selector-row.presentational'
-import type { PreviewState } from './session-fork.types'
-import type { ForkProgressLabel, SeedSizeWarning } from './session-fork.pure'
+import type { ForkSubmitError, PreviewState } from './session-fork.types'
+import {
+  forkConfirmBlockedReason,
+  type ForkProgressLabel,
+  type SeedSizeWarning,
+} from './session-fork.pure'
 
 interface SessionForkDialogProps {
   open: boolean
@@ -58,7 +63,7 @@ interface SessionForkDialogProps {
   attachmentErrorByAttachmentId: Record<string, string>
   attachmentsValid: boolean
   isSubmitting: boolean
-  submitError: string | null
+  submitError: ForkSubmitError | null
   onNameChange: (value: string) => void
   onStrategyChange: (strategy: ForkStrategy) => void
   onProviderChange: (id: string) => void
@@ -120,15 +125,18 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  const canConfirm =
-    !isSubmitting &&
-    attachmentsValid &&
-    name.trim().length > 0 &&
-    selection.providerId.length > 0 &&
-    selection.modelId.length > 0 &&
-    (workspaceMode === 'reuse' || workspaceBranchName.trim().length > 0) &&
-    (strategy === 'full' ||
-      (preview.status === 'ready' && seedMarkdown.trim().length > 0))
+  // R2: Create says why it waits (DLG §4 13); forking is its busy state.
+  const confirmBlockedReason = forkConfirmBlockedReason({
+    name,
+    providerId: selection.providerId,
+    modelId: selection.modelId,
+    workspaceMode,
+    workspaceBranchName,
+    strategy,
+    previewReady: preview.status === 'ready',
+    seedMarkdown,
+    attachmentsValid,
+  })
 
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
@@ -329,7 +337,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               {preview.status === 'error' && (
                 <Notice
                   tone="danger"
-                  title="Couldn't summarise the transcript"
+                  title={failureTitle('summarise the transcript')}
                   actions={
                     <Button
                       variant="secondary"
@@ -355,7 +363,10 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           )}
         </DialogBody>
 
-        <DialogError className="pt-3">{submitError}</DialogError>
+        {/* R10: what failed, and why on the line under it (DLG-31). */}
+        <DialogError className="pt-3" detail={submitError?.reason}>
+          {submitError ? failureTitle('create the fork') : null}
+        </DialogError>
         <DialogFooter>
           <Button
             variant="secondary"
@@ -367,7 +378,8 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={!canConfirm}
+            disabled={isSubmitting}
+            disabledReason={confirmBlockedReason ?? undefined}
             pending={isSubmitting}
             pendingLabel="Forking…"
             size="lg"

@@ -79,7 +79,7 @@ describe('MAR-3470 the sign-in line under an app', () => {
   })
   it("couldn't check, built in, and no check, each in its own words", () => {
     expect(line(signIn('failed', null, 'Rate limited.'))).toEqual({
-      text: "Couldn't check sign-in: Rate limited.",
+      text: 'Couldn’t check sign-in: Rate limited.',
       tone: 'muted',
     })
     expect(line(signIn('built-in'))?.text).toBe(
@@ -145,7 +145,7 @@ describe('MAR-3470 the live line of a server configured on this Mac', () => {
   })
   it("couldn't check says why; no answer or no claim leaves the saved label", () => {
     expect(line(server('failed', null, 'handshake timed out.'))?.text).toBe(
-      "Couldn't check sign-in: handshake timed out.",
+      'Couldn’t check sign-in: handshake timed out.',
     )
     expect(line(server('unchecked'))).toBeNull()
     expect(line(undefined)).toBeNull()

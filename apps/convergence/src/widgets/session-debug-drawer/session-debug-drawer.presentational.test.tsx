@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import type { ProviderDebugEntry } from '@/entities/provider-debug'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import { SessionDebugDrawer } from './session-debug-drawer.presentational'
 
 function entry(
@@ -53,7 +54,7 @@ describe('SessionDebugDrawer', () => {
     expect(channelLabels.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('disables Copy all when no entries are present', () => {
+  it('disables Copy all when no entries are present, and says why (R2)', () => {
     render(
       <SessionDebugDrawer
         open
@@ -64,6 +65,8 @@ describe('SessionDebugDrawer', () => {
         onOpenLogFolder={vi.fn()}
       />,
     )
-    expect(screen.getByRole('button', { name: 'Copy all' })).toBeDisabled()
+    const copyAll = screen.getByRole('button', { name: 'Copy all' })
+    expect(isUnavailable(copyAll)).toBe(true)
+    expect(copyAll).toHaveAccessibleDescription('Nothing captured yet.')
   })
 })

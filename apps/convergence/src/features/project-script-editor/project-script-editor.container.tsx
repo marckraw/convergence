@@ -7,6 +7,7 @@ import {
   type ProjectScriptIconId,
 } from '@/entities/project-script'
 import {
+  failureTitle,
   Field,
   FieldLabel,
   FormDialog,
@@ -16,6 +17,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  reasonOf,
   Textarea,
 } from '@convergence/ui'
 
@@ -64,7 +66,8 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
   const [icon, setIcon] = useState<ProjectScriptIconId>('play')
   const [cwd, setCwd] = useState('')
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // R10: what failed, and why on the line under it (DLG-31).
+  const [error, setError] = useState<{ reason?: string } | null>(null)
   const iconLabelId = useId()
 
   useEffect(() => {
@@ -88,8 +91,7 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
       })
       onOpenChange(false)
     } catch (err) {
-      const reason = err instanceof Error ? ` ${err.message}` : ''
-      setError(`Couldn't save the action.${reason}`)
+      setError({ reason: reasonOf(err) })
     } finally {
       setSaving(false)
     }
@@ -104,7 +106,8 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
       onSave={() => void handleSave()}
       pending={saving}
       saveDisabledReason={missingField(name, command)}
-      error={error}
+      error={error ? failureTitle('save the action') : null}
+      errorDetail={error?.reason}
     >
       <div className="space-y-4">
         <Field>

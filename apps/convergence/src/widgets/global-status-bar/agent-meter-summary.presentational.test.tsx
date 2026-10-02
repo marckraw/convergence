@@ -10,6 +10,7 @@ it('R4 status bar renders totals and a CPU-sorted hover list with shared and rem
       <GlobalStatusBar
         runningCount={2}
         attentionCount={0}
+        attentionTone={null}
         byProject={[]}
         recency={null}
         providers={[]}

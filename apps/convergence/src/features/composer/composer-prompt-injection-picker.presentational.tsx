@@ -54,7 +54,7 @@ export const ComposerPromptInjectionPicker: FC<
       {error ? (
         <InlinePickerState
           state="failed"
-          title="Couldn't load prompts"
+          title="Couldn’t load prompts"
           detail={error}
         />
       ) : isLoading ? (

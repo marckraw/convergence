@@ -270,7 +270,7 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
           ) : error && !snapshot ? (
             <EmptyState
               state="failed"
-              title="Couldn't read the MCP servers"
+              title="Couldn’t read the MCP servers"
               detail={error}
               onRetry={onRefresh}
               retrying={isLoading}

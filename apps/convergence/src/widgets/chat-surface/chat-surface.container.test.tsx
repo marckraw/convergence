@@ -216,7 +216,7 @@ describe('ChatSurface', () => {
   it('renders a project-free new chat composer when no global session is active', () => {
     render(<ChatSurface selectedSpaceId={null} />)
 
-    expect(screen.queryByText('Convergence Chat')).not.toBeInTheDocument()
+    expect(screen.queryByText('Convergence chat')).not.toBeInTheDocument()
     expect(screen.getByTestId('composer')).toHaveTextContent('global:new')
   })
 

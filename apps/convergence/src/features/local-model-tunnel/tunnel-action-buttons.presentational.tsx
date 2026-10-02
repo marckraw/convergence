@@ -103,7 +103,7 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
   if (state === 'external') {
     return onManage ? (
       <Button type="button" variant="secondary" onClick={onManage}>
-        Manage
+        Manage…
       </Button>
     ) : null
   }

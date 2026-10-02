@@ -130,12 +130,12 @@ export const Busy: Story = {
 export const Failed: Story = {
   args: {
     error:
-      "Couldn't delete the conversation. The agent is still writing to it.",
+      'Couldn’t delete the conversation. The agent is still writing to it.',
   },
   play: async ({ args, canvas, userEvent }) => {
     const { dialog } = await open(canvas, userEvent)
     await expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      "Couldn't delete the conversation.",
+      'Couldn’t delete the conversation.',
     )
     await userEvent.click(
       within(dialog).getByRole('button', { name: 'Delete' }),

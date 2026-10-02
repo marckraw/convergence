@@ -72,7 +72,9 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
                 variant="secondary"
                 size="sm"
                 onClick={onCopyAll}
-                disabled={entries.length === 0}
+                disabledReason={
+                  entries.length === 0 ? 'Nothing captured yet.' : undefined
+                }
               >
                 Copy all
               </Button>
