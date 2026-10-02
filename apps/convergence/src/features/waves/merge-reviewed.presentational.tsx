@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  FormError,
 } from '@convergence/ui'
 import { canMergeReviewed, mergeActWords } from './merge-reviewed.pure'
 import { MergeReviewedRow } from './merge-reviewed.row.presentational'
@@ -60,7 +61,7 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-5">
-          {props.error ? <p role="alert">{props.error}</p> : null}
+          <FormError>{props.error}</FormError>
           {!plan && !props.error ? <p role="status">Reading PRs…</p> : null}
           {plan?.unavailable ? (
             <p role="status">gh not found — merge by hand</p>

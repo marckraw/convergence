@@ -387,13 +387,7 @@ export const LoomSheetView = <TSession,>({
             <>
               {/* One group per horse that has anything waiting (MAR-3193
                   R1), each saying what that horse is doing now. */}
-              <div
-                className={
-                  wide
-                    ? 'grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-4'
-                    : undefined
-                }
-              >
+              <div className={wide ? 'grid grid-cols-fit-65 gap-4' : undefined}>
                 {next.seats.map((seat) => (
                   <WaveSectionView
                     appearance="loom"
@@ -444,13 +438,7 @@ export const LoomSheetView = <TSession,>({
               {/* The stages of preparation, in the order it happens
                   (MAR-3194 R3). Read-only by ruling: the only thing a
                   person can press here is a row, and it opens the detail. */}
-              <div
-                className={
-                  wide
-                    ? 'grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4'
-                    : undefined
-                }
-              >
+              <div className={wide ? 'grid grid-cols-fit-80 gap-4' : undefined}>
                 {plan.stages.map((stage) => (
                   <WaveSectionView
                     appearance="loom"

@@ -75,9 +75,11 @@ describe('MAR-3155 R5: the identifier never breaks; the title gets the rest', ()
     expect(id.className).toContain('shrink-0')
 
     const titleEl = row.getByText(title)
-    // Two lines at most, and never cut without a way to read the rest.
-    // Mutation: drop the `title` attribute -> red.
-    expect(titleEl.getAttribute('title')).toBe(title)
+    // Two lines at most, and never cut without a way to read the rest: the
+    // whole title is its Tooltip when it is cut short (R2, never a native
+    // title). Mutation: drop the Tooltip -> red.
+    expect(titleEl).toHaveAttribute('data-tooltip', title)
+    expect(titleEl).toHaveAttribute('data-tooltip-when', 'truncated')
     expect(titleEl.className).toContain('line-clamp-2')
     // `min-w-0`: without it a flex child refuses to be narrower than its text
     // and the id gets pushed off instead.
@@ -170,47 +172,58 @@ describe('MAR-3361: the PR word opens GitHub, the card opens the detail', () => 
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(entry)
   })
 
-  it('R2: card and link have separate tab stops and Enter actions', () => {
+  it('R2: the card’s door and the link have separate tab stops and Enter actions', () => {
     const { card, onOpen, entry } = mountRow()
     const link = within(card).getByRole('link')
-    expect(card).toHaveRole('button')
-    expect(card.tabIndex).toBe(0)
-    expect(link.tabIndex).toBe(0)
-    expect([...document.querySelectorAll('[tabindex="0"], a[href]')]).toEqual([
-      card,
-      link,
-    ])
-    card.focus()
-    expect(card).toHaveFocus()
-    fireEvent.keyDown(card, { key: 'Enter' })
+    // The card is a Card with a stretched door since MC-26: its title is a
+    // real button, so Enter and Space are its click by the platform, and the
+    // link is never inside it (axe: no nested interactive).
+    const door = within(card).getByRole('button', {
+      name: `${entry.issueIdentifier} ${entry.issueTitle}`,
+    })
+    expect(door.tagName).toBe('BUTTON')
+    expect(card).not.toHaveAttribute('role')
+    expect(
+      [...card.querySelectorAll('button, a[href], [tabindex="0"]')].filter(
+        (element) => (element as HTMLElement).tabIndex >= 0,
+      ),
+    ).toEqual([door, link])
+    door.focus()
+    expect(door).toHaveFocus()
+    // jsdom does not synthesize the browser's Enter click on a button:
+    // dispatch the click Enter makes.
+    fireEvent.click(door)
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(entry)
     onOpen.mockClear()
     link.focus()
     expect(link).toHaveFocus()
-    // jsdom does not synthesize the browser's Enter click. Its key event
-    // must remain uncancelled; dispatch the resulting click explicitly.
+    // The link's own key event stays uncancelled, and its click opens GitHub,
+    // never the detail.
     expect(fireEvent.keyDown(link, { key: 'Enter' })).toBe(true)
     fireEvent.click(link)
     expect(onOpen).not.toHaveBeenCalled()
   })
 
-  it('R2: Space opens the focused card and prevents scrolling', () => {
+  it('R2: a press anywhere on the card opens it; one on the link does not', () => {
     const { card, onOpen, entry } = mountRow()
-    card.focus()
-    expect(fireEvent.keyDown(card, { key: ' ' })).toBe(false)
+    // In a browser the door's hit area covers the card, so a press lands on
+    // the door and bubbles here; jsdom has no hit area, so press the card.
+    fireEvent.click(card)
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(entry)
     onOpen.mockClear()
     const link = within(card).getByRole('link')
-    link.focus()
     expect(fireEvent.keyDown(link, { key: ' ' })).toBe(true)
+    fireEvent.click(link)
     expect(onOpen).not.toHaveBeenCalled()
   })
 
-  it('R3: the PR link has no native button ancestor', () => {
+  it('R3: the PR link has no button ancestor', () => {
     const { card } = mountRow()
-    // MAR-3361 retires MAR-3313's "one button with no anchor" assertion:
-    // the card is now a div with a button role, and the anchor is real HTML.
+    // MAR-3361 retired MAR-3313's "one button with no anchor" assertion; MC-26
+    // retires the card's button role: the card is a plain div, the door is a
+    // button beside the link, and the anchor is real HTML.
     expect(within(card).getByRole('link').closest('button')).toBeNull()
+    expect(within(card).getByRole('link').closest('[role="button"]')).toBeNull()
     expect(card.tagName).toBe('DIV')
   })
 
@@ -222,15 +235,16 @@ describe('MAR-3361: the PR word opens GitHub, the card opens the detail', () => 
         'rounded-lg',
         'p-3',
         'gap-2',
+        // The Card's hover fill, and the same while its door has focus.
         'hover:bg-fill-hover',
-        'focus-visible:bg-fill-hover',
-        // The Button's own ring since MAR-3616: a drawn outline in --ring.
-        'focus-visible:outline-solid',
-        'focus-visible:outline-ring',
+        'has-focus-visible:bg-fill-hover',
         'bg-fill-quiet',
       ]) {
         expect(card).toHaveClass(token)
       }
+      // The ring is the door's, drawn round the whole card (CardAction).
+      const door = card.querySelector('[data-slot="card-action"]')!
+      expect(door).toHaveClass('focus-visible:after:outline-solid')
       expect(card.classList.contains('mb-2')).toBe(layout === 'list')
     },
   )

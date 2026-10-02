@@ -1690,9 +1690,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
     ) as HTMLElement
     fireEvent.scroll(body, { target: { scrollTop: 240 } })
 
-    const row = document.querySelector(
-      '[data-wave-row="crew-1:EX-2"]',
-    ) as HTMLElement
+    // The row's door: its title, a CardAction since MC-26.
+    const row = within(
+      document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+    ).getByRole('button')
     row.focus()
     fireEvent.click(row)
     // Focus starts inside the card, so Esc and Tab have somewhere to be.
@@ -1706,7 +1707,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Mutation: drop the focus restore -> `<body>`, and the keyboard has
     // lost the place it was reading from.
     expect(document.activeElement).toBe(
-      document.querySelector('[data-wave-row="crew-1:EX-2"]'),
+      within(
+        document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+      ).getByRole('button'),
     )
     expect(
       (document.querySelector('[data-loom-sheet="now"]') as HTMLElement)
@@ -1771,9 +1774,8 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // A Plan issue has no seat, so its conversation can never open — and
     // that is exactly the issue a person most wants to read.
     // Mutation: pass the conversation's `inertReason` to Loom's rows -> the
-    // row is an inert `div`, the click does nothing, red.
-    expect(row).toHaveRole('button')
-    fireEvent.click(row)
+    // row is an inert `div` with no door, the click does nothing, red.
+    fireEvent.click(within(row).getByRole('button'))
     const card = document.querySelector(
       '[data-loom-detail="crew-1:EX-PLAN"]',
     ) as HTMLElement

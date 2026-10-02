@@ -16,6 +16,7 @@ import {
   type UIEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { focusRing } from '@convergence/ui'
 import type { SessionSummary } from '@/entities/session'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { loadWavePanelMode, saveWavePanelMode } from './wave-panel-mode.api'
@@ -119,8 +120,12 @@ function openerSelector(active: HTMLElement): string | null {
   if (ticket) {
     return `[data-loom-horse-ticket="${ticket.getAttribute('data-loom-horse-ticket')}"]`
   }
+  // A row's door is its title, a CardAction (MC-26): the card itself takes
+  // no focus, so the keyboard goes back to the door it left from.
   const row = active.closest('[data-wave-row]')
-  return row ? `[data-wave-row="${row.getAttribute('data-wave-row')}"]` : null
+  return row
+    ? `[data-wave-row="${row.getAttribute('data-wave-row')}"] [data-slot="card-action"]`
+    : null
 }
 
 function useWindowWidth(): number {
@@ -700,11 +705,8 @@ export const WavePanel: FC<WavePanelProps> = memo(function WavePanel({
       showDetail(row.entry)
     } else if (card) {
       card.tabIndex = -1
-      card.classList.add(
-        'focus-visible:outline-none',
-        'focus-visible:ring-1',
-        'focus-visible:ring-ring',
-      )
+      // The kit's focus ring, drawn where the card sits (DS-7).
+      card.classList.add(...focusRing.split(' '))
       card.scrollIntoView({
         block: 'nearest',
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches

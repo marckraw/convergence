@@ -42,20 +42,6 @@ const field = {
   onShortcut: fn(),
 }
 
-/**
- * Expanded Loom's rows carry the same contrast misses as the stack's: the
- * amber action words and muted status chips, and the amber outage line on
- * the light header.
- */
-const lowContrastRows = {
-  a11y: {
-    config: {
-      // a11y-known: Loom row action words, status chips and the amber outage line miss 4.5:1 (color-contrast) — fixed by the sweep (DS4)
-      rules: [{ id: 'color-contrast', enabled: false }],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Waves/LoomExpanded',
   component: LoomExpandedView,
@@ -108,7 +94,6 @@ type Story = StoryObj<typeof meta>
  * field, the guide, Fold and Collapse; the sheets lie side by side.
  */
 export const Default: Story = {
-  parameters: lowContrastRows,
   play: async ({ args, canvas, userEvent }) => {
     const loom = canvas.getByRole('region', { name: 'Loom' })
     await expect(
@@ -139,7 +124,6 @@ export const Dark: Story = {
 /** With a detail open, Escape is the container's: it closes that first. */
 export const Escape: Story = {
   args: { onEscape: fn() },
-  parameters: lowContrastRows,
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(
       canvas.getByRole('searchbox', { name: 'Search Loom' }),
@@ -156,7 +140,6 @@ export const Failed: Story = {
     header: { kind: 'outage', text: 'tracker key refused · 12m' },
     refresh: undefined,
   },
-  parameters: lowContrastRows,
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('status')).toHaveTextContent(
       'tracker key refused · 12m',

@@ -1,5 +1,5 @@
-import { ExternalLink, X } from 'lucide-react'
-import { Button, IconButton } from '@convergence/ui'
+import { X } from 'lucide-react'
+import { Button, IconButton, TextLink } from '@convergence/ui'
 import type { LoomIssueDetail } from './loom-detail.pure'
 import {
   LOOM_DETAIL_CHIP_CLASS,
@@ -81,15 +81,9 @@ export const LoomDetailView = <TSession,>({
     >
       {detail.pr.linked ? (
         <>
-          <a
-            href={detail.pr.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1 underline-offset-2 hover:underline"
-          >
+          <TextLink external href={detail.pr.url} className="w-fit">
             {detail.pr.headline}
-            <ExternalLink className="size-3" aria-hidden />
-          </a>
+          </TextLink>
           {detail.pr.title ? (
             <span className="whitespace-normal">{detail.pr.title}</span>
           ) : null}
@@ -132,15 +126,9 @@ export const LoomDetailView = <TSession,>({
       )}
     </section>
 
-    <a
-      href={detail.url}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center gap-1 underline-offset-2 hover:underline"
-    >
+    <TextLink external href={detail.url} className="w-fit">
       Open issue in Linear
-      <ExternalLink className="size-3" aria-hidden />
-    </a>
+    </TextLink>
 
     <p className={LOOM_DETAIL_FOOTER_CLASS}>{detail.footer}</p>
   </div>

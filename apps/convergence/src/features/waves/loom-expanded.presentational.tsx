@@ -6,11 +6,12 @@ import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
-  LOOM_COLLAPSE_BUTTON_CLASS,
   DRAG_REGION_STYLE,
+  LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_EXPANDED_CLASS,
-  NO_DRAG_STYLE,
+  LOOM_GUIDE_ENTRY_CLASS,
   LOOM_SEARCH_EXPANDED_CLASS,
+  NO_DRAG_STYLE,
 } from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 import { LoomSearchFieldView } from './loom-search.presentational'
@@ -83,7 +84,7 @@ export const LoomExpandedView: FC<
         style={NO_DRAG_STYLE}
         onClick={props.onOpenGuide}
         size="lg"
-        className="w-[148px] shrink-0 px-3 text-xs py-0"
+        className={LOOM_GUIDE_ENTRY_CLASS}
       >
         {LEARN_LOOM_ENTRY}
       </Button>

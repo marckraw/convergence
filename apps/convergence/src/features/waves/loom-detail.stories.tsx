@@ -118,7 +118,10 @@ export const Default: Story = {
       'https://github.com/marckraw/convergence/pull/905',
     )
     await expect(
-      canvas.getByRole('link', { name: 'Open issue in Linear' }),
+      // A TextLink that leaves the app says so to a screen reader.
+      canvas.getByRole('link', {
+        name: 'Open issue in Linear (opens in browser)',
+      }),
     ).toHaveAttribute('href', args.detail.url)
     // Nothing here can be edited: no field, no checkbox, no select.
     await expect(canvas.queryByRole('textbox')).toBeNull()

@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Circle, CircleHelp, CircleX, LoaderCircle } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import { Button, cn, Spinner } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomHorseTicketLine,
@@ -121,13 +121,13 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           />
         ) : null}
         <span className="flex w-full items-baseline gap-1.5">
-          <Icon
-            className={cn(
-              'size-3 shrink-0',
-              horse.runtime === 'working' && 'animate-spin',
-            )}
-            aria-hidden
-          />
+          {/* A horse at work turns the kit's Spinner, which stands still
+              under reduced motion (MC-25); the others wear their glyph. */}
+          {horse.runtime === 'working' ? (
+            <Spinner size="xs" />
+          ) : (
+            <Icon className="size-3 shrink-0" aria-hidden />
+          )}
           <span id={`${ids}-seat`} className="min-w-0 truncate font-medium">
             {horse.seat ?? 'unnamed seat'}
           </span>
