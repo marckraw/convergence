@@ -2661,11 +2661,14 @@ describe('MAR-3097: through the containers and the real stores', () => {
       ])
       // Mutation: every group `closed` -> the newest work is folded away and
       // the sheet opens on nothing, red.
-      expect(groups[0]?.hasAttribute('open')).toBe(true)
-      expect(groups[1]?.hasAttribute('open')).toBe(false)
-      expect(groups[0]?.querySelector('summary')?.textContent).toBe(
-        'loom-view · 2',
-      )
+      // A group is a Collapsible (MC-17): open says data-open, and its
+      // trigger carries the heading.
+      expect(groups[0]?.hasAttribute('data-open')).toBe(true)
+      expect(groups[1]?.hasAttribute('data-open')).toBe(false)
+      expect(
+        groups[0]?.querySelector('[data-slot="collapsible-trigger"]')
+          ?.textContent,
+      ).toBe('loom-view · 2')
 
       // ...and a Before row still opens its detail (LV6).
       fireEvent.click(
@@ -2740,7 +2743,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
           text: body.textContent,
           folded: [...body.querySelectorAll('[data-wave-group]')].map((g) => [
             g.getAttribute('data-wave-group'),
-            g.hasAttribute('open'),
+            g.hasAttribute('data-open'),
           ]),
         }
       }

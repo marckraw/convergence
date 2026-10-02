@@ -1,3 +1,4 @@
+import { calendarDaysBefore, formatTimestamp } from '@convergence/ui'
 import type { SessionStatus } from '@/entities/session'
 import type { CrewHail } from '@/entities/crew-hail'
 import type { RelayHop } from '@/entities/session-relay'
@@ -140,7 +141,7 @@ export function formatRunStatusLine(run: RelayRun): string {
 /** One row in the run list. */
 export interface HistoryRunRow {
   flowRunId: string
-  /** "14:32", or "Yesterday · 17:46" for anything older than today. */
+  /** "14:32", or "Sep 5, 17:46" for anything older than today. */
   timeLabel: string
   lastActivityLabel: string
   debt: { name: string; since: string; live: SessionStatus | null } | null
@@ -153,38 +154,25 @@ export interface HistoryRunRow {
   needsYou: boolean
 }
 
-function pad(value: number): string {
-  return String(value).padStart(2, '0')
-}
-
-/** "14:32" for today, "Yesterday · 17:46", or "6 Sep · 17:46". */
+/**
+ * "14:32" for today, "Sep 6, 17:46" for any other day: Timestamp's clock and
+ * datetime, on the 24-hour clock Mission Control and Loom read in (MC-13).
+ */
 export function formatRunTime(startedAt: string, now: Date): string {
   const at = new Date(startedAt)
   if (Number.isNaN(at.getTime())) return 'unknown time'
-  const clock = `${pad(at.getHours())}:${pad(at.getMinutes())}`
-
-  const sameDay =
-    at.getFullYear() === now.getFullYear() &&
-    at.getMonth() === now.getMonth() &&
-    at.getDate() === now.getDate()
-  if (sameDay) return clock
-
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-  const wasYesterday =
-    at.getFullYear() === yesterday.getFullYear() &&
-    at.getMonth() === yesterday.getMonth() &&
-    at.getDate() === yesterday.getDate()
-  if (wasYesterday) return `Yesterday · ${clock}`
-
-  return `${at.getDate()} ${at.toLocaleString('en-GB', { month: 'short' })} · ${clock}`
+  const today = calendarDaysBefore(at, now) === 0
+  return formatTimestamp(at, today ? 'clock' : 'datetime', {
+    now,
+    hour12: false,
+  })
 }
 
-/** "14:32:10" — an event row is scanned against its neighbours. */
+/** "14:32:10" — an event row is scanned against its neighbours, to the second. */
 export function formatEventTime(at: string): string {
   const time = new Date(at)
   if (Number.isNaN(time.getTime())) return '--:--:--'
-  return `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
+  return formatTimestamp(time, 'clock', { seconds: true, hour12: false })
 }
 
 /**
