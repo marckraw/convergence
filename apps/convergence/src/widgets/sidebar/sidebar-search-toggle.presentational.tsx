@@ -5,6 +5,8 @@ import { IconButton } from '@convergence/ui'
 interface SidebarSearchToggleProps {
   open: boolean
   onToggle: () => void
+  /** Its key, already formatted ("⌘F"), shown in the tooltip (NAV-23). */
+  shortcut?: string
 }
 
 const SEARCH_CONVERSATIONS = 'Search conversations'
@@ -12,9 +14,11 @@ const SEARCH_CONVERSATIONS = 'Search conversations'
 export const SidebarSearchToggle: FC<SidebarSearchToggleProps> = ({
   open,
   onToggle,
+  shortcut,
 }) => (
   <IconButton
     label={SEARCH_CONVERSATIONS}
+    shortcut={shortcut}
     type="button"
     variant={open ? 'tonal' : 'ghost'}
     aria-expanded={open}

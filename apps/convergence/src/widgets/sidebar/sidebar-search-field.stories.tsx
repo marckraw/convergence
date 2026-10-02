@@ -81,9 +81,15 @@ export const Long: Story = {
       name: 'Search conversations',
     })
     const clear = canvas.getByRole('button', { name: 'Clear search' })
+    // The field's box is SearchField's frame: the words end where the clear
+    // button starts, and the button sits inside the frame.
+    const frame = field.closest('[data-slot="search-field"]') as HTMLElement
     await expect(field.scrollWidth).toBeGreaterThan(field.clientWidth)
+    await expect(field.getBoundingClientRect().right).toBeLessThanOrEqual(
+      clear.getBoundingClientRect().left,
+    )
     await expect(clear.getBoundingClientRect().right).toBeLessThanOrEqual(
-      field.getBoundingClientRect().right,
+      frame.getBoundingClientRect().right,
     )
   },
 }

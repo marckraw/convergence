@@ -1,10 +1,8 @@
 import { SessionStateBadge } from '@/entities/session'
-import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import {
   noConversationMatchesLine,
   normalizeNameQuery,
 } from '@/shared/lib/name-search.pure'
-import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { memo, useEffect, useState } from 'react'
 import type { Workspace } from '@/entities/workspace'
 import type { WorkspacePullRequest } from '@/entities/pull-request'
@@ -16,8 +14,10 @@ import {
   type CardContext,
 } from '@/features/needs-you'
 import {
+  Badge,
   Button,
   cn,
+  EmptyState,
   Menu,
   MenuContent,
   MenuItem,
@@ -25,14 +25,13 @@ import {
   MenuTrigger,
   IconButton,
   Input,
+  SectionHeader,
+  Spinner,
   Tooltip,
 } from '@convergence/ui'
 import {
   Archive,
-  ChevronRight,
-  Cloud,
   GitBranch,
-  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -43,6 +42,8 @@ import {
   Undo2,
 } from 'lucide-react'
 import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
+import { TreeDisclosureRow } from './tree-disclosure-row.presentational'
+import { TreeSessionRow } from './tree-session-row.presentational'
 
 /** Shown on branch-row tooltips while search keeps every branch open. */
 export const BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH =
@@ -183,11 +184,11 @@ export const ProjectTree = memo(function ProjectTree({
               type="button"
               variant="ghost"
               size={card ? 'lg' : 'xs'}
-              className={
-                card
-                  ? 'shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
-                  : 'shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
-              }
+              // A row's ⋯ shows with its row (ListRow's actions); a card's always.
+              className={cn(
+                'shrink-0 text-muted-foreground hover:text-foreground',
+                card && 'rounded-lg',
+              )}
               onClick={(event) => event.stopPropagation()}
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
@@ -211,7 +212,7 @@ export const ProjectTree = memo(function ProjectTree({
                 onClick={() => onRegenerateSessionName(session.id)}
               >
                 {isRegeneratingName ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Spinner size="sm" />
                 ) : (
                   <Sparkles className="h-3.5 w-3.5" />
                 )}
@@ -262,7 +263,7 @@ export const ProjectTree = memo(function ProjectTree({
               onClick={(event) => event.stopPropagation()}
               tooltipSide="left"
               size="xs"
-              className="shrink-0 opacity-0 transition-opacity group-hover/workspace:opacity-100 focus-visible:opacity-100"
+              className="shrink-0"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </IconButton>
@@ -312,6 +313,10 @@ export const ProjectTree = memo(function ProjectTree({
     const isRenaming = renamingSessionId === session.id
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
     const pulsing = pulsingSessionIds?.[session.id] === true
+    const startRename = () => {
+      setRenamingSessionId(session.id)
+      setRenameDraft(session.name)
+    }
 
     if (session.providerId !== 'shell' && !isRenaming) {
       return (
@@ -324,26 +329,23 @@ export const ProjectTree = memo(function ProjectTree({
             regeneratingName={isRegeneratingName}
             selectionLabel={session.name}
             onSelect={onSelectSession}
-            onRename={() => {
-              setRenamingSessionId(session.id)
-              setRenameDraft(session.name)
-            }}
+            onRename={startRename}
             actions={renderSessionActions(session, true)}
           />
         </div>
       )
     }
 
-    return (
-      <div
-        key={session.id}
-        data-pulse={pulsing ? 'true' : undefined}
-        className={cn(
-          'group/session flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
-          activeSessionId === session.id && 'bg-accent',
-        )}
-      >
-        {isRenaming ? (
+    const leading =
+      session.providerId === 'shell' ? (
+        <TerminalSquare className="size-3" aria-label="Terminal session" />
+      ) : (
+        <SessionStateBadge session={session} />
+      )
+
+    if (isRenaming) {
+      return (
+        <div key={session.id} className="flex min-w-0 items-center gap-1 pr-1">
           <form
             className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1"
             onSubmit={(event) => {
@@ -351,14 +353,9 @@ export const ProjectTree = memo(function ProjectTree({
               submitRename()
             }}
           >
-            {session.providerId === 'shell' ? (
-              <TerminalSquare
-                className="h-3 w-3 shrink-0 text-muted-foreground"
-                aria-label="Terminal session"
-              />
-            ) : (
-              <SessionStateBadge session={session} />
-            )}
+            <span className="flex shrink-0 text-muted-foreground">
+              {leading}
+            </span>
             <Input
               size="xs"
               value={renameDraft}
@@ -375,81 +372,75 @@ export const ProjectTree = memo(function ProjectTree({
               aria-label={`Rename ${session.name}`}
             />
           </form>
-        ) : (
-          <Tooltip
-            label={
-              isRegeneratingName
-                ? `${session.name} (regenerating name…)`
-                : session.name
-            }
-            side="right"
-          >
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onSelectSession(session.id)}
-              onDoubleClick={() => {
-                setRenamingSessionId(session.id)
-                setRenameDraft(session.name)
-              }}
-              size="lg"
-              className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
-            >
-              {session.providerId === 'shell' ? (
-                <TerminalSquare
-                  className="h-3 w-3 shrink-0 text-muted-foreground"
-                  aria-label="Terminal session"
-                />
-              ) : (
-                <SessionStateBadge session={session} />
-              )}
-              <span className="min-w-0 text-left">
-                <span className="block truncate">{session.name}</span>
-                {parallelWorkStatus(session) && (
-                  <span className="block truncate text-[10px] text-muted-foreground">
-                    {parallelWorkStatus(session)}
-                  </span>
-                )}
-              </span>
-              {isRemoteExecutionHost(session.executionHost) && (
-                <Cloud
-                  className="h-3 w-3 shrink-0 text-sky-500/80"
-                  aria-label="Runs on remote execution host"
-                />
-              )}
-              {isRegeneratingName && (
-                <Loader2
-                  className="ml-auto h-3 w-3 shrink-0 animate-spin text-muted-foreground"
-                  aria-label="Regenerating name"
-                />
-              )}
-            </Button>
-          </Tooltip>
-        )}
-        {renderSessionActions(session)}
-      </div>
+          {renderSessionActions(session)}
+        </div>
+      )
+    }
+
+    return (
+      <TreeSessionRow
+        key={session.id}
+        session={session}
+        selected={activeSessionId === session.id}
+        pulsing={pulsing}
+        regeneratingName={isRegeneratingName}
+        onSelect={() => onSelectSession(session.id)}
+        onRename={startRename}
+        actions={renderSessionActions(session)}
+      />
+    )
+  }
+
+  const searchLock = searching ? BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH : undefined
+
+  const renderWorkspaceRow = (
+    ws: Workspace,
+    wsSessions: readonly SessionSummary[],
+    isExpanded: boolean,
+  ) => {
+    const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
+    const isMerged = pullRequest?.state === 'merged'
+    return (
+      <TreeDisclosureRow
+        title={ws.branchName}
+        icon={<GitBranch aria-hidden className="size-3 shrink-0" />}
+        expanded={isExpanded}
+        locked={searching}
+        tooltipDetail={searchLock}
+        marks={
+          isMerged || ws.worktreeRemovedAt ? (
+            <>
+              {isMerged ? <Badge hue="merged">Merged</Badge> : null}
+              {ws.worktreeRemovedAt ? <Badge>Worktree removed</Badge> : null}
+            </>
+          ) : undefined
+        }
+        count={wsSessions.length > 0 ? wsSessions.length : undefined}
+        actions={renderWorkspaceActions(ws)}
+        onToggle={() => toggleWorkspace(ws.id)}
+      />
     )
   }
 
   return (
     <div className="px-3">
       {searching && sessions.length === 0 ? (
-        <p
-          role="status"
-          className="mb-3 rounded-lg border border-dashed border-border p-3 text-[11px] text-muted-foreground"
-        >
-          {noConversationMatchesLine(nameSearchQuery.trim())}
-        </p>
+        <div role="status" className="mb-3">
+          <EmptyState
+            size="compact"
+            title={noConversationMatchesLine(nameSearchQuery.trim())}
+          />
+        </div>
       ) : null}
 
       {/* Root sessions (on main branch) */}
       {!searching || rootSessions.length > 0 ? (
         <div className="mb-1 ml-2 border-l border-border pl-2">
           <Tooltip label={baseBranchName || 'main'} side="right">
-            <p className="mb-0.5 truncate text-xs text-muted-foreground">
-              {(baseBranchName || 'main') +
-                (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
-            </p>
+            <SectionHeader
+              label={baseBranchName || 'main'}
+              count={rootSessions.length > 0 ? rootSessions.length : undefined}
+            />
           </Tooltip>
           {rootSessions.map(renderSessionRow)}
           {!searching ? (
@@ -465,56 +456,10 @@ export const ProjectTree = memo(function ProjectTree({
         const wsSessions = getActiveWorkspaceSessions(ws.id)
         if (searching && wsSessions.length === 0) return null
         const isExpanded = searching || effectiveExpanded.has(ws.id)
-        const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
-        const isMerged = pullRequest?.state === 'merged'
 
         return (
           <div key={ws.id} className="ml-2 border-l border-border pl-2">
-            <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-              <Tooltip
-                side="right"
-                label={ws.branchName}
-                detail={
-                  searching ? BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH : undefined
-                }
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={searching}
-                  onClick={() => {
-                    if (!searching) toggleWorkspace(ws.id)
-                  }}
-                  size="lg"
-                  className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left font-normal hover:text-foreground"
-                >
-                  <ChevronRight
-                    className={cn(
-                      'h-3 w-3 shrink-0 transition-transform',
-                      isExpanded && 'rotate-90',
-                    )}
-                  />
-                  <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{ws.branchName}</span>
-                  {isMerged ? (
-                    <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
-                      Merged
-                    </span>
-                  ) : null}
-                  {ws.worktreeRemovedAt ? (
-                    <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      Worktree removed
-                    </span>
-                  ) : null}
-                  {wsSessions.length > 0 && (
-                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                      {wsSessions.length}
-                    </span>
-                  )}
-                </Button>
-              </Tooltip>
-              {renderWorkspaceActions(ws)}
-            </div>
+            {renderWorkspaceRow(ws, wsSessions, isExpanded)}
 
             {isExpanded && (
               <div className="ml-4 space-y-0.5">
@@ -538,45 +483,24 @@ export const ProjectTree = memo(function ProjectTree({
         ) ||
           archivedRootSessions.length > 0)) ? (
         <div className="mt-3 ml-2 border-l border-border pl-2">
-          <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-            <Tooltip
-              side="right"
-              label="Archived workspaces and sessions"
-              detail={
-                searching ? BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH : undefined
-              }
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label={`${archivedExpanded ? 'Collapse' : 'Expand'} archived workspaces and sessions`}
-                disabled={searching}
-                onClick={() => {
-                  if (!searching) setShowArchived((current) => !current)
-                }}
-                size="lg"
-                className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left font-normal hover:text-foreground"
-              >
-                <ChevronRight
-                  className={cn(
-                    'h-3 w-3 shrink-0 transition-transform',
-                    archivedExpanded && 'rotate-90',
-                  )}
-                />
-                <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span className="truncate">Archived</span>
-                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                  {searching
-                    ? archivedWorkspaces.reduce(
-                        (count, ws) =>
-                          count + getWorkspaceSessions(ws.id).length,
-                        0,
-                      ) + archivedRootSessions.length
-                    : archivedWorkspaces.length + archivedRootSessions.length}
-                </span>
-              </Button>
-            </Tooltip>
-          </div>
+          <TreeDisclosureRow
+            title="Archived"
+            icon={<Archive aria-hidden className="size-3 shrink-0" />}
+            expanded={archivedExpanded}
+            locked={searching}
+            tooltip="Archived workspaces and sessions"
+            tooltipDetail={searchLock}
+            ariaLabel={`${archivedExpanded ? 'Collapse' : 'Expand'} archived workspaces and sessions`}
+            count={
+              searching
+                ? archivedWorkspaces.reduce(
+                    (count, ws) => count + getWorkspaceSessions(ws.id).length,
+                    0,
+                  ) + archivedRootSessions.length
+                : archivedWorkspaces.length + archivedRootSessions.length
+            }
+            onToggle={() => setShowArchived((current) => !current)}
+          />
 
           {archivedExpanded && (
             <div className="ml-4 space-y-0.5">
@@ -584,58 +508,10 @@ export const ProjectTree = memo(function ProjectTree({
                 const wsSessions = getWorkspaceSessions(ws.id)
                 if (searching && wsSessions.length === 0) return null
                 const isExpanded = searching || effectiveExpanded.has(ws.id)
-                const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
-                const isMerged = pullRequest?.state === 'merged'
 
                 return (
                   <div key={ws.id}>
-                    <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-                      <Tooltip
-                        side="right"
-                        label={ws.branchName}
-                        detail={
-                          searching
-                            ? BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH
-                            : undefined
-                        }
-                      >
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          disabled={searching}
-                          onClick={() => {
-                            if (!searching) toggleWorkspace(ws.id)
-                          }}
-                          size="lg"
-                          className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left font-normal hover:text-foreground"
-                        >
-                          <ChevronRight
-                            className={cn(
-                              'h-3 w-3 shrink-0 transition-transform',
-                              isExpanded && 'rotate-90',
-                            )}
-                          />
-                          <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{ws.branchName}</span>
-                          {isMerged ? (
-                            <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
-                              Merged
-                            </span>
-                          ) : null}
-                          {ws.worktreeRemovedAt ? (
-                            <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              Worktree removed
-                            </span>
-                          ) : null}
-                          {wsSessions.length > 0 && (
-                            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                              {wsSessions.length}
-                            </span>
-                          )}
-                        </Button>
-                      </Tooltip>
-                      {renderWorkspaceActions(ws)}
-                    </div>
+                    {renderWorkspaceRow(ws, wsSessions, isExpanded)}
 
                     {isExpanded && (
                       <div className="ml-4 space-y-0.5">

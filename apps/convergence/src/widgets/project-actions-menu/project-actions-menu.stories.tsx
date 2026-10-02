@@ -84,17 +84,6 @@ const liveOutput: ProjectScriptRunOutput[] = [
   },
 ]
 
-/*
- * Known gaps, each switched off only on the stories that draw it.
- */
-// a11y-known: the running status (emerald-300) and the error banner
-// (destructive on its own tint) are below 4.5:1 on the light theme — fixed by
-// the sweep (DS4)
-const lightStatusContrast = { id: 'color-contrast', enabled: false }
-const knownGaps = (...rules: Array<{ id: string; enabled: boolean }>) => ({
-  a11y: { config: { rules } },
-})
-
 type MenuProps = ComponentProps<typeof ProjectActionsMenuPresentational>
 
 /**
@@ -134,7 +123,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="flex h-[40rem] justify-end">
+      <div className="flex h-160 justify-end">
         <Story />
       </div>
     ),
@@ -150,7 +139,6 @@ type Story = StoryObj<typeof meta>
  * one, edit or delete each, add another, and make a lane.
  */
 export const Default: Story = {
-  parameters: knownGaps(lightStatusContrast),
   play: async ({ args, userEvent }) => {
     const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await waitFor(() => expect(menu).toBeVisible())
@@ -194,7 +182,6 @@ export const Dark: Story = {
 
 /** A run's output opens under it: where it ran, when, and what it said. */
 export const Output: Story = {
-  parameters: knownGaps(lightStatusContrast),
   args: { expandedRunIds: new Set(['run-build', 'run-tests']) },
   play: async ({ args, userEvent }) => {
     const menu = await screen.findByRole('dialog', { name: 'Project actions' })
@@ -218,7 +205,6 @@ export const Output: Story = {
 
 /** A lane offers a sibling lane and a way to its folder. */
 export const Lane: Story = {
-  parameters: knownGaps(lightStatusContrast),
   args: { isLane: true },
   play: async ({ args, userEvent }) => {
     const menu = await screen.findByRole('dialog', { name: 'Project actions' })
@@ -231,20 +217,17 @@ export const Lane: Story = {
   },
 }
 
-/** An action that could not start says why at the top. */
+/** An action that could not start says why at the top, and is announced. */
 export const Failed: Story = {
-  parameters: knownGaps(lightStatusContrast),
   args: {
     error: 'Could not start "Build": npm was not found on PATH.',
   },
   play: async () => {
     const menu = await screen.findByRole('dialog', { name: 'Project actions' })
     await waitFor(() =>
-      expect(
-        within(menu).getByText(
-          'Could not start "Build": npm was not found on PATH.',
-        ),
-      ).toBeVisible(),
+      expect(within(menu).getByRole('alert')).toHaveTextContent(
+        'Could not start "Build": npm was not found on PATH.',
+      ),
     )
   },
 }

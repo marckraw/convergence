@@ -126,23 +126,6 @@ const meter: AgentMeterSnapshot = {
   ],
 }
 
-/**
- * The stories that draw a project chip or the last-finished badge carry this
- * one exception, and only for contrast.
- */
-const knownContrastGap = {
-  a11y: {
-    config: {
-      rules: [
-        // a11y-known: a project chip's counts (muted-foreground/80) and the
-        // last-finished badge's project name (muted-foreground/70) are below
-        // 4.5:1 in both themes — fixed by the sweep (DS4)
-        { id: 'color-contrast', enabled: false },
-      ],
-    },
-  },
-}
-
 const meta = {
   title: 'Widgets/Global status bar/Global status bar',
   component: GlobalStatusBar,
@@ -190,7 +173,6 @@ type Story = StoryObj<typeof meta>
  * busy project, the agents' footprint, and the last session to finish.
  */
 export const Default: Story = {
-  parameters: knownContrastGap,
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('need you')).toBeVisible()
     const chip = canvas.getByRole('button', {
@@ -221,7 +203,6 @@ export const Dark: Story = {
 /** A project chip's tooltip lists what runs and what asks, by provider. */
 export const ProjectTooltip: Story = {
   name: 'Project tooltip',
-  parameters: knownContrastGap,
   play: async ({ canvas, userEvent }) => {
     const chip = canvas.getByRole('button', {
       name: /^Switch to project convergence, 1 running/,
@@ -239,14 +220,18 @@ export const ProjectTooltip: Story = {
   },
 }
 
-/** The counts' tooltip sums up every busy project. */
+/**
+ * The counts' tooltip sums up every busy project. The counts are a stop for
+ * the keyboard too, so Tab opens the same summary the pointer does (NAV-26).
+ */
 export const AggregateTooltip: Story = {
   name: 'Aggregate tooltip',
-  parameters: knownContrastGap,
   play: async ({ canvas, userEvent }) => {
-    const counts = canvas.getByText('running').closest('div')
-    await expect(counts).not.toBeNull()
-    await userEvent.hover(counts as HTMLElement)
+    const counts = canvas.getByRole('group', {
+      name: 'Agents: 3 running, 1 need you',
+    })
+    await userEvent.tab()
+    await expect(counts).toHaveFocus()
     const tooltip = await screen.findByRole('tooltip')
     await expect(
       within(tooltip).getByText('1 running · 1 approval · Anthropic'),
@@ -260,7 +245,6 @@ export const AggregateTooltip: Story = {
 /** The meter's tooltip: each metered agent, busiest first, and remote ones. */
 export const MeterTooltip: Story = {
   name: 'Meter tooltip',
-  parameters: knownContrastGap,
   play: async ({ canvas }) => {
     const total = canvas.getByText(/^Agents 34% · 1\.8 GB/)
     total.focus()
@@ -276,7 +260,6 @@ export const MeterTooltip: Story = {
 
 /** The last session failed: the same badge, in the failure's colour. */
 export const Failed: Story = {
-  parameters: knownContrastGap,
   args: {
     recency: {
       session: {
@@ -324,7 +307,6 @@ export const Empty: Story = {
 
 /** Many busy projects: the chips stay on the one line the bar has. */
 export const Long: Story = {
-  parameters: knownContrastGap,
   args: {
     runningCount: 12,
     byProject: Array.from({ length: 12 }, (_, index) => ({

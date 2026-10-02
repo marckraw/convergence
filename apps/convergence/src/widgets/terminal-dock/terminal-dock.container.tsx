@@ -15,11 +15,13 @@ import type {
 } from '@/entities/terminal'
 import {
   CloseConfirmDialog,
+  TerminalPaneContainer,
   xtermRegistry,
   type CloseConfirmRequest,
 } from '@/features/terminal-pane'
 import { dockStyles } from './terminal-dock.styles'
 import { SplitNodeView } from './split-node.presentational'
+import type { TerminalPaneSlot } from './leaf-pane.presentational'
 import { DockResizeHandle } from './dock-resize.container'
 
 const DEFAULT_COLS = 80
@@ -322,6 +324,18 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
     })
   }, [mode, sessionId, cwd, tree, hydratePaneTree])
 
+  const renderTerminal = useCallback(
+    ({ tabId, isFocused }: TerminalPaneSlot) =>
+      activeSessionId ? (
+        <TerminalPaneContainer
+          sessionId={activeSessionId}
+          tabId={tabId}
+          isFocused={isFocused}
+        />
+      ) : null,
+    [activeSessionId],
+  )
+
   if (!activeSessionId || !activeSession) return null
 
   if (mode === 'main') {
@@ -348,7 +362,7 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
           <div className={dockStyles.mainFrame}>
             <SplitNodeView
               tree={tree}
-              sessionId={activeSessionId}
+              renderTerminal={renderTerminal}
               focusedLeafId={focusedLeafId}
               onSelectTab={handleSelectTab}
               onNewTab={handleNewTab}
@@ -391,7 +405,7 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
     <div className={dockStyles.inner}>
       <SplitNodeView
         tree={tree}
-        sessionId={activeSessionId}
+        renderTerminal={renderTerminal}
         focusedLeafId={focusedLeafId}
         onSelectTab={handleSelectTab}
         onNewTab={handleNewTab}

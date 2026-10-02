@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { orderProjectsWithLanes, type Project } from '@/entities/project'
-import { Combobox } from '@convergence/ui'
+import { Combobox, SectionHeader } from '@convergence/ui'
 import { FolderGit2, Plus } from 'lucide-react'
 
 interface ProjectSwitcherProps {
@@ -38,19 +38,17 @@ export const ProjectSwitcher: FC<ProjectSwitcherProps> = ({
 
   return (
     <div className="px-3 pb-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Project
-      </p>
+      <SectionHeader label="Project" className="mb-2" />
       <Combobox
         selectedId={activeProjectId}
         value={activeProject?.name ?? 'Select project'}
         items={items}
         onChange={onSelectProject}
-        searchPlaceholder="Search projects..."
+        searchPlaceholder="Search projects…"
         emptyMessage="No matching projects."
         variant="secondary"
         className="w-full"
-        contentClassName="min-w-72 max-w-[min(28rem,calc(100vw-2rem))]"
+        contentClassName="min-w-72"
         icon={<FolderGit2 className="h-3.5 w-3.5 shrink-0" />}
         action={{
           label: 'Open a project',

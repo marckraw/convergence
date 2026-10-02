@@ -9,7 +9,6 @@ const meta = {
   args: {
     activeSurface: 'code',
     hasActiveProject: true,
-    iconOnly: false,
     onOpenDialog: fn(),
   },
   decorators: [
@@ -87,13 +86,15 @@ export const Disabled: Story = {
   },
 }
 
-/** The collapsed sidebar's square button, named the same way. */
-export const IconOnly: Story = {
-  name: 'Icon only',
-  args: { iconOnly: true, activeSurface: 'chat' },
+/**
+ * The collapsed rail's button: the same square ⋯, its tooltip to the right
+ * like every rail control's (NAV-17), and the keyboard opens it.
+ */
+export const Rail: Story = {
+  args: { tooltipSide: 'right', activeSurface: 'chat' },
   play: async ({ canvas, userEvent }) => {
     const trigger = canvas.getByRole('button', { name: 'Open sidebar tools' })
-    await expect(trigger).not.toHaveTextContent('Tools')
+    await expect(trigger).toHaveAttribute('data-tooltip-side', 'right')
     await userEvent.keyboard('{Tab}')
     await expect(trigger).toHaveFocus()
     await userEvent.keyboard('{Enter}')

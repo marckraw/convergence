@@ -18,7 +18,7 @@ import type {
 } from '@/entities/notifications'
 
 vi.mock('sonner', () => {
-  const fn = Object.assign(vi.fn(), { error: vi.fn() })
+  const fn = Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn() })
   return { toast: fn }
 })
 
@@ -125,7 +125,7 @@ describe('NotificationsToastHostContainer', () => {
     expect(useNotificationsStore.getState().unreadCount).toBe(1)
   })
 
-  it('uses error toast for critical kinds', () => {
+  it('uses an error toast for a failure', () => {
     const { hooks } = installNotificationApi()
     render(<NotificationsToastHostContainer />)
 
@@ -140,6 +140,26 @@ describe('NotificationsToastHostContainer', () => {
       expect.objectContaining({ description: 'My project' }),
     )
   })
+
+  it.each(['agent.needs_approval', 'agent.needs_input'] as const)(
+    'uses a warning toast, never an error, when %s waits on you (R1)',
+    (kind) => {
+      const { hooks } = installNotificationApi()
+      render(<NotificationsToastHostContainer />)
+
+      hooks.show?.({
+        channel: 'toast',
+        event: makeEvent(kind),
+        formatted: { title: 'My session needs you', body: 'My project' },
+      })
+
+      expect(toast.warning).toHaveBeenCalledWith(
+        'My session needs you',
+        expect.objectContaining({ description: 'My project' }),
+      )
+      expect(toast.error).not.toHaveBeenCalled()
+    },
+  )
 
   it('inline-pulse channel triggers store pulseSession instead of a toast', () => {
     const { hooks } = installNotificationApi()
