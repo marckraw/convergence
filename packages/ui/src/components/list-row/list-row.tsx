@@ -1,6 +1,7 @@
 import { useRender } from '@base-ui/react/use-render'
 import { isValidElement, type ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
+import { textStack } from '#lib/text-stack.styles'
 import { focusRingInset } from '#lib/focus-ring.styles'
 import { MetaLine } from '../meta-line/meta-line'
 
@@ -127,7 +128,7 @@ function ListRow({
               {leading}
             </span>
           )}
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className={textStack}>
             <span
               data-slot="list-row-title"
               className="flex min-w-0 items-center gap-1.5"

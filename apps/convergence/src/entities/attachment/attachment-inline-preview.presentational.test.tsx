@@ -26,11 +26,13 @@ describe('AttachmentInlinePreview', () => {
 
     render(<AttachmentInlinePreview attachment={attachment} onOpen={onOpen} />)
 
-    const image = screen.getByRole('img', { name: 'screen.png' })
+    // The picture is decoration: the button is named for the file, once.
+    const preview = screen.getByRole('button', { name: 'Preview screen.png' })
+    const image = preview.querySelector('img')
+    expect(image).toHaveAttribute('alt', '')
     expect(image).toHaveAttribute('src', 'file:///tmp/full-screen.png')
-    expect(image).toHaveClass('object-contain')
 
-    fireEvent.click(screen.getByRole('button', { name: /Preview screen\.png/ }))
+    fireEvent.click(preview)
     expect(onOpen).toHaveBeenCalledWith(attachment)
   })
 
@@ -42,10 +44,11 @@ describe('AttachmentInlinePreview', () => {
       />,
     )
 
-    expect(screen.getByRole('img', { name: 'screen.png' })).toHaveAttribute(
-      'src',
-      'file:///tmp/thumb-screen.png',
-    )
+    expect(
+      screen
+        .getByRole('button', { name: 'Preview screen.png' })
+        .querySelector('img'),
+    ).toHaveAttribute('src', 'file:///tmp/thumb-screen.png')
   })
 
   it('does not render for non-image attachments', () => {

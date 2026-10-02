@@ -118,6 +118,30 @@ export const Failed: Story = {
   },
 }
 
+/** A picture taller than the window: whole and uncropped, within the window. */
+export const Tall: Story = {
+  args: {
+    objectUrl: `data:image/svg+xml;utf8,${encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="2400"><rect width="400" height="2400" fill="#334155"/></svg>',
+    )}`,
+  },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', {
+      name: 'sidebar-overflow.svg',
+    })
+    const image = (await within(dialog).findByRole('img', {
+      name: 'sidebar-overflow.svg',
+    })) as HTMLImageElement
+    await waitFor(() => expect(image.naturalHeight).toBe(2400))
+    await expect(getComputedStyle(image).objectFit).toBe('contain')
+    await waitFor(() =>
+      expect(image.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        window.innerHeight,
+      ),
+    )
+  },
+}
+
 /** No attachment, no dialog. */
 export const Empty: Story = {
   args: { attachment: null, objectUrl: null },

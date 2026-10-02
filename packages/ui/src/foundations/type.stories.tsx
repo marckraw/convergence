@@ -38,15 +38,12 @@ const SIZE_CLASS: Record<(typeof STEPS)[number][0], string> = {
 
 function TypeScale() {
   return (
-    <div className="grid w-[40rem] gap-8 bg-canvas p-6 text-ink">
+    <div className="grid w-160 gap-8 bg-canvas p-6 text-ink">
       <section aria-label="Sizes">
         <ul className="grid gap-3">
           {STEPS.map(([step, px, use]) => (
-            <li
-              key={step}
-              className="grid grid-cols-[10rem_1fr] items-baseline gap-4"
-            >
-              <span className="font-mono text-xs text-ink-muted">
+            <li key={step} className="flex items-baseline gap-4">
+              <span className="w-40 shrink-0 font-mono text-xs text-ink-muted">
                 text-{step} · {px} px
               </span>
               <span data-step={step} className={SIZE_CLASS[step]}>
@@ -73,6 +70,13 @@ function TypeScale() {
           Eyebrow: text-2xs, medium, uppercase, tracking-eyebrow
         </p>
         <p className="font-mono text-xs">font-mono: ~/Projects/convergence</p>
+        <p className="text-sm">
+          Inline code, text-code: run{' '}
+          <code data-code className="font-mono text-code">
+            npm run storybook
+          </code>{' '}
+          (0.92 of the words around it)
+        </p>
       </section>
       <section aria-label="Inherited line height" className="text-xs">
         <p>
@@ -116,6 +120,11 @@ export const Default: Story = {
     await expect(
       Number.parseFloat(getComputedStyle(eyebrow).letterSpacing),
     ).toBeCloseTo(11 * 0.025, 3)
+    // Inline code is relative: 0.92 of the 14 px sentence it sits in.
+    const code = canvasElement.querySelector('[data-code]')!
+    await expect(
+      Number.parseFloat(getComputedStyle(code).fontSize),
+    ).toBeCloseTo(14 * 0.92, 1)
   },
 }
 

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { KeyRound } from 'lucide-react'
-import { Combobox } from '@convergence/ui'
+import { Combobox, Tooltip } from '@convergence/ui'
 import {
   AMBIENT_DEFAULT_ACCOUNT_ID,
   buildProviderAccountPickerItems,
@@ -58,35 +58,40 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
   // picker is gone on a remote").
   if (accounts.length === 0 && !onManageAccounts) return null
 
+  // The help is our tooltip (R2), on the pointer and on the keyboard's focus.
   return (
-    <span title={help}>
-      <Combobox
-        selectedId={selectedAccountId ?? AMBIENT_DEFAULT_ACCOUNT_ID}
-        value={
-          ambientIsCurrent && selectedAccountId === null
-            ? 'Current CLI login'
-            : describeSelectedProviderAccount(selectedAccountId, accounts)
-        }
-        items={buildProviderAccountPickerItems(accounts, {
-          providerName,
-          ambientDisabledReason,
-          ambientIsCurrent,
-        })}
-        action={
-          onManageAccounts
-            ? { label: 'Manage accounts…', onSelect: onManageAccounts }
-            : undefined
-        }
-        onChange={(value) => onChange(providerAccountIdFromPickerValue(value))}
-        disabled={disabled}
-        icon={<KeyRound className="h-3.5 w-3.5" />}
-        searchPlaceholder="Search accounts..."
-        emptyMessage="No matching accounts."
-        variant="ghost"
-        className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-        open={open}
-        onOpenChange={onOpenChange}
-      />
-    </span>
+    <Tooltip label={help}>
+      <span>
+        <Combobox
+          selectedId={selectedAccountId ?? AMBIENT_DEFAULT_ACCOUNT_ID}
+          value={
+            ambientIsCurrent && selectedAccountId === null
+              ? 'Current CLI login'
+              : describeSelectedProviderAccount(selectedAccountId, accounts)
+          }
+          items={buildProviderAccountPickerItems(accounts, {
+            providerName,
+            ambientDisabledReason,
+            ambientIsCurrent,
+          })}
+          action={
+            onManageAccounts
+              ? { label: 'Manage accounts…', onSelect: onManageAccounts }
+              : undefined
+          }
+          onChange={(value) =>
+            onChange(providerAccountIdFromPickerValue(value))
+          }
+          disabled={disabled}
+          icon={<KeyRound className="h-3.5 w-3.5" />}
+          searchPlaceholder="Search accounts..."
+          emptyMessage="No matching accounts."
+          variant="ghost"
+          className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+          open={open}
+          onOpenChange={onOpenChange}
+        />
+      </span>
+    </Tooltip>
   )
 }

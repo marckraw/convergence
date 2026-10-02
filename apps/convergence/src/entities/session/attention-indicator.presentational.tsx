@@ -4,6 +4,7 @@ import {
 } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import { Loader2 } from 'lucide-react'
+import { Spinner, StatusPill } from '@convergence/ui'
 import type {
   ActivitySignal,
   AttentionState,
@@ -13,19 +14,19 @@ import {
   COMPACTING_CONTEXT_LABEL,
   isSessionCompacting,
 } from './session-compacting.pure'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
+import { SessionBadge } from './session-badge.presentational'
+import { ATTENTION_TONE, type LabelledAttention } from './session-tone.pure'
 
 /**
- * The attention values that have something to say to a human — every
- * `AttentionState` except `'none'`, which by definition has nothing.
+ * The words of each attention that has something to say to a human: every
+ * `AttentionState` except `'none'`, which by definition has nothing. Its tone
+ * is the session's map (`ATTENTION_TONE`, R1).
  *
- * Written as an exclusion so the maps below are exhaustive at the type level:
- * a new attention value is a missing key here, and a compile error, rather
- * than a value that reaches the fallback below and renders as nothing
- * (MAR-2590).
+ * Written over `LabelledAttention`, an exclusion, so the maps are exhaustive
+ * at the type level: a new attention value is a missing key here, and a
+ * compile error, rather than a value that reaches the fallback below and
+ * renders as nothing (MAR-2590).
  */
-type LabelledAttention = Exclude<AttentionState, 'none'>
-
 const labelMap = {
   'needs-approval': 'Needs Approval',
   'needs-input': 'Needs Input',
@@ -34,17 +35,8 @@ const labelMap = {
   'host-unreachable': 'Host Unreachable',
 } satisfies Record<LabelledAttention, string>
 
-const pillStyleMap = {
-  'needs-approval': 'bg-warning/10 text-warning-foreground',
-  'needs-input': 'bg-blue-500/10 text-blue-700 dark:text-blue-500',
-  finished: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-500',
-  failed: 'bg-red-500/10 text-red-700 dark:text-red-500',
-  // Amber says "we cannot see it", where red says "it broke" (MAR-3051).
-  'host-unreachable': 'bg-amber-500/10 text-amber-700 dark:text-amber-500',
-} satisfies Record<LabelledAttention, string>
-
 /**
- * Whether an attention value has an entry of its own in the maps above.
+ * Whether an attention value has an entry of its own in the maps.
  *
  * A plain `labelMap[attention]` resolves the prototype chain, so an attention
  * value of `'toString'` or `'constructor'` -- and the session record carries
@@ -54,8 +46,8 @@ const pillStyleMap = {
  * meant: is this one of ours?
  *
  * It gates both maps, and one guard is enough for both because `satisfies`
- * above pins them to the same key set: a key in one and not the other is a
- * compile error, not a runtime miss.
+ * pins them to the same key set: a key in one and not the other is a compile
+ * error, not a runtime miss.
  */
 function isLabelledAttention(
   attention: AttentionState,
@@ -99,18 +91,16 @@ export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
   // Nothing can be waiting on a human here: a compaction runs no turn.
   if (isSessionCompacting({ activity }))
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground [&_svg]:size-3">
-        <Loader2 className="animate-spin" />
+      <StatusPill leading={<Spinner size="xs" />}>
         {COMPACTING_CONTEXT_LABEL}
-      </span>
+      </StatusPill>
     )
   const parallelLabel = parallelWorkStatus({ status, attention, parallelWork })
   if (parallelLabel)
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground">
-        <Loader2 className="size-3 opacity-50" />
+      <StatusPill leading={<Loader2 className="size-3 opacity-50" />}>
         {parallelLabel}
-      </span>
+      </StatusPill>
     )
   // Blocked on a human outranks the spinner, and it has to: the turn IS still
   // running while an approval prompt is up. Every provider's `setAttention`
@@ -122,12 +112,7 @@ export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
 
   // The spinner is the session's status, and nothing else decides it.
   if (status === 'running' && !isBlockedOnHuman) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground [&_svg]:size-3">
-        <Loader2 className="animate-spin" />
-        Running
-      </span>
-    )
+    return <StatusPill leading={<Spinner size="xs" />}>Running</StatusPill>
   }
 
   // `'none'` is a real state, and silence is the honest rendering of it.
@@ -142,15 +127,12 @@ export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
   // read takes nothing away from what the status plainly says.
   if (!isLabelledAttention(attention)) return null
 
-  const label = labelMap[attention]
-  const pillStyle = pillStyleMap[attention]
-
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium [&_svg]:size-3 ${pillStyle}`}
+    <StatusPill
+      tone={ATTENTION_TONE[attention]}
+      leading={<SessionBadge attention={attention} />}
     >
-      <SessionBadge attention={attention} />
-      {label}
-    </span>
+      {labelMap[attention]}
+    </StatusPill>
   )
 }

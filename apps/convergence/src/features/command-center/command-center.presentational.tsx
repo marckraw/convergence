@@ -107,7 +107,7 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
         <DialogDescription className="sr-only">
           Jump to projects, workspaces, sessions, or dialogs.
         </DialogDescription>
-        <div className="border-b border-white/10 px-4 py-3">
+        <div className="border-b border-line-soft px-4 py-3">
           <SearchField
             role="combobox"
             aria-label="Command palette"
@@ -143,7 +143,7 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
             id={listId}
             aria-label="Results"
             active={active}
-            className="max-h-[60vh] overflow-y-auto px-2 py-2"
+            className="max-h-136 min-h-0 overflow-y-auto px-2 py-2"
           >
             {renderRows()}
           </Listbox>

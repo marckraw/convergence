@@ -15,12 +15,15 @@ import { Badge } from '../badge/badge'
 import { Button, type ButtonVariant } from '../button/button'
 import { EmptyState } from '../empty-state/empty-state'
 import { SearchField } from '../search-field/search-field'
+import { Tooltip } from '../tooltip/tooltip'
 import {
   comboboxFooter,
   comboboxGroupLabel,
   comboboxItem,
   comboboxList,
+  comboboxNameRow,
   comboboxPopup,
+  comboboxPositioner,
   comboboxSearch,
 } from './combobox.styles'
 import { filterComboboxItems, groupComboboxItems } from './combobox.pure'
@@ -37,7 +40,7 @@ type ComboboxItem = {
   /** A word on a warning tint after the label (an ALPHA provider); it is searched too. */
   badge?: {
     label: string
-    /** More about it, for a pointer that rests on it. */
+    /** More about it, in our tooltip for a pointer that rests on it (R2). */
     title?: string
   }
   /**
@@ -263,12 +266,14 @@ function Combobox(props: ComboboxProps) {
         ) : null}
         {item.icon}
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="flex min-w-0 items-center gap-2">
+          <span className={comboboxNameRow}>
             <span className="truncate font-medium">{item.label}</span>
             {item.badge ? (
-              <Badge tone="warning" shape="label" title={item.badge.title}>
-                {item.badge.label}
-              </Badge>
+              <Tooltip label={item.badge.title}>
+                <Badge tone="warning" shape="label">
+                  {item.badge.label}
+                </Badge>
+              </Tooltip>
             ) : null}
           </span>
           {item.description ? (
@@ -390,13 +395,15 @@ function Combobox(props: ComboboxProps) {
           />
         }
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className={comboboxNameRow}>
           {triggerIcon}
           <span className="truncate">{value}</span>
           {chosen?.badge && !props.multiple ? (
-            <Badge tone="warning" shape="label" title={chosen.badge.title}>
-              {chosen.badge.label}
-            </Badge>
+            <Tooltip label={chosen.badge.title}>
+              <Badge tone="warning" shape="label">
+                {chosen.badge.label}
+              </Badge>
+            </Tooltip>
           ) : null}
         </span>
         {chevron ? <ChevronDownIcon aria-hidden className={CHEVRON} /> : null}
@@ -406,7 +413,7 @@ function Combobox(props: ComboboxProps) {
           align="start"
           sideOffset={4}
           collisionPadding={16}
-          className="z-50 outline-none app-no-drag"
+          className={comboboxPositioner}
         >
           <ComboboxPrimitive.Popup
             // The popup is a dialog to assistive tech; it takes its trigger's

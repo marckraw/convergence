@@ -1,17 +1,16 @@
-import type { FormEvent } from 'react'
 import type { FeedbackPriority } from '@/entities/feedback'
-import { Loader2, MessageSquarePlus, Send } from 'lucide-react'
+import { MessageSquarePlus } from 'lucide-react'
 import {
-  Button,
   cn,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Field,
+  FieldLabel,
+  Fieldset,
+  FieldsetLegend,
+  FormDialog,
   IconButton,
   Input,
+  SegmentedControl,
+  SegmentedControlItem,
   Textarea,
 } from '@convergence/ui'
 import { FLOATING_CORNER_BUTTON_CLASS } from '@/shared/ui/floating-corner.pure'
@@ -41,6 +40,18 @@ const priorities: Array<{
   { value: 'high', label: 'High' },
 ]
 
+/**
+ * The floating corner button over the app's glass, drawn from tokens alone:
+ * the strong hairline, the raised surface, the floating shadow.
+ */
+const floatingButtonClass =
+  'z-40 rounded-full border border-hairline-strong bg-raised/90 text-ink shadow-floating backdrop-blur-xl hover:border-ink/35 hover:bg-highlight'
+
+/**
+ * Send feedback: the button in the window's corner and the form it opens,
+ * both under the one name (NAV-28). Nothing is kept until Send, so the form
+ * ends in Cancel and Send (R6).
+ */
 export function FeedbackButton({
   open,
   priority,
@@ -56,13 +67,12 @@ export function FeedbackButton({
   onContactChange,
   onSubmit,
 }: FeedbackButtonProps) {
-  const canSubmit =
-    title.trim().length >= 3 && description.trim().length >= 5 && !submitting
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (canSubmit) onSubmit()
-  }
+  const missing =
+    title.trim().length < 3
+      ? 'Add a title of three letters or more'
+      : description.trim().length < 5
+        ? 'Say a little more in the description'
+        : undefined
 
   return (
     <>
@@ -73,113 +83,86 @@ export function FeedbackButton({
         variant="primary"
         size="lg"
         onClick={() => onOpenChange(true)}
-        className={cn(
-          FLOATING_CORNER_BUTTON_CLASS,
-          'z-40 rounded-full border border-foreground/20 bg-background/90 text-foreground shadow-xl shadow-black/15 backdrop-blur-xl hover:border-foreground/35 hover:bg-accent dark:border-white/20 dark:bg-white/8 dark:text-zinc-100 dark:hover:border-white/35 dark:hover:bg-white/12',
-        )}
+        className={cn(FLOATING_CORNER_BUTTON_CLASS, floatingButtonClass)}
       >
         <MessageSquarePlus className="h-5 w-5 stroke-[2.25]" />
       </IconButton>
 
-      <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-        <DialogContent className="w-[min(520px,calc(100vw-2rem))]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-            <DialogHeader className="border-b border-border/60 px-5 py-4">
-              <DialogTitle>Request a feature</DialogTitle>
-              <DialogDescription>
-                Share what should change in Convergence.
-              </DialogDescription>
-            </DialogHeader>
+      <FormDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Send feedback"
+        description="Ask for a feature, or say what should change in Convergence."
+        size="md"
+        saves="on-save"
+        onSave={onSubmit}
+        saveLabel="Send"
+        pendingLabel="Sending…"
+        pending={submitting}
+        saveDisabledReason={missing}
+        error={error}
+      >
+        <div className="flex flex-col gap-4">
+          <Field className="gap-2">
+            <FieldLabel>Title</FieldLabel>
+            <Input
+              size="lg"
+              value={title}
+              onChange={(event) => onTitleChange(event.target.value)}
+              placeholder="Add export to Markdown"
+              required
+              minLength={3}
+              autoComplete="off"
+            />
+          </Field>
 
-            <div className="flex min-h-0 flex-col gap-4 px-5 py-4">
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Title
-                <Input
-                  size="lg"
-                  value={title}
-                  onChange={(event) => onTitleChange(event.target.value)}
-                  placeholder="Add export to Markdown"
-                  required
-                  minLength={3}
-                  autoComplete="off"
-                />
-              </label>
+          <Fieldset className="flex flex-col gap-2">
+            <FieldsetLegend>Priority</FieldsetLegend>
+            <SegmentedControl
+              aria-label="Priority"
+              value={priority}
+              onValueChange={(value) =>
+                onPriorityChange(value as FeedbackPriority)
+              }
+              className="flex w-full"
+            >
+              {priorities.map((item) => (
+                <SegmentedControlItem
+                  key={item.value}
+                  value={item.value}
+                  className="flex-1"
+                >
+                  {item.label}
+                </SegmentedControlItem>
+              ))}
+            </SegmentedControl>
+          </Fieldset>
 
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Priority
-                <div className="grid grid-cols-3 gap-2">
-                  {priorities.map((item) => {
-                    const selected = item.value === priority
-                    return (
-                      <Button
-                        key={item.value}
-                        type="button"
-                        variant={selected ? 'primary' : 'secondary'}
-                        aria-pressed={selected}
-                        onClick={() => onPriorityChange(item.value)}
-                        size="lg"
-                        className={cn(
-                          'min-w-0 px-2 text-xs py-0',
-                          !selected && 'bg-background/40',
-                        )}
-                      >
-                        <span className="truncate">{item.label}</span>
-                      </Button>
-                    )
-                  })}
-                </div>
-              </label>
+          <Field className="gap-2">
+            <FieldLabel>Description</FieldLabel>
+            <Textarea
+              value={description}
+              onChange={(event) => onDescriptionChange(event.target.value)}
+              placeholder="I want to export notes directly to Markdown files."
+              required
+              minLength={5}
+              rows={7}
+              className="max-h-72 min-h-36 resize-none"
+            />
+          </Field>
 
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Description
-                <Textarea
-                  value={description}
-                  onChange={(event) => onDescriptionChange(event.target.value)}
-                  placeholder="I want to export notes directly to Markdown files."
-                  required
-                  minLength={5}
-                  rows={7}
-                  className="max-h-[34vh] min-h-36 resize-none"
-                />
-              </label>
-
-              {error ? (
-                <p className="rounded-md border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {error}
-                </p>
-              ) : null}
-            </div>
-
-            <DialogFooter className="border-t border-border/60 px-5 py-4">
-              <Input
-                size="lg"
-                value={contact}
-                onChange={(event) => onContactChange(event.target.value)}
-                placeholder="Contact optional"
-                autoComplete="email"
-                className="min-w-0 sm:flex-1"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => onOpenChange(false)}
-                disabled={submitting}
-                size="lg"
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!canSubmit} size="lg">
-                {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                Send
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          <Field className="gap-2">
+            <FieldLabel>Contact (optional)</FieldLabel>
+            <Input
+              size="lg"
+              value={contact}
+              onChange={(event) => onContactChange(event.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+            />
+          </Field>
+        </div>
+      </FormDialog>
     </>
   )
 }

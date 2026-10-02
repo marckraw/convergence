@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import type { ComponentPropsWithoutRef, CSSProperties } from 'react'
+import type { ComponentPropsWithoutRef } from 'react'
 import type { ProjectScript } from '@/entities/project-script'
 import { ProjectScriptIcon } from '@/entities/project-script'
 import { Button, cn, Tooltip } from '@convergence/ui'
@@ -13,7 +13,7 @@ interface ProjectActionsTriggerProps extends ComponentPropsWithoutRef<'button'> 
 export const ProjectActionsTrigger = forwardRef<
   HTMLButtonElement,
   ProjectActionsTriggerProps
->(({ selectedScript, running, className, style, ...props }, ref) => (
+>(({ selectedScript, running, className, ...props }, ref) => (
   <Tooltip label="Project actions">
     <Button
       ref={ref}
@@ -22,15 +22,10 @@ export const ProjectActionsTrigger = forwardRef<
       size="sm"
       className={cn(
         'min-w-28 justify-between gap-2 border border-border/70 bg-muted/50',
-        running && 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+        // A running action is working: R1's info.
+        running && 'border-info-line bg-info-soft text-info-ink',
         className,
       )}
-      style={
-        {
-          WebkitAppRegion: 'no-drag',
-          ...style,
-        } as CSSProperties
-      }
       {...props}
     >
       <span className="flex min-w-0 items-center gap-1.5">

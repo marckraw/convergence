@@ -65,7 +65,7 @@ describe('AttachmentChip', () => {
     )
 
     const chip = screen.getByTestId('attachment-chip')
-    expect(chip.className).toMatch(/border-destructive/)
+    expect(chip).toHaveAttribute('data-tone', 'danger')
     // The app's tooltip says why, never a native title (MAR-3616, R2).
     const preview = screen.getByRole('button', { name: /Preview doc\.pdf/ })
     expect(preview).not.toHaveAttribute('title')

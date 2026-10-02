@@ -1,5 +1,5 @@
 import { cardStateTone, type FoldedSectionSummary } from '@/features/needs-you'
-import { cn, TooltipCard } from '@convergence/ui'
+import { cn, focusRing, TooltipCard } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 
 /**
@@ -24,7 +24,10 @@ export function FoldedGlyphs({ summary }: { summary: FoldedSectionSummary }) {
         aria-label={summary.names.join(', ')}
         tabIndex={0}
         data-fold-glyphs=""
-        className="flex shrink-0 items-center gap-0.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          'flex shrink-0 items-center gap-0.5 rounded-sm',
+          focusRing,
+        )}
       >
         {summary.glyphs.map((glyph) => (
           <span

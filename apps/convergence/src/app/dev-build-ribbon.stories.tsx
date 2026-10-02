@@ -27,18 +27,6 @@ type Story = StoryObj<typeof meta>
  * click from what is under it.
  */
 export const Default: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the ribbon's amber-200 text is the same in both
-          // themes and nearly invisible on the light one (1.06:1) — fixed by
-          // the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   play: async ({ canvas }) => {
     const ribbon = canvas.getByText('Dev version')
     await expect(ribbon).toBeVisible()

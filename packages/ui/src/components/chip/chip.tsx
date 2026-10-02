@@ -66,7 +66,11 @@ function Chip({
           {icon}
         </span>
       )}
-      <span className="max-w-48 min-w-0 truncate">{children}</span>
+      {/* The cut keeps a focus ring's width of room round the name, so a
+          name that is a control (a file's preview) shows its ring whole. */}
+      <span className="-m-(--focus-width) max-w-48 min-w-0 truncate p-(--focus-width)">
+        {children}
+      </span>
       {onRemove ? (
         <IconButton
           label={removeLabel}

@@ -10,7 +10,8 @@ import {
   AlertTriangle,
   MessageSquare,
 } from 'lucide-react'
-import { cn } from '@convergence/ui'
+import { cn, Spinner, toneInk } from '@convergence/ui'
+import { attentionTone } from './session-tone.pure'
 
 interface SessionBadgeProps {
   parallelWork?: ParallelWorkCounts
@@ -19,8 +20,8 @@ interface SessionBadgeProps {
   className?: string
   /**
    * The conversation is compacting its context (MAR-3288 R5). The caller
-   * answers it with the session entity's `isSessionCompacting`, so this
-   * shared glyph never learns what compacting looks like on the record.
+   * answers it with `isSessionCompacting`, so this glyph never learns what
+   * compacting looks like on the record (SessionStateBadge does that).
    */
   compacting?: boolean
 }
@@ -38,10 +39,13 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
   // `finished` for the whole compaction.
   if (compacting)
     return (
-      <Loader2
+      <span
+        role="img"
         aria-label="Compacting context…"
-        className={cn(iconClassName, 'animate-spin text-muted-foreground')}
-      />
+        className={cn('inline-flex shrink-0', className)}
+      >
+        <Spinner size="xs" className="text-muted-foreground" />
+      </span>
     )
 
   const parallel = parallelWorkStatus({ status, attention, parallelWork })
@@ -53,20 +57,25 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
       />
     )
 
-  switch (attention) {
-    case 'needs-approval':
-      return <AlertTriangle className={cn(iconClassName, 'text-warning')} />
-    case 'needs-input':
-      return <MessageSquare className={cn(iconClassName, 'text-blue-500')} />
-    case 'finished':
-      return <CheckCircle2 className={cn(iconClassName, 'text-emerald-500')} />
-    case 'failed':
-      return <XCircle className={cn(iconClassName, 'text-red-500')} />
-    default:
-      return (
-        <Loader2
-          className={cn(iconClassName, 'animate-spin text-muted-foreground')}
-        />
-      )
-  }
+  const tone = attentionTone(attention)
+  const Glyph = GLYPHS[attention]
+  if (tone && Glyph)
+    return (
+      <Glyph data-tone={tone} className={cn(iconClassName, toneInk[tone])} />
+    )
+  return (
+    <Spinner size="xs" className={cn(className, 'text-muted-foreground')} />
+  )
+}
+
+/**
+ * A settled state's glyph; its tone is the session's map (session-tone.pure).
+ * Anything else, a machine out of reach included, is still at work: the
+ * spinner.
+ */
+const GLYPHS: Partial<Record<string, typeof CheckCircle2>> = {
+  'needs-approval': AlertTriangle,
+  'needs-input': MessageSquare,
+  finished: CheckCircle2,
+  failed: XCircle,
 }

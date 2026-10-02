@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import type { LeafNode } from '@/entities/terminal'
 import { LeafPaneView } from './leaf-pane.presentational'
 
 vi.mock('@/features/terminal-pane', () => ({
-  TerminalPaneContainer: () => <div data-testid="pane" />,
   PaneToolbar: () => <div data-testid="toolbar" />,
 }))
 
@@ -32,7 +31,6 @@ describe('LeafPaneView', () => {
     const { container } = render(
       <LeafPaneView
         leaf={leaf()}
-        sessionId="s1"
         focusedLeafId={null}
         onSelectTab={vi.fn()}
         onNewTab={vi.fn()}
@@ -40,11 +38,14 @@ describe('LeafPaneView', () => {
         onCloseActiveTab={vi.fn()}
         onCloseTab={vi.fn()}
         onFocusLeaf={vi.fn()}
+        renderTerminal={() => <div data-testid="pane" />}
       />,
     )
     const root = container.querySelector('[data-leaf-id="leaf-1"]')
     expect(root).not.toBeNull()
     expect(root!.className).toContain('w-full')
     expect(root!.className).toContain('h-full')
+    // The open tab's terminal comes from the dock's container, through the slot.
+    expect(screen.getByTestId('pane')).toBeInTheDocument()
   })
 })

@@ -19,7 +19,7 @@ const conversation = (
 const terminal = (
   <section
     aria-label="Terminal dock"
-    className="flex h-40 min-w-56 shrink-0 flex-col bg-[#0b0b0f] p-3 font-mono text-xs text-zinc-100"
+    className="flex h-40 min-w-56 shrink-0 flex-col bg-terminal-bg p-3 font-mono text-xs text-terminal-ink"
   >
     <span>~/Projects/Private/convergence $ npm run test:stories</span>
   </section>
@@ -37,7 +37,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="h-[30rem] border border-border">
+      <div className="h-120 border border-border">
         <Story />
       </div>
     ),
@@ -124,19 +124,5 @@ export const TerminalOnly: Story = {
     await expect(
       canvas.getByText(/Convert it to a conversation session/),
     ).toHaveTextContent(/workspace\.$/)
-  },
-}
-
-/** Once converting exists, the placeholder says it is coming. */
-export const TerminalOnlyConvertible: Story = {
-  name: 'Terminal only, convertible',
-  args: {
-    mainSlot: terminal,
-    dockSlot: <ConversationDockPlaceholder onConvert={() => undefined} />,
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByText(/Convert it to a conversation session/),
-    ).toHaveTextContent(/\(coming soon\)\.$/)
   },
 }

@@ -12,7 +12,7 @@ import { durationsMs, easings } from '../motion/tokens'
  */
 function Motion() {
   return (
-    <div className="grid w-[36rem] gap-6 bg-canvas p-6 text-ink">
+    <div className="grid w-144 gap-6 bg-canvas p-6 text-ink">
       <section aria-label="Durations">
         <h2 className="mb-2 text-sm font-semibold">Durations</h2>
         <ul className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">

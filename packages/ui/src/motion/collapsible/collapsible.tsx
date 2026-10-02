@@ -83,7 +83,7 @@ function CollapsiblePanel({ className, ...props }: CollapsiblePanelProps) {
     <BaseCollapsible.Panel
       data-slot="collapsible-panel"
       className={cn(
-        'h-(--collapsible-panel-height) overflow-hidden transition-all duration-panel ease-in-out',
+        'h-(--collapsible-panel-height) overflow-hidden transition-size duration-panel ease-in-out',
         'data-ending-style:h-0 data-ending-style:opacity-0 data-starting-style:h-0 data-starting-style:opacity-0',
         'motion-reduce:transition-opacity',
         className,

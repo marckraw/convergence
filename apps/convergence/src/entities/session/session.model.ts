@@ -9,7 +9,7 @@ import {
   markPerfConversationLoaded,
 } from '@/shared/lib/usePerfProbe'
 import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
-import { create } from 'zustand'
+import { create, type StoreApi } from 'zustand'
 import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
 import type {
   ConversationItem,
@@ -408,6 +408,39 @@ function upsertQueuedInput(
 
 function persistRecents(ids: string[]): void {
   void sessionApi.setRecentIds(ids).catch(() => undefined)
+}
+
+/**
+ * A fork is made, whole or summarised: list it where it belongs, open it on
+ * an empty conversation with nothing queued, remember it as recent, and load
+ * what it holds.
+ */
+function openForkedSession(
+  set: StoreApi<SessionStore>['setState'],
+  get: StoreApi<SessionStore>['getState'],
+  session: SessionSummary,
+): SessionSummary {
+  set((state) => ({
+    sessions:
+      state.currentProjectId === session.projectId
+        ? upsertSummary(state.sessions, session)
+        : state.sessions,
+    globalSessions: upsertSummary(state.globalSessions, session),
+    activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+    activeConversationWindow: EMPTY_WINDOW,
+    activeConversation: [],
+    activeConversationSessionId: session.id,
+    queuedInputsBySessionId: {
+      ...state.queuedInputsBySessionId,
+      [session.id]: [],
+    },
+    activeSessionId: session.id,
+    activeProjectSessionId: session.id,
+    draftWorkspaceId: null,
+  }))
+  get().recordRecentSession(session.id)
+  void get().loadActiveConversation(session.id)
+  return session
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -1483,55 +1516,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     summarizeWith?: ForkSummarizeWith,
   ) => sessionForkApi.previewSummary(parentSessionId, requestId, summarizeWith),
 
-  forkFull: async (input: ForkFullInput) => {
-    const session = await sessionForkApi.forkFull(input)
-    set((state) => ({
-      sessions:
-        state.currentProjectId === session.projectId
-          ? upsertSummary(state.sessions, session)
-          : state.sessions,
-      globalSessions: upsertSummary(state.globalSessions, session),
-      activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
-      activeConversationWindow: EMPTY_WINDOW,
-      activeConversation: [],
-      activeConversationSessionId: session.id,
-      queuedInputsBySessionId: {
-        ...state.queuedInputsBySessionId,
-        [session.id]: [],
-      },
-      activeSessionId: session.id,
-      activeProjectSessionId: session.id,
-      draftWorkspaceId: null,
-    }))
-    get().recordRecentSession(session.id)
-    void get().loadActiveConversation(session.id)
-    return session
-  },
+  forkFull: async (input: ForkFullInput) =>
+    openForkedSession(set, get, await sessionForkApi.forkFull(input)),
 
-  forkSummary: async (input: ForkSummaryInput) => {
-    const session = await sessionForkApi.forkSummary(input)
-    set((state) => ({
-      sessions:
-        state.currentProjectId === session.projectId
-          ? upsertSummary(state.sessions, session)
-          : state.sessions,
-      globalSessions: upsertSummary(state.globalSessions, session),
-      activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
-      activeConversationWindow: EMPTY_WINDOW,
-      activeConversation: [],
-      activeConversationSessionId: session.id,
-      queuedInputsBySessionId: {
-        ...state.queuedInputsBySessionId,
-        [session.id]: [],
-      },
-      activeSessionId: session.id,
-      activeProjectSessionId: session.id,
-      draftWorkspaceId: null,
-    }))
-    get().recordRecentSession(session.id)
-    void get().loadActiveConversation(session.id)
-    return session
-  },
+  forkSummary: async (input: ForkSummaryInput) =>
+    openForkedSession(set, get, await sessionForkApi.forkSummary(input)),
 
   setPinned: async (id, pinned) => {
     const previous =

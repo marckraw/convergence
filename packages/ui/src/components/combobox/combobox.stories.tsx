@@ -240,10 +240,34 @@ export const Long: Story = {
     await expect(dialog.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       window.innerHeight,
     )
+    // A picker is at most 24 rem tall, however long its list.
+    await expect(dialog.offsetHeight).toBeLessThanOrEqual(384)
     await expect(listbox.scrollHeight).toBeGreaterThan(listbox.clientHeight)
     const [first] = within(dialog).getAllByRole('option')
     const name = within(first).getByText(/^project-with/)
     await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth)
+  },
+}
+
+/** Wide: a trigger wider than a picker; the popup stops at 24 rem. */
+export const Wide: Story = {
+  render: (args) => (
+    <div className="w-160 max-w-full">
+      <Combobox
+        {...args}
+        value="convergence"
+        className="w-full"
+        onChange={args.onChange}
+      />
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Project' })
+    await userEvent.click(trigger)
+    const dialog = await openedList()
+    // Layout sizes (offset*), not the box mid-grow.
+    await expect(trigger.offsetWidth).toBeGreaterThan(384)
+    await expect(dialog.offsetWidth).toBe(384)
   },
 }
 
@@ -307,6 +331,13 @@ export const Grouped: Story = {
     await expect(within(only).getByRole('option')).toHaveTextContent(
       /Gemini 3\.5 Flash/,
     )
+    // The badge says more in our tooltip, never a native title (R2).
+    const badge = within(only).getByText('Alpha')
+    await expect(badge).not.toHaveAttribute('title')
+    await userEvent.hover(badge)
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('Early provider support')
   },
 }
 
