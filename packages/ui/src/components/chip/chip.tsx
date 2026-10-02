@@ -4,6 +4,15 @@ import { cn } from '#lib/cn.pure'
 import { toneInk, toneLine, toneSoft, type Tone } from '#lib/tone.styles'
 import { IconButton } from '../icon-button/icon-button'
 
+/**
+ * Chip's frame as a class (CONV-15): rounded-md, the line, the muted wash and
+ * ink, the 12 px print, 28 px tall. For an element that holds what a Chip
+ * doesn't, and must still look like one: an annotation's quote, arrow and two
+ * actions, the form that edits it, the tray's pill that opens it.
+ */
+const chipFrame =
+  'inline-flex h-7 max-w-full min-w-0 items-center gap-1 rounded-md border border-line bg-surface-muted/40 pl-1.5 text-xs text-ink-muted'
+
 type ChipProps = Omit<ComponentProps<'span'>, 'className' | 'children'> & {
   className?: string
   /** The item's name: a file, a skill, a project's context. Cut short past 192 px. */
@@ -51,11 +60,9 @@ function Chip({
       data-tone={tone}
       data-missing={dashed ? '' : undefined}
       className={cn(
-        'inline-flex h-7 max-w-full min-w-0 items-center gap-1 rounded-md border pl-1.5 text-xs',
+        chipFrame,
         onRemove ? 'pr-0.5' : 'pr-1.5',
-        tone === undefined
-          ? 'border-line bg-surface-muted/40 text-ink-muted'
-          : [toneLine[tone], toneSoft[tone], toneInk[tone]],
+        tone !== undefined && [toneLine[tone], toneSoft[tone], toneInk[tone]],
         dashed && 'border-dashed bg-surface-muted/20',
         className,
       )}
@@ -87,4 +94,4 @@ function Chip({
   )
 }
 
-export { Chip, type ChipProps }
+export { Chip, type ChipProps, chipFrame }

@@ -425,3 +425,8 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export { chipFrame } from './components/chip/chip'
+export {
+  type SectionLabelSize,
+  sectionLabelVariants,
+} from './components/section-label/section-label'
