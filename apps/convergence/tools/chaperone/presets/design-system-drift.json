@@ -200,6 +200,15 @@
         "files": "packages/ui/.storybook/preview.tsx",
         "requiredPatterns": ["a11y:\\s*\\{\\s*test:\\s*[\"']error[\"']"],
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
+      },
+      {
+        "id": "no-ascii-ellipsis",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:[A-Za-z0-9)}]|[\"'\\`>])\\.\\.\\.(?!\\.)",
+        "message": "Three dots typed in words (\"Loading...\", \"Search options...\", a name cut short with + '...'): R10 writes the ellipsis character, … (U+2026), on busy labels, placeholders, cut-short text and every item that opens a dialog. Code's spread (...props, [...items]) follows a bracket, a comma or a space, never a letter or a quote, and is not reported (MAR-3608; docs/checks/design-system-drift.md)."
       }
     ]
   }
