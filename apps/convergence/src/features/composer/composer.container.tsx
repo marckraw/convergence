@@ -129,6 +129,7 @@ import {
   workAddressForNewSession,
   type LocalRepositoryState,
 } from './execution-bar.pure'
+import { SectionLabel } from '@convergence/ui'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
@@ -2245,7 +2246,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
                 className="flex items-start justify-between gap-3 text-xs"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-3xs uppercase tracking-wide text-ink-muted">
+                  <SectionLabel size="sm" className="flex items-center gap-2">
                     <span>
                       {DELIVERY_MODE_LABELS[input.deliveryMode] ??
                         input.deliveryMode}
@@ -2256,7 +2257,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
                         ? WAITS_FOR_COMPACTION_LABEL
                         : QUEUED_INPUT_STATE_LABELS[input.state]}
                     </span>
-                  </div>
+                  </SectionLabel>
                   <div className="truncate text-ink">
                     {getQueuedInputPreview(input)}
                   </div>

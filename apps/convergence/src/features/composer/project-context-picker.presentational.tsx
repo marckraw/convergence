@@ -105,7 +105,7 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
                   <span className={pickRowDetail}>
                     {bodyPreview(item.body)}
                   </span>
-                  <Badge className="mt-2 uppercase">
+                  <Badge caps className="mt-2">
                     {item.reinjectMode === 'every-turn' ? 'Every turn' : 'Boot'}
                   </Badge>
                 </span>

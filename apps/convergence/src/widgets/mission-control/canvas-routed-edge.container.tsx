@@ -17,6 +17,7 @@ import {
   routePath,
 } from '@/features/mission-control'
 import type { RouteRect } from '@/features/mission-control'
+import { Badge } from '@convergence/ui'
 
 /**
  * A wire drawn as a rounded orthogonal route that stays clear of the cards it
@@ -184,7 +185,9 @@ export const CanvasRoutedEdge: FC<EdgeProps> = ({
       <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
       {label ? (
         <EdgeLabelRenderer>
-          <div
+          {/* The kit's Badge on the canvas (MC-6), over the canvas colour so
+              the wire under it doesn't show through its words. */}
+          <Badge
             data-canvas-edge-label={id}
             style={{
               // On the longest straight run rather than at the path's
@@ -192,10 +195,10 @@ export const CanvasRoutedEdge: FC<EdgeProps> = ({
               // happens to be bending.
               transform: `translate(${labelTranslate}) translate(${labelPoint.x}px, ${labelPoint.y}px)`,
             }}
-            className="pointer-events-none absolute rounded bg-canvas/90 px-1.5 py-0.5 text-3xs text-ink-muted"
+            className="pointer-events-none absolute bg-canvas/90"
           >
             {label}
-          </div>
+          </Badge>
         </EdgeLabelRenderer>
       ) : null}
     </>

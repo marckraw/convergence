@@ -436,3 +436,8 @@ export {
   type NotifyAction,
   type NotifyOptions,
 } from './components/toaster/notify'
+export { chipFrame } from './components/chip/chip'
+export {
+  type SectionLabelSize,
+  sectionLabelVariants,
+} from './components/section-label/section-label'

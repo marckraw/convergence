@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 import { cn, Spinner, Tooltip } from '@convergence/ui'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
-import { cardStateTone } from './needs-you-card-state.styles'
+import { cardStateTone, cardStateToneName } from './needs-you-card-state.styles'
+import type { FoldCardState } from './needs-you-fold.pure'
 
 export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
   if (!card.summary) return null
@@ -27,6 +28,17 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
           : card.session.parallelWork?.unknown
             ? CircleHelp
             : CircleCheck
+  // The glyph's state, in the session's tones (NAV-1): a host out of reach is
+  // warning, as Mission Control and the sidebar's rows draw it (MC-1).
+  const tinted: FoldCardState | null = card.hostUnreachable
+    ? 'unreachable'
+    : waiting
+      ? 'waiting'
+      : failed
+        ? 'failed'
+        : Icon === CircleCheck
+          ? 'finished'
+          : null
   return (
     <Tooltip label={card.timing.tooltip}>
       <span
@@ -38,15 +50,14 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
         {/* At work, the kit's Spinner (it stands still under reduced
             motion, MC-25) in the working tone; otherwise the state's glyph. */}
         {card.working && Icon === LoaderCircle ? (
-          <Spinner size="xs" className={cardStateTone.working} />
+          <span data-tone={cardStateToneName.working} className="flex">
+            <Spinner size="xs" className={cardStateTone.working} />
+          </span>
         ) : (
           <Icon
             aria-hidden="true"
-            className={cn('size-3 shrink-0', {
-              [cardStateTone.finished]: Icon === CircleCheck,
-              [cardStateTone.waiting]: waiting,
-              [cardStateTone.failed]: failed,
-            })}
+            data-tone={tinted ? cardStateToneName[tinted] : undefined}
+            className={cn('size-3 shrink-0', tinted && cardStateTone[tinted])}
           />
         )}
         <span>

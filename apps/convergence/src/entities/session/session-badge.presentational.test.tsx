@@ -30,10 +30,24 @@ it.each([
   expect(container.querySelector('[data-slot="spinner"]')).toBeNull()
 })
 
-it('a session at work spins, with no tone of a settled state', () => {
+it('a session at work spins in the working tone, info, and no settled one (MC-1)', () => {
   const { container } = render(
     <SessionBadge attention="none" status="running" />,
   )
   expect(container.querySelector('[data-slot="spinner"]')).not.toBeNull()
-  expect(container.querySelector('[data-tone]')).toBeNull()
+  // Mutation: paint the spinner muted again (no data-tone) -> red.
+  expect(
+    [...container.querySelectorAll('[data-tone]')].map((node) =>
+      node.getAttribute('data-tone'),
+    ),
+  ).toEqual(['info'])
+})
+
+it('a host out of reach is its own glyph in the warning tone, never the spinner (NAV-1)', () => {
+  const { container } = render(
+    <SessionBadge attention="host-unreachable" status="running" />,
+  )
+  // Mutation: drop host-unreachable from GLYPHS -> the info spinner, red.
+  expect(container.querySelector('[data-tone="warning"]')).not.toBeNull()
+  expect(container.querySelector('[data-slot="spinner"]')).toBeNull()
 })
