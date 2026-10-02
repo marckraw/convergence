@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react'
 import type { ReleasePlan } from '@/entities/release'
 import {
   Button,
@@ -54,7 +55,19 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
         }
       />
       <DialogContent onKeyDown={(event) => event.stopPropagation()}>
-        <DialogHeader className="border-b-0 p-6 pr-12">
+        <DialogHeader
+          actions={
+            // Refresh lives in the header (R6); the footer holds the merge.
+            <Button
+              variant="secondary"
+              onClick={props.onRefresh}
+              disabled={running}
+            >
+              <RefreshCw aria-hidden />
+              Refresh
+            </Button>
+          }
+        >
           <DialogTitle>Merge reviewed</DialogTitle>
           <DialogDescription>
             Reviewed PRs in Awaiting QA. Untick rows to choose a partial set.
@@ -121,15 +134,7 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             ))}
           </div>
         </DialogBody>
-        <DialogFooter className="border-t-0 p-6">
-          <Button
-            variant="secondary"
-            onClick={props.onRefresh}
-            disabled={running}
-            size="lg"
-          >
-            Refresh
-          </Button>
+        <DialogFooter>
           <Button
             disabled={!canMergeReviewed(plan, selected, busy)}
             onClick={props.onMerge}
