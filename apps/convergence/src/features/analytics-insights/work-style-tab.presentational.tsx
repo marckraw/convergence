@@ -13,13 +13,14 @@ import type {
   WorkStyleInteractionShape,
   WorkStyleSessionSizeBucket,
 } from '@/entities/analytics'
-import { Button } from '@convergence/ui'
+import { Button, Card, cn, EmptyState, SectionLabel } from '@convergence/ui'
 import {
   formatHour,
   formatInteger,
   getRangeLabel,
   WEEKDAY_LABELS,
 } from './analytics-insights.pure'
+import { iconChip, skeletonBar } from './analytics-insights.styles'
 
 interface WorkStyleTabProps {
   overview: AnalyticsOverview | null
@@ -70,24 +71,23 @@ export function WorkStyleTab({
 
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-border bg-card/60 p-5">
+      <Card render={<section />} padding="md">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Deterministic local profile
-            </p>
+            <SectionLabel>Deterministic local profile</SectionLabel>
             <h4 className="mt-2 text-lg font-semibold">
               Based on the last {getRangeLabel(overview.range.preset)}
             </h4>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-sm leading-relaxed text-ink-muted">
               {profile.summary}
             </p>
           </div>
-          <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+          {/* What this profile promises about privacy: information, not a warning (R1). */}
+          <p className="shrink-0 rounded-lg border border-info-line bg-info-soft px-3 py-2 text-xs leading-relaxed text-info-ink">
             No model call. No transcripts sent.
-          </div>
+          </p>
         </div>
-      </section>
+      </Card>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {facts.map((fact) => renderFactCard(fact))}
@@ -104,36 +104,39 @@ export function WorkStyleTab({
   )
 }
 
+/** A skeleton of the tab while it loads: a status, so it is announced. */
 function renderLoadingState() {
   return (
-    <div className="space-y-4" aria-label="Loading work style" aria-busy="true">
-      <section className="rounded-lg border border-border bg-card/60 p-5">
+    <div
+      role="status"
+      className="space-y-4"
+      aria-label="Loading work style"
+      aria-busy="true"
+    >
+      <Card render={<section />} padding="md">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="w-full max-w-3xl space-y-3">
-            <div className="h-3 w-44 rounded bg-muted" />
-            <div className="h-6 w-64 rounded bg-muted/80" />
-            <div className="h-4 w-full max-w-xl rounded bg-muted" />
-            <div className="h-4 w-full max-w-md rounded bg-muted" />
+            <div className={cn(skeletonBar, 'h-3 w-44')} />
+            <div className={cn(skeletonBar, 'h-6 w-64')} />
+            <div className={cn(skeletonBar, 'h-4 w-full max-w-xl')} />
+            <div className={cn(skeletonBar, 'h-4 w-full max-w-md')} />
           </div>
-          <div className="h-10 w-44 rounded-lg border border-border bg-muted/70" />
+          <div className={cn(skeletonBar, 'h-10 w-44 rounded-lg')} />
         </div>
-      </section>
+      </Card>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 5 }, (_, index) => (
-          <div
-            key={index}
-            className="min-w-0 rounded-lg border border-border bg-card/70 p-4"
-          >
+          <Card key={index} padding="md" className="min-w-0">
             <div className="flex items-start gap-3">
-              <div className="h-8 w-8 rounded-md border border-border bg-muted" />
+              <div className={cn(skeletonBar, 'size-8 rounded-md')} />
               <div className="min-w-0 flex-1 space-y-3">
-                <div className="h-3 w-28 rounded bg-muted" />
-                <div className="h-5 w-36 rounded bg-muted/80" />
-                <div className="h-3 w-full max-w-44 rounded bg-muted" />
+                <div className={cn(skeletonBar, 'h-3 w-28')} />
+                <div className={cn(skeletonBar, 'h-5 w-36')} />
+                <div className={cn(skeletonBar, 'h-3 w-full max-w-44')} />
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </section>
     </div>
@@ -156,17 +159,17 @@ function renderGeneratedProfilePanel({
   const generated = overview.generatedProfile
 
   return (
-    <section className="rounded-lg border border-border bg-card/60 p-5">
+    <Card render={<section />} padding="md">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
-          <span className="rounded-md border border-border bg-background p-2 text-muted-foreground">
+          <span aria-hidden className={iconChip}>
             <Sparkles className="size-4" />
           </span>
           <div>
             <h4 className="text-sm font-semibold">
               {generated?.payload.title ?? 'Generated work profile'}
             </h4>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
               {generated?.payload.summary ??
                 'Generate an optional profile from local aggregate usage data. Full transcripts and raw conversation excerpts are not sent in this version.'}
             </p>
@@ -199,24 +202,21 @@ function renderGeneratedProfilePanel({
       {generated ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {generated.payload.themes.map((theme) => (
-            <div
-              key={theme.label}
-              className="rounded-lg border border-border bg-background/60 p-3"
-            >
+            <Card key={theme.label} surface="raised">
               <p className="text-sm font-medium">{theme.label}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-xs leading-relaxed text-ink-muted">
                 {theme.description}
               </p>
-            </div>
+            </Card>
           ))}
           {generated.payload.caveats.length > 0 ? (
-            <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200 md:col-span-2">
+            <p className="rounded-lg border border-warning-line bg-warning-soft p-3 text-xs leading-relaxed text-warning-ink md:col-span-2">
               {generated.payload.caveats.join(' ')}
-            </div>
+            </p>
           ) : null}
         </div>
       ) : null}
-    </section>
+    </Card>
   )
 }
 
@@ -268,25 +268,25 @@ function buildFactCards(overview: AnalyticsOverview): FactCard[] {
 
 function renderFactCard(fact: FactCard) {
   return (
-    <article
+    <Card
       key={fact.label}
-      className="min-w-0 rounded-lg border border-border bg-card/70 p-4"
+      render={<article />}
+      padding="md"
+      className="min-w-0"
     >
       <div className="flex items-start gap-3">
-        <span className="rounded-md border border-border bg-background p-1.5 text-muted-foreground">
+        <span aria-hidden className={iconChip}>
           {fact.icon}
         </span>
         <div className="min-w-0">
-          <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {fact.label}
-          </p>
+          <SectionLabel>{fact.label}</SectionLabel>
           <p className="mt-2 truncate text-base font-semibold">{fact.value}</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
             {fact.detail}
           </p>
         </div>
       </div>
-    </article>
+    </Card>
   )
 }
 
@@ -297,14 +297,7 @@ function renderEmptyState({
   title: string
   description: string
 }) {
-  return (
-    <section className="rounded-lg border border-dashed border-border bg-background/60 px-4 py-10 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-    </section>
-  )
+  return <EmptyState title={title} detail={description} />
 }
 
 function getSessionSizeLabel(bucket: WorkStyleSessionSizeBucket): string {

@@ -184,12 +184,12 @@ describe('AnalyticsInsights', () => {
     expect(screen.getAllByText('Turns').length).toBeGreaterThan(0)
   })
 
-  it('calls onRangeChange when a range button is selected', () => {
+  it('calls onRangeChange when a range is chosen', () => {
     const onRangeChange = vi.fn()
 
     renderInsights({ onRangeChange })
 
-    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+    fireEvent.click(screen.getByRole('radio', { name: '7 days' }))
 
     expect(onRangeChange).toHaveBeenCalledWith('7d')
   })
@@ -235,7 +235,7 @@ describe('AnalyticsInsights', () => {
 
     expect(screen.getByText('Deterministic local profile')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Your Usage' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Your usage' }))
     expect(onTabChange).toHaveBeenCalledWith('usage')
   })
 

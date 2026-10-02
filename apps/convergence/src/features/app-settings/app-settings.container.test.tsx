@@ -660,7 +660,7 @@ describe('AppSettingsDialogContainer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Insights/ }))
 
-    expect(await screen.findByRole('tab', { name: 'Your Usage' })).toBeVisible()
+    expect(await screen.findByRole('tab', { name: 'Your usage' })).toBeVisible()
     expect(dialog).toHaveAttribute('data-size', '2xl')
     expect(dialog).toHaveAttribute('data-height', 'tall')
   })
@@ -680,7 +680,7 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Insights/ }))
 
     expect(
-      await screen.findByRole('tab', { name: 'Your Usage' }),
+      await screen.findByRole('tab', { name: 'Your usage' }),
     ).toBeInTheDocument()
     await waitFor(() => {
       expect(window.electronAPI.analytics.getOverview).toHaveBeenCalledWith(
@@ -748,7 +748,7 @@ describe('AppSettingsDialogContainer', () => {
     renderSettings()
 
     expect(
-      await screen.findByRole('tab', { name: 'Your Usage' }),
+      await screen.findByRole('tab', { name: 'Your usage' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
     expect(window.electronAPI.analytics.getOverview).toHaveBeenCalledWith('30d')

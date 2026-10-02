@@ -10,6 +10,7 @@ import type {
   DailyActivityPoint,
   WeekdayHourActivityPoint,
 } from '@/entities/analytics'
+import { chartTokens } from '@convergence/ui'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -54,7 +55,13 @@ export const WEEKDAY_FULL_NAMES_MONDAY_FIRST = [
   'Sunday',
 ]
 
-const CHART_PALETTE = ['#2563eb', '#14b8a6', '#f59e0b', '#7c3aed', '#ef4444']
+/**
+ * ChartGPU draws on the GPU and can't read CSS, so the series come from the
+ * chart tokens' mirror (R1): the first two are what the legends call series
+ * 1 and 2.
+ */
+const CHART_PALETTE = [...chartTokens.series]
+const [SERIES_1, SERIES_2] = chartTokens.series
 
 function normalizeTooltipParams(
   params: TooltipParams | ReadonlyArray<TooltipParams>,
@@ -185,7 +192,7 @@ export function buildDailyActivityChartOptions(
     palette: CHART_PALETTE,
     grid: { left: 40, right: 16, top: 12, bottom: 28 },
     gridLines: {
-      color: 'rgba(148, 163, 184, 0.22)',
+      color: chartTokens.grid,
       horizontal: { count: 4 },
       vertical: false,
     },
@@ -206,8 +213,8 @@ export function buildDailyActivityChartOptions(
       {
         type: 'area',
         name: 'User messages',
-        color: '#2563eb',
-        areaStyle: { opacity: 0.18, color: '#2563eb' },
+        color: SERIES_1,
+        areaStyle: { opacity: 0.18, color: SERIES_1 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.userMessages,
@@ -216,8 +223,8 @@ export function buildDailyActivityChartOptions(
       {
         type: 'line',
         name: 'Turns',
-        color: '#14b8a6',
-        lineStyle: { width: 2, color: '#14b8a6' },
+        color: SERIES_2,
+        lineStyle: { width: 2, color: SERIES_2 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.turnsCompleted,
@@ -237,7 +244,7 @@ export function buildConversationBalanceChartOptions(
     palette: CHART_PALETTE,
     grid: { left: 44, right: 16, top: 12, bottom: 28 },
     gridLines: {
-      color: 'rgba(148, 163, 184, 0.22)',
+      color: chartTokens.grid,
       horizontal: { count: 4 },
       vertical: false,
     },
@@ -258,8 +265,8 @@ export function buildConversationBalanceChartOptions(
       {
         type: 'line',
         name: 'User words',
-        color: '#2563eb',
-        lineStyle: { width: 2, color: '#2563eb' },
+        color: SERIES_1,
+        lineStyle: { width: 2, color: SERIES_1 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.userWords,
@@ -268,8 +275,8 @@ export function buildConversationBalanceChartOptions(
       {
         type: 'area',
         name: 'Assistant words',
-        color: '#14b8a6',
-        areaStyle: { opacity: 0.16, color: '#14b8a6' },
+        color: SERIES_2,
+        areaStyle: { opacity: 0.16, color: SERIES_2 },
         data: points.map((point) => ({
           x: dateKeyToTimestamp(point.date),
           y: point.assistantWords,

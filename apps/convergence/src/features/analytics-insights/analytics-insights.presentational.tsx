@@ -6,7 +6,14 @@ import type {
 } from '@/entities/analytics'
 import type { ProviderInfo } from '@/entities/session'
 import { getProviderLifecycleBadge } from '@/entities/session'
-import { Button, cn } from '@convergence/ui'
+import {
+  Button,
+  Notice,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTab,
+} from '@convergence/ui'
 import { GenerateProfileDialog } from './generate-profile-dialog.presentational'
 import { RangePicker } from './range-picker.presentational'
 import { UsageTab } from './usage-tab.presentational'
@@ -79,24 +86,16 @@ export function AnalyticsInsights({
     badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
   return (
-    <div className="space-y-5">
+    <Tabs
+      value={activeTab}
+      onValueChange={(next: AnalyticsInsightsTab) => onTabChange(next)}
+      className="gap-5"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div
-          className="inline-flex w-fit rounded-lg border border-border bg-background p-1"
-          role="tablist"
-          aria-label="Insights view"
-        >
-          {renderTabButton({
-            label: 'Your Usage',
-            selected: activeTab === 'usage',
-            onClick: () => onTabChange('usage'),
-          })}
-          {renderTabButton({
-            label: 'Your Work Style',
-            selected: activeTab === 'work-style',
-            onClick: () => onTabChange('work-style'),
-          })}
-        </div>
+        <TabsList aria-label="Insights view" className="w-fit">
+          <TabsTab value="usage">Your usage</TabsTab>
+          <TabsTab value="work-style">Your work style</TabsTab>
+        </TabsList>
 
         <RangePicker
           value={rangePreset}
@@ -106,26 +105,27 @@ export function AnalyticsInsights({
       </div>
 
       {error ? (
-        <div
-          className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
-          role="alert"
-        >
-          <span>{error}</span>
-          <Button
-            type="button"
-            variant="danger-quiet"
-            onClick={onRetry}
-            className="w-fit border border-destructive/40 bg-background"
-          >
-            <RefreshCw className="size-3.5" />
-            Retry
-          </Button>
-        </div>
+        <Notice
+          tone="danger"
+          title={error}
+          actions={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onRetry}
+            >
+              <RefreshCw className="size-3.5" />
+              Retry
+            </Button>
+          }
+        />
       ) : null}
 
-      {activeTab === 'usage' ? (
+      <TabsPanel value="usage">
         <UsageTab overview={overview} isLoading={isLoading} />
-      ) : (
+      </TabsPanel>
+      <TabsPanel value="work-style">
         <WorkStyleTab
           overview={overview}
           isLoading={isLoading}
@@ -134,7 +134,7 @@ export function AnalyticsInsights({
           onGenerateProfile={() => onGenerateDialogOpenChange(true)}
           onDeleteGeneratedProfile={onDeleteGeneratedProfile}
         />
-      )}
+      </TabsPanel>
 
       <GenerateProfileDialog
         open={generateDialogOpen}
@@ -152,30 +152,6 @@ export function AnalyticsInsights({
         onModelChange={onProfileModelChange}
         onConfirm={onGenerateProfile}
       />
-    </div>
-  )
-}
-
-function renderTabButton({
-  selected,
-  onClick,
-  label,
-}: {
-  selected: boolean
-  onClick: () => void
-  label: string
-}) {
-  return (
-    <Button
-      key={label}
-      type="button"
-      role="tab"
-      aria-selected={selected}
-      variant={selected ? 'tonal' : 'ghost'}
-      onClick={onClick}
-      className={cn('rounded-md', selected && 'shadow-none ring-1 ring-ring')}
-    >
-      {label}
-    </Button>
+    </Tabs>
   )
 }
