@@ -89,7 +89,7 @@ describe('UpdatesFields', () => {
     render(<UpdatesFields {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Download v0.17.0' }))
     expect(props.onDownload).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Release notes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Release notes…' }))
     expect(props.onOpenReleaseNotes).toHaveBeenCalled()
   })
 

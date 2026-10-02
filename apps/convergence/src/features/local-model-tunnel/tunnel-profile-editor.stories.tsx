@@ -300,7 +300,7 @@ export const External: Story = {
     draft: draftOf({ ...profile, allowExternal: true }),
   },
   play: async ({ canvas }) => {
-    await expect(canvas.queryByRole('button', { name: 'Manage' })).toBeNull()
+    await expect(canvas.queryByRole('button', { name: 'Manage…' })).toBeNull()
     await expect(
       canvas.getByRole('button', { name: 'Save profile' }),
     ).toBeVisible()

@@ -433,7 +433,7 @@ export const NoAttempts: Story = {
   play: async () => {
     const dialog = await openWorkboard()
     await expect(
-      within(dialog).getByText('No linked Attempts yet'),
+      within(dialog).getByText('No linked attempts yet'),
     ).toBeVisible()
     await expect(within(dialog).getByText('No Artifacts yet')).toBeVisible()
     const synthesize = within(dialog).getByRole('button', {
@@ -441,7 +441,7 @@ export const NoAttempts: Story = {
     })
     await expect(synthesize).toHaveAttribute('aria-disabled', 'true')
     await expect(synthesize).toHaveAccessibleDescription(
-      'Link an Attempt to synthesize from first.',
+      'Link an attempt to synthesize from first.',
     )
   },
 }

@@ -213,7 +213,7 @@ function renderGeneratedProfilePanel({
             disabled={isGeneratingProfile || !canGenerateProfile}
           >
             <Sparkles className="size-4" />
-            {generated ? 'Regenerate' : 'Generate'}
+            {generated ? 'Regenerate…' : 'Generate…'}
           </Button>
         </div>
       </div>

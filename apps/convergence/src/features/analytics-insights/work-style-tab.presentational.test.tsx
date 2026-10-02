@@ -176,7 +176,7 @@ describe('WorkStyleTab', () => {
     screen.getByRole('button', { name: 'Delete…' }).click()
     expect(onDeleteGeneratedProfile).toHaveBeenCalledTimes(1)
 
-    screen.getByRole('button', { name: 'Regenerate' }).click()
+    screen.getByRole('button', { name: 'Regenerate…' }).click()
     expect(onGenerateProfile).toHaveBeenCalledTimes(1)
   })
 })

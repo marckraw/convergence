@@ -514,7 +514,7 @@ describe('App', () => {
 
     const sidebar = getSidebarQueries()
 
-    expect(screen.queryByText('Convergence Chat')).not.toBeInTheDocument()
+    expect(screen.queryByText('Convergence chat')).not.toBeInTheDocument()
     expect(
       screen.getByText('Start a project-free agent conversation.'),
     ).toBeInTheDocument()

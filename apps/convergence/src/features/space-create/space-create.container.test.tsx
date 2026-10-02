@@ -136,7 +136,7 @@ describe('SpaceCreateDialogContainer', () => {
     expect(screen.getByLabelText('Title')).toHaveValue('Refactor auth')
     expect(
       screen.getByText(
-        'Create a durable Chat context, with this session as its seed attempt.',
+        'Create a durable chat context, with this session as its seed attempt.',
       ),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Create Space' }))

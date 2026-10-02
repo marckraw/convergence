@@ -95,7 +95,7 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
             onClick={onOpenReleaseNotes}
             disabled={isDev || isSaving}
           >
-            {RELEASE_NOTES_TITLE}
+            {RELEASE_NOTES_TITLE}…
           </Button>
         )}
       </div>

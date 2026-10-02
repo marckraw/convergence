@@ -48,7 +48,7 @@ export const Default: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Check now' }))
     await expect(args.onCheckNow).toHaveBeenCalledOnce()
     await expect(
-      canvas.queryByRole('button', { name: 'Release notes' }),
+      canvas.queryByRole('button', { name: 'Release notes…' }),
     ).toBeNull()
   },
 }
@@ -68,7 +68,9 @@ export const Available: Story = {
       canvas.getByRole('button', { name: 'Download v0.99.0' }),
     )
     await expect(args.onDownload).toHaveBeenCalledOnce()
-    await userEvent.click(canvas.getByRole('button', { name: 'Release notes' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Release notes…' }),
+    )
     await expect(args.onOpenReleaseNotes).toHaveBeenCalledOnce()
   },
 }

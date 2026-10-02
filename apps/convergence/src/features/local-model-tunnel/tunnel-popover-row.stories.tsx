@@ -150,7 +150,7 @@ export const External: Story = {
     ),
   },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Manage' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Manage…' }))
     await expect(args.onManage).toHaveBeenCalledOnce()
   },
 }

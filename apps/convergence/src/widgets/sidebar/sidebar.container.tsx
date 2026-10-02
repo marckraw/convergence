@@ -964,7 +964,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <IconButton
             label={
               activeSurface === 'chat'
-                ? 'Convergence Chat'
+                ? 'Convergence chat'
                 : (activeProject?.name ?? 'No project')
             }
             tooltipDetail="Show it in the sidebar"

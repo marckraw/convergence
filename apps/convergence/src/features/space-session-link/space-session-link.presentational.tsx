@@ -81,7 +81,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
       open={open}
       onOpenChange={onOpenChange}
       title="Session Space"
-      description="Link this session as an Attempt in a global Space."
+      description="Link this session as an attempt in a global Space."
       saves="as-you-go"
       error={error}
     >
