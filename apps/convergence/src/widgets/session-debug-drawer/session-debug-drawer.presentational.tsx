@@ -122,6 +122,7 @@ export const SessionDebugDrawer: FC<SessionDebugDrawerProps> = ({
                       ) : null}
                     </div>
                     {payload ? (
+                      // raw-element: one event's payload in the row's own small print, dozens to a page; CodeBlock's framed box would wrap each
                       <pre className={drawerStyles.payload}>{payload}</pre>
                     ) : null}
                   </li>

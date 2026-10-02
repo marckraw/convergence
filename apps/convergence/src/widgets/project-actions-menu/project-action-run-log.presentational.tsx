@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import { MetaLine, Timestamp } from '@convergence/ui'
 import type {
   ProjectScriptRun,
   ProjectScriptRunOutput,
@@ -25,13 +26,21 @@ export const ProjectActionRunLog: FC<ProjectActionRunLogProps> = ({
     <div className="border-t border-line bg-surface-muted/30 p-3">
       <div className="mb-2 grid gap-1 text-2xs text-ink-muted">
         <span>cwd: {run.cwd}</span>
-        <span>
-          started: {formatTimestamp(run.startedAt)}
-          {run.endedAt ? ` · ended: ${formatTimestamp(run.endedAt)}` : ''}
-          {run.exitCode !== null ? ` · exit: ${run.exitCode}` : ''}
-        </span>
+        {/* A run's start and end, to the second, as Timestamps (use-timestamp). */}
+        <MetaLine wrap>
+          <span>
+            started: <Timestamp date={run.startedAt} format="clock" seconds />
+          </span>
+          {run.endedAt ? (
+            <span>
+              ended: <Timestamp date={run.endedAt} format="clock" seconds />
+            </span>
+          ) : null}
+          {run.exitCode !== null ? `exit: ${run.exitCode}` : null}
+        </MetaLine>
         <span>stdin is not supported for project actions.</span>
       </div>
+      {/* raw-element: a run's live log, stdout and stderr each in its own ink; CodeBlock takes one string */}
       <pre className="max-h-72 overflow-auto rounded-md border border-line bg-canvas p-2 font-mono text-2xs leading-relaxed">
         {chunks.length === 0 ? (
           <span className="text-ink-muted">No output yet.</span>
@@ -48,12 +57,4 @@ export const ProjectActionRunLog: FC<ProjectActionRunLogProps> = ({
       </pre>
     </div>
   )
-}
-
-function formatTimestamp(value: string): string {
-  return new Date(value).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
 }

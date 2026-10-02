@@ -1,5 +1,5 @@
 import type { ProviderQuotaWindow } from '@/entities/provider-quota'
-import { Card, Meter } from '@convergence/ui'
+import { Card, Meter, Timestamp } from '@convergence/ui'
 
 interface ProviderUsageWindowRowProps {
   window: ProviderQuotaWindow
@@ -7,16 +7,6 @@ interface ProviderUsageWindowRowProps {
 
 function formatPercent(value: number): string {
   return `${Math.round(value)}%`
-}
-
-function formatReset(value: string | null): string {
-  if (!value) return 'Reset time unavailable'
-  return `Resets ${new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))}`
 }
 
 /**
@@ -32,12 +22,17 @@ export function ProviderUsageWindowRow({
   const valueLabel = isObservedUsage
     ? (window.valueLabel ?? 'No local usage')
     : `${formatPercent(window.remainingPercent)} remaining`
-  const boundaryLabel = isObservedUsage
-    ? formatReset(window.resetsAt).replace(
-        'Resets',
-        window.resetLabel ?? 'Ends',
-      )
-    : formatReset(window.resetsAt)
+  // When it resets (or, for observed usage, ends): a Timestamp (CONV-22).
+  const boundaryWord = isObservedUsage
+    ? (window.resetLabel ?? 'Ends')
+    : 'Resets'
+  const boundaryLabel = window.resetsAt ? (
+    <>
+      {boundaryWord} <Timestamp date={window.resetsAt} format="datetime" />
+    </>
+  ) : (
+    'Reset time unavailable'
+  )
 
   return (
     <Card className="flex flex-col gap-3 px-4 md:flex-row md:items-center">

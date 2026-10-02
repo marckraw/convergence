@@ -23,6 +23,7 @@ import {
   Notice,
   SegmentedControl,
   SegmentedControlItem,
+  Timestamp,
   type Tone,
 } from '@convergence/ui'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
@@ -162,12 +163,10 @@ export interface ProviderAccountsFieldsProps {
   onConnectLinear: (accountId: string) => void
 }
 
-function formatCheckedAt(value: string | null): string {
+/** When the identity was checked: a Timestamp, the whole moment in its tooltip. */
+function checkedAt(value: string | null) {
   if (!value) return 'not checked yet'
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return <Timestamp date={value} format="datetime" />
 }
 
 export function ProviderAccountsFields({
@@ -804,7 +803,7 @@ export function ProviderAccountsFields({
 
       <div className={spreadRow}>
         <p className="text-xs text-ink-muted">
-          Identity checked: {formatCheckedAt(lastCheckedAt)}
+          Identity checked: {checkedAt(lastCheckedAt)}
           {claudeVersion ? ` · Claude Code ${claudeVersion}` : ''}
         </p>
         <Button

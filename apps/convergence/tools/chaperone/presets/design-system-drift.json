@@ -137,8 +137,8 @@
         "type": "regex",
         "severity": "error",
         "files": "apps/convergence/src/**/*.presentational.tsx",
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!(?://|/\\*)[ \\t]*raw-element:[ \\t]*(?!\\*/)\\S[^\\n]*\\n(?:[ \\t]*(?://|\\{?/\\*)[ \\t]*eslint-disable-next-line[^\\n]*\\n)?[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a|input|textarea|select)\\b(?!(?:[^>]|=>)*?\\bbuttonVariants\\()",
-        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; MAR-3617; DS-27)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!(?://|/\\*)[ \\t]*raw-element:[ \\t]*(?!\\*/)\\S[^\\n]*\\n(?:[ \\t]*(?://|\\{?/\\*)[ \\t]*eslint-disable-next-line[^\\n]*\\n)?[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a|input|textarea|select|pre)\\b(?!(?:[^>]|=>)*?\\bbuttonVariants\\()",
+        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. A raw <pre> is CodeBlock's job: tool output, a payload, a preview, scrolling inside itself with its own focus (MAR-3608; CONV-32). Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; MAR-3617; DS-27)."
       },
       {
         "id": "ui-components-have-stories",
@@ -200,6 +200,18 @@
         "files": "packages/ui/.storybook/preview.tsx",
         "requiredPatterns": ["a11y:\\s*\\{\\s*test:\\s*[\"']error[\"']"],
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
+      },
+      {
+        "id": "use-timestamp",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": [
+          "**/*.test.{ts,tsx}",
+          "packages/ui/src/components/timestamp/**"
+        ],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\bIntl\\.(?:DateTimeFormat|RelativeTimeFormat)\\b|\\.toLocale(?:Date|Time)String\\(|\\bnew\\s+Date\\([^()\\n]*(?:\\([^()\\n]*\\)[^()\\n]*)*\\)\\s*\\.toLocaleString\\(|\\.toLocaleString\\([^)]*?\\{[^}]*?\\b(?:year|month|day|weekday|hour|minute|second|dateStyle|timeStyle|era|timeZoneName|hour12|hourCycle)\\s*:)",
+        "message": "A time written by hand (Intl.DateTimeFormat, toLocaleTimeString, a Date's toLocaleString): render it with <Timestamp date={…} format=\"relative\" | \"clock\" | \"date\" | \"datetime\" | \"log\" /> from @convergence/ui, a <time> with the whole moment in our Tooltip, or write it with formatTimestamp (and fullDateLabel, exactDateLabel) where it must be a string. One vocabulary for every time in the app (MAR-3608; CONV-22; MC-13)."
       }
     ]
   }
