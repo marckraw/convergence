@@ -238,6 +238,13 @@ function seedRelays(relays: SessionRelay[]) {
   listRelays.mockResolvedValue(relays)
 }
 
+/**
+ * A History row's door (DS-21): each run or event is a Card in its list
+ * item, and its CardAction is the pressable row.
+ */
+const HISTORY_ROW_DOORS =
+  'ul > li > [data-slot="card"] > [data-slot="card-action"][aria-pressed]'
+
 describe('MissionControl', () => {
   beforeEach(() => {
     useWorkLedgerStore.setState({ snapshots: {}, unsubscribeBroadcast: null })
@@ -3154,16 +3161,13 @@ describe('MissionControl', () => {
           await screen.findByRole('button', { name: 'Load older runs' }),
         )
         await waitFor(() =>
-          expect(
-            document.querySelectorAll('ul > li > button[aria-pressed]'),
-          ).toHaveLength(3),
+          expect(document.querySelectorAll(HISTORY_ROW_DOORS)).toHaveLength(3),
         )
         const debtShown = Boolean(
           screen.queryByText(/Waiting · Fable · since .*10:03 · running/),
         )
-        const selected = document.querySelectorAll<HTMLButtonElement>(
-          'ul > li > button[aria-pressed]',
-        )[2]
+        const selected =
+          document.querySelectorAll<HTMLButtonElement>(HISTORY_ROW_DOORS)[2]
         fireEvent.click(selected)
         const scroll = selected.closest('ul')!
         scroll.scrollTop = 72
@@ -3220,8 +3224,7 @@ describe('MissionControl', () => {
             pressed: selected.getAttribute('aria-pressed'),
             connected: selected.isConnected,
             scroll: scroll.scrollTop,
-            rows: document.querySelectorAll('ul > li > button[aria-pressed]')
-              .length,
+            rows: document.querySelectorAll(HISTORY_ROW_DOORS).length,
           }
           fireEvent.click(screen.getByRole('button', { name: 'Close history' }))
           act(() => broadcast('crew-1'))
@@ -3323,8 +3326,7 @@ describe('MissionControl', () => {
           })
           expect({
             calls: listRuns.mock.calls.length,
-            rows: document.querySelectorAll('ul > li > button[aria-pressed]')
-              .length,
+            rows: document.querySelectorAll(HISTORY_ROW_DOORS).length,
             error: screen.queryByText('obsolete failure')?.textContent ?? null,
             older:
               screen.queryByRole('button', { name: 'Load older runs' })
