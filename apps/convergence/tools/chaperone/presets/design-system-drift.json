@@ -52,6 +52,15 @@
         "message": "A white or black overlay (border-white/10, bg-black/20) assumes a dark surface and vanishes on a light one: use the theme-safe tokens, border-line-soft for a hairline, bg-fill-hover and bg-fill-selected for the hover and chosen fills, bg-fill-quiet for a faint panel, bg-chip for a chip (MAR-3617; DS-2)."
       },
       {
+        "id": "no-streamdown-names",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx,css}",
+        "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/theme.css"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<![\\w-])(?:(?:accent|bg|text|border(?:-[xytrbse])?|divide|outline|ring(?:-offset)?|inset-ring|shadow|inset-shadow|drop-shadow|fill|stroke|from|via|to|decoration|caret|placeholder)-|--color-)(?:background|foreground|muted(?:-foreground)?|border|sidebar|primary(?:-foreground)?|black)(?![\\w-])",
+        "message": "A name only Streamdown's markup may write (bg-background, text-muted-foreground, border-border, bg-black…): theme.css's vendor bridge keeps it painting for Streamdown's bundle alone, and the app and the design system write the token: background -> canvas, foreground -> ink, muted -> surface-muted, muted-foreground -> ink-muted, border -> line (border/60 to /80 -> line-soft), sidebar -> surface-sunken, primary -> strong, primary-foreground -> on-strong, black -> viewer behind a picture or scrim behind a dialog; var(--color-muted) is var(--surface-muted) (MAR-3618; docs/checks/design-system-drift.md)."
+      },
+      {
         "id": "motion-from-tokens",
         "type": "regex",
         "severity": "error",
