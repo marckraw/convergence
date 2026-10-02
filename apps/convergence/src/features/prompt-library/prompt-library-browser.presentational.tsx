@@ -2,12 +2,9 @@ import type { FC, ReactElement } from 'react'
 import {
   BookOpenText,
   FileText,
-  Library,
-  Loader2,
   Pencil,
   Plus,
   RefreshCw,
-  Search,
   Save,
   Trash2,
   X,
@@ -19,17 +16,21 @@ import type {
   PromptLibraryScope,
 } from '@/entities/prompt-library'
 import {
+  Badge,
   Button,
-  cn,
+  Card,
   CopyButton,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  EmptyState,
+  Field,
+  FieldLabel,
+  FormDialog,
+  FormError,
+  IconButton,
   Input,
+  ListRow,
+  Notice,
+  SearchField,
+  SectionLabel,
   Select,
   SelectContent,
   SelectItem,
@@ -92,6 +93,9 @@ const KIND_LABELS: Record<PromptLibraryEntry['kind'], string> = {
   text: 'Text',
 }
 
+/** The details pane's own scroll, beside the list's. */
+const paneScroll = 'app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5'
+
 function renderSelectControl({
   label,
   value,
@@ -104,18 +108,16 @@ function renderSelectControl({
   options: { value: string; label: string }[]
 }) {
   return (
-    <label className="min-w-0 flex-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-      <span>{label}</span>
+    <Field className="min-w-0 flex-1 gap-1">
+      <FieldLabel variant="caption" nativeLabel={false} render={<div />}>
+        {label}
+      </FieldLabel>
       <Select
         items={options}
         value={value}
         onValueChange={(next) => onChange(next)}
       >
-        <SelectTrigger
-          size="md"
-          aria-label={label}
-          className="mt-1 w-full normal-case tracking-normal"
-        >
+        <SelectTrigger size="md" aria-label={label} className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -126,7 +128,7 @@ function renderSelectControl({
           ))}
         </SelectContent>
       </Select>
-    </label>
+    </Field>
   )
 }
 
@@ -135,47 +137,29 @@ function renderPromptRow(
   selectedPromptId: string | null,
   onSelectPrompt: (promptId: string) => void,
 ) {
-  const selected = prompt.id === selectedPromptId
-
   return (
-    <Button
+    <ListRow
       key={prompt.id}
-      type="button"
-      variant="ghost"
-      onClick={() => onSelectPrompt(prompt.id)}
-      size="lg"
-      className={cn(
-        'h-auto w-full justify-start rounded-lg border border-transparent px-3 text-left',
-        selected
-          ? 'border-primary/30 bg-primary/10 text-foreground'
-          : 'hover:border-border/70 hover:bg-muted/40',
-      )}
-    >
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium">{prompt.title}</span>
-          <span className="shrink-0 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
-            {prompt.sourceLabel}
-          </span>
-        </span>
-        <span className="mt-1 line-clamp-2 block whitespace-normal text-xs font-normal leading-5 text-muted-foreground">
-          {prompt.shortDescription || prompt.description || prompt.relativePath}
-        </span>
-        <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
-            {KIND_LABELS[prompt.kind]}
-          </span>
+      render={
+        <button type="button" onClick={() => onSelectPrompt(prompt.id)} />
+      }
+      selected={prompt.id === selectedPromptId}
+      title={prompt.title}
+      marks={<Badge>{prompt.sourceLabel}</Badge>}
+      meta={
+        <>
+          <span>{KIND_LABELS[prompt.kind]}</span>
           {prompt.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs text-muted-foreground"
-            >
-              {tag}
-            </span>
+            <span key={tag}>{tag}</span>
           ))}
-        </span>
-      </span>
-    </Button>
+          <span>
+            {prompt.shortDescription ||
+              prompt.description ||
+              prompt.relativePath}
+          </span>
+        </>
+      }
+    />
   )
 }
 
@@ -211,9 +195,12 @@ function renderDetailsPane({
 >) {
   if (!projectName) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Open a project to inspect prompts.
-      </div>
+      <EmptyState
+        variant="plain"
+        layout="centred"
+        title="No project open"
+        detail="Open a project to inspect prompts."
+      />
     )
   }
 
@@ -230,28 +217,27 @@ function renderDetailsPane({
 
   if (!selectedPrompt) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        No prompt selected.
-      </div>
+      <EmptyState
+        variant="plain"
+        layout="centred"
+        title="No prompt selected"
+        detail="Choose one from the list."
+      />
     )
   }
 
   return (
-    <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+    <div className={paneScroll}>
       <div className="mb-4 flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
-              {SCOPE_LABELS[selectedPrompt.scope]}
-            </span>
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
-              {KIND_LABELS[selectedPrompt.kind]}
-            </span>
+            <Badge>{SCOPE_LABELS[selectedPrompt.scope]}</Badge>
+            <Badge>{KIND_LABELS[selectedPrompt.kind]}</Badge>
           </div>
           <h3 className="truncate text-lg font-semibold">
             {selectedPrompt.title}
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-ink-muted">
             {selectedPrompt.description || selectedPrompt.relativePath}
           </p>
         </div>
@@ -263,7 +249,7 @@ function renderDetailsPane({
               onClick={() => onStartEdit(selectedPrompt)}
               disabled={isMutating}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="size-3.5" />
               Edit
             </Button>
           ) : null}
@@ -273,86 +259,72 @@ function renderDetailsPane({
             onClick={() => onDeletePrompt(selectedPrompt)}
             disabled={isMutating}
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
+            <Trash2 className="size-3.5" />
+            Delete…
           </Button>
         </div>
       </div>
 
       <div className="space-y-4">
-        <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
+        <Card render={<section />}>
           <div className="mb-1 flex items-center justify-between gap-2">
-            <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-              Path
-            </p>
+            <SectionLabel as="h4">Path</SectionLabel>
             <CopyButton text={selectedPrompt.path} label="Copy prompt path" />
           </div>
-          <p
-            className="break-all font-mono text-xs text-muted-foreground"
-            title={selectedPrompt.path}
-          >
+          <p className="font-mono text-xs break-all text-ink-muted">
             {selectedPrompt.path}
           </p>
-        </section>
+        </Card>
 
         {selectedPrompt.tags.length > 0 ? (
-          <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-            <p className="mb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+          <Card render={<section />}>
+            <SectionLabel as="h4" className="mb-2">
               Tags
-            </p>
+            </SectionLabel>
             <div className="flex flex-wrap gap-1.5">
               {selectedPrompt.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-2xs text-muted-foreground"
-                >
-                  {tag}
-                </span>
+                <Badge key={tag}>{tag}</Badge>
               ))}
             </div>
-          </section>
+          </Card>
         ) : null}
 
         {isDetailsLoading ? (
-          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading prompt...
-          </div>
+          <EmptyState state="loading" title="Loading the prompt…" />
         ) : null}
 
-        {detailsError ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {detailsError}
-          </div>
-        ) : null}
+        {detailsError ? <Notice tone="danger" title={detailsError} /> : null}
 
         {selectedDetails ? (
           <>
-            <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
+            <Card render={<section />}>
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Prompt Text
-                </p>
+                <SectionLabel as="h4">Prompt text</SectionLabel>
                 <CopyButton
                   text={selectedDetails.promptText}
                   label="Copy prompt text"
                 />
               </div>
-              <pre className="app-scrollbar max-h-60 overflow-auto whitespace-pre-wrap rounded-md border border-border/70 bg-background/60 p-3 text-xs leading-5 text-foreground">
+              {/* The prompt's own text: it scrolls, so the keyboard can reach it. */}
+              <pre
+                tabIndex={0}
+                aria-label="Prompt text"
+                className="app-scrollbar max-h-60 overflow-auto rounded-md border border-line-soft bg-canvas/60 p-3 text-xs leading-5 whitespace-pre-wrap text-ink"
+              >
                 {selectedDetails.promptText}
               </pre>
-            </section>
+            </Card>
 
-            <section className="rounded-lg border border-border/70 bg-background/60 p-4">
-              <div className="mb-3 flex items-center gap-2 border-b border-border/60 pb-3">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm font-medium">Preview</p>
-                <span className="ml-auto text-xs text-muted-foreground">
+            <Card render={<section />} padding="md" surface="raised">
+              <div className="mb-3 flex items-center gap-2 border-b border-line-soft pb-3">
+                <FileText className="size-4 text-ink-muted" />
+                <h4 className="text-sm font-medium">Preview</h4>
+                <span className="ml-auto text-xs text-ink-muted">
                   {selectedDetails.sizeBytes} bytes
                 </span>
               </div>
               <Markdown content={selectedDetails.markdown} size="sm" />
-            </section>
+            </Card>
           </>
         ) : null}
       </div>
@@ -376,13 +348,13 @@ function renderPromptForm({
   onSubmit: () => void
 }) {
   return (
-    <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+    <div className={paneScroll}>
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold">
-            {draft.mode === 'create' ? 'Create Prompt' : 'Edit Prompt'}
+            {draft.mode === 'create' ? 'New prompt' : 'Edit prompt'}
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-ink-muted">
             Prompt text is stored as a file; metadata is tracked by Convergence.
           </p>
         </div>
@@ -393,15 +365,16 @@ function renderPromptForm({
             onClick={onCancel}
             disabled={isMutating}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="size-3.5" />
             Cancel
           </Button>
-          <Button type="button" onClick={onSubmit} disabled={isMutating}>
-            {isMutating ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Save className="h-3.5 w-3.5" />
-            )}
+          <Button
+            type="button"
+            onClick={onSubmit}
+            pending={isMutating}
+            pendingLabel="Saving…"
+          >
+            <Save className="size-3.5" />
             Save
           </Button>
         </div>
@@ -409,35 +382,35 @@ function renderPromptForm({
 
       <div className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            Title
+          <Field>
+            <FieldLabel>Title</FieldLabel>
             <Input
               size="lg"
               value={draft.title}
               onChange={(event) =>
                 onChange({ title: event.currentTarget.value })
               }
-              className="mt-1"
               placeholder="PR Review"
             />
-          </label>
-          <label className="text-xs font-medium text-muted-foreground">
-            Tags
+          </Field>
+          <Field>
+            <FieldLabel>Tags</FieldLabel>
             <Input
               size="lg"
               value={draft.tagsText}
               onChange={(event) =>
                 onChange({ tagsText: event.currentTarget.value })
               }
-              className="mt-1"
               placeholder="review, github"
             />
-          </label>
+          </Field>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            Scope
+          <Field>
+            <FieldLabel nativeLabel={false} render={<div />}>
+              Scope
+            </FieldLabel>
             <Select
               items={SCOPE_LABELS}
               value={draft.scope}
@@ -446,7 +419,7 @@ function renderPromptForm({
               }
               disabled={draft.mode === 'edit'}
             >
-              <SelectTrigger size="lg" className="mt-1 w-full">
+              <SelectTrigger size="lg" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -454,9 +427,11 @@ function renderPromptForm({
                 <SelectItem value="global">Global</SelectItem>
               </SelectContent>
             </Select>
-          </label>
-          <label className="text-xs font-medium text-muted-foreground">
-            File Kind
+          </Field>
+          <Field>
+            <FieldLabel nativeLabel={false} render={<div />}>
+              File kind
+            </FieldLabel>
             <Select
               items={KIND_LABELS}
               value={draft.kind}
@@ -467,7 +442,7 @@ function renderPromptForm({
               }
               disabled={draft.mode === 'edit'}
             >
-              <SelectTrigger size="lg" className="mt-1 w-full">
+              <SelectTrigger size="lg" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -475,53 +450,48 @@ function renderPromptForm({
                 <SelectItem value="text">Text</SelectItem>
               </SelectContent>
             </Select>
-          </label>
+          </Field>
         </div>
 
         {draft.mode === 'create' ? (
-          <label className="text-xs font-medium text-muted-foreground">
-            Filename
+          <Field>
+            <FieldLabel>Filename</FieldLabel>
             <Input
               size="lg"
               value={draft.filename}
               onChange={(event) =>
                 onChange({ filename: event.currentTarget.value })
               }
-              className="mt-1"
               placeholder="Optional; generated from title"
             />
-          </label>
+          </Field>
         ) : null}
 
-        <label className="text-xs font-medium text-muted-foreground">
-          Description
+        <Field>
+          <FieldLabel>Description</FieldLabel>
           <Textarea
             value={draft.description}
             onChange={(event) =>
               onChange({ description: event.currentTarget.value })
             }
-            className="mt-1 min-h-20"
+            className="min-h-20"
             placeholder="What this prompt is for"
           />
-        </label>
+        </Field>
 
-        <label className="text-xs font-medium text-muted-foreground">
-          Prompt Text
+        <Field>
+          <FieldLabel>Prompt text</FieldLabel>
           <Textarea
             value={draft.promptText}
             onChange={(event) =>
               onChange({ promptText: event.currentTarget.value })
             }
-            className="mt-1 min-h-72 font-mono text-xs leading-5"
+            className="min-h-72 font-mono text-xs leading-5"
             placeholder="Write the prompt text to copy into the composer"
           />
-        </label>
+        </Field>
 
-        {error ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        ) : null}
+        <FormError>{error}</FormError>
       </div>
     </div>
   )
@@ -563,129 +533,154 @@ export const PromptLibraryBrowserDialog: FC<
   const hasCatalog = Boolean(catalog)
 
   return (
-    <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogTrigger render={trigger} />
-      <DialogContent className="w-[min(1180px,calc(100vw-2rem))] max-h-[min(86vh,820px)]">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <BookOpenText className="h-5 w-5 text-muted-foreground" />
-            <DialogTitle>Prompt Library</DialogTitle>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onStartCreate}
-              disabled={!projectName || isMutating}
-              className="ml-auto"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New
-            </Button>
-          </div>
-          <DialogDescription>
-            {projectName
-              ? `${filteredPromptCount}/${totalPromptCount} prompts in ${projectName}.`
-              : 'Select a project to browse saved prompts.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-          <div className="flex min-h-0 flex-col border-b border-border/70 lg:border-r lg:border-b-0">
-            <div className="shrink-0 border-b border-border/70 p-4">
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  size="lg"
-                  value={filters.query}
-                  onChange={(event) =>
-                    onFiltersChange({ query: event.currentTarget.value })
-                  }
-                  placeholder="Search prompts"
-                  className="pl-8"
-                />
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {renderSelectControl({
-                  label: 'Scope',
-                  value: filters.scope,
-                  onChange: (value) =>
-                    onFiltersChange({
-                      scope: value as PromptLibraryBrowserFilters['scope'],
-                    }),
-                  options: [
-                    { value: 'all', label: 'All scopes' },
-                    { value: 'project', label: 'Project' },
-                    { value: 'global', label: 'Global' },
-                  ],
-                })}
-                {renderSelectControl({
-                  label: 'Kind',
-                  value: filters.kind,
-                  onChange: (value) =>
-                    onFiltersChange({
-                      kind: value as PromptLibraryBrowserFilters['kind'],
-                    }),
-                  options: [
-                    { value: 'all', label: 'All files' },
-                    { value: 'markdown', label: 'Markdown' },
-                    { value: 'text', label: 'Text' },
-                  ],
-                })}
-                {renderSelectControl({
-                  label: 'Tag',
-                  value: filters.tag,
-                  onChange: (value) => onFiltersChange({ tag: value }),
-                  options: [
-                    { value: 'all', label: 'All tags' },
-                    ...tagOptions.map((tag) => ({ value: tag, label: tag })),
-                  ],
-                })}
-              </div>
+    // Creating, editing and deleting a prompt is kept as it is done, so the
+    // library ends in Done; Refresh and New live in the header (R6).
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={trigger}
+      title={
+        <span className="flex items-center gap-2">
+          <BookOpenText aria-hidden className="size-5 text-ink-muted" />
+          Prompt library
+        </span>
+      }
+      description={
+        projectName
+          ? `${filteredPromptCount}/${totalPromptCount} prompts in ${projectName}.`
+          : 'Select a project to browse saved prompts.'
+      }
+      size="2xl"
+      height="tall"
+      flush
+      saves="as-you-go"
+      headerActions={
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onStartCreate}
+            disabledReason={projectName ? undefined : 'Open a project first.'}
+            disabled={isMutating}
+          >
+            <Plus className="size-3.5" />
+            New
+          </Button>
+          <IconButton
+            label="Refresh"
+            size="sm"
+            variant="ghost"
+            onClick={onRefresh}
+            pending={isCatalogLoading}
+            disabledReason={projectName ? undefined : 'Open a project first.'}
+          >
+            <RefreshCw />
+          </IconButton>
+        </>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="flex min-h-0 flex-col border-b border-line-soft lg:w-97.5 lg:shrink-0 lg:border-r lg:border-b-0">
+          <div className="shrink-0 border-b border-line-soft p-4">
+            <SearchField
+              size="lg"
+              value={filters.query}
+              onChange={(event) =>
+                onFiltersChange({ query: event.currentTarget.value })
+              }
+              onClear={() => onFiltersChange({ query: '' })}
+              clearLabel="Clear the prompt search"
+              placeholder="Search prompts"
+              aria-label="Search prompts"
+            />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {renderSelectControl({
+                label: 'Scope',
+                value: filters.scope,
+                onChange: (value) =>
+                  onFiltersChange({
+                    scope: value as PromptLibraryBrowserFilters['scope'],
+                  }),
+                options: [
+                  { value: 'all', label: 'All scopes' },
+                  { value: 'project', label: 'Project' },
+                  { value: 'global', label: 'Global' },
+                ],
+              })}
+              {renderSelectControl({
+                label: 'Kind',
+                value: filters.kind,
+                onChange: (value) =>
+                  onFiltersChange({
+                    kind: value as PromptLibraryBrowserFilters['kind'],
+                  }),
+                options: [
+                  { value: 'all', label: 'All files' },
+                  { value: 'markdown', label: 'Markdown' },
+                  { value: 'text', label: 'Text' },
+                ],
+              })}
+              {renderSelectControl({
+                label: 'Tag',
+                value: filters.tag,
+                onChange: (value) => onFiltersChange({ tag: value }),
+                options: [
+                  { value: 'all', label: 'All tags' },
+                  ...tagOptions.map((tag) => ({ value: tag, label: tag })),
+                ],
+              })}
             </div>
+          </div>
 
-            <div className="app-scrollbar h-[min(52vh,520px)] overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
-              {!projectName ? (
-                <p className="text-sm text-muted-foreground">
-                  Open a project to browse prompts.
-                </p>
-              ) : catalogError && !hasCatalog ? (
-                <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {catalogError}
-                </div>
-              ) : isCatalogLoading && !hasCatalog ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading prompts...
-                </div>
-              ) : hasCatalog && catalog?.prompts.length === 0 ? (
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p>No prompts found.</p>
-                  <p className="text-xs">
-                    Add Markdown or text files under `.convergence/prompts`.
-                  </p>
+          <div className="app-scrollbar h-130 overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
+            {!projectName ? (
+              <EmptyState
+                title="No project open"
+                detail="Open a project to browse prompts."
+              />
+            ) : catalogError && !hasCatalog ? (
+              <EmptyState
+                state="failed"
+                title="Couldn't read the prompts"
+                detail={catalogError}
+                onRetry={onRefresh}
+                retrying={isCatalogLoading}
+              />
+            ) : isCatalogLoading && !hasCatalog ? (
+              <EmptyState state="loading" title="Loading prompts…" />
+            ) : hasCatalog && catalog?.prompts.length === 0 ? (
+              <EmptyState
+                title="No prompts yet"
+                detail="Add Markdown or text files under .convergence/prompts, or make one here."
+                action={
                   <Button
                     type="button"
                     variant="secondary"
                     onClick={onStartCreate}
                     disabled={isMutating}
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    Create prompt
+                    <Plus className="size-3.5" />
+                    New prompt
                   </Button>
-                </div>
-              ) : prompts.length > 0 ? (
-                <div className="space-y-2">
-                  {prompts.map((prompt) =>
-                    renderPromptRow(prompt, selectedPromptId, onSelectPrompt),
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No prompts matched these filters.
-                </p>
-              )}
-            </div>
+                }
+              />
+            ) : prompts.length > 0 ? (
+              <div className="space-y-1">
+                {prompts.map((prompt) =>
+                  renderPromptRow(prompt, selectedPromptId, onSelectPrompt),
+                )}
+              </div>
+            ) : (
+              <EmptyState
+                title="No prompts match these filters"
+                detail="Clear the search or widen a filter."
+              />
+            )}
           </div>
+        </div>
 
+        <div className="min-h-0 flex-1">
           {renderDetailsPane({
             projectName,
             selectedPrompt,
@@ -702,27 +697,7 @@ export const PromptLibraryBrowserDialog: FC<
             onDeletePrompt,
           })}
         </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onRefresh}
-            disabled={!projectName || isCatalogLoading}
-          >
-            <RefreshCw
-              className={cn('h-4 w-4', isCatalogLoading && 'animate-spin')}
-            />
-            Refresh
-          </Button>
-          {selectedPrompt?.path ? (
-            <div className="mr-auto hidden min-w-0 items-center gap-2 text-xs text-muted-foreground sm:flex">
-              <Library className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{selectedPrompt.path}</span>
-            </div>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </FormDialog>
   )
 }
