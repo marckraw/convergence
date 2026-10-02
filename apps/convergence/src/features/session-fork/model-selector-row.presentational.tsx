@@ -1,7 +1,9 @@
 import type { FC, ReactNode } from 'react'
 import {
-  getProviderLifecycleBadge,
+  effortSelectItems,
+  providerSelectItems,
   type ProviderInfo,
+  type ProviderSelectItem,
   type ReasoningEffort,
   type ResolvedProviderSelection,
 } from '@/entities/session'
@@ -24,18 +26,20 @@ interface ModelSelectorRowProps {
   onEffortChange: (id: ReasoningEffort | '') => void
 }
 
-/** A provider as its choice reads: its mark, its vendor, and ALPHA where it is early. */
-function providerChoice(provider: ProviderInfo): ReactNode {
-  const badge = getProviderLifecycleBadge(provider)
+/**
+ * A provider as its choice reads: its mark, its vendor, and ALPHA where it is
+ * early. The words come from the composer's own mapping (CONV-17).
+ */
+function providerChoice(item: ProviderSelectItem): ReactNode {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <ProviderIcon
-        providerId={provider.id}
-        vendorLabel={provider.vendorLabel}
-        name={provider.name}
+        providerId={item.id}
+        vendorLabel={item.vendorLabel}
+        name={item.name}
       />
-      <span className="truncate">{provider.vendorLabel || provider.name}</span>
-      {badge ? <Badge tone="warning">{badge.label}</Badge> : null}
+      <span className="truncate">{item.label}</span>
+      {item.badge ? <Badge tone="warning">{item.badge.label}</Badge> : null}
     </span>
   )
 }
@@ -54,11 +58,14 @@ export const ModelSelectorRow: FC<ModelSelectorRowProps> = ({
   onModelChange,
   onEffortChange,
 }) => {
-  const providerItems = providers.map((provider) => ({
-    value: provider.id,
-    label: providerChoice(provider),
+  const choices = providerSelectItems(
+    providers.map((descriptor) => ({ descriptor })),
+  )
+  const providerItems = choices.map((choice) => ({
+    value: choice.id,
+    label: providerChoice(choice),
   }))
-  const efforts = selection.model?.effortOptions ?? []
+  const efforts = effortSelectItems(selection)
   const effortItems = efforts.map((effort) => ({
     value: effort.id,
     label: effort.label,
@@ -75,9 +82,9 @@ export const ModelSelectorRow: FC<ModelSelectorRowProps> = ({
           <SelectValue placeholder="Select provider" />
         </SelectTrigger>
         <SelectContent>
-          {providers.map((provider) => (
-            <SelectItem key={provider.id} value={provider.id}>
-              {providerChoice(provider)}
+          {choices.map((choice) => (
+            <SelectItem key={choice.id} value={choice.id}>
+              {providerChoice(choice)}
             </SelectItem>
           ))}
         </SelectContent>

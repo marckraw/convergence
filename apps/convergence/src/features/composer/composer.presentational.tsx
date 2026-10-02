@@ -23,8 +23,9 @@ import {
   CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
   CODEX_APPROVAL_POLICY_OPTIONS,
   CODEX_SANDBOX_OPTIONS,
-  getProviderLifecycleBadge,
+  effortSelectItems,
   getSimplePermissionPreset,
+  providerSelectItems,
   scopeModelCatalogToProvider,
   selectableProviderDescriptors,
 } from '@/entities/session'
@@ -38,6 +39,7 @@ import {
   Badge,
   Button,
   Chip,
+  ComposerCard,
   Kbd,
   cn,
   IconButton,
@@ -559,12 +561,6 @@ export const Composer: FC<ComposerProps> = ({
     }
   }
 
-  const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
-    const target = e.currentTarget
-    target.style.height = 'auto'
-    target.style.height = `${Math.min(target.scrollHeight, 200)}px`
-  }
-
   // What the row has to fill its controls from. A `notice` row has none, which
   // is why it renders a sentence instead of an emptied cluster.
   const providerCatalog =
@@ -572,25 +568,18 @@ export const Composer: FC<ComposerProps> = ({
   // Listed and disabled, never dropped: a machine that will not run a provider
   // teaches more by saying so than by having no row at all (MAR-2682, "a
   // blocked provider is listed and disabled, never dropped" -- the same
-  // treatment the strip beneath already gives).
-  const providerItems = providerCatalog.map(
-    ({ descriptor, blockedReason }) => ({
-      id: descriptor.id,
+  // treatment the strip beneath already gives). The fork dialog lists them
+  // from the same mapping (CONV-17); the mark is drawn here.
+  const providerItems = providerSelectItems(providerCatalog).map(
+    ({ vendorLabel, name, ...item }) => ({
+      ...item,
       icon: (
         <ProviderIcon
-          providerId={descriptor.id}
-          vendorLabel={descriptor.vendorLabel}
-          name={descriptor.name}
+          providerId={item.id}
+          vendorLabel={vendorLabel}
+          name={name}
         />
       ),
-      label: descriptor.vendorLabel || descriptor.name,
-      description:
-        blockedReason ??
-        (descriptor.vendorLabel && descriptor.vendorLabel !== descriptor.name
-          ? descriptor.name
-          : undefined),
-      badge: getProviderLifecycleBadge(descriptor) ?? undefined,
-      disabled: blockedReason !== null,
     }),
   )
   // The same derivation the container resolves selections through, so the model
@@ -605,14 +594,7 @@ export const Composer: FC<ComposerProps> = ({
   // A stranded session has no catalog model to read options from, but its row
   // still carries an effort. Showing it, disabled, beats hiding the control and
   // leaving the human to guess what the row says (MAR-2550).
-  const effortItems = (
-    selection.model?.effortOptions ??
-    (selection.effort ? [selection.effort] : [])
-  ).map((effort) => ({
-    id: effort.id,
-    label: effort.label,
-    description: effort.description,
-  }))
+  const effortItems = effortSelectItems(selection)
   const permissionItems = [
     {
       id: 'ask',
@@ -662,14 +644,11 @@ export const Composer: FC<ComposerProps> = ({
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
-        <div
-          className={cn(
-            'rounded-xl border bg-surface p-3 transition-colors',
-            // The card is the upper of two stacked surfaces: the Execution Bar
-            // is its sibling below, tucked behind this bottom edge.
-            composerCardDepthClassByMode[executionBar.mode],
-            isDragging ? 'border-strong border-dashed' : 'border-line',
-          )}
+        <ComposerCard
+          dragging={isDragging}
+          // The card is the upper of two stacked surfaces: the Execution Bar
+          // is its sibling below, tucked behind this bottom edge.
+          className={composerCardDepthClassByMode[executionBar.mode]}
           data-testid="composer-root"
         >
           <AttachmentsRow
@@ -786,7 +765,6 @@ export const Composer: FC<ComposerProps> = ({
               onClick={(e) =>
                 onSelectionChange?.(e.currentTarget.selectionStart ?? 0)
               }
-              onInput={handleInput}
               onPaste={onPaste}
               placeholder={placeholder}
               // Named, because the strip below now has a text field of its own
@@ -802,6 +780,11 @@ export const Composer: FC<ComposerProps> = ({
                   : undefined
               }
               disabled={disabled}
+              // It grows with what's typed, to nine lines (the 200 px it
+              // grew to by hand), then scrolls; cleared, it shrinks back
+              // (CONV-17).
+              autoGrow
+              maxRows={9}
               rows={1}
               variant="bare"
               className="text-ink"
@@ -1192,7 +1175,7 @@ export const Composer: FC<ComposerProps> = ({
               )}
             </div>
           ) : null}
-        </div>
+        </ComposerCard>
         <ExecutionBar
           view={executionBar}
           workAddress={workAddress}
