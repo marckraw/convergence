@@ -43,7 +43,7 @@ import { ConversationItemHeader } from './conversation-item-header.presentationa
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
 import { ToolVisibilityBadge } from './tool-visibility-badge.presentational'
 import { RequestCard } from './request-card.presentational'
-import { ChoiceRequestForm } from './choice-request-form.presentational'
+import { ChoiceRequestForm } from './choice-request-form.container'
 import { PlanRequestForm } from './plan-request-form.presentational'
 import { FormRequestForm } from './form-request-form.presentational'
 import { UrlRequestForm } from './url-request-form.presentational'

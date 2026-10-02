@@ -1,10 +1,5 @@
-import { useMemo, type ReactNode } from 'react'
-import {
-  getFiletypeFromFileName,
-  type DiffLineAnnotation,
-  type SelectedLineRange,
-  type SupportedLanguages,
-} from '@pierre/diffs'
+import type { ComponentProps, ReactNode } from 'react'
+import type { DiffLineAnnotation, SelectedLineRange } from '@pierre/diffs'
 import {
   PatchDiff,
   Virtualizer,
@@ -13,15 +8,11 @@ import {
 import { ChevronDown, ChevronUp, ChevronsUpDown, RotateCcw } from 'lucide-react'
 import { EmptyState, IconButton } from '@convergence/ui'
 import {
-  DEFAULT_DIFF_CONTEXT_LINES,
-  foldUnifiedDiffContext,
-} from './diff-context.pure'
-import {
   DiffFileHeader,
   type DiffFileHeaderSubtitleVariant,
 } from './diff-file-header.presentational'
 import { diffContextReasons } from './diff-context-reasons.pure'
-import { planPierreDiffPerformance } from './pierre-diff-performance.pure'
+import type { PierreDiffPatchView } from './pierre-diff-patch.pure'
 
 interface PierreDiffViewerProps<TAnnotation = undefined> {
   file: string | null
@@ -45,6 +36,31 @@ interface PierreDiffViewerProps<TAnnotation = undefined> {
   onResetContext?: () => void
 }
 
+/**
+ * The worker pool a heavy diff is highlighted in, built by the container so
+ * its options keep one identity across renders (the provider rebuilds its
+ * pool when they change).
+ */
+export type PierreDiffWorkerPool = Pick<
+  ComponentProps<typeof WorkerPoolContextProvider>,
+  'poolOptions' | 'highlighterOptions'
+>
+
+type PierreDiffViewerViewProps<TAnnotation> = Omit<
+  PierreDiffViewerProps<TAnnotation>,
+  'contextBefore' | 'contextAfter'
+> & {
+  /** What the container derived from the diff (CONV-30): the folded patch and its plan. */
+  view: PierreDiffPatchView
+  /** Null where the diff is light, or workers can't run here. */
+  workerPool: PierreDiffWorkerPool | null
+}
+
+/**
+ * A file's diff in Pierre, with its header and the context controls: props in,
+ * markup out. The container folds the patch, plans the drawing and builds the
+ * worker pool (CONV-30).
+ */
 export const PierreDiffViewerView = <TAnnotation,>({
   file,
   diff,
@@ -58,53 +74,20 @@ export const PierreDiffViewerView = <TAnnotation,>({
   lineAnnotations = [],
   renderAnnotation,
   onSelectedLinesChange,
-  contextBefore = DEFAULT_DIFF_CONTEXT_LINES,
-  contextAfter = DEFAULT_DIFF_CONTEXT_LINES,
   onExpandContextBefore,
   onExpandContextAfter,
   onExpandContextBoth,
   onResetContext,
-}: PierreDiffViewerProps<TAnnotation>) => {
-  const rawPatch = useMemo(
-    () => (file ? buildPierrePatch({ file, diff }) : null),
-    [diff, file],
-  )
-  const foldedContext = useMemo(
-    () =>
-      rawPatch
-        ? foldUnifiedDiffContext(rawPatch, {
-            before: contextBefore,
-            after: contextAfter,
-          })
-        : null,
-    [contextAfter, contextBefore, rawPatch],
-  )
-  const patch = foldedContext?.patch ?? rawPatch
-  const expandedFromDefault =
-    contextBefore !== DEFAULT_DIFF_CONTEXT_LINES ||
-    contextAfter !== DEFAULT_DIFF_CONTEXT_LINES
-  const shouldShowContextControls =
-    !!foldedContext && (foldedContext.totalHidden > 0 || expandedFromDefault)
-  const performancePlan = useMemo(
-    () => planPierreDiffPerformance(patch ?? diff),
-    [diff, patch],
-  )
-  const canUseWorkerPool =
-    performancePlan.useWorkerPool && canUsePierreDiffWorkerPool()
-  const workerPoolOptions = useMemo(
-    () => ({
-      poolSize: getPierreDiffWorkerPoolSize(),
-      workerFactory: createPierreDiffWorker,
-    }),
-    [],
-  )
-  const workerHighlighterOptions = useMemo(
-    () => ({
-      langs: [getPierreDiffLanguageHint(file ?? '')],
-      preferredHighlighter: 'shiki-js' as const,
-    }),
-    [file],
-  )
+  view,
+  workerPool,
+}: PierreDiffViewerViewProps<TAnnotation>) => {
+  const {
+    patch,
+    folded: foldedContext,
+    expandedFromDefault,
+    showContextControls: shouldShowContextControls,
+    performance: performancePlan,
+  } = view
 
   if (!file) {
     return (
@@ -143,7 +126,7 @@ export const PierreDiffViewerView = <TAnnotation,>({
   const patchDiff = patch ? (
     <PatchDiff
       patch={patch}
-      disableWorkerPool={!canUseWorkerPool}
+      disableWorkerPool={!workerPool}
       selectedLines={selectedLines}
       lineAnnotations={lineAnnotations}
       renderAnnotation={renderAnnotation}
@@ -157,10 +140,10 @@ export const PierreDiffViewerView = <TAnnotation,>({
     />
   ) : null
   const diffNode =
-    patchDiff && canUseWorkerPool ? (
+    patchDiff && workerPool ? (
       <WorkerPoolContextProvider
-        poolOptions={workerPoolOptions}
-        highlighterOptions={workerHighlighterOptions}
+        poolOptions={workerPool.poolOptions}
+        highlighterOptions={workerPool.highlighterOptions}
       >
         {patchDiff}
       </WorkerPoolContextProvider>
@@ -327,51 +310,4 @@ function renderPierreDiffPerformanceShell({
       {children}
     </Virtualizer>
   )
-}
-
-function buildPierrePatch(input: {
-  file: string
-  diff: string
-}): string | null {
-  const diff = input.diff.trimEnd()
-  if (!diff || !diff.includes('@@')) return null
-
-  if (
-    diff.startsWith('diff --git ') ||
-    diff.startsWith('--- ') ||
-    diff.includes('\n--- ')
-  ) {
-    return diff
-  }
-
-  return [
-    `diff --git a/${input.file} b/${input.file}`,
-    `--- a/${input.file}`,
-    `+++ b/${input.file}`,
-    diff,
-  ].join('\n')
-}
-
-function canUsePierreDiffWorkerPool(): boolean {
-  return typeof window !== 'undefined' && typeof Worker !== 'undefined'
-}
-
-function createPierreDiffWorker(): Worker {
-  return new Worker(
-    new URL('@pierre/diffs/worker/worker.js', import.meta.url),
-    {
-      name: 'pierre-diffs',
-      type: 'module',
-    },
-  )
-}
-
-function getPierreDiffWorkerPoolSize(): number {
-  if (typeof window === 'undefined') return 1
-  const cores = window.navigator.hardwareConcurrency || 2
-  return Math.max(1, Math.min(4, cores - 1))
-}
-
-function getPierreDiffLanguageHint(file: string): SupportedLanguages {
-  return getFiletypeFromFileName(file)
 }

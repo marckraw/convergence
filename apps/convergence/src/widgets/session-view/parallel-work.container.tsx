@@ -25,7 +25,7 @@ import {
   Timestamp,
 } from '@convergence/ui'
 import { ConversationItem } from './conversation-item.container'
-import { ParallelWorkPanel } from './parallel-work.presentational'
+import { ParallelWorkPanel } from './parallel-work-panel.container'
 import { parallelWorkApi } from './parallel-work.api'
 import {
   parallelWorkDetailItems,

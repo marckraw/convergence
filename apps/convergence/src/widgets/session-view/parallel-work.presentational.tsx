@@ -1,14 +1,9 @@
-import { useMemo, type FC, type ReactNode } from 'react'
+import type { FC, ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react'
 import {
-  countParallelWork,
-  orderParallelWork,
-  parallelWorkParents,
-  archiveParallelWork,
   parallelWorkTime,
   formatRelativeTime,
   parallelWorkRowState,
-  pendingAgentDecision,
   type AttributedWorkItem,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
@@ -25,7 +20,6 @@ import {
   Tooltip,
 } from '@convergence/ui'
 import {
-  descendantActivity,
   parallelWorkCardTone,
   workRowKey,
   workStatus,
@@ -60,76 +54,49 @@ export interface ParallelWorkPanelProps {
   details?: ReactNode
 }
 
-const EMPTY_ITEMS: AttributedWorkItem[] = []
+/**
+ * What the panel draws its rows from, derived by its container (CONV-30):
+ * the tree, the older rows folded away, the running counts under a folded
+ * branch, the decisions waiting in the conversation, and the inventory line.
+ */
+export interface ParallelWorkPanelTree {
+  roots: ParallelWorkRow[]
+  childrenById: Map<ParallelWorkRow, ParallelWorkRow[]>
+  /** Settled rows folded under "N older", and the newest one's time. */
+  older: ParallelWorkRow[]
+  newest: string | null
+  archived: ReadonlySet<ParallelWorkRow>
+  descendantCounts: Map<string, number>
+  decisionIds: Map<string, string | undefined>
+  inventory: string[]
+}
+
 const EMPTY_COLLAPSED = new Set<string>()
 
-export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
+/**
+ * The Parallel work panel: props in, markup out. ParallelWorkPanel, its
+ * container, derives the tree it draws (CONV-30).
+ */
+export const ParallelWorkPanelView: FC<
+  ParallelWorkPanelProps & { tree: ParallelWorkPanelTree }
+> = (props) => {
   const {
     rows,
     now,
     selectedId,
-    items = EMPTY_ITEMS,
     collapsed = EMPTY_COLLAPSED,
     stopStates = new Map(),
+    tree,
   } = props
-  const ordered = useMemo(() => orderParallelWork(rows), [rows])
-  const archive = useMemo(
-    () => archiveParallelWork(ordered, now),
-    [ordered, now],
-  )
-  const archived = useMemo(() => new Set(archive.older), [archive])
-  const { counts, completed, childrenById, roots } = useMemo(() => {
-    const childrenById = new Map<ParallelWorkRow, ParallelWorkRow[]>()
-    const parents = parallelWorkParents(rows)
-    for (const row of ordered) {
-      const parent = row.parentId ? parents.get(row.parentId) : undefined
-      if (parent) {
-        const children = childrenById.get(parent) ?? []
-        children.push(row)
-        childrenById.set(parent, children)
-      }
-    }
-    return {
-      counts: countParallelWork(rows),
-      completed: rows.filter(
-        (row) => parallelWorkRowState(row).fact?.status === 'completed',
-      ).length,
-      childrenById,
-      roots: ordered.filter(
-        (row) => !row.parentId || !parents.has(row.parentId),
-      ),
-    }
-  }, [rows, ordered])
-  const descendantCounts = useMemo(
-    () =>
-      new Map(
-        rows
-          .filter((row) => collapsed.has(workRowKey(row)))
-          .map((row) => [workRowKey(row), descendantActivity(rows, row)]),
-      ),
-    [rows, collapsed],
-  )
-  const decisionIds = useMemo(
-    () =>
-      new Map(
-        rows.map((row) => [
-          workRowKey(row),
-          parallelWorkRowState(row)
-            .ids.map((id) => pendingAgentDecision(items, id))
-            .find(Boolean),
-        ]),
-      ),
-    [rows, items],
-  )
-  // The inventory's facts, joined by MetaLine (CONV-23).
-  const inventory = [
-    'This session',
-    `${counts.running} running`,
-    `${completed} completed`,
-    ...(counts.unknown ? [`${counts.unknown} unknown`] : []),
-    ...(counts.failed ? [`${counts.failed} failed`] : []),
-    ...(counts.stopped ? [`${counts.stopped} stopped`] : []),
-  ]
+  const {
+    roots,
+    childrenById,
+    archived,
+    descendantCounts,
+    decisionIds,
+    inventory,
+  } = tree
+  const archive = { older: tree.older, newest: tree.newest }
   const selected = rows.find((row) => workRowKey(row) === selectedId)
   const decision = (row: ParallelWorkRow) => {
     const id = decisionIds.get(workRowKey(row))

@@ -6,7 +6,7 @@ import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
 import * as rowHelpers from './parallel-work.pure'
 import * as workHelpers from '@/shared/lib/parallel-work.pure'
-import { ParallelWorkPanel } from './parallel-work.presentational'
+import { ParallelWorkPanel } from './parallel-work-panel.container'
 
 afterEach(() => vi.restoreAllMocks())
 

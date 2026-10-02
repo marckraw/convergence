@@ -1,8 +1,5 @@
-import { useId, useMemo, useState, type FC } from 'react'
-import type {
-  InteractionQuestion,
-  InteractionResponse,
-} from '@/entities/session'
+import { useId, type FC } from 'react'
+import type { InteractionQuestion } from '@/entities/session'
 import {
   Button,
   Checkbox,
@@ -13,55 +10,41 @@ import {
   RadioGroup,
 } from '@convergence/ui'
 
-interface ChoiceRequestFormProps {
+interface ChoiceRequestFormViewProps {
   questions: InteractionQuestion[]
-  onSubmit: (response: InteractionResponse, displayText: string) => void
+  /** What is chosen so far, by question id. */
+  answers: Record<string, string[]>
+  /** Every question has an answer. */
+  canSubmit: boolean
+  /** One option picked: chosen in place of a single answer, or ticked or unticked. */
+  onChoose: (question: InteractionQuestion, value: string) => void
+  onSubmit: () => void
 }
 
-export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
+/**
+ * A choice request's questions and its Answer (CONV-9): props in, markup out.
+ * The answers are held by ChoiceRequestForm, its container (CONV-30).
+ */
+export const ChoiceRequestFormView: FC<ChoiceRequestFormViewProps> = ({
   questions,
+  answers,
+  canSubmit,
+  onChoose,
   onSubmit,
 }) => {
-  const initialAnswers = useMemo(
-    () => buildInitialChoiceAnswers(questions),
-    [questions],
-  )
-  const [answers, setAnswers] =
-    useState<Record<string, string[]>>(initialAnswers)
   const formId = useId()
-
-  const canSubmit = questions.every(
-    (question) => (answers[question.id] ?? []).length > 0,
-  )
 
   return (
     <form
       className="mt-4 space-y-4"
       onSubmit={(event) => {
         event.preventDefault()
-        if (!canSubmit) return
-
-        const response: InteractionResponse = {
-          kind: 'choice',
-          answers: questions.map((question) => ({
-            questionId: question.id,
-            values: answers[question.id] ?? [],
-          })),
-        }
-        onSubmit(response, formatChoiceAnswerDisplay(questions, answers))
+        onSubmit()
       }}
     >
       {questions.map((question) => {
         const chosen = answers[question.id] ?? []
-        const choose = (value: string) =>
-          setAnswers((current) => ({
-            ...current,
-            [question.id]: toggleChoiceAnswer({
-              current: current[question.id] ?? [],
-              value,
-              multiSelect: question.multiSelect,
-            }),
-          }))
+        const choose = (value: string) => onChoose(question, value)
         const questionId = `${formId}-${question.id}`
         const head = (
           <>
@@ -128,47 +111,4 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
       </Button>
     </form>
   )
-}
-
-function buildInitialChoiceAnswers(
-  questions: InteractionQuestion[],
-): Record<string, string[]> {
-  return Object.fromEntries(
-    questions.map((question) => [
-      question.id,
-      question.multiSelect
-        ? []
-        : question.options[0]?.label
-          ? [question.options[0].label]
-          : [],
-    ]),
-  )
-}
-
-function toggleChoiceAnswer(input: {
-  current: string[]
-  value: string
-  multiSelect: boolean
-}): string[] {
-  if (!input.multiSelect) {
-    return [input.value]
-  }
-
-  if (input.current.includes(input.value)) {
-    return input.current.filter((value) => value !== input.value)
-  }
-
-  return [...input.current, input.value]
-}
-
-function formatChoiceAnswerDisplay(
-  questions: InteractionQuestion[],
-  answers: Record<string, string[]>,
-): string {
-  return questions
-    .map((question) => {
-      const values = answers[question.id] ?? []
-      return `${question.question}\n${values.join(', ')}`
-    })
-    .join('\n\n')
 }

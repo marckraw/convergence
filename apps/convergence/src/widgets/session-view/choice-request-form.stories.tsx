@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn } from 'storybook/test'
-import { ChoiceRequestForm } from './choice-request-form.presentational'
+import { ChoiceRequestForm } from './choice-request-form.container'
+import { ChoiceRequestFormView } from './choice-request-form.presentational'
 
 const meta = {
   title: 'Widgets/SessionView/ChoiceRequestForm',
@@ -41,6 +42,8 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 /**
+ * The form through its container, which holds the answers (CONV-30).
+ *
  * One question, one answer: a radio group of cards (CONV-9), named by its
  * header and described by the question, the first option chosen. The
  * arrow keys move the choice; answering sends it.
@@ -154,4 +157,29 @@ export const Long: Story = {
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
+}
+
+/**
+ * The view alone, props in and markup out: these answers chosen, and a
+ * press on an option asks the container to choose it.
+ */
+const onChoose = fn()
+
+export const Chosen: Story = {
+  render: (args) => (
+    <ChoiceRequestFormView
+      questions={args.questions}
+      answers={{ 'q-storage': ['Memory'] }}
+      canSubmit
+      onChoose={onChoose}
+      onSubmit={() => {}}
+    />
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole('radio', { name: 'Memory' })).toBeChecked()
+    await userEvent.click(canvas.getByRole('radio', { name: 'SQLite' }))
+    await expect(onChoose).toHaveBeenCalledWith(args.questions[0], 'SQLite')
+    // Nothing is held here: the choice stays where the props put it.
+    await expect(canvas.getByRole('radio', { name: 'Memory' })).toBeChecked()
+  },
 }

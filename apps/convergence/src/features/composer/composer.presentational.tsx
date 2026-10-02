@@ -72,10 +72,8 @@ import { ComposerSelect } from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
 import { SUBMIT_SHORTCUT_LABEL } from '@/shared/lib/use-form-submit-shortcut.pure'
 import type { ExecutionBarView } from './execution-bar.pure'
-import {
-  workAddressReadyForSend,
-  type WorkAddressSlotView,
-} from '@/entities/execution-host'
+import type { WorkAddressSlotView } from '@/entities/execution-host'
+import { composerCanSend } from './composer-send.pure'
 import { composerCardDepthClassByMode } from './execution-bar.styles'
 import { relayMuteTitle } from './relay-mute.pure'
 import { ProviderAccountPicker } from '@/entities/provider-account'
@@ -432,37 +430,17 @@ export const Composer: FC<ComposerProps> = ({
   const codexSpeedLabel =
     codexSpeedChoices.find((choice) => choice.id === codexSpeedId)?.label ??
     codexSpeedId
-  /**
-   * Whether this composer may send at all — one derivation, read by both ways
-   * of sending.
-   *
-   * The button and ⌘↵ each used to spell their own version out, and they had
-   * already drifted: the keyboard path knew nothing of the option row or the
-   * attachment ingest, so every guard added to the button was a guard the
-   * keyboard did not have. That is how a send could leave while the strip was
-   * still asking where the session works — through the shortcut he actually
-   * uses (MAR-2689). Two encodings of one fact need one derivation, applied at
-   * both.
-   */
-  const canSend =
-    !disabled &&
-    // Nothing to send *to* until the machine says what it runs. Never true for
-    // this machine, so a Local composer's send button is what it always was.
-    // Keyed on the row having no options at all, not on there being a sentence:
-    // a listing the daemon could not re-confirm carries one and is still a row
-    // a session can be started from (MAR-2682, "a dead daemon must not look
-    // alive").
-    optionRow.status !== 'notice' &&
-    // And nothing to send *to* until the strip can say where on that machine
-    // the session will work. Keyed on the slot the same way the line above is
-    // keyed on the option row, and for the same reason: a session born while
-    // the place is still being asked about records no place at all, and the
-    // start then falls back to the silent derivation this slice replaced
-    // (MAR-2689). Always true on Local, whose slot does not exist.
-    workAddressReadyForSend(workAddress) &&
-    !hasAttachmentErrors &&
-    !attachmentsIngestInFlight &&
-    (value.trim().length > 0 || attachments.length > 0 || hasPendingAnnotations)
+  // One derivation, read by the button and by ⌘↵ alike (MAR-2689, CONV-30).
+  const canSend = composerCanSend({
+    disabled,
+    optionRow,
+    workAddress,
+    hasAttachmentErrors,
+    attachmentsIngestInFlight,
+    value,
+    attachmentCount: attachments.length,
+    hasPendingAnnotations,
+  })
 
   /**
    * The picker the message field drives, if one is open (CONV-6): its rows,
