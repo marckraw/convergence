@@ -267,6 +267,9 @@ in the package.
 `*.presentational.tsx` files must not contain side-effectful orchestration:
 
 - no `useEffect`, `useLayoutEffect`, or `useInsertionEffect`
+- no `useState`, `useReducer`, `useContext` or `useImperativeHandle`, typed
+  calls (`useState<T>(…)`) included: state lives in the container, which
+  passes it down (Chaperone's `preset/presentational-no-stateful-hooks`)
 - no direct Electron imports
 - no direct filesystem, process, or network bootstrapping
 
