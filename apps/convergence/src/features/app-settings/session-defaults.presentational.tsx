@@ -27,10 +27,10 @@ interface SessionDefaultsFieldsProps {
 }
 
 /** A provider as its row reads: its mark, its vendor, and ALPHA where it is early. */
-function ProviderChoice({ provider }: { provider: ProviderInfo }) {
+function renderProviderChoice(provider: ProviderInfo): ReactNode {
   const badge = getProviderLifecycleBadge(provider)
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span key={provider.id} className="flex min-w-0 items-center gap-2">
       <ProviderIcon
         providerId={provider.id}
         vendorLabel={provider.vendorLabel}
@@ -54,10 +54,7 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
   onEffortChange,
 }) => {
   const providerItems: Record<string, ReactNode> = Object.fromEntries(
-    providers.map((provider) => [
-      provider.id,
-      <ProviderChoice key={provider.id} provider={provider} />,
-    ]),
+    providers.map((provider) => [provider.id, renderProviderChoice(provider)]),
   )
   const efforts = selection.model?.effortOptions ?? []
   const effortItems = efforts.map((effort) => ({
@@ -88,7 +85,7 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
           <SelectContent>
             {providers.map((provider) => (
               <SelectItem key={provider.id} value={provider.id}>
-                <ProviderChoice provider={provider} />
+                {renderProviderChoice(provider)}
               </SelectItem>
             ))}
           </SelectContent>

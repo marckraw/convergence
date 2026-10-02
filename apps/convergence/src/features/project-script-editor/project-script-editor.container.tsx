@@ -32,13 +32,7 @@ interface ProjectScriptEditorProps {
 }
 
 /** An icon with its name: how a choice reads in the list and in the trigger. */
-function IconChoice({
-  icon,
-  label,
-}: {
-  icon: ProjectScriptIconId
-  label: string
-}) {
+function renderIconChoice(icon: ProjectScriptIconId, label: string) {
   return (
     <span className="flex items-center gap-2">
       <ProjectScriptIcon icon={icon} className="size-4" />
@@ -49,7 +43,7 @@ function IconChoice({
 
 const ICON_ITEMS = PROJECT_SCRIPT_ICON_OPTIONS.map((option) => ({
   value: option.id,
-  label: <IconChoice icon={option.id} label={option.label} />,
+  label: renderIconChoice(option.id, option.label),
 }))
 
 /** Why Save waits, or nothing when it can go. */
@@ -141,7 +135,7 @@ export const ProjectScriptEditor: FC<ProjectScriptEditorProps> = ({
             <SelectContent>
               {PROJECT_SCRIPT_ICON_OPTIONS.map((option) => (
                 <SelectItem key={option.id} value={option.id}>
-                  <IconChoice icon={option.id} label={option.label} />
+                  {renderIconChoice(option.id, option.label)}
                 </SelectItem>
               ))}
             </SelectContent>
