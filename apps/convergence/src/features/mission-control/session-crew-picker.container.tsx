@@ -179,7 +179,6 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                   disabled={!isValidCrewName(draftName)}
                   onClick={() => void submitDraft()}
                   size="sm"
-                  className="px-3"
                 >
                   Create &amp; add this session
                 </Button>

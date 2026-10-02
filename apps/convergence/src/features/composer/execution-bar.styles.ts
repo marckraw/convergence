@@ -118,9 +118,11 @@ export const composerCardDepthClassByMode: Record<
 /** "Runs on". */
 export const stripLabelClass = 'text-2xs font-medium text-ink-muted'
 
-/** The chooser, while a session is being born. */
-export const stripSelectClass =
-  'h-6 px-1.5 text-2xs text-ink-muted hover:text-ink'
+/**
+ * The chooser, while a session is being born: the 24 px control, `size="xs"`
+ * (R3), whose words are the strip's 11 px; only its quiet ink is set here.
+ */
+export const stripSelectClass = 'text-ink-muted hover:text-ink'
 
 /** A live session whose machine is gone. */
 export const stripWarningClass =

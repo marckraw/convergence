@@ -613,7 +613,7 @@ export const SpaceWorkboardDialogContainer: FC<{
           <Button
             type="button"
             variant="quiet"
-            className="w-full justify-between px-2"
+            className="w-full justify-between"
           >
             <span className="flex items-center gap-2">
               <GitBranch className="h-3.5 w-3.5" />

@@ -489,7 +489,7 @@ describe('ComposerContainer', () => {
       />,
     )
     expect(
-      screen.getByRole('switch', { name: 'Send quiet' }).nextElementSibling,
+      screen.getByRole('button', { name: 'Send quiet' }).nextElementSibling,
     ).toBe(screen.getByRole('button', { name: 'Wire fixture' }))
     rerender(<ComposerContainer context={context} />)
     expect(screen.queryByText('Wire fixture')).toBeNull()
@@ -497,11 +497,11 @@ describe('ComposerContainer', () => {
 
   describe('the quiet send (F10)', () => {
     it('shows no toggle at all when nothing leaves this session', () => {
-      // A switch that silences nothing would sit on every composer in the app.
+      // A toggle that silences nothing would sit on every composer in the app.
       useSessionRelayStore.setState({ relays: [], isLoaded: true })
       renderComposer()
 
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Send quiet' })).toBeNull()
     })
 
     it('shows no toggle when every wire leaving this session is disarmed', () => {
@@ -511,7 +511,7 @@ describe('ComposerContainer', () => {
       })
       renderComposer()
 
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Send quiet' })).toBeNull()
     })
 
     it('shows the toggle, off, when an armed wire leaves this session', () => {
@@ -522,8 +522,8 @@ describe('ComposerContainer', () => {
       renderComposer()
 
       expect(
-        screen.getByRole('switch', { name: 'Send quiet' }),
-      ).toHaveAttribute('aria-checked', 'false')
+        screen.getByRole('button', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-pressed', 'false')
     })
 
     it('sends quiet in the order a person actually does it: type, toggle, send', () => {
@@ -568,7 +568,7 @@ describe('ComposerContainer', () => {
       const textbox = renderComposer()
 
       fireEvent.change(textbox, { target: { value: '/compact' } })
-      fireEvent.click(screen.getByRole('switch', { name: 'Send quiet' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Send quiet' }))
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
 
       expect(
@@ -578,17 +578,17 @@ describe('ComposerContainer', () => {
       )
     })
 
-    it('sends quiet when it is switched on, and resets itself afterwards', () => {
+    it('sends quiet when it is pressed, and resets itself afterwards', () => {
       useSessionRelayStore.setState({
         relays: [wireLeaving('session-1')],
         isLoaded: true,
       })
       const textbox = renderComposer()
 
-      fireEvent.click(screen.getByRole('switch', { name: 'Send quiet' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Send quiet' }))
       expect(
-        screen.getByRole('switch', { name: 'Send quiet' }),
-      ).toHaveAttribute('aria-checked', 'true')
+        screen.getByRole('button', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-pressed', 'true')
 
       fireEvent.change(textbox, { target: { value: '/compact' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
@@ -602,8 +602,8 @@ describe('ComposerContainer', () => {
       // The whole ruling, on screen: one quiet send, then armed again without
       // him having to switch anything back.
       expect(
-        screen.getByRole('switch', { name: 'Send quiet' }),
-      ).toHaveAttribute('aria-checked', 'false')
+        screen.getByRole('button', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-pressed', 'false')
     })
 
     it('leaves an ordinary send exactly as it was before the quiet send existed', () => {
@@ -4662,6 +4662,32 @@ describe('ComposerContainer', () => {
     expect(
       screen.getByRole('button', { name: 'Cancel queued input' }),
     ).toBeEnabled()
+  })
+
+  it('says why a row on its way can no longer be cancelled (R2, MAR-3608)', async () => {
+    // Unavailable is said, never only greyed: the button stays reachable and
+    // its description is the reason. Mutation: back to a bare `disabled`
+    // (no reason) -> the description is gone and this is red.
+    seedQueuedInputs([queuedInput({ state: 'dispatching' })])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    await screen.findByTestId('queued-inputs')
+    const cancel = screen.getByRole('button', { name: 'Cancel queued input' })
+    expect(cancel).toHaveAttribute('aria-disabled', 'true')
+    expect(cancel).toHaveAttribute(
+      'aria-description',
+      'It is being delivered now.',
+    )
   })
 
   it('drops Deliver now the moment a redelivery is reported, without a reload (MAR-2971 lap 6)', async () => {

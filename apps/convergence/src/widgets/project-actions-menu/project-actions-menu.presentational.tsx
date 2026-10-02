@@ -30,6 +30,7 @@ import {
 import { ProjectActionRunLog } from './project-action-run-log.presentational'
 import { formatProjectActionRunMeta } from './project-actions-menu.pure'
 import {
+  actionAddRow,
   actionButtonRow,
   actionDetail,
   actionIconBox,
@@ -223,11 +224,7 @@ export const ProjectActionsMenuPresentational: FC<
         variant="ghost"
         onClick={onAdd}
         size="lg"
-        className={cn(
-          actionButtonRow,
-          'border border-dashed border-line py-3',
-          items.length > 0 && 'mt-2',
-        )}
+        className={cn(actionAddRow, items.length > 0 && 'mt-2')}
       >
         <span className={actionIconColumn}>
           <span className={actionIconBox}>

@@ -199,19 +199,12 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
           variant="tonal"
           disabled={busy || selectedIds.length === 0}
           onClick={onAdd}
-          className="text-2xs"
         >
           {selectedIds.length === 1
             ? 'Add 1 conversation'
             : `Add ${selectedIds.length} conversations`}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          onClick={onClose}
-          className="text-2xs"
-        >
+        <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
           Cancel
         </Button>
       </div>

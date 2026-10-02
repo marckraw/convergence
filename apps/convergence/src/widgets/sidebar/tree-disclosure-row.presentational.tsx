@@ -52,13 +52,12 @@ export function TreeDisclosureRow({
     <Tooltip side="right" label={tooltip ?? title} detail={tooltipDetail}>
       <ListRow
         density="compact"
-        render={
-          <button
-            type="button"
-            disabled={locked}
-            className="disabled:opacity-50"
-          />
-        }
+        // Locked by a search, it stays reachable and says why (R2): not
+        // native `disabled`, which would take it out of Tab and hide the
+        // reason from focus.
+        render={<button type="button" className="aria-disabled:opacity-50" />}
+        aria-disabled={locked || undefined}
+        aria-description={locked ? tooltipDetail : undefined}
         aria-label={ariaLabel}
         onClick={() => {
           if (!locked) onToggle()

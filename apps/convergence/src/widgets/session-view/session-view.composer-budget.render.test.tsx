@@ -300,7 +300,7 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
       }
 
       expect(commits.count).toBe(0)
-      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Send quiet' })).toBeNull()
 
       act(() => {
         useSessionRelayStore.setState({
@@ -310,8 +310,8 @@ describe('ComposerContainer under a SessionView-shaped parent', () => {
 
       expect(commits.count).toBeGreaterThanOrEqual(1)
       expect(
-        screen.getByRole('switch', { name: 'Send quiet' }),
-      ).toHaveAttribute('aria-checked', 'false')
+        screen.getByRole('button', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-pressed', 'false')
     })
 
     it('R3 aimed from Mission Control at a conversation of a project nobody has opened, it still continues that conversation — mutation drop the globalSessions fallback turns red', () => {

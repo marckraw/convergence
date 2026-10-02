@@ -42,14 +42,17 @@ export const CrewDecorationPicker: FC<CrewDecorationPickerProps> = ({
             onClick={() => onEmojiChange(emoji === choice ? null : choice)}
             size="xs"
             className={cn(
-              'rounded-md border text-xs leading-none',
-              // R7: the chosen one is the raised chip.
+              'rounded-md border',
+              // R7: the chosen one is the raised chip, which pressed draws.
               emoji === choice
-                ? 'border-hairline-strong bg-chip shadow-raised'
+                ? 'border-hairline-strong'
                 : 'border-transparent hover:border-hairline-strong',
             )}
           >
-            {choice}
+            {/* The glyph's size is the glyph's, as an icon's is (R3). */}
+            <span aria-hidden="true" className="text-xs leading-none">
+              {choice}
+            </span>
           </IconButton>
         ))}
       </div>

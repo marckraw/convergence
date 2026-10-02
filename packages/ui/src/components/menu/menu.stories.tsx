@@ -204,6 +204,48 @@ export const Disabled: Story = {
   },
 }
 
+/**
+ * Disabled with a reason (R2): the arrow keys still reach it, it says why in
+ * its tooltip and its description, and choosing it does nothing.
+ */
+export const DisabledWithReason: Story = {
+  render: (args) => (
+    <Menu>
+      <MenuTrigger render={<IconButton label="Sidebar tools" size="sm" />}>
+        <MoreVertical />
+      </MenuTrigger>
+      <MenuContent align="start">
+        <MenuItem onClick={args.onRename}>Spaces…</MenuItem>
+        <MenuItem
+          disabledReason="Open a project first."
+          onClick={args.onCopyLink}
+        >
+          Project settings…
+        </MenuItem>
+      </MenuContent>
+    </Menu>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Sidebar tools' }))
+    const menu = await screen.findByRole('menu')
+    const item = within(menu).getByRole('menuitem', {
+      name: 'Project settings…',
+    })
+    await expect(item).toHaveAttribute('aria-disabled', 'true')
+    await expect(item).toHaveAccessibleDescription('Open a project first.')
+    await arrived(menu)
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}')
+    await expect(item).toHaveFocus()
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('Open a project first.')
+    await userEvent.keyboard('{Enter}')
+    await expect(args.onCopyLink).not.toHaveBeenCalled()
+    await userEvent.keyboard('{Escape}')
+    await menusClosed()
+  },
+}
+
 /** Danger: the destructive item is the one red item, and says what it does in words (R5). */
 export const Danger: Story = {
   args: { defaultOpen: true },

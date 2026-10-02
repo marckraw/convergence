@@ -10,7 +10,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
-import { Badge, Button, cn, StatusDot } from '@convergence/ui'
+import { Badge, Button, cn, StatusDot, Tooltip } from '@convergence/ui'
 import {
   laneLabel,
   seatDisplayName,
@@ -59,9 +59,9 @@ export const SeatRow: FC<SeatRowProps> = ({
       data-seat-orphan={orphan || undefined}
       aria-label={seatRowAccessibleName({ member, source, host, refused })}
       onClick={onToggle}
-      size="lg"
+      size="md"
       className={cn(
-        'flex w-full min-w-0 items-center justify-start rounded-md border bg-fill-quiet px-2.5 text-left font-normal transition-colors hover:border-hairline-strong text-xs py-0',
+        'flex w-full min-w-0 items-center justify-start rounded-md border bg-fill-quiet text-left font-normal transition-colors hover:border-hairline-strong',
         // A seat whose conversation is gone is a heads-up: the warning tone.
         orphan ? 'border-warning-line' : 'border-hairline',
       )}
@@ -84,29 +84,29 @@ export const SeatRow: FC<SeatRowProps> = ({
       >
         {source}
       </span>
-      <HostGlyph
-        aria-hidden
-        data-seat-host={hostIsLocal ? 'local' : 'remote'}
-        className="size-3.5 shrink-0 text-ink-muted"
-      >
-        <title>{host}</title>
-      </HostGlyph>
+      <Tooltip label={host}>
+        <HostGlyph
+          aria-hidden
+          data-seat-host={hostIsLocal ? 'local' : 'remote'}
+          className="size-3.5 shrink-0 text-ink-muted"
+        />
+      </Tooltip>
       {member.lanePolicy === 'main' ? (
-        <GitCommitHorizontal
-          aria-hidden
-          data-seat-lane="main"
-          className="size-3.5 shrink-0 text-ink-muted"
-        >
-          <title>{laneLabel(member.lanePolicy)}</title>
-        </GitCommitHorizontal>
+        <Tooltip label={laneLabel(member.lanePolicy)}>
+          <GitCommitHorizontal
+            aria-hidden
+            data-seat-lane="main"
+            className="size-3.5 shrink-0 text-ink-muted"
+          />
+        </Tooltip>
       ) : member.lanePolicy === 'own-worktree' ? (
-        <GitBranch
-          aria-hidden
-          data-seat-lane="own-worktree"
-          className="size-3.5 shrink-0 text-ink-muted"
-        >
-          <title>{laneLabel(member.lanePolicy)}</title>
-        </GitBranch>
+        <Tooltip label={laneLabel(member.lanePolicy)}>
+          <GitBranch
+            aria-hidden
+            data-seat-lane="own-worktree"
+            className="size-3.5 shrink-0 text-ink-muted"
+          />
+        </Tooltip>
       ) : null}
       {/* The row's name says all three in words (seatRowAccessibleName);
           the WIP count, the card dot and the refusal mark are for the eye. */}

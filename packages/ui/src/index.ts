@@ -425,6 +425,13 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+// DS6 sweep E (MAR-3608): appended, so the parallel sweeps' additions merge as unions.
+export { type InputVariant } from './components/input/input'
+export { type TextareaVariant } from './components/textarea/textarea'
+export {
+  MenuButton,
+  type MenuButtonProps,
+} from './components/menu-button/menu-button'
 export {
   RowActions,
   type RowActionsProps,

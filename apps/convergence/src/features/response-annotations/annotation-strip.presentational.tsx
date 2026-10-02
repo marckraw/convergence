@@ -125,9 +125,12 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
               onKeyDown={(event) =>
                 moveFocusAlongStrip(event, index, annotations.length)
               }
+              // Chip's own frame (annotationChipFrame: its edge, wash and
+              // padding), on the kit's 28 px step (R3), which the frame shares.
+              size="sm"
               className={cn(
                 annotationChipFrame,
-                'max-w-56 justify-start gap-1 px-2 font-normal hover:bg-fill-hover',
+                'max-w-56 justify-start gap-1 font-normal hover:bg-fill-hover',
               )}
             >
               <span className="min-w-0 truncate italic text-ink-muted">

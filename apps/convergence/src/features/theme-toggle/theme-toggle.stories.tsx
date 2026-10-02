@@ -12,10 +12,14 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** An icon button that says which theme is on, and moves to the next. */
+/**
+ * An icon button named for what it does, Change theme, with the theme that is
+ * on under it (NAV-6); it moves to the next.
+ */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    const toggle = canvas.getByRole('button', { name: 'Theme: light' })
+    const toggle = canvas.getByRole('button', { name: 'Change theme' })
+    await expect(toggle).toHaveAccessibleDescription('Now: Light')
     await userEvent.click(toggle)
     await expect(args.onToggle).toHaveBeenCalledOnce()
     // The keyboard reaches it too.
@@ -32,8 +36,8 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('button', { name: 'Theme: dark' }),
-    ).toBeVisible()
+      canvas.getByRole('button', { name: 'Change theme' }),
+    ).toHaveAccessibleDescription('Now: Dark')
   },
 }
 
@@ -42,7 +46,7 @@ export const System: Story = {
   args: { theme: 'system' },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole('button', { name: 'Theme: system' }),
-    ).toBeVisible()
+      canvas.getByRole('button', { name: 'Change theme' }),
+    ).toHaveAccessibleDescription('Now: System')
   },
 }

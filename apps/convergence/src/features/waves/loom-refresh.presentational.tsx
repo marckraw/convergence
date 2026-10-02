@@ -18,7 +18,6 @@ export const LoomRefreshView: FC<{
       disabled={blocked}
       onClick={onRefresh}
       size="xs"
-      className="px-1.5"
     >
       Refresh
     </Button>

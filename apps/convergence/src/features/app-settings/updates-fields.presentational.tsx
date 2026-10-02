@@ -58,13 +58,17 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
       </ChoiceField>
 
       <div className="flex flex-wrap items-center gap-2">
+        {/* Busy is the Button's own (DLG-17): aria-busy, and a width that
+            holds while the words change. */}
         <Button
           type="button"
           variant="secondary"
           onClick={onCheckNow}
           disabled={actionsDisabled}
+          pending={isChecking}
+          pendingLabel="Checking…"
         >
-          {isChecking ? 'Checking…' : 'Check now'}
+          Check now
         </Button>
         {status.phase === 'available' && (
           <Button

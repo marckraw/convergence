@@ -50,7 +50,7 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
           variant="quiet"
           aria-label="Select project context"
           disabled={disabled || items.length === 0}
-          size="sm"
+          size="md"
           className={triggerClassName}
         >
           <FileText className="h-3.5 w-3.5" />

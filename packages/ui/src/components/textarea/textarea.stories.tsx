@@ -95,6 +95,35 @@ export const Disabled: Story = {
   },
 }
 
+/**
+ * Bare: the text inside a card that is the field, like the composer's. No
+ * edge, padding, handle or ring of its own; the caret says where you are.
+ */
+export const Bare: Story = {
+  render: () => (
+    <div className="w-96 rounded-xl border border-line bg-surface p-3">
+      <Textarea
+        variant="bare"
+        rows={1}
+        autoGrow
+        maxRows={8}
+        aria-label="Message"
+        placeholder="Ask anything"
+        className="text-ink"
+      />
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByLabelText('Message')
+    await expect(field).toHaveAttribute('data-variant', 'bare')
+    await userEvent.click(field)
+    await userEvent.keyboard('Summarise the diff.')
+    await expect(field).toHaveValue('Summarise the diff.')
+    await expect(getComputedStyle(field).borderTopWidth).toBe('0px')
+    await expect(getComputedStyle(field).outlineStyle).toBe('none')
+  },
+}
+
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },

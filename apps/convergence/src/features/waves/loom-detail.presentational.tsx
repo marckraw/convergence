@@ -105,7 +105,7 @@ export const LoomDetailView = <TSession,>({
               }
             }}
             size="xs"
-            className="justify-start px-1"
+            className="justify-start"
           >
             Open conversation →
           </Button>

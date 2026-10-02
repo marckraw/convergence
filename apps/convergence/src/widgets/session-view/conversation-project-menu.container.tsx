@@ -1,5 +1,5 @@
 import type { FC, Ref } from 'react'
-import { ChevronDown, GitPullRequest, TerminalSquare } from 'lucide-react'
+import { GitPullRequest, TerminalSquare } from 'lucide-react'
 import type { Project } from '@/entities/project'
 import {
   ProjectOpenMenuSection,
@@ -9,6 +9,7 @@ import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
 import {
   Button,
   cn,
+  MenuButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -65,19 +66,16 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
   const openApps = useProjectOpenApps(openPath)
   const trigger = (running: boolean) => (
     <Tooltip label="Project actions, Open in, pull request and terminal">
-      <Button
+      <MenuButton
         ref={triggerRef}
         type="button"
-        variant="ghost"
-        size="sm"
         // R1: an action under way is working, the info tone.
-        className={cn('gap-1', running && 'text-info-ink')}
+        className={cn(running && 'text-info-ink')}
       >
         {running && <StatusDot tone="info" size="sm" />}
         Project
         {running && <span className="sr-only">, an action is running</span>}
-        <ChevronDown className="h-3 w-3" />
-      </Button>
+      </MenuButton>
     </Tooltip>
   )
   // A tool acts, then the panel closes, as a chosen menu item did.

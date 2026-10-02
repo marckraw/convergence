@@ -1,4 +1,4 @@
-import { durationsMs } from '@convergence/ui'
+import { durationsMs, focusRingInset } from '@convergence/ui'
 import type { LoomHorseRuntime } from './loom-horses.pure'
 import { sectionLabelVariants } from '@convergence/ui'
 
@@ -100,9 +100,10 @@ export const LOOM_STRIP_COUNT_CLASS = 'text-3xs font-normal tabular-nums'
 
 /**
  * The guide's entry in expanded Loom's header: the guide's own control width
- * (148 px, the footer's quiet controls'), on the spacing scale.
+ * (148 px, the footer's quiet controls'), on the spacing scale. Its height,
+ * padding and words are the Button's `md` (R3, MC-3).
  */
-export const LOOM_GUIDE_ENTRY_CLASS = 'w-37 shrink-0 px-3 py-0 text-xs'
+export const LOOM_GUIDE_ENTRY_CLASS = 'w-37 shrink-0'
 
 /** The header control that folds Loom away (MAR-3292 R4). */
 export const LOOM_COLLAPSE_BUTTON_CLASS = 'shrink-0'
@@ -180,10 +181,10 @@ export const LOOM_EXPANDED_CLASS =
 
 /**
  * A sheet's title: a button in both shapes, because it does the same thing in
- * both -- opens its sheet (R1, R7).
+ * both -- opens its sheet (R1, R7). Its ring sits inside its edge, since the
+ * column clips what stands outside it (DS-7: it used to cancel the ring).
  */
-export const LOOM_SHEET_TITLE_CLASS =
-  'flex w-full items-center gap-2 border-b border-hairline px-3 py-2 text-left text-2xs font-medium tracking-tight text-ink-muted transition-colors hover:bg-fill-hover focus-visible:bg-fill-hover focus-visible:outline-none'
+export const LOOM_SHEET_TITLE_CLASS = `flex w-full items-center gap-2 border-b border-hairline px-3 py-2 text-left text-2xs font-medium tracking-tight text-ink-muted transition-colors hover:bg-fill-hover focus-visible:bg-fill-hover ${focusRingInset}`
 
 /** The open sheet's title, the one the eye should land on first. */
 export const LOOM_SHEET_TITLE_OPEN_CLASS = 'text-ink'

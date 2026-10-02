@@ -75,8 +75,8 @@
         "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:focus(?:-visible|-within)?|has-focus-visible):(?:(?:outline|ring)-(?:focus|ring)\\b|outline(?![\\w-]))",
-        "message": "A focus ring typed by hand (focus-visible:outline-focus, focus-visible:ring-focus, or the old ring-ring): use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588; MAR-3617; MAR-3618; DS-7)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:focus(?:-visible|-within)?|has-focus-visible):(?:(?:outline|ring)-(?:focus|ring)\\b|outline(?![\\w-])|outline-none\\b)",
+        "message": "A focus ring typed by hand (focus-visible:outline-focus, focus-visible:ring-focus, or the old ring-ring), or cancelled (focus-visible:outline-none, which tailwind-merge lets win over a part's own ring): use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). A field inside a box that rings for it is Input or Textarea variant=\"bare\". Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588; MAR-3617; MAR-3618; MAR-3608; DS-7)."
       },
       {
         "id": "no-invisible-focus-ring",
@@ -120,8 +120,8 @@
         "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:size|h|w)-(?:\\d+(?:\\.5)?|px)\\b",
-        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). A height typed on top drifts from every other control (MAR-3617; DS-4)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:size|h|w)-(?:\\d+(?:\\.5)?|px)\\b|<(?:Button|IconButton)\\b(?!(?:[^>]|=>)*?(?<![\\w:\\]-])h-auto\\b)(?!(?:[^>]|=>)*?\\svariant=[\"']link[\"'])(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xytrbl]?-(?:\\d+(?:\\.5)?|px)|(?:min-|max-)?h-(?:\\d+(?:\\.5)?|px|control-[\\w-]+|\\(--[\\w-]+\\)))(?![\\w-])|(?<![\\w-])\\[&_button\\]:(?:(?:min-|max-)?h|size|w|p[xytrbl]?|text)-)",
+        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). Each size is a height, a padding and a text size together, so a height, a min-height, a padding or a text size typed on top (size=\"sm\" className=\"px-3 text-2xs\") is a size the scale doesn't name and drifts from every other control: take the nearest size instead, and never resize every button in a box at once ([&_button]:min-h-10). A link has no box, so its words may take a size; a Button grown into a row (h-auto) is no-buttons-as-rows' to report (MAR-3617; MAR-3608; DS-4)."
       },
       {
         "id": "no-native-confirm",
@@ -241,6 +241,15 @@
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])h-auto\\b",
         "message": "A Button or IconButton stretched into a row or a card (h-auto in its className, which undoes its height so more lines fit): a row is a ListRow (render a button or a link), a box that opens something is a Card with a CardAction over it, an option that needs a sentence is a ChoiceCard, and something that opens and closes in place is Collapsible's trigger. Words that act are a link Button, which has no box to undo (MAR-3608; DS-21; docs/checks/design-system-drift.md)."
+      },
+      {
+        "id": "no-native-title",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.tsx",
+        "exclude": ["**/*.test.tsx"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:<[a-z][\\w.-]*\\b(?:[^>]|=>)*?\\stitle=(?!\"\"|\\{[\"'`]{2}\\})|<title>)",
+        "message": "A native title (R2): title= on a page element, or an SVG's <title>, is the browser's hint, slow, unstyled and never shown on focus. Wrap the element in <Tooltip label> from @convergence/ui (when=\"truncated\" for text cut short); an icon-only button is an IconButton, whose label is its tooltip. A part's title prop (EmptyState, Notice) is its words, not a hint, so only a lowercase element counts (MAR-3608; NAV-20; DS-3)."
       }
     ]
   }

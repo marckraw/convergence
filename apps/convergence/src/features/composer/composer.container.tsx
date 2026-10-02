@@ -178,6 +178,18 @@ const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
   cancelled: 'Cancelled',
 }
 
+/**
+ * Why a queued input can't be cancelled any more (R2): a waiting or failed
+ * one can, the rest are past the point where cancelling means anything.
+ */
+const CANCEL_QUEUED_UNAVAILABLE: Partial<
+  Record<SessionQueuedInput['state'], string>
+> = {
+  dispatching: 'It is being delivered now.',
+  sent: 'It was delivered already.',
+  cancelled: 'It was cancelled already.',
+}
+
 const DELIVERY_MODE_LABELS: Partial<Record<MidRunInputMode, string>> = {
   'follow-up': 'Follow-up',
   steer: 'Steer',
@@ -2296,9 +2308,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
                     label="Cancel queued input"
                     type="button"
                     variant="ghost"
-                    disabled={
-                      input.state !== 'queued' && input.state !== 'failed'
-                    }
+                    disabledReason={CANCEL_QUEUED_UNAVAILABLE[input.state]}
                     onClick={() => void cancelQueuedInput(input.id)}
                     size="xs"
                     className="shrink-0"

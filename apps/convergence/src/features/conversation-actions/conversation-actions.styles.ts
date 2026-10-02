@@ -66,6 +66,8 @@ export const conversationActionsStyles = {
    * routine's or a group's name, short enough for one line.
    */
   item: `w-full justify-start rounded-md px-2 text-left text-sm font-normal text-ink ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-ink-muted aria-disabled:hover:bg-transparent`,
+  /** Close menu, under a running routine: a quieter, smaller row (a row, so its words are the row's, not a Button size). */
+  closeItem: 'mt-1 text-xs text-ink-muted',
   reason: 'px-2 pb-1.5 text-xs leading-relaxed text-ink-muted',
   /**
    * A Skills row (MAR-3616 DS3e): a ListboxOption the search drives, its

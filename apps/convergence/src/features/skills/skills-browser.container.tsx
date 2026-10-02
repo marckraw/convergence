@@ -380,7 +380,7 @@ export const SkillsBrowserDialogContainer: FC<
             type="button"
             variant="quiet"
             disabled={!projectId}
-            className="w-full justify-between px-2"
+            className="w-full justify-between"
           >
             <span className="flex items-center gap-2">
               <Library className="h-3.5 w-3.5" />
