@@ -10,15 +10,15 @@ import {
 import { HarnessFactsSections } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
 import { SIDE_PANEL_WIDTH } from './parallel-work-dock.pure'
-import { useParallelWork } from './use-parallel-work'
+import { useParallelWorkPanel } from './use-parallel-work-panel'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC } from 'react'
 import { flushSync } from 'react-dom'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
+  useAnswerInput,
   useSessionStore,
-  type InteractionResponse,
   type SessionContextWindow,
 } from '@/entities/session'
 import {
@@ -121,7 +121,6 @@ export const SessionView: FC = () => {
   const [debugDrawerOpen, setDebugDrawerOpen] = useState(false)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
-  const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
   const stopSession = useSessionStore((s) => s.stopSession)
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
@@ -145,17 +144,6 @@ export const SessionView: FC = () => {
     useState<RemoteSessionWorkspaceResult | null>(null)
   const sessionRootRef = useRef<HTMLDivElement>(null)
 
-  const [parallelOpen, setParallelOpen] = useState(false)
-  const [parallelSelection, setParallelSelection] = useState<{
-    sessionId: string
-    id: string | null
-  } | null>(null)
-  const [parallelNavigation, setParallelNavigation] = useState<{
-    id: string
-    nonce: number
-  } | null>(null)
-  const parallelButton = useRef<HTMLButtonElement>(null)
-  const parallelInvoker = useRef<HTMLElement | null>(null)
   // The header's groups, each a menu whose open state lives here, so More
   // opens a yielded one through the same `open` (MAR-3429 CH4).
   const [viewOpen, setViewOpen] = useState(false)
@@ -191,46 +179,10 @@ export const SessionView: FC = () => {
   )
   const sessionProject =
     projects.find((project) => project.id === session?.projectId) ?? null
-  const parallel = useParallelWork(activeSessionId)
-  // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
-  // keeps its identity until what it does changes.
-  const selectParallel = useCallback(
-    (id: string | null) => {
-      if (!parallelOpen && document.activeElement instanceof HTMLElement)
-        parallelInvoker.current = document.activeElement
-      if (activeSessionId)
-        setParallelSelection({ sessionId: activeSessionId, id })
-      setParallelOpen(true)
-    },
-    [parallelOpen, activeSessionId],
-  )
-  const answerInput = useCallback(
-    (sessionId: string, response: InteractionResponse, displayText: string) => {
-      void sendMessageToSession({
-        sessionId,
-        text: displayText,
-        deliveryMode: 'answer',
-        interactionResponse: response,
-      })
-    },
-    [sendMessageToSession],
-  )
-  // The panel hands focus back to what opened it: the row's Parallel work
-  // button, or View when it was opened from there -- and More in View's
-  // place when View has yielded (MAR-3427 D, MAR-3429 CH4 R1).
-  const focusParallelInvoker = () =>
-    headerFocusTarget(
-      parallelInvoker.current?.isConnected
-        ? parallelInvoker.current
-        : (parallelButton.current ?? viewTrigger.current),
-    )?.focus()
-  // The close is committed before focus is decided: the row's button may
-  // have left while the panel was open (nothing runs any more), so the target
-  // is read from the header as it is once the panel has closed.
-  const closeParallel = () => {
-    flushSync(() => setParallelOpen(false))
-    focusParallelInvoker()
-  }
+  // Parallel work's panel: its rows, whether it is open, and who gets focus
+  // back when it closes (MAR-3618, shared with the chat surface).
+  const parallel = useParallelWorkPanel(activeSessionId, viewTrigger)
+  const answerInput = useAnswerInput()
   const remoteSessionId = isRemoteExecutionHost(session?.executionHost)
     ? (session?.id ?? null)
     : null
@@ -521,19 +473,6 @@ export const SessionView: FC = () => {
     )
   }
 
-  const toggleParallel = () => {
-    if (parallelOpen) closeParallel()
-    else {
-      parallelInvoker.current = parallelButton.current
-      setParallelOpen(true)
-    }
-  }
-  // Parallel work's history, from View: the panel opens and gives focus back
-  // to View when it closes.
-  const openParallelHistory = () => {
-    parallelInvoker.current = viewTrigger.current
-    setParallelOpen(true)
-  }
   const toggleTerminal = () => {
     if (hasTerminal) {
       void closeAllTerminals(session.id)
@@ -592,7 +531,7 @@ export const SessionView: FC = () => {
           // re-read is one measurement.
           docked={dockedKey(
             showPullRequestPanel && 'pull-request',
-            parallelOpen && 'parallel-work',
+            parallel.open && 'parallel-work',
             linkedSpace !== null && 'space',
           )}
           slots={[
@@ -603,9 +542,9 @@ export const SessionView: FC = () => {
               parallel: parallelLabel
                 ? {
                     label: parallelLabel,
-                    expanded: parallelOpen,
-                    onToggle: toggleParallel,
-                    ref: parallelButton,
+                    expanded: parallel.open,
+                    onToggle: parallel.toggle,
+                    ref: parallel.button,
                   }
                 : null,
             }),
@@ -673,7 +612,7 @@ export const SessionView: FC = () => {
                   sessionId={session.id}
                   open={viewOpen}
                   onOpenChange={setViewOpen}
-                  onOpenParallelWork={openParallelHistory}
+                  onOpenParallelWork={parallel.openFromView}
                   triggerRef={viewTrigger}
                   contentFocus={focus}
                 />
@@ -973,12 +912,12 @@ export const SessionView: FC = () => {
           onLoadOlder={handleLoadOlder}
           conversationPrefix={conversationPrefix}
           conversationItems={activeConversation}
-          parallelRows={parallel.rows}
-          parallelLoading={!parallel.hasRecord}
-          parallelError={parallel.error}
-          onParallelRetry={parallel.retry}
-          onParallelSelect={selectParallel}
-          navigationTarget={parallelNavigation}
+          parallelRows={parallel.work.rows}
+          parallelLoading={!parallel.work.hasRecord}
+          parallelError={parallel.work.error}
+          onParallelRetry={parallel.work.retry}
+          onParallelSelect={parallel.select}
+          navigationTarget={parallel.navigation}
           composerContext={composerContext}
           composerDisabledReason={
             sessionWorktreeRemoved
@@ -994,26 +933,17 @@ export const SessionView: FC = () => {
       <ParallelWork
         key={session.id}
         session={session}
-        rows={parallel.rows}
+        rows={parallel.work.rows}
         items={activeConversation}
-        open={parallelOpen}
-        selectedId={
-          parallelSelection?.sessionId === session.id
-            ? parallelSelection.id
-            : null
-        }
-        onSelect={selectParallel}
-        onClose={closeParallel}
-        onNavigate={(id) =>
-          setParallelNavigation((previous) => ({
-            id,
-            nonce: (previous?.nonce ?? 0) + 1,
-          }))
-        }
-        loading={parallel.loading}
-        error={parallel.error}
+        open={parallel.open}
+        selectedId={parallel.selectedIdIn(session.id)}
+        onSelect={parallel.select}
+        onClose={parallel.close}
+        onNavigate={parallel.navigate}
+        loading={parallel.work.loading}
+        error={parallel.work.error}
         rowRef={sessionRootRef}
-        onReturnFocus={focusParallelInvoker}
+        onReturnFocus={parallel.returnFocus}
         otherDockedWidths={[
           showPullRequestPanel ? SIDE_PANEL_WIDTH : 0,
           linkedSpace ? SIDE_PANEL_WIDTH : 0,
