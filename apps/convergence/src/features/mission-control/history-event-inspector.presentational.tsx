@@ -1,9 +1,16 @@
 import type { FC } from 'react'
-import { X } from 'lucide-react'
-import { Button, cn, IconButton } from '@convergence/ui'
+import {
+  Button,
+  DescriptionList,
+  SectionLabel,
+  Timestamp,
+  toneInk,
+} from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
-import { HISTORY_TONE_TEXT } from './history-event-row.presentational'
 import { HistoryFact } from './history-fact.presentational'
+import { HISTORY_TONE } from './hop-tone.styles'
+import { InspectorHeader } from './inspector-header.presentational'
+import { INSPECTOR_NOTE_CLASS, INSPECTOR_SHELL_CLASS } from './inspector.styles'
 import type { HistoryTone } from './run-history.pure'
 
 /** The facts a recorded event carries, exactly as they were written down. */
@@ -75,32 +82,17 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
   <section
     data-history-event-inspector
     aria-label="Recorded event"
-    className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-hairline px-4 py-3"
+    className={INSPECTOR_SHELL_CLASS}
   >
-    <div className="flex items-start justify-between gap-2">
-      <div className="flex flex-col gap-0.5">
-        <h3 className={cn('text-sm font-medium', HISTORY_TONE_TEXT[tone])}>
-          {title}
-        </h3>
-        <time
-          dateTime={facts.timestamp}
-          title={facts.timestamp}
-          className="text-2xs text-muted-foreground"
-        >
-          {new Date(facts.timestamp).toLocaleString()}
-        </time>
-      </div>
-      <IconButton
-        label="Close the event panel"
-        type="button"
-        variant="quiet"
-        onClick={onClose}
-        size="sm"
-        className="shrink-0"
-      >
-        <X className="size-3.5" />
-      </IconButton>
-    </div>
+    <InspectorHeader
+      title={title}
+      titleClassName={toneInk[HISTORY_TONE[tone]]}
+      // The date and time it happened, as the Timestamp part writes every
+      // moment (MC-27): the whole moment in its tooltip, not the raw record.
+      subtitle={<Timestamp date={facts.timestamp} format="datetime" />}
+      closeLabel="Close the event panel"
+      onClose={onClose}
+    />
 
     {facts.message ? (
       <div className="rounded-md border border-hairline bg-fill-quiet px-3 py-2">
@@ -109,20 +101,18 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
     ) : null}
 
     <div className="flex flex-col gap-1">
-      <p className="text-2xs uppercase tracking-wide text-muted-foreground">
-        Recorded event
-      </p>
-      <HistoryFact label="Source" value={facts.source} />
-      <HistoryFact label="Recipient" value={facts.recipient} />
-      <HistoryFact label="Baton" value={facts.baton ?? 'none declared'} />
-      <HistoryFact label="Outcome" value={facts.outcome} />
+      <SectionLabel as="h4">Recorded event</SectionLabel>
+      <DescriptionList layout="inline" density="compact">
+        <HistoryFact label="Source" value={facts.source} />
+        <HistoryFact label="Recipient" value={facts.recipient} />
+        <HistoryFact label="Baton" value={facts.baton ?? 'none declared'} />
+        <HistoryFact label="Outcome" value={facts.outcome} />
+      </DescriptionList>
     </div>
 
     <div className="flex flex-col gap-1">
-      <p className="text-2xs uppercase tracking-wide text-muted-foreground">
-        Response preview
-      </p>
-      <p className="text-2xs text-muted-foreground">
+      <SectionLabel as="h4">Response preview</SectionLabel>
+      <p className="text-2xs text-ink-muted">
         {facts.responsePreview ?? 'No response preview was recorded.'}
       </p>
     </div>
@@ -161,7 +151,7 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
           >
             {acknowledged ? 'Seen' : 'Mark seen'}
           </Button>
-          <p className="text-3xs text-muted-foreground/70">
+          <p className={INSPECTOR_NOTE_CLASS}>
             Mark seen acknowledges this call. It does not send a reply or
             restart the run.
           </p>
@@ -170,12 +160,12 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
     </div>
 
     {earlierCallCount > 0 ? (
-      <p className="text-3xs text-muted-foreground/70">
+      <p className={INSPECTOR_NOTE_CLASS}>
         Earlier calls · {earlierCallCount}. Earlier calls remain in history.
       </p>
     ) : null}
 
-    <p className="mt-auto text-3xs text-muted-foreground/70">
+    <p className={`mt-auto ${INSPECTOR_NOTE_CLASS}`}>
       These are the facts recorded when this happened. The connection’s current
       settings are shown separately.
     </p>

@@ -111,11 +111,8 @@ export type { RoutePoint, RouteRect, RouteSide } from './canvas-route.pure'
 
 // History under the canvas (R3, R12): the words, the panel, the event panel.
 export { HistoryPanel } from './history-panel.presentational'
-export {
-  HISTORY_TONE_BORDER,
-  HISTORY_TONE_TEXT,
-  HistoryEventRowView,
-} from './history-event-row.presentational'
+export { HistoryEventRowView } from './history-event-row.presentational'
+export { HISTORY_TONE, RELAY_HOP_TONE, TONE_FRAME } from './hop-tone.styles'
 export { HistoryFact } from './history-fact.presentational'
 export {
   HistoryEventInspector,

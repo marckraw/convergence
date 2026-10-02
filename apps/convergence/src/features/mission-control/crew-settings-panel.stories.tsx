@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, screen, waitFor, within } from 'storybook/test'
 import {
   DEFAULT_CREW_MEMBER_SEAT,
   type SessionCrewMember,
@@ -147,8 +147,8 @@ export const Default: Story = {
     const add = within(panel).getByRole('button', { name: 'Add' })
     await expect(add).toHaveAttribute('aria-haspopup', 'menu')
     await expect(add).toHaveAttribute('aria-expanded', 'false')
-    await userEvent.click(add)
-    await expect(args.onAddMenuToggle).toHaveBeenCalledOnce()
+    // A real Menu's trigger (MC-5); AddMenu shows it open, and the
+    // container's tests drive it open and closed.
     await userEvent.click(
       within(panel).getByRole('button', { name: 'Close crew settings' }),
     )
@@ -164,19 +164,19 @@ export const Dark: Story = {
 /** One seat open: its editor takes the row's place. */
 export const OpenSeat: Story = {
   args: { openSeatKey: 'session-opus' },
-  parameters: {
-    a11y: {
-      config: {
-        // a11y-known: the open seat's role and lane choices put muted text on the primary button (color-contrast) — fixed by the sweep (DS4)
-        rules: [{ id: 'color-contrast', enabled: false }],
-      },
-    },
-  },
   play: async ({ args, canvas, userEvent }) => {
     const editor = canvas.getByRole('region', { name: 'Seat opus-mac' })
     await expect(
       within(editor).getByRole('textbox', { name: 'Baton name for opus-mac' }),
     ).toHaveValue('opus-mac')
+    // Role and lane are segmented radio groups, the chosen one the raised
+    // chip (MC-7, R7): readable in both themes.
+    await expect(
+      within(editor).getByRole('radiogroup', { name: 'Role for opus-mac' }),
+    ).toBeVisible()
+    await expect(
+      within(editor).getByRole('radiogroup', { name: 'Lane for opus-mac' }),
+    ).toBeVisible()
     await userEvent.click(
       within(editor).getByRole('button', {
         name: 'Open opus-mac · convergence',
@@ -189,15 +189,16 @@ export const OpenSeat: Story = {
 /** The Add menu open: its two entries, New recipe honest that it is not built. */
 export const AddMenu: Story = {
   args: { addMenuOpen: true },
-  play: async ({ args, canvas, userEvent }) => {
-    const menu = canvas.getByRole('menu', { name: 'Add a seat' })
+  play: async ({ args, userEvent }) => {
+    // A real Menu (MC-5), named by its trigger, in the popup layer.
+    const menu = await screen.findByRole('menu', { name: 'Add' })
+    await expect(
+      within(menu).getByRole('menuitem', { name: 'New recipe' }),
+    ).toHaveAttribute('aria-disabled', 'true')
     await userEvent.click(
       within(menu).getByRole('menuitem', { name: 'Add conversation…' }),
     )
     await expect(args.onAddConversation).toHaveBeenCalledOnce()
-    await expect(
-      within(menu).getByRole('menuitem', { name: 'New recipe' }),
-    ).toBeDisabled()
   },
 }
 
@@ -261,11 +262,14 @@ export const Details: Story = {
       '6',
     )
     await expect(args.onDeliveryLimitChange).toHaveBeenCalledWith(6)
-    await expect(
-      canvas.getByText(
-        'Crew is running — changes apply from the next delivery.',
-      ),
-    ).toBeVisible()
+    // The disclosure has finished opening (it grows and fades in, MC-31).
+    await waitFor(() =>
+      expect(
+        canvas.getByText(
+          'Crew is running — changes apply from the next delivery.',
+        ),
+      ).toBeVisible(),
+    )
     await expect(
       canvas.getByText(
         'Last exported to …/recipes/convergence-development.crew.yaml',

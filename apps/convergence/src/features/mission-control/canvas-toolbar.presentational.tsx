@@ -48,7 +48,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
     className="flex flex-wrap items-center gap-3 border-b border-hairline px-5 py-2"
   >
     <h2 className="text-sm font-medium">{crewName}</h2>
-    <p className="text-2xs text-muted-foreground">{summary}</p>
+    <p className="text-2xs text-ink-muted">{summary}</p>
 
     <div className="ml-auto flex flex-wrap items-center gap-1.5">
       <Button
@@ -77,7 +77,8 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         size="sm"
         className={cn(
           'gap-1 text-2xs',
-          connecting && 'bg-white/10 text-foreground',
+          // R7: a toggle that is on is the raised chip.
+          connecting && 'bg-chip text-ink shadow-raised',
         )}
       >
         <Link2 className="size-3" />
@@ -107,7 +108,9 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         <History className="size-3" />
         History
         {waitingCount > 0 ? (
-          <span className="tabular-nums text-amber-400">· {waitingCount}</span>
+          <span className="tabular-nums text-warning-ink">
+            · {waitingCount}
+          </span>
         ) : null}
       </Button>
     </div>

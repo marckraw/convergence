@@ -105,15 +105,16 @@ export const Default: Story = {
     await expect(enabled).toBeChecked()
     await userEvent.click(enabled)
     await expect(args.onEnabledChange).toHaveBeenCalledWith(false)
+    // One of a few, each in words: radio groups (MC-7, R9).
     await expect(
-      canvas.getByRole('button', { name: 'Any finish' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+      canvas.getByRole('radio', { name: 'Any finish' }),
+    ).toBeChecked()
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Only when a final line matches' }),
+      canvas.getByRole('radio', { name: 'Only when a final line matches' }),
     )
     await expect(args.onConditionKindChange).toHaveBeenCalledWith('token')
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Clear Opus conversation' }),
+      canvas.getByRole('radio', { name: 'Clear Opus conversation' }),
     )
     await expect(args.onBeforeDeliveryChange).toHaveBeenCalledWith('clear')
     await userEvent.type(
@@ -265,9 +266,9 @@ export const Disabled: Story = {
     }),
   },
   play: async ({ canvas }) => {
-    // Clear is unavailable with a reason (R2, MAR-3616): focusable, and it
-    // says why.
-    const clear = canvas.getByRole('button', {
+    // Clear is unavailable with a reason (R2, MAR-3616): it says why under
+    // its words, and that is its description.
+    const clear = canvas.getByRole('radio', {
       name: 'Clear Opus conversation',
     })
     await expect(clear).toHaveAttribute('aria-disabled', 'true')

@@ -16,7 +16,17 @@ import {
   cn,
   IconButton,
   Input,
+  Notice,
+  SectionLabel,
+  SegmentedControl,
+  SegmentedControlItem,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Switch,
+  Textarea,
 } from '@convergence/ui'
 import {
   LOCAL_HOST_ID,
@@ -46,6 +56,9 @@ const LANES: readonly { value: SeatLane; label: string }[] = [
   { value: 'main', label: 'main' },
   { value: 'own-worktree', label: 'own worktree' },
 ]
+
+/** A segment's value can't be null, so the default lane is this word. */
+const DEFAULT_LANE = 'default'
 
 interface SeatEditorProps {
   member: SessionCrewMember
@@ -147,40 +160,38 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       aria-label={`Seat ${label}`}
       className={cn(
         'flex flex-col gap-3 rounded-md border bg-fill-quiet p-3',
-        orphan ? 'border-amber-500/50' : 'border-hairline-strong',
+        orphan ? 'border-warning-line' : 'border-hairline-strong',
       )}
     >
       {orphan ? (
-        <div
+        <Notice
           data-seat-orphan
-          className="flex flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5"
+          tone="warning"
+          title={`${label}’s conversation no longer exists`}
+          className="text-2xs"
+          actions={
+            <Button
+              type="button"
+              variant="danger-quiet"
+              disabled={busy}
+              onClick={onRemove}
+              size="sm"
+              className="px-2.5 text-2xs"
+            >
+              Remove seat
+            </Button>
+          }
         >
-          <p className="text-2xs font-medium text-amber-400">
-            {label}’s conversation no longer exists
-          </p>
-          <p className="text-2xs text-muted-foreground">
+          <span className="text-ink-muted">
             The seat keeps its name, role and card, but a wire that reaches{' '}
             {label} has nobody to wake. Nothing is removed automatically.
-          </p>
-          <Button
-            type="button"
-            variant="danger-quiet"
-            disabled={busy}
-            onClick={onRemove}
-            size="sm"
-            className="self-start px-2.5 text-2xs"
-          >
-            Remove seat
-          </Button>
-        </div>
+          </span>
+        </Notice>
       ) : null}
 
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <KindGlyph
-            aria-hidden
-            className="size-3.5 shrink-0 text-muted-foreground"
-          />
+          <KindGlyph aria-hidden className="size-3.5 shrink-0 text-ink-muted" />
           {/* Stored when the name is FINISHED — a blur or Enter — not on
               every keystroke: the door refuses a name ending in a formatting
               mark, so a field that knocked per key made `my_horse`
@@ -190,6 +201,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             value={nameValue}
             placeholder="unnamed"
             aria-label={`Baton name for ${label}`}
+            aria-invalid={problems.batonName !== undefined || undefined}
             disabled={busy}
             onChange={(event) => onNameChange(event.target.value)}
             onBlur={onNameCommit}
@@ -199,10 +211,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 onNameCommit()
               }
             }}
-            className={cn(
-              'flex-1 text-xs',
-              problems.batonName !== undefined && 'border-amber-500/70',
-            )}
+            className="flex-1 text-xs"
           />
           <IconButton
             label={`Close ${label}`}
@@ -217,174 +226,170 @@ export const SeatEditor: FC<SeatEditorProps> = ({
         </div>
         {refusalFor('batonName')}
         {nameNotice ? (
-          <p data-seat-name-notice className="text-2xs text-muted-foreground">
+          <p data-seat-name-notice className="text-2xs text-ink-muted">
             {nameNotice}
           </p>
         ) : null}
-        <p className="text-3xs text-muted-foreground">
+        <p className="text-3xs text-ink-muted">
           {batonNameHelper(nameValue, recipe)}
         </p>
       </div>
 
       <div className="flex flex-col gap-1">
-        <div
-          role="group"
+        {/* One of four (MC-7): a segmented radio group, the chosen role the
+            raised chip (R7). */}
+        <SegmentedControl
           aria-label={`Role for ${label}`}
-          className="grid grid-cols-4 gap-0.5 rounded-md bg-white/[0.04] p-0.5"
+          size="xs"
+          value={member.role}
+          disabled={busy}
+          onValueChange={(role) => {
+            if (member.role !== role) onSeatEdit({ role: role as SeatRole })
+          }}
+          className="grid grid-cols-4"
         >
           {ROLES.map((role) => (
-            <Button
-              key={role}
-              type="button"
-              aria-pressed={member.role === role}
-              disabled={busy}
-              onClick={() => {
-                if (member.role !== role) onSeatEdit({ role })
-              }}
-              size="xs"
-              className={cn(
-                'rounded px-1 text-3xs font-normal transition-colors py-2',
-                member.role === role
-                  ? 'border border-hairline-strong bg-white/10 text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
+            <SegmentedControlItem key={role} value={role}>
               {role}
-            </Button>
+            </SegmentedControlItem>
           ))}
-        </div>
+        </SegmentedControl>
         {refusalFor('role')}
       </div>
 
       <div className="flex flex-col gap-1.5" data-seat-card>
         <div className="flex items-center gap-1.5">
-          <FileText aria-hidden className="size-3.5 text-muted-foreground" />
+          <FileText aria-hidden className="size-3.5 text-ink-muted" />
           <span className="flex-1 text-xs font-medium">Role card</span>
           <span
             data-seat-card-count
             className={cn(
               'text-3xs tabular-nums',
-              cardOver ? 'text-amber-400' : 'text-muted-foreground',
+              cardOver ? 'text-warning-ink' : 'text-ink-muted',
             )}
           >
             {formatRoleCardCount(cardText.length)}
           </span>
         </div>
-        <p className="text-3xs text-muted-foreground">
+        <p className="text-3xs text-ink-muted">
           Leads the first message of every run this seat is woken for.
         </p>
         {writingCard ? (
-          <textarea
+          <Textarea
             value={cardText}
             aria-label={`Role card for ${label}`}
+            aria-invalid={cardOver || undefined}
             rows={8}
             onChange={(event) => onCardChange(event.target.value)}
             onBlur={onCardCommit}
-            className={cn(
-              'min-h-40 resize-y rounded-md border bg-transparent p-2 text-2xs leading-relaxed',
-              cardOver ? 'border-amber-500/70' : 'border-hairline',
-            )}
+            className="min-h-40 resize-y p-2 text-2xs leading-relaxed"
           />
         ) : (
-          <div
+          <Notice
             data-seat-no-card
-            className="flex flex-col gap-1.5 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 p-2.5"
+            tone="warning"
+            title="No card yet"
+            className="border-dashed text-2xs"
+            actions={
+              <Button
+                type="button"
+                variant="tonal"
+                disabled={busy}
+                onClick={onWriteCard}
+                size="sm"
+                className="px-2.5 text-2xs"
+              >
+                Write a card
+              </Button>
+            }
           >
-            <p className="text-2xs font-medium text-amber-400">No card yet</p>
-            <p className="text-2xs text-muted-foreground">
+            <span className="text-ink-muted">
               This seat starts every run without being told who it is. The first
               message will be the payload alone.
-            </p>
-            <Button
-              type="button"
-              variant="tonal"
-              disabled={busy}
-              onClick={onWriteCard}
-              size="sm"
-              className="self-start px-2.5 text-2xs"
-            >
-              Write a card
-            </Button>
-          </div>
+            </span>
+          </Notice>
         )}
         {refusalFor('roleCard')}
       </div>
 
       <section aria-label="Policy" className="flex flex-col gap-2">
-        <h5 className="text-3xs uppercase tracking-wide text-muted-foreground">
+        <SectionLabel as="h4" className="text-3xs">
           Policy
-        </h5>
+        </SectionLabel>
         {recipe ? (
           <div className="flex flex-col gap-1">
-            <span className="text-2xs text-muted-foreground">
+            <span className="text-2xs text-ink-muted">
               Host — where each spawn runs
             </span>
-            <select
-              aria-label={`Host for ${label}`}
+            {/* A short fixed list (MC-10, R9): the app's Select, not the
+                system's popup menu. */}
+            <Select
+              items={hostChoices.map((option) => ({
+                value: option.id,
+                label: option.label,
+              }))}
               value={storedHost}
               disabled={busy}
-              onChange={(event) =>
-                onSeatEdit({ hostPolicy: event.target.value })
-              }
-              className="h-8 rounded-md border border-hairline-strong bg-transparent px-2 text-xs"
+              onValueChange={(hostPolicy) => onSeatEdit({ hostPolicy })}
             >
-              {hostChoices.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                size="md"
+                aria-label={`Host for ${label}`}
+                className="w-full text-xs"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {hostChoices.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {refusalFor('hostPolicy')}
           </div>
         ) : null}
         <div className="flex flex-col gap-1">
-          <span className="text-2xs text-muted-foreground">Lane</span>
-          <div
-            role="group"
+          <span className="text-2xs text-ink-muted">Lane</span>
+          <SegmentedControl
             aria-label={`Lane for ${label}`}
-            className="grid grid-cols-3 gap-0.5 rounded-md border border-hairline p-0.5"
+            size="xs"
+            value={member.lanePolicy ?? DEFAULT_LANE}
+            disabled={busy}
+            onValueChange={(value) => {
+              const lanePolicy =
+                value === DEFAULT_LANE ? null : (value as SeatLane)
+              if (member.lanePolicy !== lanePolicy) onSeatEdit({ lanePolicy })
+            }}
+            className="grid grid-cols-3"
           >
             {LANES.map((lane) => (
-              <Button
+              <SegmentedControlItem
                 key={lane.label}
-                type="button"
-                aria-pressed={member.lanePolicy === lane.value}
-                disabled={busy}
-                onClick={() => {
-                  if (member.lanePolicy !== lane.value)
-                    onSeatEdit({ lanePolicy: lane.value })
-                }}
-                size="xs"
-                className={cn(
-                  'rounded px-1 text-3xs font-normal transition-colors py-2',
-                  member.lanePolicy === lane.value
-                    ? 'border border-hairline-strong bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
+                value={lane.value ?? DEFAULT_LANE}
               >
                 {lane.label}
-              </Button>
+              </SegmentedControlItem>
             ))}
-          </div>
-          <p className="text-3xs text-muted-foreground">
+          </SegmentedControl>
+          <p className="text-3xs text-ink-muted">
             Applied when a recipe is spawned.
           </p>
           {refusalFor('lanePolicy')}
         </div>
         {member.lanePolicy === 'own-worktree' ? (
           <div className="flex flex-col gap-1" data-seat-lane-path>
-            <label className="flex flex-col gap-1 text-2xs text-muted-foreground">
+            <label className="flex flex-col gap-1 text-2xs text-ink-muted">
               Worktree path
               <Input
                 size="md"
                 value={lanePathValue}
                 placeholder="/Users/…/my-repo-lane-name"
+                aria-invalid={problems.lanePath !== undefined || undefined}
                 onChange={(event) => onLanePathChange(event.target.value)}
                 onBlur={onLanePathCommit}
-                className={cn(
-                  'text-xs',
-                  problems.lanePath !== undefined && 'border-amber-500/70',
-                )}
+                className="text-xs"
               />
             </label>
             {refusalFor('lanePath')}
@@ -393,16 +398,16 @@ export const SeatEditor: FC<SeatEditorProps> = ({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <div className="flex flex-1 flex-col">
-              <span className="text-2xs text-muted-foreground">WIP limit</span>
-              <span className="text-3xs text-muted-foreground/80">
+              <span className="text-2xs text-ink-muted">WIP limit</span>
+              <span className="text-3xs text-ink-muted">
                 Issues this seat may hold at once
               </span>
             </div>
             <div
               className={cn(
-                'flex h-8 items-center rounded-md border',
+                'flex h-control-md items-center rounded-md border',
                 problems.wipLimit !== undefined
-                  ? 'border-amber-500/70'
+                  ? 'border-danger-solid'
                   : 'border-hairline-strong',
               )}
             >
@@ -424,6 +429,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 min={1}
                 value={wipValue}
                 aria-label={`WIP limit for ${label}`}
+                aria-invalid={problems.wipLimit !== undefined || undefined}
                 onChange={(event) => onWipChange(event.target.value)}
                 onBlur={onWipCommit}
                 className="w-9 border-0 bg-transparent p-0 text-center text-xs tabular-nums shadow-none [appearance:textfield] focus-visible:outline-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -443,7 +449,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             </div>
           </div>
           {refusalFor('wipLimit')}
-          <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex min-h-10 items-center gap-2 text-xs text-ink-muted">
             <Switch
               checked={member.paused}
               disabled={busy}
@@ -454,7 +460,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           {refusalFor('paused')}
           {member.role === 'mastermind' && (
             <>
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <label className="flex items-center gap-2 text-xs text-ink-muted">
                 <Checkbox
                   checked={member.drillAuto}
                   disabled={busy}
@@ -473,7 +479,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
       {orphan ? null : <SeatFacts heading={factsHeading} facts={facts} />}
 
       <div className="flex items-center gap-2 border-t border-hairline pt-2">
-        <p className="flex-1 text-3xs text-muted-foreground">
+        <p className="flex-1 text-3xs text-ink-muted">
           Typed fields save when you leave them
         </p>
         <Button

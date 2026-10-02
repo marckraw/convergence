@@ -1,5 +1,10 @@
 import type { FC } from 'react'
-import { IconButton } from '@convergence/ui'
+import {
+  DescriptionItem,
+  DescriptionList,
+  IconButton,
+  SectionLabel,
+} from '@convergence/ui'
 import { ArrowUpRight } from 'lucide-react'
 
 export interface SeatFact {
@@ -16,20 +21,19 @@ interface SeatFactsProps {
 
 /**
  * What a seat IS and nobody edits here (MAR-3118 R4): plain key/value text at
- * full contrast. Never a disabled input — a fact that looks like a field reads
- * as a field somebody locked.
+ * full contrast, in a DescriptionList (MC-30). Never a disabled input — a fact
+ * that looks like a field reads as a field somebody locked.
  */
 export const SeatFacts: FC<SeatFactsProps> = ({ heading, facts }) => (
   <section aria-label="Facts" data-seat-facts className="flex flex-col gap-1.5">
-    <h5 className="text-3xs uppercase tracking-wide text-muted-foreground">
+    <SectionLabel as="h4" className="text-3xs">
       {heading}
-    </h5>
-    <dl className="grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-2xs">
+    </SectionLabel>
+    <DescriptionList layout="inline" density="compact">
       {facts.map((fact) => (
-        <div key={fact.term} className="contents">
-          <dt className="text-muted-foreground">{fact.term}</dt>
-          <dd className="flex min-w-0 items-center gap-1 text-foreground">
-            <span className="min-w-0 flex-1 truncate">{fact.value}</span>
+        <DescriptionItem key={fact.term} term={fact.term} className="text-2xs">
+          <span className="flex min-w-0 items-center justify-end gap-1 text-2xs">
+            <span className="min-w-0 truncate">{fact.value}</span>
             {fact.open ? (
               <IconButton
                 label={fact.open.label}
@@ -42,9 +46,9 @@ export const SeatFacts: FC<SeatFactsProps> = ({ heading, facts }) => (
                 <ArrowUpRight aria-hidden className="size-3.5" />
               </IconButton>
             ) : null}
-          </dd>
-        </div>
+          </span>
+        </DescriptionItem>
       ))}
-    </dl>
+    </DescriptionList>
   </section>
 )

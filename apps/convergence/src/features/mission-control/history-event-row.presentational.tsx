@@ -1,23 +1,7 @@
 import type { FC } from 'react'
-import { cn, Button } from '@convergence/ui'
-import type { HistoryEventRow, HistoryTone } from './run-history.pure'
-
-/** One tone, one colour. Unknown is neutral: red is for what we understand. */
-export const HISTORY_TONE_TEXT: Record<HistoryTone, string> = {
-  delivered: 'text-emerald-400',
-  held: 'text-muted-foreground',
-  alarm: 'text-red-400',
-  terminal: 'text-amber-400',
-  unknown: 'text-muted-foreground',
-}
-
-export const HISTORY_TONE_BORDER: Record<HistoryTone, string> = {
-  delivered: 'border-emerald-500/40',
-  held: 'border-hairline',
-  alarm: 'border-red-500/40',
-  terminal: 'border-amber-500/40',
-  unknown: 'border-hairline',
-}
+import { cn, Button, toneInk } from '@convergence/ui'
+import { HISTORY_TONE, TONE_FRAME } from './hop-tone.styles'
+import type { HistoryEventRow } from './run-history.pure'
 
 interface HistoryEventRowViewProps {
   event: HistoryEventRow
@@ -39,25 +23,25 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
   const content = (
     <>
       <span className="flex w-full items-baseline gap-2">
-        <span className="shrink-0 tabular-nums text-3xs text-muted-foreground">
+        <span className="shrink-0 tabular-nums text-3xs text-ink-muted">
           {event.timeLabel}
         </span>
         <span className="min-w-0 flex-1 whitespace-normal break-words text-xs">
           {event.title}
         </span>
         <span
-          className={cn('shrink-0 text-2xs', HISTORY_TONE_TEXT[event.tone])}
+          className={cn('shrink-0 text-2xs', toneInk[HISTORY_TONE[event.tone]])}
         >
           {event.outcomeLabel}
         </span>
       </span>
       {event.reason && (
-        <span className="w-full whitespace-normal break-words text-3xs text-muted-foreground">
+        <span className="w-full whitespace-normal break-words text-3xs text-ink-muted">
           {event.reason}
         </span>
       )}
       {event.preview && (
-        <span className="w-full whitespace-normal break-words text-3xs text-muted-foreground">
+        <span className="w-full whitespace-normal break-words text-3xs text-ink-muted">
           {event.preview}
         </span>
       )}
@@ -65,8 +49,9 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
   )
   const classes = cn(
     'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left font-normal',
-    HISTORY_TONE_BORDER[event.tone],
-    selected && 'bg-white/[0.06]',
+    TONE_FRAME[HISTORY_TONE[event.tone]],
+    // R7: the picked event wears the selected fill.
+    selected && 'bg-fill-selected',
   )
   return (
     <li>

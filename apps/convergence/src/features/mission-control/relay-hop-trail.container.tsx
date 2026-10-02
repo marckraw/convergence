@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
-import { ChevronDown, ChevronRight, TriangleAlert } from 'lucide-react'
+import { ChevronRight, TriangleAlert } from 'lucide-react'
 import {
   selectHopTrailForCrew,
   useSessionRelayStore,
 } from '@/entities/session-relay'
-import { Button, cn } from '@convergence/ui'
+import { Badge, Button, cn, Tooltip } from '@convergence/ui'
 import { RelayHopRow } from './relay-hop-row.presentational'
 import {
   buildRelayHopLine,
@@ -83,7 +83,7 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
     // The note survives the trail it described: clearing the last hop empties
     // this section, and "kept 2 from a running flow" would vanish with it.
     return keptNote ? (
-      <p className="text-2xs text-muted-foreground">{keptNote}</p>
+      <p className="text-2xs text-ink-muted">{keptNote}</p>
     ) : null
   }
 
@@ -98,39 +98,37 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
           size="xs"
           className="px-1"
         >
-          {open ? (
-            <ChevronDown className="size-3" />
-          ) : (
-            <ChevronRight className="size-3" />
-          )}
+          {/* One chevron that turns (MC-31). */}
+          <ChevronRight
+            className={cn('size-3 transition-transform', open && 'rotate-90')}
+          />
           Trail
           <span className="tabular-nums">{formatHopCount(hops.length)}</span>
         </Button>
 
         {alarming > 0 ? (
-          <span
-            title={formatAlarmSummary(alarming)}
-            className={cn(
-              'flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium leading-none',
-              'bg-red-500/20 text-red-400 ring-1 ring-red-500/40',
-            )}
-          >
-            <TriangleAlert aria-hidden className="size-3" />
-            {alarming}
-            <span className="sr-only">{formatAlarmSummary(alarming)}</span>
-          </span>
+          <Tooltip label={formatAlarmSummary(alarming)}>
+            <Badge
+              tone="danger"
+              icon={<TriangleAlert />}
+              className="font-medium"
+            >
+              {alarming}
+              <span className="sr-only">{formatAlarmSummary(alarming)}</span>
+            </Badge>
+          </Tooltip>
         ) : null}
 
         {confirmingClear ? (
           <Button
             type="button"
-            variant="ghost"
+            variant="danger-quiet"
             disabled={busy}
             onClick={() => {
               void confirmClear()
             }}
             size="xs"
-            className="ml-auto shrink-0 text-red-400 hover:text-red-300"
+            className="ml-auto shrink-0"
           >
             {formatClearTrailConfirm(alarming)}
           </Button>
@@ -151,9 +149,7 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
         )}
       </div>
 
-      {keptNote ? (
-        <p className="text-2xs text-muted-foreground">{keptNote}</p>
-      ) : null}
+      {keptNote ? <p className="text-2xs text-ink-muted">{keptNote}</p> : null}
 
       {open ? (
         <>

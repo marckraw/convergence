@@ -1732,6 +1732,14 @@ describe('MissionControl', () => {
         await screen.findByRole('button', { name: 'Crew settings' }),
       )
       await screen.findByRole('region', { name: 'Crew settings' })
+      // The crew's own settings sit in the Crew details disclosure, a real
+      // Collapsible since MC-31: open it, as the person does, so its fields
+      // and buttons are in reach.
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Crew details — name, decoration, loop limits, tracker, export',
+        }),
+      )
       return api
     }
 
@@ -2719,7 +2727,8 @@ describe('MissionControl', () => {
       await waitFor(() => expect(toast.success).toHaveBeenCalled())
       fireEvent.click(screen.getByRole('button', { name: 'Crew settings' }))
       expect(await screen.findByText(/Last exported to/)).toHaveAttribute(
-        'title',
+        // The full path is its tooltip (R2: our Tooltip, never a title).
+        'data-tooltip',
         path,
       )
     })

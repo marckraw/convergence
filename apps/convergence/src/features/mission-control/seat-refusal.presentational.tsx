@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import { FormError } from '@convergence/ui'
 
 interface SeatRefusalProps {
   /** The door's own sentence, verbatim. */
@@ -9,17 +10,15 @@ interface SeatRefusalProps {
 
 /**
  * A refusal, drawn directly under the field it refuses (MAR-3118 R7): the
- * service's sentence in amber, then what is still in force. The typed text
- * stays in its field — this component never touches it.
+ * service's sentence, then what is still in force. The typed text stays in
+ * its field — this component never touches it.
+ *
+ * The door said no, so it reads as every refusal in the app does (MC-18): a
+ * FormError, in the danger ink, announced at once, its field marked
+ * aria-invalid beside it.
  */
 export const SeatRefusal: FC<SeatRefusalProps> = ({ message, kept }) => (
-  <div data-seat-refusal role="alert" className="flex flex-col gap-0.5">
-    <p className="text-2xs text-amber-400">
-      <span aria-hidden className="mr-1 font-semibold">
-        !
-      </span>
-      {message}
-    </p>
-    <p className="pl-2.5 text-3xs text-muted-foreground">{kept}</p>
-  </div>
+  <FormError data-seat-refusal detail={kept || undefined}>
+    {message}
+  </FormError>
 )

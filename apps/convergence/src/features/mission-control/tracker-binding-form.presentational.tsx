@@ -3,7 +3,7 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
-import { Button, Input, Switch } from '@convergence/ui'
+import { Button, FormError, Input, SectionLabel, Switch } from '@convergence/ui'
 import {
   probeAsksForKey,
   probeTimeLabel,
@@ -45,7 +45,7 @@ interface TrackerBindingFormProps {
   onTest: () => void
 }
 
-const LABEL = 'text-2xs text-muted-foreground'
+const LABEL = 'text-2xs text-ink-muted'
 
 /**
  * The crew's tracker binding (MAR-3084 R9): four fields, whether a key is
@@ -81,10 +81,8 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       className="flex flex-col gap-2 border-t border-hairline pt-2"
     >
       <section aria-label="Dispatch" className="flex flex-col gap-2">
-        <h4 className="text-2xs uppercase tracking-wide text-muted-foreground">
-          Dispatch
-        </h4>
-        <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
+        <SectionLabel as="h4">Dispatch</SectionLabel>
+        <label className="flex min-h-10 items-center gap-2 text-xs text-ink-muted">
           <Switch
             checked={autoDispatch}
             disabled={busy || !bound}
@@ -93,15 +91,13 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           Auto-dispatch — send issues labeled groomed, grounded, their seat and
           dispatch into their seats' conversations
         </label>
-        <p className="text-2xs tabular-nums text-muted-foreground">
+        <p className="text-2xs tabular-nums text-ink-muted">
           {dispatchCandidates.length
             ? `${dispatchCandidates.length} issue(s) would start now: ${dispatchCandidates.join(', ')}`
             : 'Nothing would start now'}
         </p>
       </section>
-      <h4 className="text-2xs uppercase tracking-wide text-muted-foreground">
-        Tracker
-      </h4>
+      <SectionLabel as="h4">Tracker</SectionLabel>
 
       <div className="flex items-center gap-2">
         <span className={`flex-1 ${LABEL}`}>Kind</span>
@@ -245,16 +241,12 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         </p>
       </div>
       {lastProbe ? (
-        <p className="text-3xs text-muted-foreground/70">
+        <p className="text-3xs text-ink-muted">
           Tested at {probeTimeLabel(lastProbe.at)}
         </p>
       ) : null}
-      {error ? (
-        <p role="alert" className="text-2xs text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <p className="text-3xs text-muted-foreground/70">
+      <FormError>{error}</FormError>
+      <p className="text-3xs text-ink-muted">
         Read only: the app watches this project once a minute and never writes
         to it; with auto-dispatch on it sends issues into your seats'
         conversations.
