@@ -508,12 +508,14 @@ function renderStreakCalendar(overview: AnalyticsOverview) {
         {days.map((day) => {
           const active = activeDays.has(day)
           const isCurrent = day === currentMarker
+          const words = `${formatDateLabel(day)}${active ? ': active' : ''}`
           return (
-            <Tooltip
-              key={day}
-              label={`${formatDateLabel(day)}${active ? ': active' : ''}`}
-            >
+            // The tooltip is the pointer's; the name is what a screen reader
+            // reads for the day (DS N1, DLG N2).
+            <Tooltip key={day} label={words}>
               <div
+                role="img"
+                aria-label={words}
                 className={cn(
                   'aspect-square rounded-md border',
                   active
@@ -613,12 +615,14 @@ function renderHeatmapRow({
             weekday,
             hour,
           )
+          const words = `${label} ${formatHour(hour)}: ${formatInteger(count)}`
           return (
-            <Tooltip
-              key={`${weekday}-${hour}`}
-              label={`${label} ${formatHour(hour)}: ${formatInteger(count)}`}
-            >
+            // Named for a screen reader as the tooltip names it for the
+            // pointer (DS N1, DLG N2).
+            <Tooltip key={`${weekday}-${hour}`} label={words}>
               <div
+                role="img"
+                aria-label={words}
                 className={cn(
                   'aspect-square rounded-sm border border-line-soft',
                   heatFill[getHeatmapLevel(count, max)],
