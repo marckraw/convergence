@@ -85,7 +85,7 @@ export const WAVE_RAIL_CLASS =
   'flex h-full w-11 shrink-0 flex-col items-center gap-2 border-r border-hairline py-3'
 
 /** The strip's two ways out: icon-only, the header controls' size. */
-export const LOOM_STRIP_BUTTON_CLASS = 'size-7 shrink-0 p-0'
+export const LOOM_STRIP_BUTTON_CLASS = 'shrink-0'
 
 /**
  * A sheet on the folded column: the glyph, the count under it, no word.
@@ -104,7 +104,7 @@ export const LOOM_STRIP_COUNT_CLASS = 'text-3xs font-normal tabular-nums'
 export const LOOM_GUIDE_ENTRY_CLASS = 'w-37 shrink-0 px-3 py-0 text-xs'
 
 /** The header control that folds Loom away (MAR-3292 R4). */
-export const LOOM_COLLAPSE_BUTTON_CLASS = 'size-7 shrink-0 p-0'
+export const LOOM_COLLAPSE_BUTTON_CLASS = 'shrink-0'
 
 /**
  * A sheet's section heading, in the eyebrow look at the 10 px step: Loom's

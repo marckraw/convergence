@@ -47,7 +47,7 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             type="button"
             variant="secondary"
             disabled={!props.enabled}
-            className="min-h-10"
+            size="lg"
           >
             Merge reviewed…
           </Button>
@@ -127,7 +127,6 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             onClick={props.onRefresh}
             disabled={running}
             size="lg"
-            className="min-h-10"
           >
             Refresh
           </Button>
@@ -135,7 +134,7 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             disabled={!canMergeReviewed(plan, selected, busy)}
             onClick={props.onMerge}
             size="lg"
-            className="min-h-10 tabular-nums"
+            className="tabular-nums"
           >
             {mergeableCount > 0
               ? `Merge ${mergeableCount}`
