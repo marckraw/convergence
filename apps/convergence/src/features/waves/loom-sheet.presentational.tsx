@@ -39,6 +39,7 @@ import {
   LOOM_QA_PREVIEW,
   type LoomHorse,
   type LoomMastermind,
+  loomDispatchClock,
 } from './loom-horses.pure'
 import { LoomHorseCardContainer as LoomHorseCard } from './loom-horse.container'
 import { LoomMastermindCardContainer } from './loom-mastermind.container'
@@ -419,13 +420,7 @@ export const LoomSheetView = <TSession,>({
               ) : null}
               {dispatchPlan ? (
                 <p className={LOOM_SHEET_NOTE_CLASS}>
-                  Planned{' '}
-                  {new Date(dispatchPlan.plannedAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                  })}{' '}
-                  ·{' '}
+                  Planned {loomDispatchClock(dispatchPlan.plannedAt)} ·{' '}
                   {dispatchPlan.autoDispatch
                     ? 'Auto-dispatch is on · sends within a minute'
                     : 'Auto-dispatch is off · nothing is sent'}

@@ -50,6 +50,7 @@ import { CANVAS_THEME_VARS } from './session-canvas.styles'
 import { CANVAS_HANDLE } from './session-canvas.types'
 
 import '@xyflow/react/dist/style.css'
+import './session-canvas.css'
 
 /**
  * Defined once at module scope. React Flow warns loudly and remounts every node
@@ -462,6 +463,8 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
         },
         // A lit wire marches while it carries something, so a hop reads as
         // movement along the wire rather than a colour change in place.
+        // Under reduced motion it is lit, not marching: session-canvas.css
+        // plays the dash --motion-loops times (MC-25).
         animated: Boolean(pulse),
         // A disarmed wire is drawn but visibly not live: grey and dashed.
         style: {
