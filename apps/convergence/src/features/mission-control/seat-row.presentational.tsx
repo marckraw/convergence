@@ -59,9 +59,9 @@ export const SeatRow: FC<SeatRowProps> = ({
       data-seat-orphan={orphan || undefined}
       aria-label={seatRowAccessibleName({ member, source, host, refused })}
       onClick={onToggle}
-      size="lg"
+      size="md"
       className={cn(
-        'flex w-full min-w-0 items-center justify-start rounded-md border bg-fill-quiet px-2.5 text-left font-normal transition-colors hover:border-hairline-strong text-xs py-0',
+        'flex w-full min-w-0 items-center justify-start rounded-md border bg-fill-quiet text-left font-normal transition-colors hover:border-hairline-strong',
         // A seat whose conversation is gone is a heads-up: the warning tone.
         orphan ? 'border-warning-line' : 'border-hairline',
       )}

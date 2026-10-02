@@ -62,8 +62,7 @@ export const LoomCompactView: FC<
           variant="ghost"
           aria-label={EXPAND_LOOM}
           onClick={onExpand}
-          size="lg"
-          className="px-2 text-xs py-0"
+          size="md"
         >
           Expand <Maximize2 className="size-3.5" />
         </Button>
@@ -122,8 +121,8 @@ export const LoomCompactView: FC<
         variant="ghost"
         ref={props.guideRef}
         onClick={props.onOpenGuide}
-        size="lg"
-        className="w-full justify-start px-2 text-xs py-0"
+        size="md"
+        className="w-full justify-start"
       >
         {LEARN_LOOM_ENTRY}
       </Button>

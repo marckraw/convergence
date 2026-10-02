@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import { Combobox, type ComboboxItem } from '@convergence/ui'
+import { Combobox, type ComboboxItem, type ControlSize } from '@convergence/ui'
 
 interface ComposerSelectProps {
   selectedId: string
@@ -7,6 +7,8 @@ interface ComposerSelectProps {
   items: ComboboxItem[]
   onChange: (id: string) => void
   disabled?: boolean
+  /** R3: the row's one size, as a prop (CONV-14). `md` unless said. */
+  size?: ControlSize
   className?: string
   icon?: ReactNode
   ariaLabel?: string
@@ -18,6 +20,7 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
   items,
   onChange,
   disabled = false,
+  size = 'md',
   className,
   icon,
   ariaLabel,
@@ -31,6 +34,7 @@ export const ComposerSelect: FC<ComposerSelectProps> = ({
     searchPlaceholder="Search options..."
     emptyMessage="No matching options."
     variant="ghost"
+    size={size}
     className={className}
     icon={icon}
     ariaLabel={ariaLabel}

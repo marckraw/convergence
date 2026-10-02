@@ -49,6 +49,7 @@ import {
   SegmentedControlItem,
   StatusPill,
   Textarea,
+  Toggle,
   Tooltip,
 } from '@convergence/ui'
 import {
@@ -875,7 +876,7 @@ export const Composer: FC<ComposerProps> = ({
                     aria-label="Add attachment"
                     onClick={onAttachmentAdd}
                     disabled={attachmentsIngestInFlight}
-                    className="w-full justify-start px-2"
+                    className="w-full justify-start"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     Attach file
@@ -897,7 +898,7 @@ export const Composer: FC<ComposerProps> = ({
                     error={skillCatalogError}
                     notice={remoteSkillsNotice}
                     disabled={!selection.provider}
-                    triggerClassName="h-8 w-full justify-start gap-2 px-2"
+                    triggerClassName="w-full justify-start"
                     onToggleSkill={onSkillToggle}
                     onBrowseAll={onSkillsBrowse}
                   />
@@ -908,7 +909,7 @@ export const Composer: FC<ComposerProps> = ({
                       items={projectContextItems}
                       selectedIds={selectedContextItems.map((item) => item.id)}
                       disabled={selectionDisabled}
-                      triggerClassName="h-8 w-full justify-start gap-2 px-2"
+                      triggerClassName="w-full justify-start"
                       onToggleItem={onContextToggle}
                     />
                   ) : null}
@@ -941,6 +942,7 @@ export const Composer: FC<ComposerProps> = ({
                     <CatalogNotice notice={optionRow.notice} />
                   ) : null}
                   <ComposerSelect
+                    size="sm"
                     selectedId={selection.providerId}
                     value={selection.providerLabel || 'Select provider'}
                     items={providerItems}
@@ -962,11 +964,12 @@ export const Composer: FC<ComposerProps> = ({
                     }
                     disabled={modelSelectionDisabled || !selection.provider}
                     triggerVariant="ghost"
-                    triggerSize="md"
+                    triggerSize="sm"
                     triggerClassName={composerToolbarControl}
                   />
                   {effortItems.length > 0 && (
                     <ComposerSelect
+                      size="sm"
                       selectedId={selection.effortId}
                       value={selection.effort?.label ?? 'Select effort'}
                       items={effortItems}
@@ -1004,6 +1007,7 @@ export const Composer: FC<ComposerProps> = ({
                   */}
                   {codexBillingControlsAvailable ? (
                     <ComposerSelect
+                      size="sm"
                       selectedId={codexSpeedId}
                       value={codexSpeedLabel}
                       ariaLabel={`Speed: ${codexSpeedLabel}`}
@@ -1039,6 +1043,7 @@ export const Composer: FC<ComposerProps> = ({
                   {!selectionDisabled ? (
                     <>
                       <ComposerSelect
+                        size="sm"
                         selectedId={simplePermissionPreset}
                         value={
                           permissionConfig.preset === 'custom'
@@ -1061,7 +1066,7 @@ export const Composer: FC<ComposerProps> = ({
                           label="Advanced permission controls"
                           type="button"
                           variant="quiet"
-                          aria-pressed={permissionAdvancedOpen}
+                          pressed={permissionAdvancedOpen}
                           onClick={() =>
                             onPermissionAdvancedOpenChange(
                               !permissionAdvancedOpen,
@@ -1069,10 +1074,6 @@ export const Composer: FC<ComposerProps> = ({
                           }
                           disabled={disabled || !selection.provider}
                           size="sm"
-                          className={cn(
-                            permissionAdvancedOpen &&
-                              'bg-surface-muted text-ink',
-                          )}
                         >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
                         </IconButton>
@@ -1087,16 +1088,12 @@ export const Composer: FC<ComposerProps> = ({
                 <Tooltip
                   label={relayMuteTitle(relaysMuted, armedOutgoingRelays)}
                 >
-                  <Button
-                    type="button"
-                    variant="quiet"
-                    role="switch"
-                    aria-checked={relaysMuted}
-                    aria-label="Send quiet"
-                    onClick={() => onRelaysMutedChange(!relaysMuted)}
-                    disabled={disabled}
+                  <Toggle
                     size="sm"
-                    className={cn(relaysMuted && 'bg-surface-muted text-ink')}
+                    pressed={relaysMuted}
+                    aria-label="Send quiet"
+                    onPressedChange={onRelaysMutedChange}
+                    disabled={disabled}
                   >
                     {relaysMuted ? (
                       <BellOff className="h-3.5 w-3.5" />
@@ -1104,7 +1101,7 @@ export const Composer: FC<ComposerProps> = ({
                       <Bell className="h-3.5 w-3.5" />
                     )}
                     Quiet
-                  </Button>
+                  </Toggle>
                 </Tooltip>
               ) : null}
               {wiresSlot}
@@ -1167,6 +1164,7 @@ export const Composer: FC<ComposerProps> = ({
               {selection.providerId === 'codex' ? (
                 <>
                   <ComposerSelect
+                    size="sm"
                     selectedId={codexConfig.approvalPolicy}
                     value={
                       CODEX_APPROVAL_POLICY_OPTIONS.find(
@@ -1181,6 +1179,7 @@ export const Composer: FC<ComposerProps> = ({
                     className={composerToolbarControl}
                   />
                   <ComposerSelect
+                    size="sm"
                     selectedId={codexConfig.sandbox}
                     value={
                       CODEX_SANDBOX_OPTIONS.find(
@@ -1197,6 +1196,7 @@ export const Composer: FC<ComposerProps> = ({
                 </>
               ) : (
                 <ComposerSelect
+                  size="sm"
                   selectedId={claudeCodeConfig.permissionMode}
                   value={
                     CLAUDE_CODE_PERMISSION_MODE_OPTIONS.find(

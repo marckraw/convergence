@@ -112,7 +112,7 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
         aria-label="Close history"
         onClick={onClose}
         size="sm"
-        className="text-2xs gap-2"
+        className="gap-2"
       >
         <X className="size-3.5" />
         Close
@@ -191,7 +191,6 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
             variant="tonal"
             onClick={() => onFilterChange('all')}
             size="sm"
-            className="px-3 text-2xs"
           >
             Clear history filters
           </Button>
@@ -240,7 +239,7 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
                 disabled={loadingOlder}
                 onClick={onLoadOlder}
                 size="sm"
-                className="w-full px-3 text-2xs text-ink-muted"
+                className="w-full text-ink-muted"
               >
                 {loadingOlder
                   ? 'Loading older runs…'

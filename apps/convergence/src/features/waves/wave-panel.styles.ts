@@ -99,9 +99,10 @@ export const LOOM_STRIP_COUNT_CLASS = 'text-3xs font-normal tabular-nums'
 
 /**
  * The guide's entry in expanded Loom's header: the guide's own control width
- * (148 px, the footer's quiet controls'), on the spacing scale.
+ * (148 px, the footer's quiet controls'), on the spacing scale. Its height,
+ * padding and words are the Button's `md` (R3, MC-3).
  */
-export const LOOM_GUIDE_ENTRY_CLASS = 'w-37 shrink-0 px-3 py-0 text-xs'
+export const LOOM_GUIDE_ENTRY_CLASS = 'w-37 shrink-0'
 
 /** The header control that folds Loom away (MAR-3292 R4). */
 export const LOOM_COLLAPSE_BUTTON_CLASS = 'shrink-0'

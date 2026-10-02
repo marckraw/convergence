@@ -178,7 +178,6 @@ export const SeatEditor: FC<SeatEditorProps> = ({
               disabled={busy}
               onClick={onRemove}
               size="sm"
-              className="px-2.5 text-2xs"
             >
               Remove seat
             </Button>
@@ -299,7 +298,6 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 disabled={busy}
                 onClick={onWriteCard}
                 size="sm"
-                className="px-2.5 text-2xs"
               >
                 Write a card
               </Button>
@@ -424,7 +422,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSeatEdit({ wipLimit: stepBase - 1 })}
                 size="sm"
-                className="px-2 disabled:opacity-40"
+                className="disabled:opacity-40"
               >
                 <Minus aria-hidden className="size-3" />
               </IconButton>
@@ -448,7 +446,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSeatEdit({ wipLimit: stepBase + 1 })}
                 size="sm"
-                className="px-2 disabled:opacity-40"
+                className="disabled:opacity-40"
               >
                 <Plus aria-hidden className="size-3" />
               </IconButton>
@@ -494,7 +492,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           disabled={busy}
           onClick={onRemove}
           size="sm"
-          className="shrink-0 gap-1 px-1 text-2xs font-normal disabled:opacity-50"
+          className="shrink-0 gap-1 font-normal disabled:opacity-50"
         >
           <Trash2 aria-hidden className="size-3.5" />
           {recipe ? 'Delete recipe' : 'Remove from crew'}

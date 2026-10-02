@@ -108,7 +108,7 @@ export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
             type="button"
             variant="quiet"
             disabled={activeSurface === 'code' && !projectId}
-            className="w-full justify-between px-2"
+            className="w-full justify-between"
           >
             <span className="flex items-center gap-2">
               <Cable className="size-3.5" />

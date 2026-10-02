@@ -275,7 +275,6 @@ export function HarnessFactsSections({
                         aria-label={`Reconnect ${server.name}`}
                         onClick={() => mcp.onReconnect(server.name)}
                         size="xs"
-                        className="text-xs"
                       >
                         {mcp.pending === server.name
                           ? 'Reconnecting…'

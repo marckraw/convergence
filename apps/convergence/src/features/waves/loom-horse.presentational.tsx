@@ -188,7 +188,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           data-loom-horse-details={horse.key}
           onClick={onShowDetail}
           size="xs"
-          className="px-1 text-ink-muted"
+          className="text-ink-muted"
         >
           Details
         </Button>
@@ -199,7 +199,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           variant="ghost"
           onClick={onShowNext}
           size="xs"
-          className="px-1 text-ink-muted"
+          className="text-ink-muted"
         >
           View next work →
         </Button>

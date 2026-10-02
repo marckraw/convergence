@@ -1,8 +1,7 @@
 import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
 import { isEditableTarget } from '@/shared/lib/editable-target.pure'
-import { Button, cn } from '@convergence/ui'
-import { annotationChipFrame } from './annotation.styles'
+import { Button } from '@convergence/ui'
 import {
   formatAnnotationCount,
   stripNavigationTarget,
@@ -128,10 +127,10 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
               onKeyDown={(event) =>
                 moveFocusAlongStrip(event, index, annotations.length)
               }
-              className={cn(
-                annotationChipFrame,
-                'max-w-56 justify-start gap-1 px-2 font-normal hover:bg-fill-hover',
-              )}
+              // The chip's look on the kit's 28 px step (R3): its height,
+              // padding and words come from size, its edge and wash from here.
+              size="sm"
+              className="max-w-56 min-w-0 justify-start gap-1 border border-line bg-surface-muted/40 font-normal text-ink hover:bg-fill-hover"
             >
               <span className="min-w-0 truncate italic text-ink-muted">
                 {toPillQuote(annotation.quotedText)}

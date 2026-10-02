@@ -81,7 +81,7 @@ export const LoomExpandedView: FC<
         ref={props.guideRef}
         style={NO_DRAG_STYLE}
         onClick={props.onOpenGuide}
-        size="lg"
+        size="md"
         className={LOOM_GUIDE_ENTRY_CLASS}
       >
         {LEARN_LOOM_ENTRY}
@@ -92,8 +92,8 @@ export const LoomExpandedView: FC<
         variant="ghost"
         style={NO_DRAG_STYLE}
         onClick={onFold}
-        size="lg"
-        className="shrink-0 px-3 text-xs py-0"
+        size="md"
+        className="shrink-0"
       >
         <Minimize2 className="size-3.5" />
         {FOLD_LOOM}

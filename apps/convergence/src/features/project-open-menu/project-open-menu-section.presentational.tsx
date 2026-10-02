@@ -40,7 +40,7 @@ export function ProjectOpenMenuSection({
               key={app.id}
               variant="ghost"
               onClick={() => onOpen(app)}
-              className="w-full justify-start px-2 font-normal"
+              className="w-full justify-start font-normal"
             >
               <Icon className="size-3.5" />
               Open in {app.label}

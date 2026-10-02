@@ -104,7 +104,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
           variant="quiet"
           aria-label="Select skills"
           disabled={disabled}
-          size="sm"
+          size="md"
           className={triggerClassName}
         >
           <Library className="h-3.5 w-3.5" />

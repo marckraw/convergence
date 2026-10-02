@@ -1567,7 +1567,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 })
               }
               size="sm"
-              className="text-2xs"
             >
               Import crew…
             </Button>

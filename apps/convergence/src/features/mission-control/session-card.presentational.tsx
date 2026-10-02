@@ -8,12 +8,12 @@ import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { ProviderModel } from '@/shared/ui/provider-model.presentational'
 import {
-  Button,
   Card,
   CardAction,
   cn,
   Spinner,
   StatusDot,
+  Toggle,
   Tooltip,
 } from '@convergence/ui'
 import { CrewMark } from './crew-mark.presentational'
@@ -248,18 +248,18 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
             {crewAction}
 
             {onHail ? (
-              <Button
-                type="button"
-                variant={hailOpen ? 'tonal' : 'ghost'}
-                aria-expanded={hailOpen}
+              // Open or not, one control: a Toggle, pressed while its Hail
+              // shows, in R7's chosen look, never a variant swapped in (DS-28).
+              <Toggle
+                size="xs"
+                pressed={hailOpen}
                 aria-label={`Hail ${session.name}`}
                 onClick={() => onHail(card)}
-                size="xs"
-                className="shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+                className="gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-pressed:opacity-100"
               >
                 <Radio className="size-3" />
                 Hail
-              </Button>
+              </Toggle>
             ) : null}
           </div>
         </div>

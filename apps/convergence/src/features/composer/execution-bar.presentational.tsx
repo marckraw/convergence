@@ -72,6 +72,7 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
           )}
           onChange={onChange}
           disabled={disabled}
+          size="xs"
           className={stripSelectClass}
         />
       ) : (

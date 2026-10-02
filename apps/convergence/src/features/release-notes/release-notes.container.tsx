@@ -64,7 +64,7 @@ export const ReleaseNotesDialogContainer: FC<
           <Button
             type="button"
             variant="quiet"
-            className="w-full justify-between px-2"
+            className="w-full justify-between"
           >
             <span className="flex items-center gap-2">
               <Info className="size-3.5" />

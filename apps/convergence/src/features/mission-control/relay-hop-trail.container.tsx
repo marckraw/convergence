@@ -96,7 +96,6 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
           size="xs"
-          className="px-1"
         >
           {/* One chevron that turns (MC-31). */}
           <ChevronRight
@@ -173,7 +172,7 @@ export const RelayHopTrail: FC<RelayHopTrailProps> = ({
                 void loadOlder()
               }}
               size="xs"
-              className="self-start px-1"
+              className="self-start"
             >
               Load older
             </Button>

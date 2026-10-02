@@ -34,7 +34,7 @@ const InProjectMenu = (props: SectionProps) => (
       align="start"
       className="min-w-52 p-1.5"
     >
-      <Button variant="ghost" className="w-full justify-start px-2 font-normal">
+      <Button variant="ghost" className="w-full justify-start font-normal">
         Project settings…
       </Button>
       <div className="my-1 h-px bg-surface-muted" />

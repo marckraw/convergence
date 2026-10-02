@@ -181,9 +181,9 @@ describe('SidebarConversations (production search wiring)', () => {
       sessions: [treeMatch],
     })
     const toggle = screen.getByRole('button', { name: 'Search conversations' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
     const field = screen.getByRole('searchbox', {
       name: 'Search conversations',
     })

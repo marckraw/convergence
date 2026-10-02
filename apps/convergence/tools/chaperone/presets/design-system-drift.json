@@ -120,8 +120,8 @@
         "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:size|h|w)-(?:\\d+(?:\\.5)?|px)\\b",
-        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). A height typed on top drifts from every other control (MAR-3617; DS-4)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:size|h|w)-(?:\\d+(?:\\.5)?|px)\\b|<(?:Button|IconButton)\\b(?!(?:[^>]|=>)*?(?<![\\w:\\]-])h-auto\\b)(?!(?:[^>]|=>)*?\\svariant=[\"']link[\"'])(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xytrbl]?-(?:\\d+(?:\\.5)?|px)|(?:min-|max-)?h-(?:\\d+(?:\\.5)?|px|control-[\\w-]+|\\(--[\\w-]+\\)))(?![\\w-])|(?<![\\w-])\\[&_button\\]:(?:(?:min-|max-)?h|size|w|p[xytrbl]?|text)-)",
+        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). Each size is a height, a padding and a text size together, so a height, a min-height, a padding or a text size typed on top (size=\"sm\" className=\"px-3 text-2xs\") is a size the scale doesn't name and drifts from every other control: take the nearest size instead, and never resize every button in a box at once ([&_button]:min-h-10). A link has no box, so its words may take a size; a Button grown into a row (h-auto) is no-buttons-as-rows' to report (MAR-3617; MAR-3608; DS-4)."
       },
       {
         "id": "no-native-confirm",

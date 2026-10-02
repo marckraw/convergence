@@ -85,7 +85,7 @@ export function NeedsYouControls({
             onClick={onReset}
             aria-label="Clear activity filters"
             size="sm"
-            className="gap-1 px-1.5 text-2xs font-normal"
+            className="gap-1 font-normal"
           >
             <X aria-hidden="true" className="size-3" /> Clear
           </Button>
@@ -267,7 +267,7 @@ export function NeedsYouControls({
             type="button"
             variant="ghost"
             onClick={onCollapse}
-            className="text-2xs font-normal"
+            className="font-normal"
           >
             Collapse filters
           </Button>

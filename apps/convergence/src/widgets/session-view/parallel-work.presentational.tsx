@@ -260,24 +260,35 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           data-tone={tone}
           data-returned={returned ? '' : undefined}
         >
-          {children.length > 0 && (
-            <Button
-              variant="quiet"
-              size="xs"
-              aria-expanded={!hidden}
-              aria-label={`${hidden ? 'Expand' : 'Collapse'} ${workTitle(row)}`}
-              onClick={() => props.onToggle?.(key)}
-              className="-ml-2 text-2xs"
-            >
-              {hidden ? (
-                <ChevronRight className="size-3" />
-              ) : (
+          {/* Open, the toggle is an icon: an IconButton, whose label is its
+              name and its tooltip. Folded, it says what it hides, and those
+              words are its name, with what it does in the tooltip (CONV-5). */}
+          {children.length > 0 &&
+            (hidden ? (
+              <Tooltip label={`Expand ${workTitle(row)}`}>
+                <Button
+                  variant="quiet"
+                  size="xs"
+                  aria-expanded={false}
+                  onClick={() => props.onToggle?.(key)}
+                  className="-ml-2"
+                >
+                  <ChevronRight className="size-3" />
+                  {`${descendantCounts.get(key) ?? 0} descendants running`}
+                </Button>
+              </Tooltip>
+            ) : (
+              <IconButton
+                label={`Collapse ${workTitle(row)}`}
+                variant="quiet"
+                size="xs"
+                aria-expanded
+                onClick={() => props.onToggle?.(key)}
+                className="-ml-2"
+              >
                 <ChevronDown className="size-3" />
-              )}
-              {hidden &&
-                `${descendantCounts.get(key) ?? 0} descendants running`}
-            </Button>
-          )}
+              </IconButton>
+            ))}
           {content(row)}
           {controls(row)}
         </Card>
@@ -349,8 +360,8 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
                   variant="ghost"
                   aria-expanded={props.olderOpen ?? false}
                   onClick={props.onToggleOlder}
-                  size="lg"
-                  className="text-xs text-ink-muted"
+                  size="md"
+                  className="text-ink-muted"
                 >
                   {archive.older.length} older ·{' '}
                   {archive.newest

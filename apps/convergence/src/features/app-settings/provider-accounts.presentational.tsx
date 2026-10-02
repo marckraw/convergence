@@ -234,7 +234,7 @@ export function ProviderAccountsFields({
     !isCodex && Boolean(removalLayout?.privateEntries.length)
 
   return (
-    <div className="space-y-4 [&_button]:min-h-10">
+    <div className="space-y-4">
       {/* Two providers, one at a time (R9): a SegmentedControl. */}
       <SegmentedControl
         aria-label="Account provider"

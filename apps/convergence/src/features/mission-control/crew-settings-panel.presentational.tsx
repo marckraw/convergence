@@ -333,7 +333,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         disabled={busy}
         onClick={onAddConversation}
         size="sm"
-        className="px-2.5 text-2xs"
       >
         <MessageSquare aria-hidden className="size-3.5" />
         Add conversation…
@@ -345,7 +344,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         variant="secondary"
         disabledReason="Coming with MAR-3099"
         size="sm"
-        className="px-2.5 text-2xs"
       >
         <FlaskConical aria-hidden className="size-3.5" />
         New recipe
@@ -405,7 +403,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                     variant="secondary"
                     disabled={busy}
                     size="sm"
-                    className="gap-1 text-2xs"
+                    className="gap-1"
                   />
                 }
               >
@@ -605,7 +603,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               disabled={exporting}
               onClick={onExport}
               size="sm"
-              className="px-3"
             >
               {exporting ? 'Exporting…' : 'Export crew…'}
             </Button>
@@ -641,7 +638,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                     disabled={busy}
                     onClick={onConfirmDelete}
                     size="sm"
-                    className="flex-1 px-3"
+                    className="flex-1"
                   >
                     Delete crew
                   </Button>
@@ -651,7 +648,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                     disabled={busy}
                     onClick={onCancelDelete}
                     size="sm"
-                    className="px-3"
                   >
                     Cancel
                   </Button>
