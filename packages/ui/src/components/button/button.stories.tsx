@@ -35,6 +35,8 @@ const SIZES: { size: ButtonSize; px: number }[] = [
   { size: 'sm', px: 28 },
   { size: 'md', px: 32 },
   { size: 'lg', px: 36 },
+  // The Button's own step (ruling 9): a title you press, such as Loom's.
+  { size: 'xl', px: 44 },
 ]
 
 /** The spinners a button draws that can be seen: a busy one's, never its hidden twin's. */
@@ -45,7 +47,8 @@ const shownSpinners = (element: Element) =>
 
 /**
  * Every variant, named by what it means, at every size of the one scale
- * (R3): 24, 28, 32 and 36 px. The keyboard reaches each and draws the ring.
+ * (R3): 24, 28, 32 and 36 px, and the Button's own 44 (ruling 9). The
+ * keyboard reaches each and draws the ring.
  */
 export const Default: Story = {
   render: (args) => (

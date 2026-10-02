@@ -91,8 +91,8 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
             disabled={isGenerating || providerItems.length === 0}
             searchPlaceholder="Search providers…"
             emptyMessage="No providers available."
-            variant="secondary"
-            className="w-full px-2 text-xs"
+            variant="field"
+            className="w-full"
           />
         </Field>
 
@@ -110,9 +110,9 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
               onModelChange(nextModelId, nextProviderId)
             }
             disabled={isGenerating || providers.length === 0}
-            triggerVariant="secondary"
+            triggerVariant="field"
             triggerSize="md"
-            triggerClassName="w-full justify-between px-2 text-xs"
+            triggerClassName="w-full"
           />
         </div>
       </div>

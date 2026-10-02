@@ -39,8 +39,11 @@ interface ConversationProjectMenuProps {
   contentFocus?: HeaderMenuFocus
 }
 
-/** A tool's row in the Project panel: a full-width quiet button, its icon first. */
-const TOOL_ROW = 'w-full justify-start gap-2 px-2 font-normal'
+/**
+ * A tool's row in the Project panel: a full-width quiet button, its icon
+ * first, on the md Button's own padding, as Open in…'s rows above it (R3).
+ */
+const TOOL_ROW = 'w-full justify-start gap-2 font-normal'
 
 /**
  * The header's Project group (MAR-3429 CH4 R4): one trigger for the

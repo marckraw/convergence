@@ -584,6 +584,8 @@
   --control-sm: 1.75rem;
   --control-md: 2rem;
   --control-lg: 2.25rem;
+  /* The Button's own 44 px step (ruling 9, 2 Oct 2026): Loom's sheet titles and its folded strip */
+  --control-xl: 2.75rem;
 
   /*
    * Layout -------------------------------------------------------------------------------------

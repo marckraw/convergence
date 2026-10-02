@@ -2013,7 +2013,8 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         <Notice
           tone="info"
           title={COMPOSER_WAIT_NOTICES[waitReason]}
-          className="mx-auto mb-2 w-full max-w-conversation py-1.5 text-xs"
+          size="sm"
+          className="mx-auto mb-2 w-full max-w-conversation"
           data-testid="composer-wait-notice"
         />
       ) : null}
@@ -2213,7 +2214,8 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         <Notice
           tone="danger"
           title={attachmentRejectionsTitle(rejections)}
-          className="mx-auto mt-2 w-full max-w-conversation text-xs"
+          size="sm"
+          className="mx-auto mt-2 w-full max-w-conversation"
         >
           {rejections.length === 1 ? (
             rejections[0]?.reason

@@ -145,7 +145,8 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                     value={draftName}
                     placeholder="Crew name"
                     aria-label="New crew name"
-                    className="flex-1 text-xs"
+                    density="compact"
+                    className="flex-1"
                     onChange={(event) => setDraftName(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {

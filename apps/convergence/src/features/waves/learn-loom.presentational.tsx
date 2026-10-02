@@ -18,7 +18,6 @@ import { LearnLoomReferenceView } from './learn-loom-reference.presentational'
 import type { LearnLoomStepView, LearnLoomView } from './learn-loom.pure'
 import {
   LEARN_LOOM_BODY_CLASS,
-  LEARN_LOOM_CLOSE_CLASS,
   LEARN_LOOM_CONTROL_CLASS,
   LEARN_LOOM_CONTROL_OFF_CLASS,
   LEARN_LOOM_DIALOG_CLASS,
@@ -98,13 +97,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
         <DialogTitle className={LEARN_LOOM_DIALOG_TITLE_CLASS}>
           {view === 'reference' ? LEARN_LOOM_REFERENCE_TITLE : LEARN_LOOM_TITLE}
         </DialogTitle>
-        <Button
-          type="button"
-          variant="ghost"
-          size="lg"
-          onClick={onClose}
-          className={LEARN_LOOM_CLOSE_CLASS}
-        >
+        <Button type="button" variant="ghost" size="lg" onClick={onClose}>
           {LEARN_LOOM_CONTROLS.close}
         </Button>
       </DialogHeader>

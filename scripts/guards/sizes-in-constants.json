@@ -1,0 +1,101 @@
+{
+  "files": ["apps/convergence/src/**/*.{ts,tsx}"],
+  "exclude": ["**/*.test.{ts,tsx}"],
+  "aliases": {
+    "@/": "apps/convergence/src/"
+  },
+  "parts": [
+    {
+      "why": "A Button's or IconButton's size: what use-button-sizes and no-buttons-as-rows read on the tag (a height, a width, a padding, a text size, a height token, h-auto), here read through the names its className uses. A link has no box, so only a fixed width or height counts on one.",
+      "tags": ["Button", "IconButton"],
+      "attributes": ["className"],
+      "pattern": "(?:size|h|w)-(?:\\d+(?:\\.5)?|px)|text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xytrbl]?-(?:\\d+(?:\\.5)?|px)|(?:min-|max-)?h-(?:\\d+(?:\\.5)?|px|control-[\\w-]+|\\(--[\\w-]+\\)|auto)",
+      "linkPattern": "(?:size|h|w)-(?:\\d+(?:\\.5)?|px)"
+    },
+    {
+      "why": "A component that hands its className or its trigger's on to a Button (LoomTitleView, ComposerSelect, every triggerClassName): the drift rules read only the parts' own tags, so here the strings written in place count too.",
+      "tags": ["LoomTitleView", "ComposerSelect", "*"],
+      "attributes": ["triggerClassName"],
+      "pattern": "(?:size|h|w)-(?:\\d+(?:\\.5)?|px)|text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xytrbl]?-(?:\\d+(?:\\.5)?|px)|(?:min-|max-)?h-(?:\\d+(?:\\.5)?|px|control-[\\w-]+|\\(--[\\w-]+\\)|auto)",
+      "inPlace": true
+    },
+    {
+      "why": "A wrapper's className, handed on to its Button or Combobox: the strings written in place count too.",
+      "tags": ["LoomTitleView", "ComposerSelect"],
+      "attributes": ["className"],
+      "pattern": "(?:size|h|w)-(?:\\d+(?:\\.5)?|px)|text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xytrbl]?-(?:\\d+(?:\\.5)?|px)|(?:min-|max-)?h-(?:\\d+(?:\\.5)?|px|control-[\\w-]+|\\(--[\\w-]+\\)|auto)",
+      "inPlace": true
+    },
+    {
+      "why": "Notice's, Badge's and the field frame's words and room: what use-part-sizes reads on the tag (ruling 10), here read through the names its className uses.",
+      "tags": [
+        "Notice",
+        "Badge",
+        "Input",
+        "Textarea",
+        "SelectTrigger",
+        "Combobox",
+        "SearchField",
+        "NumberField"
+      ],
+      "attributes": ["className"],
+      "pattern": "text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xy]?-(?:\\d+(?:\\.5)?|px)"
+    }
+  ],
+  "allowlist": [
+    {
+      "path": "apps/convergence/src/entities/execution-host/work-address-slot.styles.ts",
+      "name": "stripInputClass",
+      "utilities": ["px-1.5", "text-2xs"],
+      "reason": "The composer strip's branch field keeps the strip's one ruled scale, 11 px, with the strip's tight padding (Marcin's quiet ruling, MAR-2642, pinned in composer.container.test.tsx); the field frame's compact density is 12 px, and no other field wants 11."
+    },
+    {
+      "path": "apps/convergence/src/entities/feedback/floating-corner.pure.ts",
+      "name": "FLOATING_CORNER_BUTTON_CLASS",
+      "utilities": ["h-10", "w-10"],
+      "reason": "The floating corner's own 40 px round button, the box every floating layer measures itself against (FLOATING_CORNER, MAR-3416); its test pins these classes to those numbers. It is a place on the window, not a control in a row."
+    },
+    {
+      "path": "apps/convergence/src/widgets/sidebar/sidebar.styles.ts",
+      "name": "peekHandleClass",
+      "utilities": ["h-14", "w-5"],
+      "reason": "The collapsed rail's peek handle is a 20 × 56 tab on the rail's edge, half outside it: it reads as the panel's edge, not a button, so it takes no control size on purpose (its comment says so)."
+    },
+    {
+      "path": "apps/convergence/src/features/waves/wave-panel.styles.ts",
+      "name": "LOOM_GUIDE_ENTRY_CLASS",
+      "utilities": ["w-37"],
+      "reason": "The guide's entry in expanded Loom's header is as wide as the guide's own quiet controls, 148 px (MAR-3201), on the spacing scale (R11); a width, its height, padding and words the Button's md."
+    },
+    {
+      "path": "apps/convergence/src/features/waves/learn-loom.styles.ts",
+      "name": "LEARN_LOOM_CONTROL_CLASS",
+      "utilities": ["w-37"],
+      "reason": "Learn Loom's frozen frames (MAR-3201) give its footer's controls fixed widths, 148, 224 and 240 px on the spacing scale (R11), so the footer never reflows between steps and the control that advances the lesson is never the one pushed off; a width, not a height, padding or text size, which stay the Button's."
+    },
+    {
+      "path": "apps/convergence/src/features/waves/learn-loom.styles.ts",
+      "name": "LEARN_LOOM_CONTROL_OFF_CLASS",
+      "utilities": ["w-37"],
+      "reason": "Learn Loom's frozen frames (MAR-3201) give its footer's controls fixed widths, 148, 224 and 240 px on the spacing scale (R11), so the footer never reflows between steps and the control that advances the lesson is never the one pushed off; a width, not a height, padding or text size, which stay the Button's."
+    },
+    {
+      "path": "apps/convergence/src/features/waves/learn-loom.styles.ts",
+      "name": "LEARN_LOOM_PRIMARY_CLASS",
+      "utilities": ["w-56"],
+      "reason": "Learn Loom's frozen frames (MAR-3201) give its footer's controls fixed widths, 148, 224 and 240 px on the spacing scale (R11), so the footer never reflows between steps and the control that advances the lesson is never the one pushed off; a width, not a height, padding or text size, which stay the Button's."
+    },
+    {
+      "path": "apps/convergence/src/features/waves/learn-loom.styles.ts",
+      "name": "LEARN_LOOM_REFERENCE_CONTROL_CLASS",
+      "utilities": ["w-60"],
+      "reason": "Learn Loom's frozen frames (MAR-3201) give its footer's controls fixed widths, 148, 224 and 240 px on the spacing scale (R11), so the footer never reflows between steps and the control that advances the lesson is never the one pushed off; a width, not a height, padding or text size, which stay the Button's."
+    },
+    {
+      "path": "apps/convergence/src/features/waves/learn-loom.styles.ts",
+      "name": "LEARN_LOOM_REFERENCE_PRIMARY_CLASS",
+      "utilities": ["w-60"],
+      "reason": "Learn Loom's frozen frames (MAR-3201) give its footer's controls fixed widths, 148, 224 and 240 px on the spacing scale (R11), so the footer never reflows between steps and the control that advances the lesson is never the one pushed off; a width, not a height, padding or text size, which stay the Button's."
+    }
+  ]
+}

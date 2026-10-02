@@ -502,7 +502,8 @@ function renderPromptForm({
             onChange={(event) =>
               onChange({ promptText: event.currentTarget.value })
             }
-            className="min-h-72 font-mono text-xs leading-5"
+            density="compact"
+            className="min-h-72 font-mono leading-5"
             placeholder="Write the prompt text to copy into the composer"
           />
         </Field>

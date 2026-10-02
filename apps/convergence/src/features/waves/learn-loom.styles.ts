@@ -21,6 +21,11 @@ import type { LearnLoomEmphasis } from './learn-loom.pure'
  * The xl dialog (960 px, the nearest step to the frame's 1000), 840 tall on
  * the spacing scale, never taller than the window less its margins (the
  * dialog layer's own padding), on the canvas, in the sheet corner.
+ *
+ * A recorded R11 exception (DS-17): the guide's frozen frames fix its
+ * height, padding and header, so its illustration never moves between
+ * steps; it doesn't take DialogContent's `height`, whose `tall` grows with
+ * the window, nor DialogHeader's padding.
  */
 export const LEARN_LOOM_DIALOG_CLASS =
   'h-210 max-h-full bg-canvas rounded-2xl gap-0 px-8 pt-7 pb-6'
@@ -40,9 +45,6 @@ export const LEARN_LOOM_BODY_CLASS =
 
 export const LEARN_LOOM_FOOTER_CLASS =
   'mt-5 flex h-10 shrink-0 flex-row items-center justify-between gap-3 sm:justify-between'
-
-/** 36 tall in the header (the lg Button), its padding the frame's. */
-export const LEARN_LOOM_CLOSE_CLASS = 'px-3'
 
 /**
  * The footer's two quiet controls are a fixed 148 wide; the primary, 224.

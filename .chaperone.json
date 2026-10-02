@@ -32,6 +32,15 @@
         "args": ["scripts/guards/copied-code.mjs"],
         "timeoutMs": 60000,
         "message": "jscpd found copied code in apps/convergence/src or packages/ui/src (.jscpd.json has the settings): make the copy a shared part, or keep it on purpose in scripts/guards/copied-code.json, or between jscpd:ignore-start and jscpd:ignore-end, and say why (MAR-3613)."
+      },
+      {
+        "id": "sizes-in-constants-guard",
+        "type": "command",
+        "severity": "error",
+        "command": "node",
+        "args": ["scripts/guards/sizes-in-constants.mjs"],
+        "timeoutMs": 60000,
+        "message": "A size handed to a Button, a Notice, a Badge or a field through a name (a constant, an object's member, a function that returns classes) or a wrapper's className: R3 makes a size a prop, and a name that hands one on is a className too. Take the part's size (Button xs to xl; Notice and Badge size; a field's size and density=\"compact\"), make the row the part it is, or keep one on purpose in scripts/guards/sizes-in-constants.json's allowlist with its reason (MAR-3608, DS8)."
       }
     ]
   }

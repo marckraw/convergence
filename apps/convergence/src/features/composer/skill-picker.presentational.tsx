@@ -10,6 +10,8 @@ import {
 import {
   Badge,
   Button,
+  Card,
+  CardAction,
   cn,
   Popover,
   PopoverContent,
@@ -17,7 +19,7 @@ import {
   SearchField,
 } from '@convergence/ui'
 import { Library } from 'lucide-react'
-import { pickPopover, pickRowClass } from './pick-row.styles'
+import { pickPopover, pickRowAction, pickRowClass } from './pick-row.styles'
 
 interface SkillPickerProps {
   open: boolean
@@ -120,18 +122,21 @@ export const SkillPicker: FC<SkillPickerProps> = ({
               {skills.map((skill) => {
                 const selected = hasSkillSelection(selectedSkills, skill.id)
                 return (
-                  <Button
+                  <Card
                     key={skill.id}
-                    type="button"
-                    variant="ghost"
-                    disabled={!skill.enabled}
-                    aria-pressed={selected}
-                    onClick={() => onToggleSkill(skill)}
-                    size="lg"
+                    interactive
+                    padding="none"
                     className={pickRowClass(selected)}
                   >
-                    <SkillRow skill={skill} selected={selected} form="full" />
-                  </Button>
+                    <CardAction
+                      disabled={!skill.enabled}
+                      aria-pressed={selected}
+                      onClick={() => onToggleSkill(skill)}
+                      className={pickRowAction}
+                    >
+                      <SkillRow skill={skill} selected={selected} form="full" />
+                    </CardAction>
+                  </Card>
                 )
               })}
             </div>

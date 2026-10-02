@@ -1,6 +1,12 @@
 import type { ProviderInfo } from '@/entities/session'
 import type { ProviderLifecycleBadge } from '@/entities/session'
-import type { ButtonProps } from '@convergence/ui'
+import type { ButtonProps, ControlDensity, ControlSize } from '@convergence/ui'
+
+/**
+ * How the trigger looks: a Button's variant, or `field`, the field frame
+ * SelectTrigger and Combobox wear (DLG-15), where it sits among fields.
+ */
+export type ModelPickerTriggerVariant = ButtonProps['variant'] | 'field'
 
 export interface ModelPickerDialogProps {
   providers: ProviderInfo[]
@@ -15,8 +21,12 @@ export interface ModelPickerDialogProps {
   label?: string
   onChange: (providerId: string, modelId: string) => void
   disabled?: boolean
-  triggerVariant?: ButtonProps['variant']
-  triggerSize?: ButtonProps['size']
+  triggerVariant?: ModelPickerTriggerVariant
+  /** R3's scale; never a size in `triggerClassName`. */
+  triggerSize?: ControlSize
+  /** A `field` trigger's words: `compact` is 12 px at any height (ruling 10). */
+  triggerDensity?: ControlDensity
+  /** Its width and place only: a size or a text size is a prop (R3). */
   triggerClassName?: string
 }
 

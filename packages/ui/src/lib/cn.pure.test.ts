@@ -79,6 +79,7 @@ describe('cn with the Convergence theme', () => {
     expect(cn('h-9', 'h-control-lg')).toBe('h-control-lg')
     expect(cn('size-control-xs', 'size-control-md')).toBe('size-control-md')
     expect(cn('min-h-control-md', 'min-h-0')).toBe('min-h-0')
+    expect(cn('h-11', 'h-control-xl')).toBe('h-control-xl')
   })
 
   it('knows the motion names', () => {

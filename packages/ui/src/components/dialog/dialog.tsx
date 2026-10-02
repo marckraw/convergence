@@ -170,8 +170,17 @@ function DialogCloseCross() {
   )
 }
 
+/**
+ * `default` holds the title and the description. `toolbar` is a picker's
+ * header: one row of controls (a search, a star) where the title would be,
+ * the title then only for a screen reader, with the same line under it and
+ * room for the ✕ (DS-17: the model picker typed this row by hand).
+ */
+type DialogHeaderVariant = 'default' | 'toolbar'
+
 type DialogHeaderProps = Omit<ComponentProps<'div'>, 'className'> & {
   className?: string
+  variant?: DialogHeaderVariant
   /**
    * Header actions, before the ✕: Refresh, say (R6). They sit at the end of
    * the title's row.
@@ -181,10 +190,12 @@ type DialogHeaderProps = Omit<ComponentProps<'div'>, 'className'> & {
 
 /**
  * The title and the description, at the top, with today's padding and the
- * line under them built in, and room for the ✕ (R0: 18 of 25 headers).
+ * line under them built in, and room for the ✕ (R0: 18 of 25 headers). A
+ * `toolbar` header is a row of controls instead, as a picker's search is.
  */
 function DialogHeader({
   className,
+  variant = 'default',
   actions,
   children,
   ...props
@@ -192,9 +203,15 @@ function DialogHeader({
   return (
     <div
       data-slot="dialog-header"
+      data-variant={variant}
       className={cn(
-        'flex shrink-0 gap-3 border-b border-line-soft bg-sheet px-6 py-5 pr-14',
-        actions ? 'items-start' : 'flex-col gap-1.5',
+        'flex shrink-0 border-b border-line-soft bg-sheet',
+        variant === 'toolbar'
+          ? 'items-center gap-2 px-4 py-3 pr-12'
+          : [
+              'gap-3 px-6 py-5 pr-14',
+              actions ? 'items-start' : 'flex-col gap-1.5',
+            ],
         className,
       )}
       {...props}
@@ -347,6 +364,7 @@ export {
   type DialogFooterProps,
   DialogHeader,
   type DialogHeaderProps,
+  type DialogHeaderVariant,
   type DialogHeight,
   type DialogProps,
   type DialogSize,

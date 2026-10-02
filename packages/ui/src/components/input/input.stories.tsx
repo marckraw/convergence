@@ -67,6 +67,30 @@ export const Sizes: Story = {
   },
 }
 
+/**
+ * Compact (ruling 10): 12 px words at the same height, for a dense panel such
+ * as Mission Control's inspectors. A text size is this prop, never a className.
+ */
+export const Compact: Story = {
+  render: () => (
+    <div className="flex w-80 flex-col gap-2">
+      <Input aria-label="Default" defaultValue="opus-mac" />
+      <Input aria-label="Compact" density="compact" defaultValue="opus-mac" />
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const plain = canvas.getByLabelText('Default')
+    const compact = canvas.getByLabelText('Compact')
+    await expect(compact).toHaveAttribute('data-density', 'compact')
+    await expect(getComputedStyle(plain).fontSize).toBe('14px')
+    await expect(getComputedStyle(compact).fontSize).toBe('12px')
+    // The height is the size's, whatever the words.
+    await expect(compact.getBoundingClientRect().height).toBe(
+      plain.getBoundingClientRect().height,
+    )
+  },
+}
+
 /** Invalid: the border turns the danger colour, and the field says it's invalid. */
 export const Invalid: Story = {
   args: { 'aria-invalid': true, defaultValue: 'feature/one two' },

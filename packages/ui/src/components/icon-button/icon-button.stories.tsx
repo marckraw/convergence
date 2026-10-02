@@ -26,6 +26,8 @@ const SIZES: { size: ButtonSize; px: number; label: string }[] = [
   { size: 'sm', px: 28, label: 'Collapse sidebar' },
   { size: 'md', px: 32, label: 'Open settings' },
   { size: 'lg', px: 36, label: 'Retry' },
+  // The Button's own step (ruling 9), square too.
+  { size: 'xl', px: 44, label: 'Copy link' },
 ]
 
 const ICONS = {
@@ -33,6 +35,7 @@ const ICONS = {
   sm: <PanelLeftClose aria-hidden />,
   md: <Settings aria-hidden />,
   lg: <RotateCcw aria-hidden />,
+  xl: <Link2 aria-hidden />,
 }
 
 /** A toolbar: a search button, then one button at every size of the scale. */
@@ -68,7 +71,8 @@ const tooltip = () => screen.findByRole('tooltip', {}, { timeout: 2000 })
 
 /**
  * One label names each button and is its tooltip (R2); no native title.
- * The sizes are the scale's: 24, 28, 32 and 36 px, square.
+ * The sizes are the scale's: 24, 28, 32 and 36 px, and the Button's own 44,
+ * square.
  */
 export const Default: Story = {
   play: async ({ args, canvas, canvasElement, userEvent }) => {

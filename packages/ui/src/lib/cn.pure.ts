@@ -24,7 +24,13 @@ const twMerge = extendTailwindMerge({
         'sheet-open',
         'halo',
       ],
-      spacing: ['control-xs', 'control-sm', 'control-md', 'control-lg'],
+      spacing: [
+        'control-xs',
+        'control-sm',
+        'control-md',
+        'control-lg',
+        'control-xl',
+      ],
       container: [
         'conversation',
         'dialog',

@@ -3,7 +3,9 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '#lib/cn.pure'
 import {
+  type ControlDensity,
   type ControlSize,
+  controlDensity,
   fieldTrigger,
   fieldTriggerSize,
 } from '#lib/control-frame.styles'
@@ -75,6 +77,8 @@ type SelectTriggerProps = Omit<SelectPrimitive.Trigger.Props, 'className'> & {
   className?: string
   /** 24, 28, 32 or 36 px; `md` (32) unless told otherwise. Never a className (R3). */
   size?: ControlSize
+  /** `compact`: 12 px words at any height, for a dense panel (ruling 10). Never a text size in className. */
+  density?: ControlDensity
   /** `field` unless told otherwise. */
   variant?: SelectTriggerVariant
 }
@@ -91,6 +95,7 @@ type SelectTriggerProps = Omit<SelectPrimitive.Trigger.Props, 'className'> & {
 function SelectTrigger({
   className,
   size = 'md',
+  density = 'default',
   variant = 'field',
   children,
   ...props
@@ -127,8 +132,15 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
+      data-density={density}
       data-variant={variant}
-      className={cn('w-fit', fieldTrigger, fieldTriggerSize[size], className)}
+      className={cn(
+        'w-fit',
+        fieldTrigger,
+        fieldTriggerSize[size],
+        controlDensity[density],
+        className,
+      )}
       {...props}
     >
       {children}

@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Button, FormError } from '@convergence/ui'
+import { FormError } from '@convergence/ui'
 import { ConversationActionItem } from './conversation-action-item.presentational'
 import type { RoutineRowView } from './conversation-actions-menu.pure'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
@@ -35,27 +35,17 @@ export const ConversationRoutineRow: FC<{
         </p>
       ) : null}
       {cancel ? (
-        <>
-          <Button
-            size="md"
-            type="button"
-            variant="ghost"
-            role="menuitem"
-            data-actions-item=""
-            aria-disabled={!cancel.enabled || undefined}
-            className={styles.item}
-            onClick={() => {
-              if (cancel.enabled) onCancelDrill()
-            }}
-          >
-            {cancel.enabled ? 'Cancel' : 'Cancel unavailable'}
-          </Button>
-          <p className={styles.reason}>
-            {cancel.enabled
+        <ConversationActionItem
+          row={{
+            id: 'cancel',
+            label: cancel.enabled ? 'Cancel' : 'Cancel unavailable',
+            offered: cancel.enabled,
+            reason: cancel.enabled
               ? 'Cancels the routine; the current reply may continue.'
-              : cancel.reason}
-          </p>
-        </>
+              : cancel.reason,
+          }}
+          onActivate={onCancelDrill}
+        />
       ) : null}
       {cancelRefusal ? (
         <FormError className={styles.refusal}>{cancelRefusal}</FormError>

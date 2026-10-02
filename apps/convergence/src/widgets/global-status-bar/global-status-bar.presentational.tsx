@@ -12,9 +12,9 @@ import {
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
 import {
-  Button,
   cn,
   StatusDot,
+  StatusPillButton,
   toneInk,
   toneLine,
   toneSoft,
@@ -28,10 +28,9 @@ import {
   aggregateZoneClass,
   barClass,
   barTone,
-  projectChipClass,
-  projectChipNeedsYouClass,
+  chipNameClass,
   recencyBadgeClass,
-  statusChipButtonClass,
+  recencyNameClass,
   zoneClass,
 } from './global-status-bar.styles'
 
@@ -164,25 +163,22 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                     />
                   }
                 >
-                  <Button
+                  <StatusPillButton
                     type="button"
-                    variant="ghost"
                     onClick={() => onSelectProject(project.projectId)}
                     data-testid={`global-status-chip-${project.projectId}`}
                     aria-label={formatProjectChipLabel(project)}
-                    className={cn(
-                      statusChipButtonClass,
-                      projectChipClass,
-                      projectTone && projectChipNeedsYouClass[projectTone],
-                    )}
+                    // Something waits on you here: warning while anything
+                    // asks, danger when only a failed run waits (R1, ruling 6).
+                    tone={projectTone ?? 'neutral'}
+                    leading={
+                      <StatusDot
+                        size="sm"
+                        tone={projectTone ?? barTone.running}
+                      />
+                    }
                   >
-                    <StatusDot
-                      size="sm"
-                      tone={projectTone ?? barTone.running}
-                    />
-                    <span className="max-w-32 truncate">
-                      {project.projectName}
-                    </span>
+                    <span className={chipNameClass}>{project.projectName}</span>{' '}
                     <span className="text-ink-muted">
                       {project.running.length > 0 && (
                         <span>{project.running.length}▸</span>
@@ -193,7 +189,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                         </span>
                       )}
                     </span>
-                  </Button>
+                  </StatusPillButton>
                 </TooltipCard>
               )
             })}
@@ -208,22 +204,23 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
           label={recency.session.name}
           detail={`${recency.kind === 'completed' ? 'Completed' : 'Failed'} · ${providerLabel(recency.session.providerId)}\n${recency.projectName}`}
         >
-          <Button
+          <StatusPillButton
             type="button"
-            variant="ghost"
             onClick={() => onSelectProject(recency.session.projectId)}
             data-testid="global-status-recency"
             aria-label={`Switch to project ${recency.projectName}`}
-            className={cn(statusChipButtonClass, recencyBadgeClass)}
+            className={recencyBadgeClass}
+            leading={
+              recency.kind === 'completed' ? (
+                <CheckCircle2 className="h-3 w-3 text-success-ink" />
+              ) : (
+                <CircleAlert className="h-3 w-3 text-danger-ink" />
+              )
+            }
           >
-            {recency.kind === 'completed' ? (
-              <CheckCircle2 className="h-3 w-3 text-success-ink" />
-            ) : (
-              <CircleAlert className="h-3 w-3 text-danger-ink" />
-            )}
-            <span className="max-w-28 truncate">{recency.session.name}</span>
+            <span className={recencyNameClass}>{recency.session.name}</span>{' '}
             <span className="text-ink-muted">· {recency.projectName}</span>
-          </Button>
+          </StatusPillButton>
         </Tooltip>
       ) : (
         <span className="ml-auto" aria-hidden />

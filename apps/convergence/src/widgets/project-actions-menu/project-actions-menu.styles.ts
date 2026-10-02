@@ -12,17 +12,14 @@ export const actionIconColumn = 'flex w-9 shrink-0 items-center'
 
 /** An action's icon, boxed like the run button beside the commands. */
 export const actionIconBox =
-  'flex size-8 items-center justify-center rounded-md border border-line bg-canvas text-ink-muted'
+  'flex size-8 items-center justify-center rounded-md border border-line bg-canvas text-ink-muted [&>svg]:size-4'
 
 /** The mono line under an action's name: its command, or what it does. */
 export const actionDetail = 'block truncate font-mono text-2xs text-ink-muted'
 
-/** A Button drawn as one of the panel's wide rows. */
-export const actionButtonRow =
-  'h-auto w-full justify-start rounded-md px-3 text-left'
-
 /**
- * The last row, Add action: a row (h-auto), so its room is the row's, not
- * a Button size (R3), with a dashed edge that says it adds one more.
+ * The last row, Add action: a ListRow like the lane rows under it (R3: a
+ * row, never a Button stretched with h-auto: NAV's N3), with a dashed edge
+ * that says it adds one more.
  */
-export const actionAddRow = `${actionButtonRow} border border-dashed border-line py-3`
+export const actionAddRow = 'rounded-md border border-dashed border-line'

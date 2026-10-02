@@ -20,6 +20,7 @@ describe('buttonVariants (MAR-3616)', () => {
     ['sm', 'h-7'],
     ['md', 'h-8'],
     ['lg', 'h-9'],
+    ['xl', 'h-11'],
   ] as const)(
     'draws %s at %s, one scale for every control (R3)',
     (size, height) => {
@@ -30,7 +31,7 @@ describe('buttonVariants (MAR-3616)', () => {
     },
   )
 
-  it.each(['xs', 'sm', 'md', 'lg'] as const)(
+  it.each(['xs', 'sm', 'md', 'lg', 'xl'] as const)(
     'gives a link no box at size %s: no height, padding or text size',
     (size) => {
       expect(buttonVariants({ variant: 'link', size })).not.toMatch(

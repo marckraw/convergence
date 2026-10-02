@@ -111,6 +111,36 @@ export const Long: Story = {
 }
 
 /**
+ * Sizes: 10 px words (`sm`, the default) or 11 px (`md`), among 11 px words
+ * such as the composer's strip; both in the same 20 px box, so a row of
+ * them still lines up (ruling 10: a size, never a className).
+ */
+export const Sizes: Story = {
+  render: () => (
+    <div className="flex items-center gap-2 rounded-md bg-canvas p-4 text-2xs text-ink-muted">
+      <span>Runs on</span>
+      <Badge shape="label" outline size="md">
+        kuba-vps
+      </Badge>
+      <Badge shape="label" outline>
+        Local
+      </Badge>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const md = canvas.getByText('kuba-vps').closest('[data-slot="badge"]')!
+    const sm = canvas.getByText('Local').closest('[data-slot="badge"]')!
+    await expect(md).toHaveAttribute('data-size', 'md')
+    await expect(sm).toHaveAttribute('data-size', 'sm')
+    await expect(getComputedStyle(md).fontSize).toBe('11px')
+    await expect(getComputedStyle(sm).fontSize).toBe('10px')
+    for (const badge of [md, sm]) {
+      await expect(badge.getBoundingClientRect().height).toBe(20)
+    }
+  },
+}
+
+/**
  * Caps: a kind or a short state in capitals, as lists of skills and servers
  * show them; the same box, 20 px, in the same tones.
  */

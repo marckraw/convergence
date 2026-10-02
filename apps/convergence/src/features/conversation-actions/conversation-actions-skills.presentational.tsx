@@ -1,13 +1,13 @@
 import { useId, type FC } from 'react'
 import { SkillListStatus } from '@/entities/skill'
 import {
-  Button,
   Kbd,
   Listbox,
   ListboxOption,
   listboxOptionId,
   SearchField,
 } from '@convergence/ui'
+import { ConversationActionItem } from './conversation-action-item.presentational'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
 
@@ -94,16 +94,16 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
       {state.kind === 'empty' ? (
         <>
           <p className={styles.reason}>Routines are still available below.</p>
-          <Button
-            size="md"
-            type="button"
-            variant="ghost"
-            data-actions-item=""
-            className={styles.item}
-            onClick={() => onOpenGroup('routines')}
-          >
-            Routines →
-          </Button>
+          <ConversationActionItem
+            row={{
+              id: 'routines',
+              label: 'Routines →',
+              offered: true,
+              reason: null,
+            }}
+            menu={false}
+            onActivate={() => onOpenGroup('routines')}
+          />
         </>
       ) : null}
       <p className={styles.hint}>

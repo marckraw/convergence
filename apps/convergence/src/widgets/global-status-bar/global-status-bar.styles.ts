@@ -1,6 +1,5 @@
 import { focusRing, type Tone } from '@convergence/ui'
 import { SESSION_STATE_TONE } from '@/entities/session'
-import type { NeedsYouTone } from '@/features/needs-you'
 
 /** The window's last line: a hairline over it, 11 px muted words in it. */
 export const barClass =
@@ -14,26 +13,18 @@ export const aggregateZoneClass = `${zoneClass} rounded-md ${focusRing}`
 export const aggregateChipClass =
   'flex items-center gap-1 rounded-md border border-line/50 bg-canvas/40 px-1.5 py-0.5'
 
-/** A project chip and the last-finished badge: Buttons drawn as the bar's small chips. */
-export const statusChipButtonClass =
-  'h-auto px-1.5 py-0.5 text-2xs font-medium shadow-none'
-
-export const projectChipClass =
-  'flex items-center gap-1 rounded-md border border-line-soft bg-canvas/60 px-1.5 py-0.5 text-ink transition-colors hover:bg-highlight'
-
 /**
- * Something waits on you in this project, in R1's tone for it: warning while
- * anything asks for an answer, danger when only a failed run waits (ruling 6).
+ * The last-finished badge, at the bar's end. It and the project chips are
+ * StatusPillButtons, a state you press, in the bar's 11 px (NAV's N3: never
+ * a Button resized into a chip by a constant).
  */
-export const projectChipNeedsYouClass = {
-  warning:
-    'border-warning-line bg-warning-soft text-warning-ink hover:bg-warning-soft',
-  danger:
-    'border-danger-line bg-danger-soft text-danger-ink hover:bg-danger-soft',
-} as const satisfies Record<NeedsYouTone, string>
+export const recencyBadgeClass = 'ml-auto'
 
-export const recencyBadgeClass =
-  'ml-auto flex items-center gap-1 rounded-md border border-line/40 bg-canvas/40 px-1.5 py-0.5 text-ink-muted transition-colors hover:bg-highlight'
+/** A project's name in its chip, cut short on its own so the counts after it stay. */
+export const chipNameClass = 'inline-block max-w-32 truncate align-bottom'
+
+/** The finished session's name in the badge, cut short on its own before its project. */
+export const recencyNameClass = 'inline-block max-w-28 truncate align-bottom'
 
 /**
  * R1's map for what the bar shows, read from the session's own (NAV-1): a

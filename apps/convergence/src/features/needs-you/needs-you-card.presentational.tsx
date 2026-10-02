@@ -1,12 +1,5 @@
-import { Archive, CheckCheck, MoreHorizontal } from 'lucide-react'
-import {
-  Button,
-  Menu,
-  MenuContent,
-  MenuItem,
-  MenuTrigger,
-  IconButton,
-} from '@convergence/ui'
+import { Archive, CheckCheck } from 'lucide-react'
+import { Button, MenuItem, RowActions } from '@convergence/ui'
 import { SessionActivityCard } from './session-activity-card.presentational'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
 
@@ -69,34 +62,21 @@ export function NeedsYouCard({
         )
       }
       actions={
-        <Menu>
-          <MenuTrigger
-            render={
-              <IconButton
-                label={`Actions for ${session.name}`}
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="shrink-0 rounded-lg"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </IconButton>
-            }
-          />
-          <MenuContent align="end">
-            <MenuItem onClick={() => onPin(session.id, !session.pinnedAt)}>
-              {session.pinnedAt ? 'Unpin' : 'Pin'}
+        // The card's ⋯ is RowActions at sm, the size the session tree's card
+        // takes too: one part, one size (R3, NAV-6).
+        <RowActions label={`Actions for ${session.name}`} size="sm">
+          <MenuItem onClick={() => onPin(session.id, !session.pinnedAt)}>
+            {session.pinnedAt ? 'Unpin' : 'Pin'}
+          </MenuItem>
+          {card.dismissLabel && !card.dismissed && (
+            <MenuItem onClick={() => onDismiss(session.id)}>
+              {card.dismissLabel}
             </MenuItem>
-            {card.dismissLabel && !card.dismissed && (
-              <MenuItem onClick={() => onDismiss(session.id)}>
-                {card.dismissLabel}
-              </MenuItem>
-            )}
-            {card.canArchive && (
-              <MenuItem onClick={() => onArchive(session.id)}>Archive</MenuItem>
-            )}
-          </MenuContent>
-        </Menu>
+          )}
+          {card.canArchive && (
+            <MenuItem onClick={() => onArchive(session.id)}>Archive</MenuItem>
+          )}
+        </RowActions>
       }
     />
   )

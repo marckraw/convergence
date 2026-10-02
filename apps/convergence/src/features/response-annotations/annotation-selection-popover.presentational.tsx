@@ -78,7 +78,6 @@ export const AnnotationSelectionPopover: FC<
               onChange={(event) => onCommentValueChange(event.target.value)}
               placeholder="What about this part?"
               aria-label="Comment on the selected text"
-              className="text-sm"
             />
             <Button type="submit" className="shrink-0">
               Add

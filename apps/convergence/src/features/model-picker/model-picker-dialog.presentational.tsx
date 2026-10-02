@@ -3,11 +3,14 @@ import { Check, ChevronDown, Star } from 'lucide-react'
 import {
   Badge,
   Button,
-  type ButtonProps,
   cn,
+  type ControlDensity,
+  type ControlSize,
+  controlDensity,
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogHeader,
   DialogTitle,
   dialogRail,
   dialogSplit,
@@ -19,11 +22,14 @@ import {
   listboxStep,
   SearchField,
   Tooltip,
+  fieldTrigger,
+  fieldTriggerSize,
 } from '@convergence/ui'
 import { ProviderIcon } from '@/entities/provider'
 import type {
   ModelPickerModelItem,
   ModelPickerProviderFilter,
+  ModelPickerTriggerVariant,
 } from './model-picker-dialog.types'
 import { ModelPickerProviderFilterButton } from './model-picker-provider-filter-button.presentational'
 
@@ -39,8 +45,9 @@ interface ModelPickerDialogPresentationalProps {
   models: ModelPickerModelItem[]
   totalModelCount: number
   isDisabled: boolean
-  triggerVariant: ButtonProps['variant']
-  triggerSize: ButtonProps['size']
+  triggerVariant: ModelPickerTriggerVariant
+  triggerSize: ControlSize
+  triggerDensity: ControlDensity
   triggerClassName?: string
   inputRef: RefObject<HTMLInputElement | null>
   onOpenChange: (open: boolean) => void
@@ -86,6 +93,7 @@ export const ModelPickerDialogPresentational: FC<
   isDisabled,
   triggerVariant,
   triggerSize,
+  triggerDensity,
   triggerClassName,
   inputRef,
   onOpenChange,
@@ -104,35 +112,65 @@ export const ModelPickerDialogPresentational: FC<
 
   return (
     <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
-      <Button
-        type="button"
-        variant={triggerVariant}
-        size={triggerSize}
-        disabled={isDisabled}
-        role="combobox"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={label ?? value}
-        aria-describedby={label ? valueId : undefined}
-        className={cn('justify-between', triggerClassName)}
-        onClick={() => onOpenChange(true)}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span id={valueId} className="truncate">
+      {triggerVariant === 'field' ? (
+        // raw-element: a field that opens the model dialog, in the field frame SelectTrigger and Combobox wear (DLG-15); Button has no field look, and the list is a dialog, not a popup
+        <button
+          type="button"
+          disabled={isDisabled}
+          data-disabled={isDisabled ? '' : undefined}
+          data-size={triggerSize}
+          data-density={triggerDensity}
+          role="combobox"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={label ?? value}
+          aria-describedby={label ? valueId : undefined}
+          className={cn(
+            'w-fit min-w-0',
+            fieldTrigger,
+            fieldTriggerSize[triggerSize],
+            controlDensity[triggerDensity],
+            triggerClassName,
+          )}
+          onClick={() => onOpenChange(true)}
+        >
+          <span id={valueId} className="min-w-0 flex-1 truncate text-left">
             {value}
           </span>
-        </span>
-        <ChevronDown className="h-3 w-3 shrink-0" />
-      </Button>
+          <ChevronDown aria-hidden className="text-ink-muted" />
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant={triggerVariant}
+          size={triggerSize}
+          disabled={isDisabled}
+          role="combobox"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={label ?? value}
+          aria-describedby={label ? valueId : undefined}
+          className={cn('justify-between', triggerClassName)}
+          onClick={() => onOpenChange(true)}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span id={valueId} className="truncate">
+              {value}
+            </span>
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0" />
+        </Button>
+      )}
 
-      {/* R11: 860 px wide becomes the nearest size, xl (960); 620 px tall is h-155. */}
-      <DialogContent size="xl" className="h-155" initialFocus={inputRef}>
+      {/* R11: 860 px wide becomes the nearest size, xl (960); its 620 px
+          fold into the tall height, as the debug log's 640 did (DS4, DS-17). */}
+      <DialogContent size="xl" height="tall" initialFocus={inputRef}>
         <DialogTitle className="sr-only">Select model</DialogTitle>
         <DialogDescription className="sr-only">
           Search and filter providers to choose a model.
         </DialogDescription>
 
-        <div className="flex shrink-0 items-center gap-2 border-b border-line-soft px-4 py-3 pr-12">
+        <DialogHeader variant="toolbar">
           <SearchField
             className="min-w-0 flex-1"
             ref={inputRef}
@@ -192,7 +230,7 @@ export const ModelPickerDialogPresentational: FC<
               )}
             />
           </IconButton>
-        </div>
+        </DialogHeader>
 
         <div className={dialogSplit}>
           <aside className={cn(dialogRail, 'min-w-0 p-2 sm:w-44')}>
