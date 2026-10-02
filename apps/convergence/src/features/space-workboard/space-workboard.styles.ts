@@ -60,9 +60,6 @@ export const noteCard =
  */
 export const rowCaption = 'text-2xs font-medium text-ink-muted'
 
-/** The same caption at a form's size, over a Select that names itself. */
-export const fieldCaption = 'text-sm font-medium'
-
 /** A section's head: its label at the start, its action at the end. */
 export const sectionHead = 'flex items-center justify-between gap-3'
 

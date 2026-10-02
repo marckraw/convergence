@@ -271,7 +271,7 @@ export const AddArtifact: Story = {
       expect(dialog).toContainElement(document.activeElement as HTMLElement),
     )
     await userEvent.type(
-      within(dialog).getByRole('textbox', { name: 'New Artifact label' }),
+      within(dialog).getByRole('textbox', { name: 'Label' }),
       's',
     )
     await expect(args.onArtifactDraftChange).toHaveBeenCalledWith({

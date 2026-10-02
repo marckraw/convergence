@@ -22,7 +22,7 @@ import {
 import { useAnalyticsStore, type AnalyticsOverview } from '@/entities/analytics'
 import { useDialogStore } from '@/entities/dialog'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
-import { Button, UiProvider } from '@convergence/ui'
+import { Button, dialogPane, UiProvider } from '@convergence/ui'
 import { answerConfirm } from '@/shared/testing/confirm'
 import { AppSettingsDialogContainer } from './app-settings.container'
 
@@ -629,9 +629,9 @@ describe('AppSettingsDialogContainer', () => {
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
+    // The page is a flush dialog's pane, scrolling on its own (DLG-5).
     expect(screen.getByTestId('app-settings-scroll-region')).toHaveClass(
-      'app-scrollbar',
-      'overflow-y-auto',
+      ...dialogPane.split(' '),
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Notifications/ }))

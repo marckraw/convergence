@@ -20,6 +20,7 @@ import {
   Button,
   ChoiceField,
   cn,
+  dialogPane,
   dialogRail,
   dialogSplit,
   EmptyState,
@@ -474,8 +475,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         <div
           data-testid="app-settings-scroll-region"
           className={cn(
-            'app-scrollbar min-h-0 flex-1 overflow-y-auto py-5',
-            currentSection.id === 'insights' ? 'px-5 lg:px-8' : 'px-6',
+            dialogPane,
+            currentSection.id === 'insights' && 'px-5 lg:px-8',
           )}
         >
           <div

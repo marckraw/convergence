@@ -16,6 +16,7 @@ import type {
   PromptLibraryScope,
 } from '@/entities/prompt-library'
 import {
+  dialogPane,
   Badge,
   Button,
   Card,
@@ -93,9 +94,6 @@ const KIND_LABELS: Record<PromptLibraryEntry['kind'], string> = {
   text: 'Text',
 }
 
-/** The details pane's own scroll, beside the list's. */
-const paneScroll = 'app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5'
-
 function renderSelectControl({
   label,
   value,
@@ -117,7 +115,7 @@ function renderSelectControl({
         value={value}
         onValueChange={(next) => onChange(next)}
       >
-        <SelectTrigger size="md" aria-label={label} className="w-full">
+        <SelectTrigger size="md" className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -227,7 +225,7 @@ function renderDetailsPane({
   }
 
   return (
-    <div className={paneScroll}>
+    <div className={dialogPane}>
       <div className="mb-4 flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -348,7 +346,7 @@ function renderPromptForm({
   onSubmit: () => void
 }) {
   return (
-    <div className={paneScroll}>
+    <div className={dialogPane}>
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold">
