@@ -34,7 +34,11 @@ import {
 import { ForkComposer } from './fork-composer.presentational'
 import { ModelSelectorRow } from './model-selector-row.presentational'
 import type { ForkSubmitError, PreviewState } from './session-fork.types'
-import type { ForkProgressLabel, SeedSizeWarning } from './session-fork.pure'
+import {
+  forkConfirmBlockedReason,
+  type ForkProgressLabel,
+  type SeedSizeWarning,
+} from './session-fork.pure'
 
 interface SessionForkDialogProps {
   open: boolean
@@ -121,15 +125,18 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  const canConfirm =
-    !isSubmitting &&
-    attachmentsValid &&
-    name.trim().length > 0 &&
-    selection.providerId.length > 0 &&
-    selection.modelId.length > 0 &&
-    (workspaceMode === 'reuse' || workspaceBranchName.trim().length > 0) &&
-    (strategy === 'full' ||
-      (preview.status === 'ready' && seedMarkdown.trim().length > 0))
+  // R2: Create says why it waits (DLG §4 13); forking is its busy state.
+  const confirmBlockedReason = forkConfirmBlockedReason({
+    name,
+    providerId: selection.providerId,
+    modelId: selection.modelId,
+    workspaceMode,
+    workspaceBranchName,
+    strategy,
+    previewReady: preview.status === 'ready',
+    seedMarkdown,
+    attachmentsValid,
+  })
 
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
@@ -371,7 +378,8 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={!canConfirm}
+            disabled={isSubmitting}
+            disabledReason={confirmBlockedReason ?? undefined}
             pending={isSubmitting}
             pendingLabel="Forking…"
             size="lg"

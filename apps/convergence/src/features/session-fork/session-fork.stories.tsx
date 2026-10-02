@@ -207,9 +207,12 @@ export const Summary: Story = {
   args: { strategy: 'summary' },
   play: async ({ args, userEvent }) => {
     const dialog = await openedDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create fork' }),
-    ).toBeDisabled()
+    // R2: Create stays reachable and says why it waits (DLG §4 13).
+    const create = within(dialog).getByRole('button', { name: 'Create fork' })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription(
+      'Generate the summary first.',
+    )
     await userEvent.click(
       within(dialog).getByRole('button', { name: 'Generate summary' }),
     )
@@ -328,9 +331,12 @@ export const NewWorkspace: Story = {
   args: { workspaceMode: 'fork', workspaceBranchName: '' },
   play: async ({ args, userEvent }) => {
     const dialog = await openedDialog()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create fork' }),
-    ).toBeDisabled()
+    // R2: Create stays reachable and says why it waits (DLG §4 13).
+    const create = within(dialog).getByRole('button', { name: 'Create fork' })
+    await expect(create).toHaveAttribute('aria-disabled', 'true')
+    await expect(create).toHaveAccessibleDescription(
+      'Name the new branch first.',
+    )
     await userEvent.type(
       within(dialog).getByPlaceholderText('fork/branch-name'),
       'f',

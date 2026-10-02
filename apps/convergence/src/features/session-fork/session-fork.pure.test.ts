@@ -7,6 +7,7 @@ import {
   FORK_PROGRESS_EXTENDED_THRESHOLD_MS,
   FORK_PROGRESS_SECONDARY_THRESHOLD_MS,
   FORK_PROGRESS_STALE_THRESHOLD_MS,
+  forkConfirmBlockedReason,
   renderSeedMarkdown,
 } from './session-fork.pure'
 
@@ -144,5 +145,51 @@ describe('deriveForkProgressLabel', () => {
       msSinceLastEvent: FORK_PROGRESS_STALE_THRESHOLD_MS,
     })
     expect(stuck.stale).toBe(true)
+  })
+})
+
+describe('forkConfirmBlockedReason (R2, DLG §4 13)', () => {
+  const ready = {
+    name: 'Composer focus (fork)',
+    providerId: 'claude-code',
+    modelId: 'opus',
+    workspaceMode: 'reuse' as const,
+    workspaceBranchName: '',
+    strategy: 'full' as const,
+    previewReady: false,
+    seedMarkdown: '',
+    attachmentsValid: true,
+  }
+
+  it('says nothing when the fork can be created', () => {
+    expect(forkConfirmBlockedReason(ready)).toBeNull()
+    expect(
+      forkConfirmBlockedReason({
+        ...ready,
+        strategy: 'summary',
+        previewReady: true,
+        seedMarkdown: '# Seed',
+      }),
+    ).toBeNull()
+  })
+
+  it.each([
+    [{ name: '  ' }, 'Name the fork first.'],
+    [{ modelId: '' }, 'Pick a model first.'],
+    [
+      { workspaceMode: 'fork' as const, workspaceBranchName: ' ' },
+      'Name the new branch first.',
+    ],
+    [{ strategy: 'summary' as const }, 'Generate the summary first.'],
+    [
+      { strategy: 'summary' as const, previewReady: true, seedMarkdown: '' },
+      'The summary seed is empty.',
+    ],
+    [
+      { attachmentsValid: false },
+      'Remove the attachments this model can’t read.',
+    ],
+  ])('names the first thing left: %o → %s', (patch, reason) => {
+    expect(forkConfirmBlockedReason({ ...ready, ...patch })).toBe(reason)
   })
 })

@@ -34,6 +34,9 @@ import {
   skeletonBar,
 } from './analytics-insights.styles'
 
+/** Why the profile's buttons wait while one is written (R2, DLG §4 13). */
+const PROFILE_GENERATING_REASON = 'A profile is being generated.'
+
 interface WorkStyleTabProps {
   overview: AnalyticsOverview | null
   isLoading: boolean
@@ -201,7 +204,9 @@ function renderGeneratedProfilePanel({
               type="button"
               variant="danger-quiet"
               onClick={onDeleteGeneratedProfile}
-              disabled={isGeneratingProfile}
+              disabledReason={
+                isGeneratingProfile ? PROFILE_GENERATING_REASON : undefined
+              }
             >
               <Trash2 className="size-4" />
               Delete…
@@ -210,7 +215,13 @@ function renderGeneratedProfilePanel({
           <Button
             type="button"
             onClick={onGenerateProfile}
-            disabled={isGeneratingProfile || !canGenerateProfile}
+            disabledReason={
+              isGeneratingProfile
+                ? PROFILE_GENERATING_REASON
+                : canGenerateProfile
+                  ? undefined
+                  : 'Set up a provider first.'
+            }
           >
             <Sparkles className="size-4" />
             {generated ? 'Regenerate…' : 'Generate…'}

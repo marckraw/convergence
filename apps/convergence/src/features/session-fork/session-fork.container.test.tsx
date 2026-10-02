@@ -21,6 +21,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useTaskProgressStore } from '@/entities/task-progress'
 import { useAttachmentStore, type Attachment } from '@/entities/attachment'
+import { isUnavailable } from '@/shared/testing/unavailable'
 import { SessionForkDialogContainer } from './session-fork.container'
 
 const TEST_ATTACHMENTS = {
@@ -516,7 +517,9 @@ describe('SessionForkDialogContainer', () => {
     fireEvent.click(screen.getByRole('radio', { name: /New workspace/i }))
 
     const confirm = screen.getByRole('button', { name: /^Create fork$/i })
-    expect(confirm).toBeDisabled()
+    // R2: unavailable, and it says why (DLG §4 13).
+    expect(isUnavailable(confirm)).toBe(true)
+    expect(confirm).toHaveAccessibleDescription('Name the new branch first.')
 
     const branchInput = screen.getByPlaceholderText(
       'fork/branch-name',
