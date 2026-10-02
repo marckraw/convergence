@@ -43,6 +43,7 @@ import { providerDebugApi } from '@/entities/provider-debug'
 import { useDialogStore } from '@/entities/dialog'
 import { useUpdatesStore, type UpdatePrefs } from '@/entities/updates'
 import { systemApi } from '@/shared'
+import { useSaveAsYouGo } from '@/shared/lib/use-save-as-you-go'
 import {
   AppSettingsDialog,
   type AppSettingsSectionId,
@@ -373,19 +374,15 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     piModels: piModelDraft,
     shortcut: shortcutsDraft,
   }
-  const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saves = useRef<Promise<void>>(Promise.resolve())
-
-  /** Saves what Settings holds now, after any save still under way. */
-  const saveNow = useCallback(() => {
-    if (pendingSave.current !== null) {
-      clearTimeout(pendingSave.current)
-      pendingSave.current = null
-    }
+  /**
+   * Saves what Settings holds, after any save still under way; on close, and
+   * when the dialog goes, whatever still waits is saved (useSaveAsYouGo).
+   */
+  const { scheduleSave, flush } = useSaveAsYouGo(() => {
     // Read now, not when its turn comes: closing unseeds the drafts, and the
     // save that closing flushes may wait behind one still under way.
     const ready = seeded.current
-    saves.current = saves.current.then(async () => {
+    return async () => {
       const current = drafts.current
       if (!ready || !current) return
       try {
@@ -397,25 +394,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       } catch {
         // The store keeps the error, and the dialog shows it.
       }
-    })
-  }, [saveSettings, loadProviders])
-
-  /** Saves after `delayMs`; a later change in the meantime saves both. */
-  const scheduleSave = useCallback(
-    (delayMs: number) => {
-      if (pendingSave.current !== null) clearTimeout(pendingSave.current)
-      pendingSave.current = setTimeout(saveNow, delayMs)
-    },
-    [saveNow],
-  )
-
-  // Leaving with a typed value still waiting keeps it.
-  useEffect(() => {
-    const pending = pendingSave
-    return () => {
-      if (pending.current !== null) saveNow()
     }
-  }, [saveNow])
+  })
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -423,10 +403,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         openDialog('app-settings')
         return
       }
-      if (pendingSave.current !== null) saveNow()
+      flush()
       closeDialog()
     },
-    [openDialog, closeDialog, saveNow],
+    [openDialog, closeDialog, flush],
   )
 
   const handleProviderChange = useCallback(

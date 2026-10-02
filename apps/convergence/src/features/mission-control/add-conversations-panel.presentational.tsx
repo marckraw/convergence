@@ -56,6 +56,14 @@ interface AddConversationsPanelProps {
 /** The id the project picker uses for "any project". */
 export const ANY_PROJECT_OPTION_ID = '__any__'
 
+/** What the project picker's trigger says: the chosen project, or all of them. */
+const projectValue = (
+  options: readonly RelayEndpointOption[],
+  selectedId: string | null,
+): string =>
+  options.find((option) => option.id === (selectedId ?? ANY_PROJECT_OPTION_ID))
+    ?.label ?? 'All projects'
+
 /**
  * Bringing existing conversations into a crew.
  *
@@ -105,12 +113,10 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
 
     <Combobox
       selectedId={selectedProjectId ?? ANY_PROJECT_OPTION_ID}
-      value={
-        projectOptions.find(
-          (option) =>
-            option.id === (selectedProjectId ?? ANY_PROJECT_OPTION_ID),
-        )?.label ?? 'All projects'
-      }
+      value={projectValue(projectOptions, selectedProjectId)}
+      // Named "Field: value", as the connection inspector's pickers are: its
+      // value alone never said which choice it was (MC-12).
+      ariaLabel={`Project: ${projectValue(projectOptions, selectedProjectId)}`}
       items={projectOptions}
       onChange={(id) =>
         onProjectChange(id === ANY_PROJECT_OPTION_ID ? null : id)

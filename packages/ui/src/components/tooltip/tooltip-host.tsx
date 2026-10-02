@@ -5,6 +5,8 @@ import { popupMotion } from '../../motion/popup.styles'
 import { Kbd } from '../kbd/kbd'
 import { tooltipSurface } from './tooltip.styles'
 import {
+  innermostAt,
+  isTruncated,
   mayShow,
   openingOf,
   placeTooltip,
@@ -36,8 +38,9 @@ const textOf = (anchor: Element): TooltipText => ({
  * One tooltip for the whole page (Flyweight, MAR-3616): a single bubble for
  * every control that has a tooltip. It listens on the document for a pointer
  * resting on, or keyboard focus reaching, anything with `data-tooltip` (what
- * Tooltip and IconButton set) and shows that label beside it. Once one has
- * shown, the next opens at once. A press or Escape puts it away. The bubble is
+ * Tooltip and IconButton set) and shows that label beside it. Over a card's
+ * stretched action, which every point of the card lands on, it shows what
+ * lies under the pointer (MC N1). Once one has shown, the next opens at once. A press or Escape puts it away. The bubble is
  * `app-no-drag`, so it can float over the window's title strip without
  * becoming draggable chrome (MAR-3284), and no call site passes a style for
  * it again.
@@ -63,6 +66,11 @@ export function TooltipHost() {
     let closedAt = Number.NEGATIVE_INFINITY
     /** Pressed: its tooltip stays away until the pointer leaves it. */
     let pressed: Element | null = null
+    /**
+     * The card's stretched action the pointer is over, when what shows was
+     * found under it: leaving the action leaves that too.
+     */
+    let via: Element | null = null
     /**
      * Whether the keyboard moved last, as `:focus-visible` decides it: a key
      * makes focus visible, a press makes it quiet. Tracked here rather than
@@ -93,8 +101,47 @@ export function TooltipHost() {
         hasPopup: anchor.getAttribute('aria-haspopup'),
         onlyWhenTruncated:
           anchor.getAttribute('data-tooltip-when') === 'truncated',
-        truncated: anchor.scrollWidth > anchor.clientWidth,
+        truncated: isTruncated(anchor),
       })
+
+    /**
+     * The tooltip for where an event happened: the closest element with one.
+     * A tooltip only for cut-short words, while its words fit, gives way to
+     * the one around it (a Badge's words in a row that has a tooltip).
+     */
+    const ownOf = (target: EventTarget | null): Element | null => {
+      let anchor = tooltipTargetOf(target)
+      while (
+        anchor !== null &&
+        anchor.getAttribute('data-tooltip-when') === 'truncated' &&
+        !isTruncated(anchor)
+      )
+        anchor = tooltipTargetOf(anchor.parentElement)
+      return anchor
+    }
+
+    /**
+     * What a pointer rests on. Over a card's stretched action every point of
+     * the card lands on the action, so there it is the innermost tooltip
+     * drawn under the point that may show (a cut-short line, a meter), and
+     * the action's own only where there is none (MC N1).
+     */
+    const anchorAt = (event: PointerEvent): Element | null => {
+      const action = stretchedActionOf(event.target)
+      if (!action) return ownOf(event.target)
+      const card = action.closest('[data-slot="card"]')
+      const under = card
+        ? [...card.querySelectorAll('[data-tooltip]')].filter(
+            (element) => element !== action,
+          )
+        : []
+      const index = innermostAt(
+        { x: event.clientX, y: event.clientY },
+        under.map((element) => element.getBoundingClientRect()),
+        (at) => allowed(under[at]!),
+      )
+      return index === null ? ownOf(action) : under[index]!
+    }
 
     const show = (anchor: Element, how: 'hover' | 'focus') => {
       if (!allowed(anchor)) return
@@ -122,25 +169,45 @@ export function TooltipHost() {
 
     const onPointerOver = (event: PointerEvent) => {
       if (event.pointerType === 'touch') return
-      const anchor = tooltipTargetOf(event.target)
+      const anchor = anchorAt(event)
+      via = stretchedActionOf(event.target)
       if (anchor && anchor !== current && anchor !== pressed)
         show(anchor, 'hover')
     }
+    // Under a stretched action the pointer goes from one line to the next
+    // without leaving the action, so no pointerover says so: the move does.
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') return
+      const action = stretchedActionOf(event.target)
+      if (!action) return
+      via = action
+      const anchor = anchorAt(event)
+      if (anchor === current) return
+      if (cause === 'hover') hide()
+      if (anchor && anchor !== pressed) show(anchor, 'hover')
+    }
     const onPointerOut = (event: PointerEvent) => {
-      const anchor = tooltipTargetOf(event.target)
+      if (via !== null && event.target === via) {
+        if (isInside(via, event.relatedTarget)) return
+        via = null
+        pressed = null
+        if (cause === 'hover') hide()
+        return
+      }
+      const anchor = ownOf(event.target)
       if (!anchor || isInside(anchor, event.relatedTarget)) return
       if (anchor === pressed) pressed = null
       if (anchor === current && cause === 'hover') hide()
     }
     const onFocusIn = (event: FocusEvent) => {
-      const anchor = tooltipTargetOf(event.target)
+      const anchor = ownOf(event.target)
       // Only focus the keyboard brought shows a tooltip; the focus a press
       // brings stays quiet.
       if (anchor && anchor !== current && anchor !== pressed && keyboard)
         show(anchor, 'focus')
     }
     const onFocusOut = (event: FocusEvent) => {
-      const anchor = tooltipTargetOf(event.target)
+      const anchor = ownOf(event.target)
       if (
         anchor &&
         anchor === current &&
@@ -151,7 +218,7 @@ export function TooltipHost() {
     }
     const onPointerDown = (event: PointerEvent) => {
       keyboard = false
-      pressed = tooltipTargetOf(event.target)
+      pressed = anchorAt(event)
       hide()
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -163,6 +230,7 @@ export function TooltipHost() {
     // a tooltip.
     const listeners = [
       ['pointerover', onPointerOver],
+      ['pointermove', onPointerMove],
       ['pointerout', onPointerOut],
       ['focusin', onFocusIn],
       ['focusout', onFocusOut],
@@ -361,6 +429,16 @@ function useLiveText(
 /** The closest element with a tooltip, from where an event happened. */
 const tooltipTargetOf = (target: EventTarget | null): Element | null =>
   target instanceof Element ? target.closest('[data-tooltip]') : null
+
+/**
+ * A card's stretched action (CardAction), when an event landed on it: its
+ * hit area covers the whole card, over everything not raised above it.
+ */
+const stretchedActionOf = (target: EventTarget | null): Element | null =>
+  target instanceof Element &&
+  target.getAttribute('data-slot') === 'card-action'
+    ? target
+    : null
 
 const isInside = (anchor: Element, node: EventTarget | null): boolean =>
   node instanceof Node && anchor.contains(node)

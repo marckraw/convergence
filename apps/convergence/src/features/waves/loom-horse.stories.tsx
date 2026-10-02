@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, screen } from 'storybook/test'
 import { SessionAgentMeter } from '@/entities/agent-meter'
 import { LoomHorseAccessLine } from './loom-horse-access.presentational'
 import { loomHorseAccessLine } from './loom-horse-access.pure'
@@ -118,6 +118,32 @@ export const Default: Story = {
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
+}
+
+/**
+ * The meter's tooltip on an openable card (MC N1): the card's door covers
+ * the meter, so the pointer over it lands on the door, and the meter still
+ * says what it measures.
+ */
+export const MeterTooltip: Story = {
+  name: 'Meter tooltip',
+  play: async ({ canvas }) => {
+    const door = canvas.getByRole('button', { name: /^opus-mac Working/ })
+    const meter = canvas.getByTestId('session-agent-meter')
+    const box = meter.getBoundingClientRect()
+    const at = { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+    await expect(document.elementFromPoint(at.x, at.y)).toBe(door)
+    door.dispatchEvent(
+      new PointerEvent('pointerover', {
+        bubbles: true,
+        pointerType: 'mouse',
+        clientX: at.x,
+        clientY: at.y,
+      }),
+    )
+    const tooltip = await screen.findByRole('tooltip', {}, { timeout: 2000 })
+    await expect(tooltip).toHaveTextContent(/^Agent CPU and memory/)
+  },
 }
 
 /** An idle seat holds nothing; it offers the work queued for it. */

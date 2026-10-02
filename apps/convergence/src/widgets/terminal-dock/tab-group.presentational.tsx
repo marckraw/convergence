@@ -18,6 +18,8 @@ interface TabGroupProps {
   onNewTab: () => void
   /** New tab's key in words ("⌘T"), for its tooltip (NAV-23). */
   newTabShortcut?: string
+  /** Close tab's key in words ("⌘W"), on the open tab's ✕: the tab it closes (NAV-23). */
+  closeTabShortcut?: string
   trailingSlot?: ReactNode
 }
 
@@ -34,6 +36,7 @@ export const TabGroup: FC<TabGroupProps> = ({
   onCloseTab,
   onNewTab,
   newTabShortcut,
+  closeTabShortcut,
   trailingSlot,
 }) => {
   return (
@@ -65,6 +68,9 @@ export const TabGroup: FC<TabGroupProps> = ({
                   className={tab.status === 'exited' ? 'italic' : undefined}
                   onClose={() => onCloseTab(tab.id)}
                   closeLabel={`Close tab ${tab.title}`}
+                  closeShortcut={
+                    tab.id === activeTabId ? closeTabShortcut : undefined
+                  }
                 >
                   {label}
                 </TabsTab>

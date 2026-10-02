@@ -870,8 +870,11 @@ export const Sidebar: FC<SidebarProps> = ({
     <>
       <SpaceWorkboardDialogContainer />
       <ProjectSettingsDialogContainer
-        contextSection={(projectId) => (
-          <ProjectContextSettings projectId={projectId} />
+        contextSection={(projectId, onDraftChange) => (
+          <ProjectContextSettings
+            projectId={projectId}
+            onDraftChange={onDraftChange}
+          />
         )}
       />
       <ProviderStatusDialogContainer />

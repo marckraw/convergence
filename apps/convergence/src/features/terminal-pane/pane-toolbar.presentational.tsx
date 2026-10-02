@@ -1,27 +1,22 @@
 import type { FC } from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, X } from 'lucide-react'
+import { SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react'
 import { IconButton } from '@convergence/ui'
 import type { TerminalShortcutLabels } from '@/entities/terminal'
 
 interface PaneToolbarProps {
   onSplitHorizontal: () => void
   onSplitVertical: () => void
-  /**
-   * Closes the pane's open tab. Leave it out where each tab carries its own
-   * close, as the terminal dock's tab strip does: a second ✕ for the same
-   * tab is a duplicate (DS4).
-   */
-  onClose?: () => void
-  closeLabel?: string
   /** The keys the buttons answer to, in words, for their tooltips (NAV-23). */
   shortcuts?: TerminalShortcutLabels
 }
 
+/**
+ * A pane's two splits. It has no close: each tab carries its own ✕, which
+ * says ⌘W (DS4, NAV N4), so a second one here was a duplicate no caller drew.
+ */
 export const PaneToolbar: FC<PaneToolbarProps> = ({
   onSplitHorizontal,
   onSplitVertical,
-  onClose,
-  closeLabel = 'Close tab',
   shortcuts,
 }) => {
   return (
@@ -46,18 +41,6 @@ export const PaneToolbar: FC<PaneToolbarProps> = ({
       >
         <SplitSquareVertical className="size-3.5" />
       </IconButton>
-      {onClose ? (
-        <IconButton
-          label={closeLabel}
-          shortcut={shortcuts?.['close-tab']}
-          type="button"
-          variant="ghost"
-          onClick={onClose}
-          size="xs"
-        >
-          <X className="size-3.5" />
-        </IconButton>
-      ) : null}
     </div>
   )
 }

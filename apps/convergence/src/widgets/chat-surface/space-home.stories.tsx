@@ -215,7 +215,7 @@ export const Sources: Story = {
     await expect(canvas.getByText('18 KB')).toBeVisible()
     await userEvent.click(
       canvas.getByRole('button', {
-        name: 'Remove source design-system-drift.md',
+        name: 'Remove source design-system-drift.md…',
       }),
     )
     await expect(args.onDeleteSource).toHaveBeenCalledWith('source-1')

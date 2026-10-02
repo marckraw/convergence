@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { GitMerge, Library } from 'lucide-react'
-import { expect } from 'storybook/test'
+import { expect, screen } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
 import { TONES } from '#lib/tone.styles'
 import { Badge } from './badge'
@@ -98,7 +98,7 @@ export const Long: Story = {
       </Badge>
     </div>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, userEvent }) => {
     const words = canvas.getByText(/Imported from/)
     await expect(getComputedStyle(words).textOverflow).toBe('ellipsis')
     await expect(words.scrollWidth).toBeGreaterThan(words.clientWidth)
@@ -106,6 +106,12 @@ export const Long: Story = {
     const row = badge.parentElement as HTMLElement
     await expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(
       row.getBoundingClientRect().right,
+    )
+    // Cut short, the whole word is one hover away (R2, MC N5).
+    await userEvent.hover(words)
+    const tooltip = await screen.findByRole('tooltip', {}, { timeout: 2000 })
+    await expect(tooltip).toHaveTextContent(
+      'Imported from a project nobody remembers the name of',
     )
   },
 }

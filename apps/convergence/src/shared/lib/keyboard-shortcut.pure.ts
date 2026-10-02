@@ -27,6 +27,13 @@ export const SUBMIT_SHORTCUT: KeyboardShortcutBinding = {
   altKey: false,
 }
 
+/** ⌘J (Ctrl+J off the Mac): a terminal session's conversation dock, shown and hidden. */
+export const CONVERSATION_DOCK_SHORTCUT: KeyboardShortcutBinding = {
+  key: 'j',
+  shiftKey: false,
+  altKey: false,
+}
+
 /** ⌘. (Ctrl+. off the Mac): a conversation's Actions. */
 export const ACTIONS_SHORTCUT: KeyboardShortcutBinding = {
   key: '.',
@@ -47,7 +54,7 @@ const RESERVED_SHORTCUTS: ReservedShortcut[] = [
     label: 'Sidebar search',
   },
   {
-    binding: { key: 'j', shiftKey: false, altKey: false },
+    binding: CONVERSATION_DOCK_SHORTCUT,
     label: 'Conversation dock',
   },
   {

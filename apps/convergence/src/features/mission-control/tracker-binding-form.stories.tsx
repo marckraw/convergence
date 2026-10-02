@@ -73,7 +73,7 @@ export const Default: Story = {
     await expect(args.onSaveBinding).toHaveBeenCalledOnce()
     await userEvent.click(canvas.getByRole('button', { name: 'Test' }))
     await expect(args.onTest).toHaveBeenCalledOnce()
-    await userEvent.click(canvas.getByRole('button', { name: 'Forget key' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Forget key…' }))
     await expect(args.onForgetKey).toHaveBeenCalledOnce()
   },
 }

@@ -59,6 +59,10 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const panel = canvas.getByRole('region', { name: 'Add conversations' })
+    // The project picker says which choice it is, not only its value (MC-12).
+    await expect(
+      within(panel).getByRole('combobox', { name: 'Project: All projects' }),
+    ).toBeVisible()
     const opus = within(panel).getByRole('button', { name: /^opus-mac/ })
     await expect(opus).toHaveAttribute('aria-pressed', 'true')
     const sol = within(panel).getByRole('button', { name: /^Sol/ })

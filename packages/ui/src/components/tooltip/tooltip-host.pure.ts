@@ -80,8 +80,53 @@ export const mayShow = (anchor: {
   ) &&
   (!anchor.onlyWhenTruncated || anchor.truncated)
 
+/** An element's own size against what it holds, as the DOM measures both. */
+type Overflow = {
+  scrollWidth: number
+  clientWidth: number
+  scrollHeight: number
+  clientHeight: number
+}
+
+/**
+ * Whether an element's text is cut short: one line ended early (wider than
+ * its box), or a clamp of several lines (taller than its box). So
+ * `when="truncated"` sees a title clamped to two lines, not only a line
+ * ended with an ellipsis (MC N2).
+ */
+export const isTruncated = (element: Overflow): boolean =>
+  element.scrollWidth > element.clientWidth ||
+  element.scrollHeight > element.clientHeight
+
 type Box = { top: number; left: number; width: number; height: number }
 type Size = { width: number; height: number }
+type Point = { x: number; y: number }
+
+const holds = (box: Box, { x, y }: Point): boolean =>
+  x >= box.left &&
+  x < box.left + box.width &&
+  y >= box.top &&
+  y < box.top + box.height
+
+/**
+ * Which of a card's tooltips a pointer rests on, under the card's stretched
+ * action (CardAction: its hit area covers the whole card, so every point of
+ * the card lands on the action and nothing under it hears the pointer). Of
+ * `boxes`, in document order (an element before what it holds), the
+ * innermost one that holds the point and whose tooltip may show, by its
+ * index; null when there is none, and the action's own tooltip stands
+ * (MC N1).
+ */
+export const innermostAt = (
+  point: Point,
+  boxes: readonly Box[],
+  mayShowAt: (index: number) => boolean,
+): number | null => {
+  for (let index = boxes.length - 1; index >= 0; index -= 1) {
+    if (holds(boxes[index]!, point) && mayShowAt(index)) return index
+  }
+  return null
+}
 
 export type TooltipPlacement = {
   /** The side it ended up on: the one asked for, or the opposite when that has no room. */

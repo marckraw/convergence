@@ -6,6 +6,7 @@ import {
   FieldDescription,
   FieldLabel,
   Fieldset,
+  FieldsetDescription,
   FieldsetLegend,
   FormDialog,
   Input,
@@ -81,10 +82,11 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
         className="gap-3"
       >
         <FieldsetLegend>Workspace start point</FieldsetLegend>
-        <p className="-mt-1.5 text-xs text-ink-muted">
+        {/* Describes the radios, so it is read with the group (DLG-7). */}
+        <FieldsetDescription className="-mt-1.5">
           This only affects new branches. Existing branches are checked out
           as-is.
-        </p>
+        </FieldsetDescription>
         <div className="grid gap-2 sm:grid-cols-2">
           <ChoiceCard
             value="base-branch"

@@ -98,6 +98,22 @@ export const Long: Story = {
   },
 }
 
+/**
+ * Read only: with no onToggle (the wire popover's glance), a hop that
+ * carried a message offers no fold for it (MC N4).
+ */
+export const ReadOnly: Story = {
+  name: 'Read only',
+  args: { onToggle: undefined },
+  play: async ({ args, canvas }) => {
+    await expect(canvas.getByRole('listitem')).toHaveTextContent('round 3')
+    await expect(canvas.queryByRole('button')).toBeNull()
+    await expect(
+      canvas.queryByText(args.line.payloadPreview!),
+    ).not.toBeInTheDocument()
+  },
+}
+
 /** A delivery that failed says why on the row itself, never behind a click. */
 export const Failed: Story = {
   args: {

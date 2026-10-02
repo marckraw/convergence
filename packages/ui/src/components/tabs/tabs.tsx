@@ -94,6 +94,11 @@ export type TabsTabProps = Omit<TabsPrimitive.Tab.Props, 'className'> & {
   onClose?: () => void
   /** The ✕'s name: "Close zsh". */
   closeLabel?: string
+  /**
+   * The key that closes it too, already formatted ("⌘W"): a Kbd in its ✕'s
+   * tooltip, so the shortcut shows where it acts (NAV-23).
+   */
+  closeShortcut?: string
 }
 
 const stripChip =
@@ -117,6 +122,7 @@ export function TabsTab({
   children,
   onClose,
   closeLabel = 'Close tab',
+  closeShortcut,
   onKeyDown,
   ...props
 }: TabsTabProps) {
@@ -172,6 +178,7 @@ export function TabsTab({
           {/* The pointer's close: out of the tab order (Delete is the keyboard's). */}
           <IconButton
             label={closeLabel}
+            shortcut={closeShortcut}
             size="xs"
             tabIndex={-1}
             onClick={(event) => {

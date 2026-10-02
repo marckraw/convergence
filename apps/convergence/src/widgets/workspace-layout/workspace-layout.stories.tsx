@@ -117,10 +117,12 @@ export const TerminalOnly: Story = {
   name: 'Terminal only',
   args: {
     mainSlot: terminal,
-    dockSlot: <ConversationDockPlaceholder />,
+    dockSlot: <ConversationDockPlaceholder hideShortcut="⌘J" />,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No conversation history')).toBeVisible()
+    // The key that hides it shows where it acts (NAV-23).
+    await expect(canvas.getByText('⌘J')).toBeVisible()
     await expect(
       canvas.getByText(/Convert it to a conversation session/),
     ).toHaveTextContent(/workspace\.$/)

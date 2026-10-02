@@ -113,6 +113,15 @@ describe('CanvasWirePopover', () => {
     expect(screen.getByText('The target is gone.')).toBeInTheDocument()
   })
 
+  it('reads its hops without offering a message it cannot open (MC N4)', () => {
+    renderPopover({ hops: [hop({ id: 'h1' })] })
+
+    // The hop carried a message, but the popover is a glance: no control
+    // that does nothing. Mutation: draw the fold for any payload -> red.
+    expect(screen.queryByRole('button', { name: /message carried/ })).toBeNull()
+    expect(screen.queryByText('Done. Ready for review.')).toBeNull()
+  })
+
   it('describes a spawn wire as the session it will start', () => {
     renderPopover({
       relay: relay({

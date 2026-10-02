@@ -53,6 +53,7 @@ function renderInspector(
     saveError?: string | null
     recipientMissing?: boolean
     recipientNote?: string | null
+    problem?: string | null
     handlers?: Partial<Record<string, ReturnType<typeof vi.fn>>>
   } = {},
 ) {
@@ -93,7 +94,7 @@ function renderInspector(
       })}
       customOpenerNote={customOpenerNote(draft, supportsReset)}
       recipientNote={overrides.recipientNote ?? null}
-      problem={null}
+      problem={overrides.problem ?? null}
       busy={false}
       projectOptions={[]}
       providerOptions={[{ id: 'codex', label: 'Codex' }]}
@@ -114,6 +115,44 @@ function renderInspector(
 }
 
 describe('the connection inspector, rendered', () => {
+  /**
+   * MC-12: a warning line under a control describes it, so a screen reader
+   * says why with what. Mutation that reds it: drop an aria-describedby, or
+   * the line's id.
+   */
+  it('reads each warning line with the control it is about', () => {
+    const draft: ConnectionDraft = {
+      ...newConnectionDraft({
+        sourceSessionId: 'fable',
+        targetSessionId: 'opus',
+      }),
+      beforeDelivery: 'custom',
+      customOpener: CONVERSATION_RESET_COMMAND,
+    }
+    const note = customOpenerNote(draft, false)
+    expect(note).not.toBeNull()
+    renderInspector({
+      draft,
+      supportsReset: false,
+      recipientNote: 'Opus is busy; the message waits for its turn to end.',
+      problem: 'Pick who receives it first.',
+    })
+
+    expect(
+      screen.getByRole('combobox', { name: 'Recipient: Opus' }),
+    ).toHaveAccessibleDescription(
+      'Opus is busy; the message waits for its turn to end.',
+    )
+    expect(
+      screen.getByRole('textbox', {
+        name: 'The first message, sent on its own',
+      }),
+    ).toHaveAccessibleDescription(note!)
+    expect(
+      screen.getByRole('button', { name: 'Save changes' }),
+    ).toHaveAccessibleDescription('Pick who receives it first.')
+  })
+
   it('says whether what is on screen is stored', () => {
     renderInspector({ isNew: true })
     expect(screen.getByText('Not saved yet')).toBeInTheDocument()

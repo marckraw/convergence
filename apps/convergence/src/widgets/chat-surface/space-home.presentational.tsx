@@ -315,7 +315,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         </div>
                       </div>
                       <IconButton
-                        label={`Remove source ${source.filename}`}
+                        label={`Remove source ${source.filename}…`}
                         variant="danger-quiet"
                         size="sm"
                         onClick={() => onDeleteSource(source.id)}
@@ -569,7 +569,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                             <Pencil aria-hidden />
                           </IconButton>
                           <IconButton
-                            label={`Remove artifact ${artifact.label}`}
+                            label={`Remove Artifact ${artifact.label}…`}
                             variant="danger-quiet"
                             size="sm"
                             onClick={() => onDeleteArtifact(artifact.id)}

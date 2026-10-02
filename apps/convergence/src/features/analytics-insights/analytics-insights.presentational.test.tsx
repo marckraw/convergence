@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AnalyticsOverview } from '@/entities/analytics'
 import { AnalyticsInsights } from './analytics-insights.presentational'
@@ -182,6 +182,20 @@ describe('AnalyticsInsights', () => {
     expect(screen.getAllByTestId('chartgpu-chart')).toHaveLength(2)
     expect(screen.getAllByText('Sessions').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Turns').length).toBeGreaterThan(0)
+  })
+
+  it('names every calendar day and heatmap hour for assistive tech', () => {
+    renderInsights()
+
+    // A tooltip only shows to a resting pointer; the cell's name is what a
+    // screen reader reads (DS N1, DLG N2). Mutation: drop the cells'
+    // role and name -> nothing is found here, red.
+    const calendar = screen.getByRole('group', { name: 'Recent activity' })
+    expect(
+      within(calendar).getAllByRole('img', { name: /: active$/ }),
+    ).toHaveLength(3)
+    expect(screen.getAllByRole('img', { name: /^Thu / })).toHaveLength(24)
+    expect(screen.getByRole('img', { name: 'Thu 2p: 6' })).toBeInTheDocument()
   })
 
   it('calls onRangeChange when a range is chosen', () => {

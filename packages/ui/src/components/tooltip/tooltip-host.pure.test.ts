@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  innermostAt,
+  isTruncated,
   mayShow,
   openingOf,
   placeTooltip,
@@ -164,5 +166,57 @@ describe('placeTooltip', () => {
       left: 170 - TOOLTIP_OFFSET - 100,
       originX: 100,
     })
+  })
+})
+
+describe('isTruncated', () => {
+  const fits = {
+    scrollWidth: 120,
+    clientWidth: 120,
+    scrollHeight: 32,
+    clientHeight: 32,
+  }
+
+  it('says no when the text fits its box', () => {
+    expect(isTruncated(fits)).toBe(false)
+  })
+
+  it('sees one line ended early', () => {
+    expect(isTruncated({ ...fits, scrollWidth: 180 })).toBe(true)
+  })
+
+  it('sees a clamp of two lines cut short (MC N2)', () => {
+    // Mutation: read the width alone -> a clamped title is "not cut", red.
+    expect(isTruncated({ ...fits, scrollHeight: 48 })).toBe(true)
+  })
+})
+
+describe('innermostAt', () => {
+  const card = { top: 0, left: 0, width: 300, height: 100 }
+  const line = { top: 40, left: 10, width: 200, height: 16 }
+  const word = { top: 40, left: 10, width: 60, height: 16 }
+  const always = () => true
+
+  it('finds the tooltip under the point, not the card around it', () => {
+    expect(innermostAt({ x: 100, y: 45 }, [card, line], always)).toBe(1)
+  })
+
+  it('takes the innermost of two that hold the point', () => {
+    expect(innermostAt({ x: 20, y: 45 }, [line, word], always)).toBe(1)
+  })
+
+  it('passes over one that may not show, to the one around it', () => {
+    expect(
+      innermostAt({ x: 20, y: 45 }, [line, word], (index) => index !== 1),
+    ).toBe(0)
+  })
+
+  it('finds nothing where nothing holds the point', () => {
+    expect(innermostAt({ x: 250, y: 90 }, [line, word], always)).toBeNull()
+  })
+
+  it("counts a box's far edges as outside it", () => {
+    expect(innermostAt({ x: 210, y: 45 }, [line], always)).toBeNull()
+    expect(innermostAt({ x: 100, y: 56 }, [line], always)).toBeNull()
   })
 })

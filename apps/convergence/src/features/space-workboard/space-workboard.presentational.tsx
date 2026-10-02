@@ -1092,10 +1092,11 @@ function renderArtifactRow(input: {
           </Select>
         </div>
 
+        {/* It can't be undone, so it asks first, from the quiet red (R5). */}
         <IconButton
-          label={`Remove Artifact ${artifact.label}`}
+          label={`Remove Artifact ${artifact.label}…`}
           type="button"
-          variant="secondary"
+          variant="danger-quiet"
           onClick={() => onDeleteArtifact(artifact.id)}
         >
           <Trash2 className="size-4" />

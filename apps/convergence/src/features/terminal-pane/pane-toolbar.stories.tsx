@@ -8,7 +8,6 @@ const meta = {
   args: {
     onSplitHorizontal: fn(),
     onSplitVertical: fn(),
-    onClose: fn(),
   },
 } satisfies Meta<typeof PaneToolbar>
 
@@ -16,9 +15,13 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** Three icon buttons, each named for what it does. */
+/**
+ * Two icon buttons, each named for what it does. No close: each tab carries
+ * its own ✕ (the terminal dock's strip), so no tab has two (NAV N4).
+ */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getAllByRole('button')).toHaveLength(2)
     await userEvent.click(
       canvas.getByRole('button', { name: 'Split horizontal' }),
     )
@@ -27,32 +30,6 @@ export const Default: Story = {
       canvas.getByRole('button', { name: 'Split vertical' }),
     )
     await expect(args.onSplitVertical).toHaveBeenCalledOnce()
-    await userEvent.click(canvas.getByRole('button', { name: 'Close tab' }))
-    await expect(args.onClose).toHaveBeenCalledOnce()
-  },
-}
-
-/** The close button takes the name its owner gives it. */
-export const ClosePane: Story = {
-  args: { closeLabel: 'Close pane' },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole('button', { name: 'Close pane' }),
-    ).toBeVisible()
-    await expect(canvas.queryByRole('button', { name: 'Close tab' })).toBeNull()
-  },
-}
-
-/**
- * Without a close: where each tab carries its own ✕ (the terminal dock's
- * strip), the toolbar only splits, so no tab has two closes.
- */
-export const WithoutClose: Story = {
-  name: 'Without close',
-  args: { onClose: undefined },
-  play: async ({ canvas }) => {
-    await expect(canvas.getAllByRole('button')).toHaveLength(2)
-    await expect(canvas.queryByRole('button', { name: 'Close tab' })).toBeNull()
   },
 }
 
@@ -78,8 +55,5 @@ export const Shortcuts: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Split vertical' }),
     ).toHaveAttribute('data-tooltip-shortcut', '⌘D')
-    await expect(
-      canvas.getByRole('button', { name: 'Close tab' }),
-    ).toHaveAttribute('data-tooltip-shortcut', '⌘W')
   },
 }

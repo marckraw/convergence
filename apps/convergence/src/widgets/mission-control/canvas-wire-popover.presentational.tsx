@@ -113,11 +113,10 @@ export const CanvasWirePopover: FC<CanvasWirePopoverProps> = ({
           {hopLines.map((line, index) => (
             <RelayHopRow
               // Rows here are read, never expanded: the popover is a glance, and
-              // the crew's own trail is where a payload gets opened up.
+              // the crew's own trail is where a payload gets opened up. So no
+              // onToggle, and no control that would do nothing (MC N4).
               key={`${line.timeLabel}-${index}`}
               line={line}
-              expanded={false}
-              onToggle={() => undefined}
             />
           ))}
         </ul>

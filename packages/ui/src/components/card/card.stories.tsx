@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useState } from 'react'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, screen, waitFor } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
+import { Tooltip } from '../tooltip/tooltip'
 import { Card, CardAction } from './card'
 
 /** The three surfaces side by side, as a session panel stacks them. */
@@ -138,6 +139,80 @@ export const Interactive: Story = {
     await userEvent.keyboard('{Enter}')
     await expect(onArchive).toHaveBeenCalledTimes(1)
     await expect(onOpen).toHaveBeenCalledTimes(2)
+  },
+}
+
+const ACCESS =
+  'Figma: read-only · Linear: can comment on MAR-3608 and every issue under it'
+
+/** An openable card whose lines carry tooltips of their own, under its hit area. */
+function CardWithHints() {
+  return (
+    <div className="w-80 rounded-md bg-canvas p-4">
+      <Card interactive>
+        <CardAction className="text-sm font-medium">opus-mac</CardAction>
+        <Tooltip label={ACCESS} when="truncated">
+          <p className="truncate text-xs text-ink-muted">{ACCESS}</p>
+        </Tooltip>
+        <Tooltip label="Working for 4 minutes">
+          <p className="w-fit text-xs text-ink-muted">Working</p>
+        </Tooltip>
+      </Card>
+    </div>
+  )
+}
+
+/** A pointer event on `target`, at the middle of `over`, as a person's would land. */
+const pointerAt = (
+  type: 'pointerover' | 'pointermove',
+  target: Element,
+  over: Element,
+) => {
+  const box = over.getBoundingClientRect()
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      pointerType: 'mouse',
+      clientX: box.left + box.width / 2,
+      clientY: box.top + box.height / 2,
+    }),
+  )
+}
+
+/**
+ * Tooltips under the action (MC N1): the card's hit area covers its lines,
+ * so the pointer over one lands on the action, and the line's own tooltip
+ * still shows; moving to the next line moves it, and leaving the card puts
+ * it away. A click there still opens the card.
+ */
+export const TooltipsUnderTheAction: Story = {
+  name: 'Tooltips under the action',
+  render: () => <CardWithHints />,
+  play: async ({ canvas }) => {
+    const action = canvas.getByRole('button', { name: 'opus-mac' })
+    const access = canvas.getByText(ACCESS)
+    const box = access.getBoundingClientRect()
+    await expect(
+      document.elementFromPoint(
+        box.left + box.width / 2,
+        box.top + box.height / 2,
+      ),
+    ).toBe(action)
+    pointerAt('pointerover', action, access)
+    const tooltip = await screen.findByRole('tooltip', {}, { timeout: 2000 })
+    await expect(tooltip).toHaveTextContent(ACCESS)
+    pointerAt('pointermove', action, canvas.getByText('Working'))
+    await waitFor(() =>
+      expect(tooltip).toHaveTextContent('Working for 4 minutes'),
+    )
+    action.dispatchEvent(
+      new PointerEvent('pointerout', {
+        bubbles: true,
+        pointerType: 'mouse',
+        relatedTarget: document.body,
+      }),
+    )
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
   },
 }
 

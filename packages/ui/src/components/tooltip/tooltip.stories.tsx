@@ -155,6 +155,33 @@ export const Truncated: Story = {
   },
 }
 
+const CLAMPED_TITLE =
+  'Loom: read an issue in place, with its whole description, its comments and the horses that touched it'
+
+/**
+ * Clamped: a title cut at two lines is cut short too, so its whole text is
+ * one hover away (MC N2), as a Loom issue card's title is.
+ */
+export const Clamped: Story = {
+  render: () => (
+    <div className="p-16">
+      <Tooltip label={CLAMPED_TITLE} when="truncated">
+        <p tabIndex={0} className="line-clamp-2 w-48 rounded-sm text-sm">
+          {CLAMPED_TITLE}
+        </p>
+      </Tooltip>
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const title = canvas.getByText(CLAMPED_TITLE)
+    await expect(title.scrollWidth).toBeLessThanOrEqual(title.clientWidth)
+    await expect(title.scrollHeight).toBeGreaterThan(title.clientHeight)
+    await userEvent.hover(title)
+    const tooltip = await bubble()
+    await expect(tooltip).toHaveTextContent(CLAMPED_TITLE)
+  },
+}
+
 /** Reduced motion: the tooltip fades in; it doesn't grow or travel. */
 export const ReducedMotion: Story = {
   globals: { motion: 'reduced' },

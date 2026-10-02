@@ -122,12 +122,22 @@ export const Long: Story = {
   },
 }
 
-/** New tab's tooltip says its key (NAV-23). */
+/**
+ * New tab's tooltip says its key, and so does the open tab's ✕, the tab ⌘W
+ * closes (NAV-23).
+ */
 export const Shortcut: Story = {
-  args: { newTabShortcut: '⌘T' },
-  play: async ({ canvas }) => {
+  args: { newTabShortcut: '⌘T', closeTabShortcut: '⌘W' },
+  play: async ({ args, canvas }) => {
     await expect(
       canvas.getByRole('button', { name: 'New tab' }),
     ).toHaveAttribute('data-tooltip-shortcut', '⌘T')
+    // The open tab is "npm run test:stories"; ⌘W leaves "zsh" alone.
+    await expect(
+      canvas.getByLabelText('Close tab npm run test:stories'),
+    ).toHaveAttribute('data-tooltip-shortcut', args.closeTabShortcut)
+    await expect(canvas.getByLabelText('Close tab zsh')).not.toHaveAttribute(
+      'data-tooltip-shortcut',
+    )
   },
 }

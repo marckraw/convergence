@@ -301,10 +301,12 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
                         {formatRouteCandidate(route)}
                       </p>
                     </div>
+                    {/* Removing a route only edits the draft, so it doesn't
+                        ask and isn't red (R5: red is the trigger that asks). */}
                     <IconButton
                       label={`Remove route ${route.label}`}
                       type="button"
-                      variant="danger-quiet"
+                      variant="ghost"
                       onClick={() => removeRouteCandidate(route.id)}
                       size="sm"
                       className="shrink-0"

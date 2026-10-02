@@ -558,6 +558,32 @@ export const InDialog: Story = {
 }
 
 /**
+ * Described: out of a Field, a note under the trigger that says why the
+ * choice matters now describes it (`ariaDescribedBy`, MC-12).
+ */
+export const Described: Story = {
+  render: (args) => (
+    <div className="flex w-64 flex-col gap-1">
+      <ProjectPicker
+        {...args}
+        ariaLabel="Recipient: convergence"
+        ariaDescribedBy="recipient-note"
+      />
+      <p id="recipient-note" className="text-2xs text-warning-ink">
+        This conversation is busy; the message waits until its turn ends.
+      </p>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('combobox', { name: 'Recipient: convergence' }),
+    ).toHaveAccessibleDescription(
+      'This conversation is busy; the message waits until its turn ends.',
+    )
+  },
+}
+
+/**
  * In a form (DLG-15): `variant="field"` wears the field frame, so it sits
  * beside an Input and a Select as one family, where the Button look (last,
  * for toolbars and chips) has a fill and a hover of its own. In a Field it

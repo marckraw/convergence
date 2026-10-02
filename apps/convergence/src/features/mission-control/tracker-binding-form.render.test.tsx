@@ -14,6 +14,8 @@ import type {
   TrackerProbeReading,
   TrackerProjectResolution,
 } from '@/shared/types/tracker.types'
+import { UiProvider } from '@convergence/ui'
+import { answerConfirm } from '@/shared/testing/confirm'
 import { TrackerBindingForm } from './tracker-binding-form.presentational'
 import { TrackerBindingFormContainer } from './tracker-binding-form.container'
 
@@ -186,6 +188,64 @@ describe('MAR-3084 R9: the binding form shows facts, not the key', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Test' }))
     })
     await screen.findByText('3 labeled issues in convergence')
+  })
+})
+
+describe('R5: forgetting the key asks first (MC N3)', () => {
+  it('deletes the stored key only once the question is answered', async () => {
+    const crew = {
+      id: 'crew-1',
+      name: 'Loom',
+      emoji: null,
+      accentColor: null,
+      position: 0,
+      roundCap: null,
+      stallMinutes: null,
+      lapCap: null,
+      createdAt: AT,
+      updatedAt: AT,
+      sessionIds: [],
+      members: [],
+      trackerBinding: null,
+    } satisfies SessionCrew
+    const deleteCredential = vi.fn(async () => 'absent' as const)
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      workLedger: {
+        onUpdated: () => () => {},
+        list: async () => ({
+          crewId: 'c',
+          entries: [],
+          dispatchPlan: null,
+          trackerHealth: null,
+        }),
+      },
+      tracker: {
+        credentialStatus: vi.fn(async () => 'present' as const),
+        setCredential: vi.fn(),
+        deleteCredential,
+        probe: vi.fn(),
+        resolveProject: vi.fn(),
+      },
+      crew: { setTrackerBinding: vi.fn() },
+    }
+
+    render(
+      <UiProvider>
+        <TrackerBindingFormContainer crew={crew} />
+      </UiProvider>,
+    )
+    await screen.findByText('Stored in Keychain')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Forget key…' }))
+    await answerConfirm('Cancel')
+    // Mutation: delete without asking -> called before any answer, red.
+    expect(deleteCredential).not.toHaveBeenCalled()
+    expect(screen.getByText('Stored in Keychain')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Forget key…' }))
+    await answerConfirm('Forget key')
+    await waitFor(() => expect(deleteCredential).toHaveBeenCalledWith('crew-1'))
+    await screen.findByText('Not stored')
   })
 })
 

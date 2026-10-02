@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
+import {
+  CONVERSATION_DOCK_SHORTCUT,
+  formatShortcutLabel,
+  runningShortcutPlatform,
+} from '@/shared/lib/keyboard-shortcut.pure'
 
 const setActiveSessionMock = vi.fn()
 const setPrimarySurfaceMock = vi.fn()
@@ -101,6 +106,12 @@ describe('WorkspaceLayoutContainer', () => {
     expect(
       screen.getByTestId('conversation-dock-placeholder'),
     ).toBeInTheDocument()
+    // It says the key that hides it, the one just pressed (NAV-23).
+    expect(
+      screen.getByTestId('conversation-dock-placeholder'),
+    ).toHaveTextContent(
+      `Press ${formatShortcutLabel(CONVERSATION_DOCK_SHORTCUT, runningShortcutPlatform())} to hide it.`,
+    )
 
     act(() => {
       fireEvent.keyDown(window, { key: 'j', metaKey: true })

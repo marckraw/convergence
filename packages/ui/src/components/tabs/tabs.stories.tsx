@@ -15,6 +15,8 @@ type DocumentTabsProps = {
   terminal?: boolean
   onValueChange: (value: string) => void
   onClose: (id: string) => void
+  /** The key that closes the open tab, for its ✕'s tooltip ("⌘W"). */
+  closeShortcut?: string
 }
 
 /** Tabs over their panels: Insights' views, or the terminal's open shells. */
@@ -24,6 +26,7 @@ function DocumentTabs({
   terminal,
   onValueChange,
   onClose,
+  closeShortcut,
 }: DocumentTabsProps) {
   const [value, setValue] = useState(docs[0]?.id)
   const tabs = (
@@ -53,6 +56,7 @@ function DocumentTabs({
               variant !== 'segmented' ? () => onClose(doc.id) : undefined
             }
             closeLabel={`Close ${doc.title}`}
+            closeShortcut={doc.id === value ? closeShortcut : undefined}
           >
             {doc.title}
           </TabsTab>
@@ -133,8 +137,17 @@ export const Strip: Story = {
       { id: 'zsh-1', title: 'zsh' },
       { id: 'zsh-2', title: 'npm run test' },
     ],
+    closeShortcut: '⌘W',
   },
   play: async ({ args, canvas, canvasElement, userEvent }) => {
+    // The open tab's ✕ says the key that closes it (NAV-23); the others,
+    // which that key doesn't close, don't.
+    await expect(
+      canvasElement.querySelector('[aria-label="Close zsh"]'),
+    ).toHaveAttribute('data-tooltip-shortcut', '⌘W')
+    await expect(
+      canvasElement.querySelector('[aria-label="Close npm run test"]'),
+    ).not.toHaveAttribute('data-tooltip-shortcut')
     const first = canvas.getByRole('tab', { name: 'zsh' })
     const second = canvas.getByRole('tab', { name: 'npm run test' })
     await expect(first).toHaveAttribute('aria-selected', 'true')

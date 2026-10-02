@@ -1,5 +1,6 @@
 import { useWorkLedgerStore } from '@/entities/work-ledger'
 import { useEffect, useState, type FC } from 'react'
+import { useConfirm } from '@convergence/ui'
 import {
   sessionCrewApi,
   trackerApi,
@@ -59,6 +60,8 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
   const [boundProjectName, setBoundProjectName] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Forgetting the key deletes it from the Keychain: it asks first (R5).
+  const confirm = useConfirm()
 
   // Mounted per crew (`key={crew.id}` at the call site), so a crew switch
   // starts from empty drafts and an unread presence bit.
@@ -122,6 +125,21 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
     }
   }
 
+  // Asked before the form goes busy, so nothing behind the question moves.
+  const forgetKey = async () => {
+    const confirmed = await confirm({
+      title: 'Forget the Linear API key?',
+      description:
+        'It is deleted from the macOS keychain, and this crew can’t read Linear until a key is stored again.',
+      confirmLabel: 'Forget key',
+      variant: 'danger',
+    })
+    if (!confirmed) return
+    await run(async () => {
+      setCredential(await trackerApi.deleteCredential(crew.id))
+    })
+  }
+
   return (
     <TrackerBindingForm
       autoDispatch={crew.trackerBinding?.autoDispatch ?? false}
@@ -181,11 +199,7 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
           setLastProbe(null)
         })
       }
-      onForgetKey={() =>
-        void run(async () => {
-          setCredential(await trackerApi.deleteCredential(crew.id))
-        })
-      }
+      onForgetKey={() => void forgetKey()}
       onTest={() =>
         void run(async () => {
           setLastProbe(await trackerApi.probe(crew.id))

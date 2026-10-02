@@ -468,6 +468,11 @@ export {
   ComposerCard,
   type ComposerCardProps,
 } from './components/composer-card/composer-card'
+// DS8 lane fixes (MAR-3608): appended, so the parallel lanes' additions merge as unions.
+export {
+  FieldsetDescription,
+  type FieldsetDescriptionProps,
+} from './components/fieldset/fieldset'
 // DS8 lane sizes (MAR-3608): appended, so the parallel lanes' additions merge as unions.
 export { type NoticeSize } from './components/notice/notice'
 export { type BadgeSize } from './components/badge/badge'
