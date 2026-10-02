@@ -47,7 +47,7 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
     <div
       className={cn(
         'flex h-full w-full min-w-0 min-h-0 flex-col',
-        isFocused && 'ring-1 ring-primary/30',
+        isFocused && 'ring-1 ring-strong/30',
       )}
       onPointerDownCapture={() => onFocusLeaf(leaf.id)}
       data-leaf-id={leaf.id}

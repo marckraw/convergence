@@ -241,9 +241,9 @@ describe('SessionWiresContainer', () => {
       'When Implementor finishes, send its last message to Scribe',
     )
 
-    expect(disarmed.className).toContain('text-muted-foreground/60')
+    expect(disarmed.className).toContain('text-ink-muted/60')
     expect(disarmed.className).toContain('line-through')
-    expect(armed.className).toContain('text-foreground')
+    expect(armed.className).toContain('text-ink')
     expect(armed.className).not.toContain('line-through')
   })
 })

@@ -67,7 +67,7 @@ interface ConversationItemViewProps {
 }
 
 const attentionPromptMarkdownClassName =
-  'mt-1 max-w-full text-muted-foreground [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:[overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap'
+  'mt-1 max-w-full text-ink-muted [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:[overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap'
 
 function getHistoryImageAttachmentsClassName(count: number): string {
   return cn(
@@ -123,7 +123,7 @@ function renderAgentAttribution(
   attribution: Parameters<typeof agentAttributionLabel>[0],
 ) {
   return (
-    <div className="mb-1 truncate text-xs text-muted-foreground">
+    <div className="mb-1 truncate text-xs text-ink-muted">
       {agentAttributionLabel(attribution)}
     </div>
   )
@@ -280,7 +280,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   </Collapsible>
                 ) : null}
                 <Markdown
-                  className="mt-1 text-foreground"
+                  className="mt-1 text-ink"
                   content={viewModel.displayText}
                   size="sm"
                 />
@@ -350,7 +350,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   : {})}
               >
                 <Markdown
-                  className="mt-1 text-foreground"
+                  className="mt-1 text-ink"
                   content={viewModel.displayText}
                   size="sm"
                 />
@@ -372,7 +372,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 timing={viewModel.timing}
               />
               <Markdown
-                className="mt-1 italic text-muted-foreground"
+                className="mt-1 italic text-ink-muted"
                 content={entry.text}
                 size="sm"
               />
@@ -419,7 +419,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               size="sm"
             />
             {entry.permissionDetails && (
-              <p className="mt-1 break-words text-xs text-muted-foreground">
+              <p className="mt-1 break-words text-xs text-ink-muted">
                 {[
                   entry.permissionDetails.blockedPath,
                   entry.permissionDetails.decisionReason,
@@ -471,7 +471,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
             {entry.request?.kind === 'plan' ? (
               <>
                 {entry.request.planPath ? (
-                  <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                  <p className="mt-1 truncate font-mono text-xs text-ink-muted">
                     {entry.request.planPath}
                   </p>
                 ) : null}
@@ -528,7 +528,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   content={entry.request.message}
                   size="sm"
                 />
-                <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+                <p className="mt-2 break-all font-mono text-xs text-ink-muted">
                   {entry.request.url}
                 </p>
                 {viewModel.actionableInput && onInputAnswer ? (
@@ -602,7 +602,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               className="mb-1 justify-center"
             />
             <Markdown
-              className="text-xs italic text-muted-foreground"
+              className="text-xs italic text-ink-muted"
               content={entry.text}
               size="sm"
             />

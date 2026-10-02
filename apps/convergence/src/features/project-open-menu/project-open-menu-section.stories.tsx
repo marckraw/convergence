@@ -37,7 +37,7 @@ const InProjectMenu = (props: SectionProps) => (
       <Button variant="ghost" className="w-full justify-start px-2 font-normal">
         Project settings…
       </Button>
-      <div className="my-1 h-px bg-muted" />
+      <div className="my-1 h-px bg-surface-muted" />
       <ProjectOpenMenuSection {...props} />
     </PopoverContent>
   </Popover>

@@ -23,7 +23,7 @@ function Summary({ names }: SummaryProps) {
     >
       <span
         tabIndex={0}
-        className="rounded-sm px-1 text-xs tabular-nums text-muted-foreground"
+        className="rounded-sm px-1 text-xs tabular-nums text-ink-muted"
       >
         {`${names.length} running`}
       </span>

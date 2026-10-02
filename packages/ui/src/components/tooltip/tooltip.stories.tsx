@@ -35,7 +35,7 @@ function Hints({ label }: HintsProps) {
       >
         <p
           tabIndex={0}
-          className="w-40 truncate rounded-sm text-sm text-muted-foreground"
+          className="w-40 truncate rounded-sm text-sm text-ink-muted"
         >
           feature/a-branch-name-long-enough-to-be-cut-short
         </p>

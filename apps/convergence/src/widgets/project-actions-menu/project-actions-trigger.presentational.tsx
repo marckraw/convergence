@@ -21,7 +21,7 @@ export const ProjectActionsTrigger = forwardRef<
       variant="tonal"
       size="sm"
       className={cn(
-        'min-w-28 justify-between gap-2 border border-border/70 bg-muted/50',
+        'min-w-28 justify-between gap-2 border border-line-soft bg-surface-muted/50',
         // A running action is working: R1's info.
         running && 'border-info-line bg-info-soft text-info-ink',
         className,
@@ -41,7 +41,7 @@ export const ProjectActionsTrigger = forwardRef<
           {selectedScript?.name ?? 'Project actions'}
         </span>
       </span>
-      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
     </Button>
   </Tooltip>
 ))

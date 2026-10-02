@@ -21,9 +21,7 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
   const rows = [...project.needsAttention, ...project.running]
   return (
     <div className="min-w-0 space-y-1">
-      <p className="text-2xs font-medium text-foreground">
-        {project.projectName}
-      </p>
+      <p className="text-2xs font-medium text-ink">{project.projectName}</p>
       {rows.map((session) => {
         // The shared words for the shared state (MAR-3288 R5).
         const activityLabel = isSessionCompacting(session)
@@ -44,15 +42,13 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
               size="sm"
               tone={waiting ? barTone.waiting : barTone.running}
             />
-            <span className="max-w-40 truncate text-foreground">
-              {session.name}
-            </span>
-            <span className="shrink-0 text-muted-foreground">
+            <span className="max-w-40 truncate text-ink">{session.name}</span>
+            <span className="shrink-0 text-ink-muted">
               · {providerLabel(session.providerId)}
             </span>
             {attentionLabel || activityLabel ? (
               <span
-                className="shrink-0 truncate text-muted-foreground"
+                className="shrink-0 truncate text-ink-muted"
                 data-testid={`global-status-activity-${session.id}`}
               >
                 · {attentionLabel ?? activityLabel}

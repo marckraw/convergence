@@ -1,5 +1,5 @@
 /*
- * The focus ring (MAR-3616): a solid line in the ring color (--ring), shown
+ * The focus ring (MAR-3616): a solid line in the focus color (--focus), shown
  * only when the keyboard moved the focus (focus-visible), never on a click.
  * One recipe in four placements; pick by where the element sits, never by
  * taste, and never type the classes out again.
@@ -20,7 +20,7 @@ const drawn = [
   'outline-none',
   'focus-visible:outline-solid',
   'focus-visible:outline-(length:--focus-width)',
-  'focus-visible:outline-ring',
+  'focus-visible:outline-focus',
 ].join(' ')
 
 /**
@@ -53,6 +53,6 @@ export const focusRingField = [drawn, 'focus-visible:-outline-offset-1'].join(
 export const focusRingWithin = [
   'has-focus-visible:outline-solid',
   'has-focus-visible:outline-(length:--focus-width)',
-  'has-focus-visible:outline-ring',
+  'has-focus-visible:outline-focus',
   'has-focus-visible:outline-offset-0',
 ].join(' ')

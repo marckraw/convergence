@@ -63,14 +63,14 @@ export function NeedsYouControls({
   return (
     <div
       role="group"
-      className="space-y-2.5 border-b border-border/60 pb-3 text-2xs"
+      className="space-y-2.5 border-b border-line-soft pb-3 text-2xs"
       aria-label="Activity controls"
     >
       <div className="flex h-control-sm items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <span className="font-medium">Activity</span>
           <span
-            className="tabular-nums text-muted-foreground"
+            className="tabular-nums text-ink-muted"
             aria-label={`${result.shown} of ${result.total} cards shown`}
           >
             {result.filtered
@@ -100,25 +100,23 @@ export function NeedsYouControls({
         aria-controls={controlsId}
         aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
         size="lg"
-        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 text-left text-2xs font-normal"
+        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-ink/25 bg-ink/5 px-2.5 text-left text-2xs font-normal"
       >
         <SlidersHorizontal
           aria-hidden="true"
-          className="size-3.5 text-muted-foreground"
+          className="size-3.5 text-ink-muted"
         />
         <span className={textStack}>
           <span className="font-medium">{summary.activity}</span>
-          <span className="break-words text-muted-foreground">
-            {summary.scope}
-          </span>
-          <span className="break-words text-muted-foreground">
+          <span className="break-words text-ink-muted">{summary.scope}</span>
+          <span className="break-words text-ink-muted">
             Order: {summary.order}
           </span>
         </span>
         <ChevronDown
           aria-hidden="true"
           className={cn(
-            'size-3.5 text-muted-foreground transition-transform motion-reduce:transition-none',
+            'size-3.5 text-ink-muted transition-transform motion-reduce:transition-none',
             expanded && 'rotate-180',
           )}
         />
@@ -156,7 +154,7 @@ export function NeedsYouControls({
                 {Icon && (
                   <Icon
                     aria-hidden="true"
-                    className="size-3.5 text-muted-foreground"
+                    className="size-3.5 text-ink-muted"
                   />
                 )}
                 {label}
@@ -200,7 +198,7 @@ export function NeedsYouControls({
                 >
                   <Icon
                     aria-hidden="true"
-                    className="size-3.5 text-muted-foreground"
+                    className="size-3.5 text-ink-muted"
                   />
                 </FilterChoice>
               )
@@ -276,7 +274,7 @@ export function NeedsYouControls({
         </div>
       </div>
       {result.hiddenPins > 0 && (
-        <p className="text-muted-foreground">
+        <p className="text-ink-muted">
           {result.hiddenPins} pinned{' '}
           {result.hiddenPins === 1 ? 'card hidden' : 'cards hidden'} by filters.
         </p>

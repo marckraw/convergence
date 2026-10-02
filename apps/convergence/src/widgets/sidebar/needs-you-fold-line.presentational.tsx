@@ -35,10 +35,7 @@ export function FoldedLine({
   return (
     <p
       data-fold-line=""
-      className={cn(
-        'truncate text-3xs font-normal text-muted-foreground',
-        className,
-      )}
+      className={cn('truncate text-3xs font-normal text-ink-muted', className)}
     >
       {parts.map((part, index) => (
         <Fragment key={index}>

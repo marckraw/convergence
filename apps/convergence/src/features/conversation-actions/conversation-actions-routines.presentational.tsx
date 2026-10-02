@@ -39,7 +39,7 @@ export const ConversationActionsRoutines: FC<ConversationActionsViewProps> = ({
         variant="ghost"
         role="menuitem"
         data-actions-item=""
-        className={cn(styles.item, 'mt-1 text-xs text-muted-foreground')}
+        className={cn(styles.item, 'mt-1 text-xs text-ink-muted')}
         onClick={onClose}
       >
         Close menu

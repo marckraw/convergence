@@ -39,12 +39,12 @@
   }
 
   * {
-    @apply border-border;
+    @apply border-line;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
   body {
-    @apply text-foreground;
+    @apply text-ink;
     background: transparent;
     font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -54,9 +54,10 @@
 /*
  * The window's chrome (MAR-3617): every colour here is a token from
  * @convergence/ui's tokens.css, light-dark() in both themes. The frame's wash
- * darkens toward pure black at its foot, which is --media-backdrop's value
- * (rgb(0 0 0) in both themes); no chrome token is black, and one use doesn't
- * make one (R11).
+ * darkens toward pure black at its foot, which is --viewer's value (rgb(0 0 0)
+ * in both themes, the media viewer's letterbox); no chrome token is black, and
+ * one use doesn't make one (R11). global-css-tokens.test.ts keeps every var()
+ * here defined.
  */
 @layer components {
   .app-chrome {
@@ -200,10 +201,10 @@
 
 @keyframes notifications-pulse {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ring) 55%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--focus) 55%, transparent);
   }
   60% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 0%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus) 0%, transparent);
   }
   100% {
     box-shadow: 0 0 0 0 transparent;

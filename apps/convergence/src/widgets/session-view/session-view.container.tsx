@@ -776,7 +776,7 @@ export const SessionView: FC = () => {
                   {(remote || meterRow?.usage) && (
                     <section
                       aria-label="Agent"
-                      className="mt-2 border-t border-border/70 pt-2"
+                      className="mt-2 border-t border-line-soft pt-2"
                       {...{ [DETAILS_SECTION]: 'agent' }}
                     >
                       <SessionAgentMeter row={meterRow} remote={remote} />

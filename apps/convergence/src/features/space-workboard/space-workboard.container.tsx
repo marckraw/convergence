@@ -619,7 +619,7 @@ export const SpaceWorkboardDialogContainer: FC<{
               <GitBranch className="h-3.5 w-3.5" />
               Spaces
             </span>
-            <span className="text-2xs text-muted-foreground/80">Open</span>
+            <span className="text-2xs text-ink-muted/80">Open</span>
           </Button>
         )
       }

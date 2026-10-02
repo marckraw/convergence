@@ -13,7 +13,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-72 rounded-md border border-border bg-popover">
+      <div className="w-72 rounded-md border border-line bg-raised">
         <Story />
       </div>
     ),

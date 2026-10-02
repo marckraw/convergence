@@ -218,7 +218,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
               {linkedSpaces.map(({ attempt, space }) => (
                 <div
                   key={attempt.id}
-                  className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/30 px-3 py-3"
+                  className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-line-soft bg-surface/30 px-3 py-3"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">

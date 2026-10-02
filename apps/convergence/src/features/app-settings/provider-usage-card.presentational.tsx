@@ -87,13 +87,13 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
   const usageLinks = getUsageLinks(snapshot)
 
   return (
-    <section className="space-y-3 rounded-lg border border-border/70 bg-card/25 px-4 py-4">
+    <section className="space-y-3 rounded-lg border border-line-soft bg-surface/25 px-4 py-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-sm font-medium text-ink">
             {getProviderName(snapshot.providerId)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-ink-muted">
             Source: {getSourceLabel(snapshot)}
           </p>
         </div>
@@ -114,7 +114,7 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
 
       {snapshot.status === 'available' ? (
         <>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
             {snapshot.planType ? <span>Plan: {snapshot.planType}</span> : null}
             <span>
               Last checked: {formatCheckedAt(snapshot.lastCheckedAt)}
@@ -135,17 +135,15 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
               ))}
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-line px-4 py-3 text-sm text-ink-muted">
               No active rate-limit windows were reported.
             </p>
           )}
 
           {snapshot.credits ? (
-            <div className="rounded-lg border border-border/70 bg-card/40 px-4 py-3">
-              <p className="text-sm font-medium text-foreground">
-                Credits remaining
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-line-soft bg-surface/40 px-4 py-3">
+              <p className="text-sm font-medium text-ink">Credits remaining</p>
+              <p className="mt-1 text-sm text-ink-muted">
                 {snapshot.credits.unlimited
                   ? 'Unlimited'
                   : (snapshot.credits.balance ?? '0')}
@@ -154,11 +152,11 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
           ) : null}
         </>
       ) : (
-        <div className="rounded-lg border border-dashed border-border px-4 py-4">
-          <p className="text-sm font-medium text-foreground">
+        <div className="rounded-lg border border-dashed border-line px-4 py-4">
+          <p className="text-sm font-medium text-ink">
             {getProviderName(snapshot.providerId)} usage unavailable
           </p>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
             {snapshot.reason}
           </p>
         </div>

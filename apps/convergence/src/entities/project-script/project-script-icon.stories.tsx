@@ -19,7 +19,7 @@ function IconSet() {
       {ICONS.map(({ id, label }) => (
         <li
           key={id}
-          className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+          className="flex items-center gap-2 rounded-md border border-line bg-canvas px-2 py-1.5 text-xs text-ink"
         >
           <ProjectScriptIcon icon={id} className="h-4 w-4" />
           {label}

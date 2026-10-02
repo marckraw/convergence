@@ -50,7 +50,7 @@ export const TurnCard: FC<TurnCardProps> = ({
       : `${fileChanges.length} file${fileChanges.length === 1 ? '' : 's'}`
 
   return (
-    <div className="border-b border-border last:border-b-0">
+    <div className="border-b border-line last:border-b-0">
       <Button
         type="button"
         variant="ghost"
@@ -68,7 +68,7 @@ export const TurnCard: FC<TurnCardProps> = ({
         />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="font-mono text-2xs text-muted-foreground">
+            <span className="font-mono text-2xs text-ink-muted">
               Turn {turn.sequence}
             </span>
             {/* R1: a turn under way is working (info); one that errored failed (danger). */}
@@ -88,11 +88,11 @@ export const TurnCard: FC<TurnCardProps> = ({
             )}
           </span>
           {turn.summary && (
-            <span className="mt-0.5 block truncate text-2xs text-foreground">
+            <span className="mt-0.5 block truncate text-2xs text-ink">
               {turn.summary}
             </span>
           )}
-          <span className="mt-1 flex items-baseline gap-2 text-3xs text-muted-foreground">
+          <span className="mt-1 flex items-baseline gap-2 text-3xs text-ink-muted">
             <span>{fileLabel}</span>
             {counts.additions > 0 && (
               <span className="text-diff-added">+{counts.additions}</span>

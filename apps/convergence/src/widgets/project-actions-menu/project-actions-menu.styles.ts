@@ -12,11 +12,10 @@ export const actionIconColumn = 'flex w-9 shrink-0 items-center'
 
 /** An action's icon, boxed like the run button beside the commands. */
 export const actionIconBox =
-  'flex size-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground'
+  'flex size-8 items-center justify-center rounded-md border border-line bg-canvas text-ink-muted'
 
 /** The mono line under an action's name: its command, or what it does. */
-export const actionDetail =
-  'block truncate font-mono text-2xs text-muted-foreground'
+export const actionDetail = 'block truncate font-mono text-2xs text-ink-muted'
 
 /** A Button drawn as one of the panel's wide rows. */
 export const actionButtonRow =

@@ -49,7 +49,7 @@ const shownSpinners = (element: Element) =>
  */
 export const Default: Story = {
   render: (args) => (
-    <div className="flex flex-col gap-3 rounded-md bg-background p-4">
+    <div className="flex flex-col gap-3 rounded-md bg-canvas p-4">
       {SIZES.map(({ size }) => (
         <div key={size} className="flex flex-wrap items-center gap-2">
           {VARIANTS.map(({ variant, label }) => (
@@ -84,10 +84,13 @@ export const Default: Story = {
     const ring = getComputedStyle(first)
     await expect(ring.outlineStyle).toBe('solid')
     await expect(ring.outlineWidth).toBe('1px')
-    await expect(ring.outlineColor).toBe(tokenColor('--ring'))
-    // Never a native title (R2).
-    for (const button of canvas.getAllByRole('button'))
+    await expect(ring.outlineColor).toBe(tokenColor('--focus'))
+    // Never a native title (R2). A hand over each, from the theme's base layer
+    // (DS-35): no button writes cursor-pointer.
+    for (const button of canvas.getAllByRole('button')) {
       await expect(button).not.toHaveAttribute('title')
+      await expect(getComputedStyle(button).cursor).toBe('pointer')
+    }
   },
 }
 
@@ -97,7 +100,7 @@ export const Dark: Story = {
   play: async ({ canvas }) => {
     const danger = canvas.getByRole('button', { name: 'Delete md' })
     await expect(getComputedStyle(danger).backgroundColor).toBe(
-      tokenColor('--destructive'),
+      tokenColor('--danger-solid'),
     )
   },
 }
@@ -135,7 +138,7 @@ function SaveButton() {
  */
 export const Busy: Story = {
   render: (args) => (
-    <div className="flex items-center gap-2 rounded-md bg-background p-3">
+    <div className="flex items-center gap-2 rounded-md bg-canvas p-3">
       <SaveButton />
       <Button {...args} variant="secondary" pending>
         Join
@@ -167,7 +170,7 @@ export const Busy: Story = {
  */
 export const Disabled: Story = {
   render: (args) => (
-    <div className="flex items-center gap-2 rounded-md bg-background p-3">
+    <div className="flex items-center gap-2 rounded-md bg-canvas p-3">
       <Button {...args} disabled>
         Send
       </Button>
@@ -192,6 +195,12 @@ export const Disabled: Story = {
       name: 'New conversation',
     })
     await expect(unavailable).toHaveAttribute('aria-disabled', 'true')
+    // What can't be used keeps the arrow, disabled either way (DS-35).
+    await expect(getComputedStyle(send).cursor).toBe('default')
+    await expect(getComputedStyle(unavailable).cursor).toBe('default')
+    await expect(
+      getComputedStyle(canvas.getByRole('button', { name: 'Delete' })).cursor,
+    ).toBe('pointer')
     await expect(unavailable).toHaveAccessibleDescription(
       'Open a project first',
     )
@@ -209,7 +218,7 @@ export const Disabled: Story = {
 export const ReducedMotion: Story = {
   globals: { motion: 'reduced' },
   render: (args) => (
-    <div className="flex items-center gap-2 rounded-md bg-background p-3">
+    <div className="flex items-center gap-2 rounded-md bg-canvas p-3">
       <Button {...args}>Send</Button>
       <Button {...args} variant="secondary" pending pendingLabel="Saving…">
         Save

@@ -5,8 +5,8 @@ import { toneLine, toneSoft, type Tone } from '#lib/tone.styles'
 
 /**
  * Where a card sits, by how much it stands off its background. `inset` is the
- * app's most common card, the panel's faint wash (bg-card/30, 19 of 79 fills);
- * `raised` is the full surface (bg-card, 13); `dashed` holds a place for
+ * app's most common card, the panel's faint wash (bg-surface/30, 19 of 79 fills);
+ * `raised` is the full surface (bg-surface, 13); `dashed` holds a place for
  * something that isn't there yet.
  */
 const SURFACES = {

@@ -29,12 +29,12 @@ export function ComposerAccountNotice({
     >
       <Icon
         aria-hidden="true"
-        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${refusal ? 'text-destructive' : 'text-muted-foreground'}`}
+        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${refusal ? 'text-danger-ink' : 'text-ink-muted'}`}
       />
-      <div className="min-w-0 space-y-1 break-words text-muted-foreground">
+      <div className="min-w-0 space-y-1 break-words text-ink-muted">
         {refusal ? (
           <>
-            <p className="font-medium text-destructive">
+            <p className="font-medium text-danger-ink">
               Not sent · {describeAccountHandoffRefusal(refusal.stage)}
             </p>
             <p>{refusal.message}</p>

@@ -5,7 +5,7 @@ import { Kbd } from './kbd'
 /** Key hints as the app shows them: beside a word that says what they do. */
 function KeyHints() {
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-background p-3 text-sm text-muted-foreground">
+    <div className="flex flex-col gap-2 rounded-md bg-canvas p-3 text-sm text-ink-muted">
       <p className="flex items-center gap-1.5">
         Command Center <Kbd>⌘K</Kbd>
       </p>
@@ -45,7 +45,7 @@ export const Default: Story = {
 /** A long chord keeps each key whole, one box a key. */
 export const Long: Story = {
   render: () => (
-    <p className="flex w-60 flex-wrap items-center gap-1 rounded-md bg-background p-3 text-sm text-muted-foreground">
+    <p className="flex w-60 flex-wrap items-center gap-1 rounded-md bg-canvas p-3 text-sm text-ink-muted">
       Mark everything read <Kbd>Ctrl</Kbd> <Kbd>Shift</Kbd> <Kbd>Option</Kbd>{' '}
       <Kbd>Escape</Kbd>
     </p>

@@ -39,7 +39,7 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
       <DialogContent size="2xl" className="max-h-full">
-        <DialogHeader className="border-b border-border px-4 py-3 pr-10">
+        <DialogHeader className="border-b border-line px-4 py-3 pr-10">
           <DialogTitle className="truncate">
             {attachment?.filename ?? 'Preview'}
           </DialogTitle>
@@ -91,7 +91,7 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
           )}
 
           {!isLoading && !error && attachment?.kind === 'text' && (
-            <pre className="max-h-(--layout-preview-height) overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-foreground">
+            <pre className="max-h-(--layout-preview-height) overflow-auto whitespace-pre-wrap rounded bg-surface-muted/40 p-3 font-mono text-xs text-ink">
               {textContent ?? ''}
             </pre>
           )}

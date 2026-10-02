@@ -59,8 +59,8 @@ describe('buttonVariants (MAR-3616)', () => {
 
   it('outlines secondary in the control border, which clears 3:1 (MAR-3460, DS-16)', () => {
     const classes = classesOf(buttonVariants({ variant: 'secondary' }))
-    expect(classes).toContain('border-control-border')
-    expect(classes).not.toContain('border-input')
+    expect(classes).toContain('border-control-line')
+    expect(classes).not.toContain('border-control-fill')
   })
 })
 

@@ -37,8 +37,8 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="h-80 bg-background p-6">
-        <p className="mt-32 max-w-md text-sm text-foreground">
+      <div className="h-80 bg-canvas p-6">
+        <p className="mt-32 max-w-md text-sm text-ink">
           I rewrote the scheduler so retries back off exponentially.
         </p>
         <Story />

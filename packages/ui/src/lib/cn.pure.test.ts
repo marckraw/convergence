@@ -34,7 +34,7 @@ describe('cn with the Convergence theme', () => {
     expect(cn('text-2xs text-ink')).toBe('text-2xs text-ink')
     expect(cn('text-3xs', 'text-ink-muted')).toBe('text-3xs text-ink-muted')
     expect(cn('text-2xs', 'text-danger-ink')).toBe('text-2xs text-danger-ink')
-    expect(cn('text-code', 'text-foreground')).toBe('text-code text-foreground')
+    expect(cn('text-code', 'text-ink')).toBe('text-code text-ink')
   })
 
   it('lets the last text step win', () => {
@@ -45,8 +45,8 @@ describe('cn with the Convergence theme', () => {
 
   it('lets the last colour win', () => {
     expect(cn('bg-surface', 'bg-raised')).toBe('bg-raised')
-    expect(cn('text-muted-foreground', 'text-ink-muted')).toBe('text-ink-muted')
-    expect(cn('border-border/70', 'border-line-soft')).toBe('border-line-soft')
+    expect(cn('text-ink-muted', 'text-danger-ink')).toBe('text-danger-ink')
+    expect(cn('border-line', 'border-line-soft')).toBe('border-line-soft')
   })
 
   it('knows the small steps’ own line heights and the eyebrow tracking', () => {

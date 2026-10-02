@@ -132,7 +132,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
 }) => (
   <section
     data-endpoint-id={endpointId}
-    className="space-y-4 rounded-2xl border border-border bg-card/45 p-4"
+    className="space-y-4 rounded-2xl border border-line bg-surface/45 p-4"
   >
     <div className={blockHead}>
       <Field className="min-w-0 flex-1">
@@ -172,14 +172,14 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
       ) : null}
     </Field>
 
-    <div className="rounded-xl border border-border bg-background/40 p-4">
+    <div className="rounded-xl border border-line bg-canvas/40 p-4">
       <div className={blockHead}>
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-muted-foreground" />
+            <KeyRound className="h-4 w-4 text-ink-muted" />
             <h4 className="text-sm font-semibold">Daemon API token</h4>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {credentialStatusText(credentialStatus, actionBlocks.token)}
           </p>
         </div>
@@ -215,9 +215,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
       </div>
 
       {actionBlocks.connection && !actionBlocks.token && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          {actionBlocks.connection}
-        </p>
+        <p className="mt-3 text-xs text-ink-muted">{actionBlocks.connection}</p>
       )}
 
       <Field className="mt-4">

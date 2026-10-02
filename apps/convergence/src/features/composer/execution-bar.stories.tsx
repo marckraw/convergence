@@ -24,7 +24,7 @@ const meta = {
   decorators: [
     (Story) => (
       <div className="w-conversation max-w-full">
-        <div className="relative z-10 h-16 rounded-xl border border-border bg-card" />
+        <div className="relative z-10 h-16 rounded-xl border border-line bg-surface" />
         <Story />
       </div>
     ),

@@ -47,7 +47,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="flex max-w-3xl flex-wrap items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-foreground">
+      <div className="flex max-w-3xl flex-wrap items-center gap-2 rounded-lg border border-line bg-canvas px-2 py-1.5 text-ink">
         <Story />
       </div>
     ),

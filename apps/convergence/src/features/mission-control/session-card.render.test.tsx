@@ -135,7 +135,7 @@ describe('the card of the open conversation is marked', () => {
   const OPEN = CARD_OPEN_CLASS.split(' ')
   const HAIL = CARD_HAIL_OPEN_CLASS.split(' ')
   // Pinned as written, not read from the constant: the open mark must stay a
-  // bright ring standing off the card. A quiet `ring-1 ring-ring` -- the old
+  // bright ring standing off the card. A quiet `ring-1 ring-focus` -- the old
   // Hail mark -- is the failure this ticket was filed for. In token names
   // since MAR-3617: the ink at 70%, offset on the canvas.
   const OPEN_RING = [

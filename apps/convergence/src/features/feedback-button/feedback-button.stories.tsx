@@ -25,7 +25,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="relative h-144 bg-background">
+        <div className="relative h-144 bg-canvas">
           <Story />
         </div>
       </TooltipProvider>

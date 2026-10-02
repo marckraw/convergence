@@ -156,7 +156,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="flex h-40 flex-col justify-end bg-background">
+        <div className="flex h-40 flex-col justify-end bg-canvas">
           <Story />
         </div>
       </TooltipProvider>

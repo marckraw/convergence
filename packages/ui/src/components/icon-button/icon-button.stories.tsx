@@ -36,7 +36,7 @@ const ICONS = {
 /** A toolbar: a search button, then one button at every size of the scale. */
 function Toolbar({ label, onSearch }: ToolbarProps) {
   return (
-    <div className="flex items-center gap-1 rounded-md border border-border bg-background p-1">
+    <div className="flex items-center gap-1 rounded-md border border-line bg-canvas p-1">
       <IconButton label={label} shortcut="⌘F" onClick={onSearch}>
         <Search aria-hidden />
       </IconButton>
@@ -120,7 +120,7 @@ export const Long: Story = {
  */
 export const Disabled: Story = {
   render: () => (
-    <div className="rounded-md bg-background p-2">
+    <div className="rounded-md bg-canvas p-2">
       <IconButton
         label="Archive conversation"
         disabledReason="A running turn can't be archived"
@@ -148,7 +148,7 @@ export const Disabled: Story = {
 /** Busy: the spinner takes the icon's place, and the size holds. */
 export const Busy: Story = {
   render: () => (
-    <div className="rounded-md bg-background p-2">
+    <div className="rounded-md bg-canvas p-2">
       <IconButton label="Retry" pending>
         <RotateCcw aria-hidden />
       </IconButton>

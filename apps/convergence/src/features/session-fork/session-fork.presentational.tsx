@@ -290,7 +290,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               </div>
               {preview.status === 'idle' && (
                 <div className="space-y-2" data-testid="fork-preview-idle">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-ink-muted">
                     Summarise the parent transcript into a structured seed.
                     Nothing runs until you generate it.
                   </p>
@@ -307,12 +307,12 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               )}
               {preview.status === 'loading' && (
                 <div className="space-y-1" data-testid="fork-preview-progress">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-ink-muted">
                     {progressLabel?.primary ??
                       'Extracting summary from parent transcript…'}
                   </p>
                   {progressLabel?.secondary && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-ink-muted">
                       {progressLabel.secondary}
                     </p>
                   )}

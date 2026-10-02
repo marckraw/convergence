@@ -35,8 +35,8 @@ const stripClearanceClass = 'pt-6'
 const stripPeekClass = 'pb-2'
 
 /**
- * The recessed surface. `bg-sidebar` is the surface token that sits darker than
- * `bg-card` in both themes; `bg-muted` inverts in dark mode and would read as a
+ * The recessed surface. `bg-surface-sunken` is the surface token that sits darker than
+ * `bg-surface` in both themes; `bg-surface-muted` inverts in dark mode and would read as a
  * layer raised above the composer rather than below it.
  *
  * Rounded and bordered on the bottom and sides only: the top edge lives behind
@@ -44,7 +44,7 @@ const stripPeekClass = 'pb-2'
  * said "one surface, divided" instead of "two surfaces, stacked".
  */
 const stripSurfaceClass =
-  'rounded-b-xl border-x border-b border-border/60 bg-sidebar'
+  'rounded-b-xl border-x border-b border-line-soft bg-surface-sunken'
 
 /**
  * The strip's half of the stacking order. Both layers are positioned on purpose
@@ -69,7 +69,7 @@ export const stripClass = [
  * onto it. The shadow is what makes the card read as *resting on* the strip
  * rather than merely overlapping it, so dial it with the inset, not alone.
  */
-const composerCardDepthClass = 'relative z-10 shadow-md'
+const composerCardDepthClass = 'relative z-10 shadow-raised'
 
 /**
  * The card's depth, one entry per strip state.
@@ -116,18 +116,18 @@ export const composerCardDepthClassByMode: Record<
  */
 
 /** "Runs on". */
-export const stripLabelClass = 'text-2xs font-medium text-muted-foreground'
+export const stripLabelClass = 'text-2xs font-medium text-ink-muted'
 
 /** The chooser, while a session is being born. */
 export const stripSelectClass =
-  'h-6 px-1.5 text-2xs text-muted-foreground hover:text-foreground'
+  'h-6 px-1.5 text-2xs text-ink-muted hover:text-ink'
 
 /** The machine, once the session is live and the choice is no longer one. */
 export const stripFactClass =
-  'rounded-md border border-border/60 px-1.5 py-0.5 text-2xs font-medium text-foreground'
+  'rounded-md border border-line-soft px-1.5 py-0.5 text-2xs font-medium text-ink'
 
 /** A live session whose machine is gone. */
 export const stripWarningClass =
-  'flex min-w-0 items-center gap-1 text-2xs text-warning-foreground'
+  'flex min-w-0 items-center gap-1 text-2xs text-warning-ink'
 
 export const stripWarningIconClass = 'h-3 w-3 shrink-0'

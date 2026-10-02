@@ -36,7 +36,7 @@ export function AgentMeterSummary({
             <div key={session.id}>{session.name} · remote</div>
           ))}
           {!rows.length && !remote.length && <div>No live metered agents</div>}
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-2xs text-ink-muted">
             Shared servers count once in the total. Standalone one-shot and
             per-turn agents are not metered.
           </p>

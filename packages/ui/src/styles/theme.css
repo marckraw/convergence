@@ -1,16 +1,17 @@
 /*
- * The Tailwind v4 theme of @convergence/ui (MAR-3615 DS2): maps tokens.css onto utilities.
+ * The Tailwind v4 theme of @convergence/ui (MAR-3615 DS2, locked by DS5 MAR-3618): maps
+ * tokens.css onto utilities. Tailwind's own palette, fonts, type scale, radii, shadows, easings and
+ * animations are switched off (each `--…-*: initial` below) and refilled from the tokens alone, so
+ * a class names a token or generates nothing: bg-canvas, text-ink-muted, border-line-soft,
+ * shadow-raised, rounded-md, text-2xs, ease-enter. Tailwind's other scales (spacing, breakpoints,
+ * container widths, line heights, tracking, blur) stay on.
  *
  * global.css imports it after Tailwind and points an @source at packages/ui/src (MAR-3610):
  *   @import 'tailwindcss';
  *   @import '@convergence/ui/theme.css';
  *
- * Until DS5 Tailwind's own palette, type scale, radii, shadows, easings and animations stay on,
- * and the LEGACY BRIDGE at the end keeps every shadcn name the app still writes (bg-background,
- * text-muted-foreground, var(--foreground) …) painting exactly what it paints at 6f6ebb93. DS4
- * sweeps the app onto the token names. DS5 deletes the bridge and uncomments every line marked
- * "DS5:", so a class names a token or doesn't exist. The vendor bridge stays: Streamdown's bundle
- * writes shadcn and palette names of its own.
+ * The vendor bridge at the end serves the shadcn and palette names Streamdown's bundle writes,
+ * and only those; the app and the design system write the tokens.
  */
 @import './tokens.css';
 
@@ -65,7 +66,7 @@
 }
 
 @theme inline {
-  /* DS5: --color-*: initial; */
+  --color-*: initial;
 
   /* Surfaces */
   --color-canvas: var(--canvas);
@@ -192,10 +193,10 @@
   --color-terminal-tab-ink-muted: var(--terminal-tab-ink-muted);
 
   /* Type. font-sans also becomes <html>'s face, which <body> already wears */
-  /* DS5: --font-*: initial; */
+  --font-*: initial;
   --font-sans: var(--type-family-sans);
   --font-mono: var(--type-family-mono);
-  /* DS5: --font-weight-*: initial; */
+  --font-weight-*: initial;
   --font-weight-normal: var(--type-weight-regular);
   --font-weight-medium: var(--type-weight-medium);
   --font-weight-semibold: var(--type-weight-semibold);
@@ -205,7 +206,7 @@
    * do today, so the sweep moves nothing. Their line heights are leading-3xs and leading-2xs
    * until the redesign wires them in (uncomment the two --line-height lines then).
    */
-  /* DS5: --text-*: initial; */
+  --text-*: initial;
   --text-3xs: var(--type-size-3xs);
   /* Redesign: --text-3xs--line-height: var(--type-leading-3xs); */
   --text-2xs: var(--type-size-2xs);
@@ -228,8 +229,8 @@
   --leading-2xs: var(--type-leading-2xs);
   --tracking-eyebrow: var(--type-tracking-eyebrow);
 
-  /* Corners: Tailwind's names, today's values. Bare rounded reads --radius (10 px) */
-  /* DS5: --radius-*: initial; */
+  /* Corners: Tailwind's names on the corner tokens. Bare rounded reads --radius (10 px) */
+  --radius-*: initial;
   --radius: var(--corner-row);
   --radius-sm: var(--corner-xs);
   --radius-md: var(--corner-control);
@@ -238,9 +239,9 @@
   --radius-2xl: var(--corner-sheet);
 
   /* Elevation: shadow-control, shadow-raised, shadow-floating, shadow-overlay, shadow-sheet(-open) */
-  /* DS5: --shadow-*: initial; */
-  /* DS5: --inset-shadow-*: initial; */
-  /* DS5: --drop-shadow-*: initial; */
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
   --shadow-control: var(--elevation-control);
   --shadow-raised: var(--elevation-raised);
   --shadow-floating: var(--elevation-floating);
@@ -280,9 +281,9 @@
   /*
    * Motion. Every value is a name: duration-exit|fast|panel|slow, ease-out|in|in-out|enter|exit|
    * guide, animate-pop-in|pop-out|slide-in-*|spin|pulse. A bare transition is --motion-fast on
-   * --motion-ease-move, exactly Tailwind's default today.
+   * --motion-ease-move, Tailwind's own default.
    */
-  /* DS5: --ease-*: initial; */
+  --ease-*: initial;
   --ease-out: var(--motion-ease);
   --ease-in: var(--motion-ease-in);
   --ease-in-out: var(--motion-ease-move);
@@ -312,7 +313,7 @@
    * under reduced motion they don't run at all; unguarded, they keep the fade and lose the travel
    * and the scale, which go to zero in tokens.css.
    */
-  /* DS5: --animate-*: initial; */
+  --animate-*: initial;
   --animate-pop-in: pop-in var(--motion-fast) var(--motion-ease-enter) both;
   --animate-pop-out: pop-out var(--motion-exit) var(--motion-ease-exit) both;
   --animate-slide-in-top:
@@ -423,105 +424,72 @@
 }
 
 /*
- * LEGACY BRIDGE (DS2 → DS5) -------------------------------------------------------------------
- *
- * The shadcn names the app writes today, kept painting what they paint at 6f6ebb93 while DS4
- * sweeps them away. Utilities point at the old variable names, and the old names alias the
- * tokens, so a local override still works (.needs-you-card redefines --muted-foreground), and
- * so does every raw var(--foreground) in TypeScript and app CSS. legacy-bridge.test.ts resolves
- * each old name, in both themes, to master's value; it goes when the bridge goes.
- *
- * DS5: delete from here to the end of the file, then add the vendor bridge below.
+ * A hand on everything you click (DS-35, MAR-3618), set here once, as accent.'s theme does, so no
+ * part or feature writes cursor-pointer: buttons (Button, IconButton, a Select's trigger, a
+ * Toggle, anything with the role), links, the toggles (Checkbox, RadioGroup, Switch, a tab), a
+ * label around a toggle or a file input, a <summary>, a native select, a slider. What's disabled
+ * keeps the arrow. Menu items and a list's options keep it too, as a native menu does, and so does
+ * a label for a text field: clicking it only focuses the field. A class still wins (cursor-default,
+ * cursor-col-resize, cursor-not-allowed): this is the base layer, and :where() weighs nothing.
  */
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-border: var(--border);
-  --color-control-border: var(--control-border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-}
-
-:root {
-  --background: var(--canvas);
-  --foreground: var(--ink);
-  --card: var(--surface);
-  --card-foreground: var(--ink);
-  --popover: var(--raised);
-  --popover-foreground: var(--ink);
-  --primary: var(--strong);
-  --primary-foreground: var(--on-strong);
-  --secondary: var(--surface-muted);
-  /* Equal to --strong in both themes (0.205 / 0.88); DS4 writes text-ink, a hair darker in light */
-  --secondary-foreground: var(--strong);
-  --muted: var(--surface-muted);
-  --muted-foreground: var(--ink-muted);
-  --accent: var(--highlight);
-  --accent-foreground: var(--on-highlight);
-  --destructive: var(--danger-solid);
-  --destructive-foreground: var(--on-danger);
-  /*
-   * Today's warning fill, frozen: light is 0.78 in both themes, which --warning-solid deepens for
-   * a 3:1 dot. bg-warning/10 and border-warning/20…/40 keep today's light look until DS4 moves
-   * them to -soft and -line.
-   */
-  --warning: light-dark(oklch(0.78 0.16 75), oklch(0.78 0.16 75));
-  --warning-foreground: var(--warning-ink);
-  --border: var(--line);
-  --control-border: var(--control-line);
-  --input: var(--control-fill);
-  --ring: var(--focus);
-  --sidebar: var(--surface-sunken);
+@layer base {
+  :where(
+    button,
+    [role='button'],
+    [role='checkbox'],
+    [role='radio'],
+    [role='switch'],
+    [role='tab'],
+    a[href],
+    summary,
+    select,
+    input:is(
+      [type='checkbox'],
+      [type='radio'],
+      [type='file'],
+      [type='submit'],
+      [type='button'],
+      [type='reset']
+    ),
+    label:has(
+      input:is([type='checkbox'], [type='radio'], [type='file']),
+      [role='checkbox'],
+      [role='radio'],
+      [role='switch']
+    ),
+    [role='slider']
+  ):not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    cursor: pointer;
+  }
 }
 
 /*
- * VENDOR BRIDGE (from DS5) ---------------------------------------------------------------------
+ * VENDOR BRIDGE -------------------------------------------------------------------------------
  *
  * Streamdown's bundle (scanned by global.css's @source) writes shadcn names and a few palette
  * shades of its own: bg-background, text-foreground, bg-muted, text-muted-foreground,
  * border-border, divide-border, bg-sidebar, border-sidebar, bg-primary, text-primary,
  * text-primary-foreground, text-red-600/700/800, bg-red-50/100 (Mermaid's error box), bg-black/10
- * (an image's hover veil). When DS5 resets the palette and deletes the legacy bridge, these come
- * back here: the shadcn names pointed straight at tokens, the palette shades at Tailwind's own
- * values so Streamdown looks as it does today. They are Streamdown's names only: apps/ and
- * packages/ui/src write the tokens.
- *
- * DS5: uncomment.
- *
- * @theme inline {
- *   --color-background: var(--canvas);
- *   --color-foreground: var(--ink);
- *   --color-muted: var(--surface-muted);
- *   --color-muted-foreground: var(--ink-muted);
- *   --color-border: var(--line);
- *   --color-sidebar: var(--surface-sunken);
- *   --color-primary: var(--strong);
- *   --color-primary-foreground: var(--on-strong);
- *   --color-red-50: oklch(97.1% 0.013 17.38);
- *   --color-red-100: oklch(93.6% 0.032 17.717);
- *   --color-red-600: oklch(57.7% 0.245 27.325);
- *   --color-red-700: oklch(50.5% 0.213 27.518);
- *   --color-red-800: oklch(44.4% 0.177 26.899);
- *   --color-black: #000;
- * }
+ * (an image's hover veil). The shadcn names point straight at tokens, the palette shades at
+ * Tailwind's own values, so Streamdown looks as it did. They are Streamdown's names only:
+ * apps/ and packages/ui/src write the tokens.
  */
+@theme inline {
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-muted: var(--surface-muted);
+  --color-muted-foreground: var(--ink-muted);
+  --color-border: var(--line);
+  --color-sidebar: var(--surface-sunken);
+  --color-primary: var(--strong);
+  --color-primary-foreground: var(--on-strong);
+  --color-red-50: oklch(97.1% 0.013 17.38);
+  --color-red-100: oklch(93.6% 0.032 17.717);
+  --color-red-600: oklch(57.7% 0.245 27.325);
+  --color-red-700: oklch(50.5% 0.213 27.518);
+  --color-red-800: oklch(44.4% 0.177 26.899);
+  --color-black: #000;
+}
 
 /*
  * Electron drag regions as classes (MAR-3616). A window strip is `app-drag`;

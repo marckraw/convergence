@@ -42,7 +42,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-72 bg-background pt-3 text-foreground">
+      <div className="w-72 bg-canvas pt-3 text-ink">
         <Story />
       </div>
     ),

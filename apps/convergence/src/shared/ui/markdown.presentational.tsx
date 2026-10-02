@@ -142,7 +142,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
       <h3
         className={cn(
           isCompact
-            ? 'mt-3 mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+            ? 'mt-3 mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-muted'
             : 'mt-4 mb-2 text-base font-semibold',
           className,
         )}
@@ -177,7 +177,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
     blockquote: ({ className, ...props }) => (
       <blockquote
         className={cn(
-          'my-4 border-l-2 border-border bg-muted/30 pl-4 italic text-muted-foreground',
+          'my-4 border-l-2 border-line bg-surface-muted/30 pl-4 italic text-ink-muted',
           isCompact ? 'py-2 text-xs leading-6' : 'py-2.5 text-sm leading-7',
           className,
         )}
@@ -185,7 +185,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
       />
     ),
     hr: ({ className, ...props }) => (
-      <hr className={cn('my-4 border-border', className)} {...props} />
+      <hr className={cn('my-4 border-line', className)} {...props} />
     ),
     // Links leave for the browser, as every link in a transcript does; no
     // glyph, so prose reads as prose.
@@ -198,7 +198,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
       />
     ),
     table: ({ className, children, ...props }) => (
-      <div className="app-scrollbar my-4 overflow-x-auto rounded-xl border border-border bg-background/50">
+      <div className="app-scrollbar my-4 overflow-x-auto rounded-xl border border-line bg-canvas/50">
         <table
           className={cn(
             'min-w-full border-collapse text-left',
@@ -212,12 +212,12 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
       </div>
     ),
     thead: ({ className, ...props }) => (
-      <thead className={cn('bg-muted/40', className)} {...props} />
+      <thead className={cn('bg-surface-muted/40', className)} {...props} />
     ),
     th: ({ className, ...props }) => (
       <th
         className={cn(
-          'border-b border-border px-3 py-2 font-medium text-foreground',
+          'border-b border-line px-3 py-2 font-medium text-ink',
           className,
         )}
         {...props}
@@ -226,7 +226,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
     td: ({ className, ...props }) => (
       <td
         className={cn(
-          'border-b border-border/70 px-3 py-2 align-top text-muted-foreground',
+          'border-b border-line-soft px-3 py-2 align-top text-ink-muted',
           className,
         )}
         {...props}
@@ -235,7 +235,7 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
     inlineCode: ({ className, children, ...props }) => (
       <code
         className={cn(
-          'rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 font-mono text-code text-foreground',
+          'rounded-md border border-line-soft bg-canvas/80 px-1.5 py-0.5 font-mono text-code text-ink',
           className,
         )}
         {...props}

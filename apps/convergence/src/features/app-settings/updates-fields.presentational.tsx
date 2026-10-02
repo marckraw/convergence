@@ -37,7 +37,7 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 text-sm">
-        <span className="text-muted-foreground">Current version</span>
+        <span className="text-ink-muted">Current version</span>
         <span className="font-mono">{currentVersion ?? 'unknown'}</span>
       </div>
 
@@ -92,7 +92,7 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
         )}
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-ink-muted">
         {isDev
           ? 'Auto-updates are disabled in development builds.'
           : describeStatus(status, currentVersion, now)}

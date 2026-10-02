@@ -87,7 +87,7 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
           searchPlaceholder="Search accounts..."
           emptyMessage="No matching accounts."
           variant="ghost"
-          className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="gap-1.5 px-2 text-xs text-ink-muted hover:text-ink"
           open={open}
           onOpenChange={onOpenChange}
         />

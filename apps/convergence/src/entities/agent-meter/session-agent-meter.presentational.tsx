@@ -23,10 +23,8 @@ export function SessionAgentMeter({
         data-testid="session-agent-meter"
       >
         <span className="w-4 shrink-0" />
-        <span className="w-22 shrink-0 text-muted-foreground">
-          CPU / memory
-        </span>
-        <span className="min-w-0 flex-1 truncate text-right tabular-nums text-foreground">
+        <span className="w-22 shrink-0 text-ink-muted">CPU / memory</span>
+        <span className="min-w-0 flex-1 truncate text-right tabular-nums text-ink">
           {formatSessionMeter(row ?? undefined, remote)}
         </span>
       </div>

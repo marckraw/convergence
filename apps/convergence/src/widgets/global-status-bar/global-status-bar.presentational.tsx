@@ -92,9 +92,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
               <div className={aggregateChipClass}>
                 <CircleDot className="h-3 w-3 text-info-ink" />
                 <span>
-                  <span className="font-medium text-foreground">
-                    {runningCount}
-                  </span>{' '}
+                  <span className="font-medium text-ink">{runningCount}</span>{' '}
                   running
                 </span>
               </div>
@@ -108,18 +106,14 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                 <CircleAlert
                   className={cn(
                     'h-3 w-3',
-                    attentionCount > 0
-                      ? 'text-warning-ink'
-                      : 'text-muted-foreground',
+                    attentionCount > 0 ? 'text-warning-ink' : 'text-ink-muted',
                   )}
                 />
                 <span>
                   <span
                     className={cn(
                       'font-medium',
-                      attentionCount > 0
-                        ? 'text-warning-ink'
-                        : 'text-foreground',
+                      attentionCount > 0 ? 'text-warning-ink' : 'text-ink',
                     )}
                   >
                     {attentionCount}
@@ -170,7 +164,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                   <span className="max-w-32 truncate">
                     {project.projectName}
                   </span>
-                  <span className="text-muted-foreground">
+                  <span className="text-ink-muted">
                     {project.running.length > 0 && (
                       <span>{project.running.length}▸</span>
                     )}
@@ -208,9 +202,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
               <CircleAlert className="h-3 w-3 text-danger-ink" />
             )}
             <span className="max-w-28 truncate">{recency.session.name}</span>
-            <span className="text-muted-foreground">
-              · {recency.projectName}
-            </span>
+            <span className="text-ink-muted">· {recency.projectName}</span>
           </Button>
         </Tooltip>
       ) : (

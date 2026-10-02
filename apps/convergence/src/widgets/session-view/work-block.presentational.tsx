@@ -43,16 +43,16 @@ export const WorkBlockRow: FC<WorkBlockRowProps> = ({
         aria-expanded={open}
         onClick={onToggle}
         size="lg"
-        className="h-auto w-full min-w-0 justify-start rounded-md border border-border/60 bg-muted/20 px-2 py-1.5 text-left font-normal hover:bg-muted/40"
+        className="h-auto w-full min-w-0 justify-start rounded-md border border-line-soft bg-surface-muted/20 px-2 py-1.5 text-left font-normal hover:bg-surface-muted/40"
       >
         <ChevronRight
           className={cn(
-            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+            'h-3.5 w-3.5 shrink-0 text-ink-muted transition-transform',
             open && 'rotate-90',
           )}
         />
-        <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+        <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">
           {label}
         </span>
       </Button>

@@ -14,7 +14,7 @@ export const NotificationsOnboardingCard: FC<OnboardingCardProps> = ({
     role="region"
     aria-label="Notifications onboarding"
     surface="raised"
-    className="mx-4 mt-3 flex flex-col gap-2 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between"
+    className="mx-4 mt-3 flex flex-col gap-2 text-sm shadow-control sm:flex-row sm:items-center sm:justify-between"
   >
     <p>
       Convergence can notify you when agents finish or need input. Try a test

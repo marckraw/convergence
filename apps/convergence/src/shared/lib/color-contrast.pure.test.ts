@@ -56,7 +56,7 @@ describe('color contrast (WCAG 2.x)', () => {
       b: 0,
       a: 0.5,
     })
-    expect(() => parseCssColor('var(--card)')).toThrow(/Unsupported/)
+    expect(() => parseCssColor('var(--surface)')).toThrow(/Unsupported/)
   })
 
   it('maps the oklch lightness axis onto sRGB black, white and gray', () => {

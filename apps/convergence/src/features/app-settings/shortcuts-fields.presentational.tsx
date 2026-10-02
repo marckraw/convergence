@@ -30,7 +30,7 @@ export const ShortcutsFields: FC<ShortcutsFieldsProps> = ({
     >
       <div className="space-y-2">
         <div
-          className="flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-3 font-mono text-sm"
+          className="flex min-h-10 items-center justify-center rounded-md border border-line bg-canvas px-3 font-mono text-sm"
           aria-live="polite"
         >
           {isRecording ? 'Press a shortcut…' : commandCenterLabel}

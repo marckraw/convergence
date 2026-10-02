@@ -94,7 +94,7 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
           ))}
           {merged.length > 0 ? (
             <details className="space-y-2">
-              <summary className="min-h-10 cursor-pointer text-sm font-medium">
+              <summary className="min-h-10 text-sm font-medium">
                 Already merged · {merged.length}
               </summary>
               {merged.map((row) => (

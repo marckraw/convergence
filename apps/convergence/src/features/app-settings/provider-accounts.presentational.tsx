@@ -422,7 +422,7 @@ export function ProviderAccountsFields({
                   }
                 >
                   {deletesPrivateHistory && removalLayout ? (
-                    <label className="flex cursor-pointer items-start gap-2">
+                    <label className="flex items-start gap-2">
                       <Checkbox
                         checked={privateDeletionAcknowledged}
                         disabled={isBusy}

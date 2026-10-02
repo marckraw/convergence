@@ -111,7 +111,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
                 const checked = selectedModelIdsSet.has(model.id)
                 return (
                   <li key={model.id}>
-                    <label className="flex min-h-14 cursor-pointer items-center gap-3 px-3 py-2">
+                    <label className="flex min-h-14 items-center gap-3 px-3 py-2">
                       <Checkbox
                         checked={checked}
                         onCheckedChange={(next) =>

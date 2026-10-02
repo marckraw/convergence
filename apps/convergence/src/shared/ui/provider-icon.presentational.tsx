@@ -45,7 +45,7 @@ export function ProviderIcon({
       <span
         aria-hidden="true"
         className={cn(
-          'inline-flex size-4 shrink-0 items-center justify-center text-foreground',
+          'inline-flex size-4 shrink-0 items-center justify-center text-ink',
           className,
         )}
       >

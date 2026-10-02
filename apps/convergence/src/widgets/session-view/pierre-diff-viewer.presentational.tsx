@@ -107,7 +107,7 @@ export const PierreDiffViewerView = <TAnnotation,>({
 
   if (!file) {
     return (
-      <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">
+      <div className="flex h-full items-center justify-center p-3 text-center text-xs text-ink-muted">
         {emptyMessage}
       </div>
     )
@@ -125,7 +125,7 @@ export const PierreDiffViewerView = <TAnnotation,>({
           status,
           loading,
         })}
-        <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
+        <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-canvas/60">
           <EmptyState
             state="loading"
             variant="plain"
@@ -173,7 +173,7 @@ export const PierreDiffViewerView = <TAnnotation,>({
       })
     : null
   const fallbackDiffContent = (
-    <div className="p-3 font-mono text-2xs text-muted-foreground">
+    <div className="p-3 font-mono text-2xs text-ink-muted">
       {diff.trim() || '(no diff available)'}
     </div>
   )
@@ -203,7 +203,7 @@ export const PierreDiffViewerView = <TAnnotation,>({
       {performancePlan.virtualize && diffContent ? (
         diffContent
       ) : (
-        <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
+        <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-canvas/60">
           {diffContent ?? fallbackDiffContent}
         </div>
       )}
@@ -312,7 +312,7 @@ function renderPierreDiffPerformanceShell({
 
   return (
     <Virtualizer
-      className="app-scrollbar h-full min-h-0 overflow-auto bg-background/60"
+      className="app-scrollbar h-full min-h-0 overflow-auto bg-canvas/60"
       contentClassName="min-h-full"
       config={{ overscrollSize: 800, intersectionObserverMargin: 1200 }}
     >

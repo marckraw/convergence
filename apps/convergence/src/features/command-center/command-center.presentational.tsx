@@ -80,9 +80,7 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
       >
         <span className="truncate">{primary}</span>
         {secondary ? (
-          <span className="truncate text-xs text-muted-foreground">
-            {secondary}
-          </span>
+          <span className="truncate text-xs text-ink-muted">{secondary}</span>
         ) : null}
       </ListboxOption>
     )

@@ -201,7 +201,7 @@ export const SidebarConversations = memo(function SidebarConversations({
         />
 
         {(cardGroups.length > 0 || terminalIdleNotices.length > 0) && (
-          <div className="mx-3 mb-3 border-t border-border/50" />
+          <div className="mx-3 mb-3 border-t border-line/50" />
         )}
 
         {activeSurface === 'chat' ? (
@@ -267,9 +267,7 @@ export const SidebarConversations = memo(function SidebarConversations({
               />
             ) : (
               <div className="px-3 text-center">
-                <p className="mb-3 text-sm text-muted-foreground">
-                  No project loaded
-                </p>
+                <p className="mb-3 text-sm text-ink-muted">No project loaded</p>
               </div>
             )}
           </>

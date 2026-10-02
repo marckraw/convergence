@@ -85,7 +85,7 @@ describe('ConversationItemView', () => {
       )?.className,
     }).toEqual({
       label: '↳ Inspect fixture (Explore)',
-      details: 'mt-1 break-words text-xs text-muted-foreground',
+      details: 'mt-1 break-words text-xs text-ink-muted',
     })
   })
   it('renders the attributed agent label exactly — drop the label or omit description/type turns red', () => {

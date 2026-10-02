@@ -371,5 +371,5 @@ it('MAR-3372 R4 a fold never hides an ask: line 2 opens with it in its tone and 
   const working = part('Working')
   expect(working.line).toHaveTextContent(/^longest 3m 0s · Project$/)
   expect(working.title.className).toBe('')
-  expect(working.heading).toHaveClass('text-muted-foreground')
+  expect(working.heading).toHaveClass('text-ink-muted')
 })
