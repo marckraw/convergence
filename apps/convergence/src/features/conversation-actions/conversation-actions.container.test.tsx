@@ -789,7 +789,7 @@ describe('ConversationActionsContainer', () => {
         'Routines',
         'Run the drill',
         'Compact',
-        'Fork',
+        'Fork…',
         'Hand off to another account',
       ])
     })
@@ -820,7 +820,7 @@ describe('ConversationActionsContainer', () => {
     it('opens the existing fork dialog', async () => {
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Routines')
-      fireEvent.click(within(list).getByRole('menuitem', { name: 'Fork' }))
+      fireEvent.click(within(list).getByRole('menuitem', { name: 'Fork…' }))
       expect(openDialogMock).toHaveBeenCalledWith('session-fork', {
         parentSessionId: 'session-1',
       })

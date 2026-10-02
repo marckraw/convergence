@@ -1,18 +1,16 @@
 import { useProjectOpenApps } from './use-project-open-apps'
-import {
-  Button,
-  Menu,
-  MenuContent,
-  MenuItem,
-  MenuTrigger,
-  Tooltip,
-} from '@convergence/ui'
-import { ChevronDown, Code2, Folder } from 'lucide-react'
+import { ProjectOpenMenu, projectOpenNote } from '@/entities/project-open'
 
 interface ProjectOpenMenuContainerProps {
   targetPath: string | null
 }
 
+/**
+ * The session header's Open menu: the project's path in an editor or in
+ * Finder, the apps read once for as long as it lives (`useProjectOpenApps`).
+ * With nothing to open, the trigger stays and the list says why (NAV-25),
+ * as the Project panel's section does.
+ */
 export function ProjectOpenMenuContainer({
   targetPath,
 }: ProjectOpenMenuContainerProps) {
@@ -20,38 +18,15 @@ export function ProjectOpenMenuContainer({
     useProjectOpenApps(targetPath)
 
   return (
-    <Menu>
-      <Tooltip label="Open project">
-        <MenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              disabledReason={disabledReason ?? undefined}
-              aria-label="Open project"
-              size="sm"
-            />
-          }
-        >
-          <Code2 className="size-3.5" />
-          Open
-          <ChevronDown className="size-3" />
-        </MenuTrigger>
-      </Tooltip>
-      <MenuContent align="end" className="min-w-40">
-        {loading ? (
-          <MenuItem disabled>Detecting apps…</MenuItem>
-        ) : (
-          apps.map((app) => {
-            const Icon = app.kind === 'file-manager' ? Folder : Code2
-            return (
-              <MenuItem key={app.id} onClick={() => openIn(app)}>
-                <Icon className="size-3.5" />
-                {app.label}
-              </MenuItem>
-            )
-          })
-        )}
-      </MenuContent>
-    </Menu>
+    <ProjectOpenMenu
+      apps={apps}
+      note={projectOpenNote({
+        apps,
+        loading,
+        unavailableReason: disabledReason,
+      })}
+      onOpen={openIn}
+      label="Open project"
+    />
   )
 }

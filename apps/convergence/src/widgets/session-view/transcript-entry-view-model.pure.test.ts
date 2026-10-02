@@ -265,7 +265,7 @@ describe('buildTranscriptEntryViewModel', () => {
     expect(model.kind).toBe('tool-result')
     expect(model.copyText).toBe(outputText)
     expect(model.toolPreview).toHaveLength(120)
-    expect(model.toolPreview?.endsWith('...')).toBe(true)
+    expect(model.toolPreview?.endsWith('…')).toBe(true)
   })
 
   it('labels Antigravity trajectory tool cards as post-run telemetry', () => {

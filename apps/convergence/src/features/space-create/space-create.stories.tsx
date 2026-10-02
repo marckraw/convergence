@@ -126,6 +126,26 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
 }
 
+/**
+ * From a session (ruling 4): Session Space's "Create Space…" opens this
+ * dialog with the session's name, and says the session becomes the seed.
+ */
+export const FromSession: Story = {
+  name: 'From a session',
+  args: { seeded: true, title: 'Refactor auth', brief: '' },
+  play: async () => {
+    const dialog = await openDialog()
+    await expect(within(dialog).getByLabelText('Title')).toHaveValue(
+      'Refactor auth',
+    )
+    await expect(
+      within(dialog).getByText(
+        'Create a durable Chat context, with this session as its seed attempt.',
+      ),
+    ).toBeVisible()
+  },
+}
+
 /** Reduced motion: the dialog arrives at once. */
 export const ReducedMotion: Story = {
   globals: { motion: 'reduced' },

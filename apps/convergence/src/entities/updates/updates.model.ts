@@ -112,7 +112,9 @@ export const useUpdatesStore = create<UpdatesStore>((set, get) => ({
     } catch (err) {
       set({
         error:
-          err instanceof Error ? err.message : 'Could not open release notes',
+          err instanceof Error
+            ? err.message
+            : 'Couldn’t open the release notes.',
       })
     }
   },
@@ -124,7 +126,9 @@ export const useUpdatesStore = create<UpdatesStore>((set, get) => ({
     } catch (err) {
       set({
         error:
-          err instanceof Error ? err.message : 'Could not save update prefs',
+          err instanceof Error
+            ? err.message
+            : 'Couldn’t save the update preferences.',
       })
     }
   },

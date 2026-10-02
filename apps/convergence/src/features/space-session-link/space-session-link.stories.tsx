@@ -54,16 +54,13 @@ const meta = {
         space: spaces[0] ?? null,
       },
     ],
-    createTitle: '',
     selectedSpaceId: 'space-loom',
     selectedRole: 'review',
     isLoading: false,
-    isCreating: false,
     isLinking: false,
     isDetaching: false,
     error: null,
     onOpenChange: fn(),
-    onCreateTitleChange: fn(),
     onSelectedSpaceChange: fn(),
     onSelectedRoleChange: fn(),
     onCreateFromSession: fn(),
@@ -83,14 +80,12 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
-    await userEvent.type(
-      within(dialog).getByRole('textbox', { name: 'Space title from session' }),
-      'D',
-    )
-    await expect(args.onCreateTitleChange).toHaveBeenCalledWith('D')
+    // A Space is made in the New Space dialog, not typed in here (ruling 4).
     await expect(
-      within(dialog).getByRole('button', { name: 'Create' }),
-    ).toBeDisabled()
+      within(dialog).queryByRole('textbox', {
+        name: 'Space title from session',
+      }),
+    ).toBeNull()
 
     await userEvent.click(
       within(dialog).getByRole('combobox', { name: 'Attempt role' }),
@@ -136,13 +131,12 @@ export const ChooseSpace: Story = {
   },
 }
 
-/** A title typed: Create makes the Space from this session. */
+/** Create Space… opens the New Space dialog, starting from this session (ruling 4). */
 export const Create: Story = {
-  args: { createTitle: 'Stories safety net' },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Create' }),
+      within(dialog).getByRole('button', { name: 'Create Space…' }),
     )
     await expect(args.onCreateFromSession).toHaveBeenCalledOnce()
   },
@@ -185,8 +179,6 @@ export const Busy: Story = {
     linkedSpaces: [],
     isLoading: true,
     isLinking: true,
-    isCreating: true,
-    createTitle: 'Stories safety net',
   },
   play: async () => {
     const dialog = await openDialog()
@@ -195,9 +187,6 @@ export const Busy: Story = {
     )
     await expect(
       within(dialog).getByRole('button', { name: 'Attach' }),
-    ).toBeDisabled()
-    await expect(
-      within(dialog).getByRole('button', { name: 'Create' }),
     ).toBeDisabled()
   },
 }

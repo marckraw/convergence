@@ -1,6 +1,6 @@
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
-import { useState, useCallback, useEffect } from 'react'
-import type { FC, KeyboardEvent } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import type { FC, FocusEvent, KeyboardEvent } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
 import { ChatSurface } from '@/widgets/chat-surface'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
@@ -240,6 +240,34 @@ export const AppShell: FC<AppShellProps> = ({
     [sidebarCollapsed, sidebarPeekOpen],
   )
 
+  /**
+   * A peeked sidebar goes away when the focus leaves it for the page, as it
+   * does when the pointer leaves (NAV-27). React sends focus events through
+   * portals, so a menu or a dialog the panel opened is still inside it: that
+   * focus arrives here just after the panel's blur, and cancels the close.
+   * A focus that leaves for nowhere (another window, an element that went
+   * away) closes nothing.
+   */
+  const peekBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelPeekBlur = useCallback(() => {
+    if (peekBlurTimer.current === null) return
+    clearTimeout(peekBlurTimer.current)
+    peekBlurTimer.current = null
+  }, [])
+  const handleSidebarBlur = useCallback(
+    (event: FocusEvent<HTMLElement>) => {
+      if (!sidebarCollapsed || !sidebarPeekOpen) return
+      if (event.relatedTarget === null) return
+      cancelPeekBlur()
+      peekBlurTimer.current = setTimeout(() => {
+        peekBlurTimer.current = null
+        setSidebarPeekOpen(false)
+      }, 0)
+    },
+    [cancelPeekBlur, sidebarCollapsed, sidebarPeekOpen],
+  )
+  useEffect(() => cancelPeekBlur, [cancelPeekBlur])
+
   if (loading) {
     return (
       <div className="app-chrome flex h-screen flex-col text-ink">
@@ -287,6 +315,8 @@ export const AppShell: FC<AppShellProps> = ({
             }}
             onMouseLeave={handleSidebarMouseLeave}
             onKeyDown={handleSidebarKeyDown}
+            onBlur={handleSidebarBlur}
+            onFocus={cancelPeekBlur}
           >
             <Sidebar
               activeSurface={activeSurface}

@@ -216,24 +216,19 @@ describe('SpaceWorkboardDialogContainer', () => {
     ).toBeInTheDocument()
   })
 
-  it('creates and selects a Space', async () => {
+  it('creates a Space in the New Space dialog, which hands back to the board (ruling 4)', async () => {
     mockElectronAPI.space.list.mockResolvedValue([])
     render(<SpaceWorkboardDialogContainer />)
 
     openSpaces()
-    fireEvent.change(screen.getByLabelText(/new space title/i), {
-      target: { value: 'Agent-native work tracking' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /create space/i }))
+    expect(screen.queryByLabelText(/new space title/i)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Create Space…' }))
 
-    await waitFor(() => {
-      expect(mockElectronAPI.space.create).toHaveBeenCalledWith({
-        title: 'Agent-native work tracking',
-      })
+    expect(useDialogStore.getState()).toMatchObject({
+      openDialog: 'space-create',
+      payload: { newSpace: { returnTo: 'space-workboard' } },
     })
-    expect(
-      screen.getByDisplayValue('Agent-native work tracking'),
-    ).toBeInTheDocument()
+    expect(mockElectronAPI.space.create).not.toHaveBeenCalled()
   })
 
   it('saves stable Space fields', async () => {

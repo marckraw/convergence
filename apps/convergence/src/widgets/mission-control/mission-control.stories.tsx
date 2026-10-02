@@ -15,7 +15,6 @@ const filters = (
       'host-unreachable': 0,
     }}
     onToggle={fn()}
-    onClear={fn()}
   />
 )
 

@@ -92,19 +92,19 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
         ) : null}
         <MenuItem onClick={() => openDialog('space-workboard')}>
           <GitBranch className="h-3.5 w-3.5" />
-          <span>Spaces</span>
+          <span>Spaces…</span>
         </MenuItem>
         <MenuItem
           disabledReason={projectSettingsReason}
           onClick={() => openDialog('project-settings')}
         >
           <Settings2 className="h-3.5 w-3.5" />
-          <span>Project Settings</span>
+          <span>Project settings…</span>
         </MenuItem>
         <MenuSeparator />
         <MenuItem onClick={() => openDialog('providers')}>
           <Bot className="h-3.5 w-3.5" />
-          <span>Providers</span>
+          <span>Providers…</span>
         </MenuItem>
         <MenuItem
           disabledReason={
@@ -115,26 +115,26 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
           onClick={() => openDialog('mcp-servers')}
         >
           <Cable className="h-3.5 w-3.5" />
-          <span>MCP Servers</span>
+          <span>MCP servers…</span>
         </MenuItem>
         <MenuItem
           disabledReason={hasActiveProject ? undefined : NEEDS_A_PROJECT}
           onClick={() => openDialog('skills-browser')}
         >
           <Library className="h-3.5 w-3.5" />
-          <span>Skills</span>
+          <span>Skills…</span>
         </MenuItem>
         <MenuItem
           disabledReason={hasActiveProject ? undefined : NEEDS_A_PROJECT}
           onClick={() => openDialog('prompt-library')}
         >
           <BookOpenText className="h-3.5 w-3.5" />
-          <span>Prompt Library</span>
+          <span>Prompt library…</span>
         </MenuItem>
         <MenuSeparator />
         <MenuItem onClick={() => openDialog('release-notes')}>
           <Info className="h-3.5 w-3.5" />
-          <span>{RELEASE_NOTES_TITLE}</span>
+          <span>{RELEASE_NOTES_TITLE}…</span>
         </MenuItem>
       </MenuContent>
     </Menu>

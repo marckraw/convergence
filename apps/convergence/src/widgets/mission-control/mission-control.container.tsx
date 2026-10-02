@@ -7,9 +7,11 @@ import type { SessionSummary } from '@/entities/session'
 import {
   SessionCrewChips,
   SessionFacetPicker,
+  SessionFiltersClear,
   SessionStateChips,
   groupSessionCardsByCrew,
   isEmptySessionCardFilter,
+  narrowsByFacet,
   useMissionControlCards,
   useMissionControlView,
 } from '@/features/mission-control'
@@ -31,13 +33,12 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     setOrder,
     setMode,
     toggleState,
-    clearStates,
     toggleProject,
     clearProjects,
     toggleProvider,
     clearProviders,
     toggleCrew,
-    clearCrews,
+    clearFacets,
     clearFilter,
   } = useMissionControlView()
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
@@ -110,7 +111,6 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             selected={filter.states}
             counts={stateCounts}
             onToggle={toggleState}
-            onClear={clearStates}
           />
           <SessionFacetPicker
             label="Filter by project"
@@ -136,8 +136,11 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             options={crewFacets}
             selected={filter.crewIds}
             onToggle={toggleCrew}
-            onClear={clearCrews}
           />
+          {/* One Clear for the whole row, after it (MC-7). */}
+          {narrowsByFacet(filter) ? (
+            <SessionFiltersClear onClear={clearFacets} />
+          ) : null}
         </>
       }
     >

@@ -177,7 +177,7 @@ describe('GlobalStatusBar container', () => {
     renderBar()
 
     expect(screen.getByText('running').textContent).toBeTruthy()
-    expect(screen.getByText('need you').textContent).toBeTruthy()
+    expect(screen.getByText('needs you').textContent).toBeTruthy()
     expect(
       screen.getByTestId('global-status-chip-project-one'),
     ).toBeInTheDocument()

@@ -20,7 +20,7 @@ Every rule is an **error** (DS5, MAR-3618): DS4's sweep brought each one to zero
 and then it turned red ([below](#severity-and-exceptions)). `npm run chaperone -- check` fails on
 any of them, and so do `npm run agent:pre-push` and CI.
 
-There are five kinds:
+There are six kinds:
 
 1. [Tokens and motion](#1-tokens-and-motion): a value or a colour typed by hand instead of a
    token.
@@ -33,6 +33,7 @@ There are five kinds:
    and every story fails on axe.
 5. [Two guards](#5-the-third-copy-and-the-pasted-component): a class string's third copy, and a
    pasted component.
+6. [Words](#6-words): three ASCII dots where R10 writes the ellipsis character.
 
 "The app" below is `apps/convergence/src/**/*.{ts,tsx}`. Tests (`*.test.{ts,tsx}`) are left out
 everywhere, since a test may name a pattern to check it's gone; stories are not, since they're
@@ -278,6 +279,22 @@ which became one hook (`useParallelWorkPanel`, with `useAnswerInput` in the sess
 allowlist keeps one entry: the two workspaces' jsdom test setups, which may not import each other.
 An allowlist entry that stops matching is reported, so the lists stay true.
 
+## 6. Words
+
+`no-ascii-ellipsis`, a `regex` rule over the app and `packages/ui/src` (tests left out): three
+ASCII dots typed in words, such as "Loading...", a placeholder's "Search options..." or a name cut
+short with `+ '...'`. R10 writes the ellipsis character, `…` (U+2026), on busy labels,
+placeholders, cut-short text and every item or button that opens a dialog or a confirmation.
+
+It looks only where words are: three dots right after a letter, a digit, `)` or `}` (the end of a
+template's `${…}`), or right after a quote or `>` (a string or JSX text that starts with them).
+Code's spread (`...props`, `[...items]`, `{...rest}`) always follows a bracket, a comma or a space,
+so it is never reported, and a comment line is skipped as in every regex rule. What it can't see is
+review's: a space before the dots (`'Loading ...'`), and words that reach the screen from
+`apps/convergence/electron` (an error's message), which the renderer's rules don't read. DS6 swept
+21 to zero before it turned on, as an error (MAR-3608). Its canary is
+`canaries/chaperone/apps/convergence/src/widgets/sidebar/rename-session.container.tsx`.
+
 ## Rules not ported, and why
 
 - **`use-external-link-props`.** accent. has a props helper, `externalLinkProps(href)`, and the
@@ -344,6 +361,7 @@ its new pattern is taken out.
 | `stories-titled-by-group`    | `design-system-drift.json`      | error    |
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
 | `use-notify`                 | `design-system-drift.json`      | error    |
+| `no-ascii-ellipsis`          | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
 | `use-timestamp`              | `design-system-drift.json`      | error    |

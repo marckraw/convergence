@@ -30,6 +30,12 @@ export {
   cardStateToneKeys,
   cardStateToneName,
 } from './needs-you-card-state.styles'
+export {
+  currentSectionTitle,
+  NEEDS_YOU,
+  needsYouCount,
+  needsYouVerb,
+} from './needs-you-words.pure'
 export type {
   FoldAsk,
   FoldAskState,

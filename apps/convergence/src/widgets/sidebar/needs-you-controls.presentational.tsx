@@ -15,6 +15,7 @@ import {
   buildFeedFilterSummary,
   feedOrders,
   feedOrderLabels,
+  NEEDS_YOU,
   toggleFeedChoice,
   type ActivityView,
   type FeedView,
@@ -72,13 +73,13 @@ export function NeedsYouControls({
     <div
       role="group"
       className="space-y-2.5 border-b border-line-soft pb-3 text-2xs"
-      aria-label="Activity controls"
+      aria-label={`${NEEDS_YOU} controls`}
     >
       <div className="flex h-control-sm items-center justify-between gap-2">
         {/* The feed's head, the kit's SectionHeader (NAV-12). */}
         <SectionHeader
           className="flex-1"
-          label="Activity"
+          label={NEEDS_YOU}
           count={
             <span aria-label={`${result.shown} of ${result.total} cards shown`}>
               {result.filtered

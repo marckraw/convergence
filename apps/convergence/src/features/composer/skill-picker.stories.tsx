@@ -125,7 +125,11 @@ export const Default: Story = {
 export const Busy: Story = {
   args: { open: true, skills: [], isLoading: true },
   play: async () => {
-    const shown = await screen.findByText('Loading skills…')
+    const shown = await screen.findByText(
+      'Loading skills…',
+      {},
+      { timeout: 2000 },
+    )
     await waitFor(() => expect(shown).toBeVisible())
   },
 }

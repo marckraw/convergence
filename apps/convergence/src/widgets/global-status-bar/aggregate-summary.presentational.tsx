@@ -3,6 +3,7 @@ import {
   summarizeAttentionRequests,
   type ProjectActivity,
 } from '@/entities/session'
+import { needsYouCount } from '@/features/needs-you'
 
 interface AggregateSummaryProps {
   byProject: ProjectActivity[]
@@ -27,7 +28,7 @@ export const AggregateSummary: FC<AggregateSummaryProps> = ({
             {project.running.length} running ·{' '}
             {project.needsAttention.length > 0
               ? summarizeAttentionRequests(project.needsAttention)
-              : '0 need you'}{' '}
+              : needsYouCount(0)}{' '}
             · {project.providerIds.map(providerLabel).join(', ')}
           </p>
         </div>

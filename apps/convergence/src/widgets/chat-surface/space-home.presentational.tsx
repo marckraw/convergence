@@ -193,12 +193,12 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
             ) : (
               <Button variant="quiet" onClick={onArchiveSpace}>
                 <Archive aria-hidden />
-                Archive Space
+                Archive Space…
               </Button>
             )}
             <Button variant="danger-quiet" onClick={onDeleteSpace}>
               <Trash2 aria-hidden />
-              Delete Space
+              Delete Space…
             </Button>
           </>
         }

@@ -313,7 +313,7 @@ function getToolPreview(value: string): string {
     return singleLine
   }
 
-  return `${singleLine.slice(0, 117)}...`
+  return `${singleLine.slice(0, 119)}…`
 }
 
 function shouldShowTurnElapsed(item: ConversationItem): boolean {

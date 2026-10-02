@@ -1,5 +1,5 @@
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { usePullRequestStore } from '@/entities/pull-request'
@@ -33,7 +33,11 @@ import {
 import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
 import { useAppSettingsStore } from '@/entities/app-settings'
-import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
+import {
+  groupNeedsYou,
+  needsYouCardModel,
+  needsYouCount,
+} from '@/features/needs-you'
 import {
   Badge,
   Button,
@@ -781,6 +785,16 @@ export const Sidebar: FC<SidebarProps> = ({
   const hasMissionControl = Boolean(onShowMissionControl)
   const showMissionControl = useStableCallback(() => onShowMissionControl?.())
   const pinPeek = useStableCallback(() => onPinPeek())
+  const pinRef = useRef<HTMLButtonElement>(null)
+  // The rail that opened the peek is gone, and a focus that was on it went
+  // to the page with it: the keyboard lands on the panel's own first control
+  // instead, so Tab and Escape still work inside it (NAV-27). A peek the
+  // pointer opened, over a focus held elsewhere, takes nothing.
+  useEffect(() => {
+    if (!peek) return
+    const active = document.activeElement
+    if (active === null || active === document.body) pinRef.current?.focus()
+  }, [peek])
   const collapse = useStableCallback(() => onCollapse())
   const headerStart = useMemo(
     () => (
@@ -806,6 +820,7 @@ export const Sidebar: FC<SidebarProps> = ({
     () =>
       peek ? (
         <IconButton
+          ref={pinRef}
           label="Pin sidebar"
           type="button"
           variant="ghost"
@@ -874,8 +889,11 @@ export const Sidebar: FC<SidebarProps> = ({
         ? SESSION_STATE_TONE.failed
         : SESSION_STATE_TONE.finished
     return (
-      <div className="relative flex h-full w-14 flex-col items-center">
-        {/* The rail's edge: hover, focus or a press opens the sidebar over the content (NAV-27). */}
+      // As wide as the layout's collapsed sidebar, which sizes it (NAV-17).
+      <div className="relative flex h-full w-full flex-col items-center">
+        {/* The rail's edge: hover or a press opens the sidebar over the
+            content. Not focus: tabbing along the rail passes it by, and Enter
+            opens it (NAV-27). */}
         <IconButton
           label="Peek sidebar"
           tooltipSide="right"
@@ -883,7 +901,6 @@ export const Sidebar: FC<SidebarProps> = ({
           variant="ghost"
           className={peekHandleClass}
           onMouseEnter={onPeek}
-          onFocus={onPeek}
           onClick={onPeek}
         >
           <ChevronRight className="h-3.5 w-3.5" />
@@ -913,9 +930,9 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
-          {/* Opens the sidebar over the content, where the Activity feed is (NAV-17). */}
+          {/* Opens the sidebar over the content, where the Needs you feed is (NAV-17). */}
           <IconButton
-            label={`Needs You (${attentionCards.length})`}
+            label={needsYouCount(attentionCards.length)}
             type="button"
             variant="ghost"
             tooltipSide="right"
@@ -941,15 +958,19 @@ export const Sidebar: FC<SidebarProps> = ({
             ) : null}
           </IconButton>
 
+          {/* The project it is named for, in the sidebar opened over the
+              content (NAV-17): its sessions and its switcher. Code and Chat
+              themselves are the switcher's above. */}
           <IconButton
             label={
               activeSurface === 'chat'
                 ? 'Convergence Chat'
                 : (activeProject?.name ?? 'No project')
             }
+            tooltipDetail="Show it in the sidebar"
             type="button"
             variant="ghost"
-            onClick={() => onSelectSurface(activeSurface)}
+            onClick={onPeek}
             tooltipSide="right"
             size="md"
           >

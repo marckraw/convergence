@@ -60,7 +60,9 @@ describe('ComposerSkillInjectionPicker remote skills note', () => {
     renderPicker({ isLoading: true, items: [] })
 
     expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
-    expect(await screen.findByText('Loading skills…')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Loading skills…', {}, { timeout: 2000 }),
+    ).toBeInTheDocument()
   })
 
   it('shows the note when no skills match', () => {

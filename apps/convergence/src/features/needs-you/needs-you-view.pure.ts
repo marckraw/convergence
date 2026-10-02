@@ -1,6 +1,7 @@
 import { isLocalExecutionHost } from '@/entities/execution-host'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
+import { NEEDS_YOU } from './needs-you-words.pure'
 import {
   feedOrders,
   sortFeedCards,
@@ -24,7 +25,7 @@ export type FeedGroup = { title: string; cards: NeedsYouCardModel[] }
  */
 export const FEED_SECTIONS = [
   { title: 'Pinned', source: 'Pinned' },
-  { title: 'Needs attention', source: 'Waiting on you' },
+  { title: NEEDS_YOU, source: 'Waiting on you' },
   { title: 'Review', source: 'Needs review' },
   { title: 'Working', source: 'Working' },
   { title: 'Errands with a PR', source: 'Errands with a PR' },
@@ -147,7 +148,7 @@ export function buildFeedView(source: FeedGroup[], view: FeedView) {
     const title = card.session.pinnedAt
       ? 'Pinned'
       : activity === 'needs-me'
-        ? 'Needs attention'
+        ? NEEDS_YOU
         : activity === 'working'
           ? 'Working'
           : activity === 'review'

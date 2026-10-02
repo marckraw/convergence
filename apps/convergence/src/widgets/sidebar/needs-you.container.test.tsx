@@ -85,7 +85,7 @@ it('starts with a readable collapsed summary and opens the existing controls', (
   expect(screen.getByRole('region', { name: 'Pinned' })).toBeInTheDocument()
   openFilters()
   expect(trigger).toHaveAttribute('aria-expanded', 'true')
-  for (const name of ['All activity', 'Needs me', 'Working', 'Review'])
+  for (const name of ['All activity', 'Needs you', 'Working', 'Review'])
     expect(choice('Activity view', name)).toBeInTheDocument()
   expect(choice('Activity view', 'All activity')).toHaveAttribute(
     'aria-pressed',
@@ -103,7 +103,7 @@ it('starts with a readable collapsed summary and opens the existing controls', (
 it('filters attention, explains hidden pins, and clears without selecting or unpinning a session', () => {
   render(<NeedsYou {...props} />)
   openFilters()
-  fireEvent.click(choice('Activity view', 'Needs me'))
+  fireEvent.click(choice('Activity view', 'Needs you'))
   expect(screen.getByLabelText('1 of 4 cards shown')).toBeInTheDocument()
   expect(
     screen.getByText('1 pinned card hidden by filters.'),
@@ -323,10 +323,10 @@ it('combines workflow choices and treats All activity like All hosts and All pro
       name: /^Collapse activity filters: Working \+ Review;/,
     }),
   ).toBeInTheDocument()
-  fireEvent.click(choice('Activity view', 'Needs me'))
+  fireEvent.click(choice('Activity view', 'Needs you'))
   expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
   fireEvent.click(choice('Activity view', 'All activity'))
-  for (const label of ['Working', 'Review', 'Needs me']) {
+  for (const label of ['Working', 'Review', 'Needs you']) {
     expect(choice('Activity view', label)).toHaveAttribute(
       'aria-pressed',
       'false',
@@ -518,7 +518,7 @@ it('MAR-3366 R3 folds a section, keeps the others open, and stays folded through
 it('MAR-3366 R3 a stored fold that is not a JSON list folds nothing', () => {
   localStorage.setItem('convergence:sidebar-activity-folded:v1', 'not json')
   render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
-  for (const title of ['Pinned', 'Needs attention', 'Review', 'Working'])
+  for (const title of ['Pinned', 'Needs you', 'Review', 'Working'])
     expect(sectionToggle(title)).toHaveAttribute('aria-expanded', 'true')
 })
 
@@ -529,7 +529,7 @@ it('MAR-3366 R3 folding keeps the feed order and the filters untouched', () => {
       .getAllByRole('region')
       .map((region) => region.getAttribute('aria-label'))
   const before = titles()
-  expect(before).toEqual(['Pinned', 'Needs attention', 'Review', 'Working'])
+  expect(before).toEqual(['Pinned', 'Needs you', 'Review', 'Working'])
   fireEvent.click(sectionToggle('Review'))
   expect(titles()).toEqual(before)
   expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()

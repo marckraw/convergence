@@ -130,23 +130,18 @@ export const Default: Story = {
     const titles = canvas
       .getAllByRole('region')
       .map((region) => region.getAttribute('aria-label'))
-    await expect(titles).toEqual([
-      'Pinned',
-      'Needs attention',
-      'Review',
-      'Working',
-    ])
+    await expect(titles).toEqual(['Pinned', 'Needs you', 'Review', 'Working'])
 
-    const asks = canvas.getByRole('region', { name: 'Needs attention' })
+    const asks = canvas.getByRole('region', { name: 'Needs you' })
     await userEvent.click(
       within(asks).getByRole('button', { name: /^Fix the sidebar overflow/ }),
     )
     await expect(args.onSelect).toHaveBeenCalledWith('overflow')
 
-    const fold = within(asks).getByRole('button', { name: 'Needs attention' })
+    const fold = within(asks).getByRole('button', { name: 'Needs you' })
     await expect(fold).toHaveAttribute('aria-expanded', 'true')
     await userEvent.click(fold)
-    await expect(args.onToggleFold).toHaveBeenCalledWith('Needs attention')
+    await expect(args.onToggleFold).toHaveBeenCalledWith('Needs you')
 
     // The open conversation is marked as the current one.
     await expect(
@@ -165,11 +160,11 @@ export const Dark: Story = {
  * named on hover, and a second line says what still asks.
  */
 export const Folded: Story = {
-  args: { foldedTitles: new Set(['Needs attention', 'Working']) },
+  args: { foldedTitles: new Set(['Needs you', 'Working']) },
   play: async ({ canvas, userEvent }) => {
-    const asks = canvas.getByRole('region', { name: 'Needs attention' })
+    const asks = canvas.getByRole('region', { name: 'Needs you' })
     await expect(
-      within(asks).getByRole('button', { name: 'Needs attention' }),
+      within(asks).getByRole('button', { name: 'Needs you' }),
     ).toHaveAttribute('aria-expanded', 'false')
     await expect(
       within(asks).queryByRole('button', { name: /^Fix the sidebar overflow/ }),

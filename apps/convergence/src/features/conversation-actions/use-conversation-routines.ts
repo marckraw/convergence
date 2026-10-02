@@ -56,7 +56,7 @@ export function useConversationRoutines(input: {
           error:
             error instanceof Error
               ? error.message
-              : 'Could not read this conversation’s routines.',
+              : 'Couldn’t read this conversation’s routines.',
         })
       },
     )

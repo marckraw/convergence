@@ -84,8 +84,11 @@ Chaperone checks it: a class string's third copy (`repeated-classes`) and a past
   labels ("Saving…"), and on every item or button that opens a dialog or a confirmation. A
   failure reads "Couldn't <verb> <thing>." with the reason under it (FormError, Notice). Refusing
   an agent: "Deny" for a permission, "Decline" for a form or a link. A name is a constant in the
-  feature that owns it. Why: the same states were worded many ways (27 busy labels swapped by
-  hand), and "…" is how a control says more comes next.
+  feature that owns it. Product nouns keep their capital inside a sentence-case label, and only
+  these: Space, Artifact, Command Center ("Create Space…", "Add Artifact"); every other word is
+  sentence case. Why: the same states were worded many ways (27 busy labels swapped by
+  hand), and "…" is how a control says more comes next; the list makes the capitals a decision,
+  not a habit (DLG-32).
 - **R11 · A number from a design handoff maps to the nearest token** when it's built. A value with
   no token becomes a new token or a recorded exception; only an illustration's geometry stays
   numeric. Why: measured values typed as they came made sizes nothing else used.

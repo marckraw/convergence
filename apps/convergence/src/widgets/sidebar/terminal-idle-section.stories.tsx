@@ -55,7 +55,7 @@ type Story = StoryObj<typeof meta>
  */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByText('Terminals Idle')).toBeVisible()
+    await expect(canvas.getByText('Idle terminals')).toBeVisible()
     await userEvent.click(
       canvas.getByRole('button', {
         name: 'Terminal · tests, terminal idle after npm, convergence',
@@ -105,6 +105,6 @@ export const Long: Story = {
 export const Empty: Story = {
   args: { notices: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.queryByText('Terminals Idle')).toBeNull()
+    await expect(canvas.queryByText('Idle terminals')).toBeNull()
   },
 }

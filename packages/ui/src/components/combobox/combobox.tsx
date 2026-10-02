@@ -185,7 +185,7 @@ function Combobox(props: ComboboxProps) {
     value,
     items,
     disabled = false,
-    searchPlaceholder = 'Search options...',
+    searchPlaceholder = 'Search options…',
     emptyMessage = 'No options found.',
     loadingMessage,
     error,

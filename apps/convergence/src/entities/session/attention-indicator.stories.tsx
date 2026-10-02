@@ -76,7 +76,7 @@ type Story = StoryObj<typeof meta>
 /** Blocked on a human outranks the spinner, though the turn is still running. */
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Needs Approval')).toBeVisible()
+    await expect(canvas.getByText('Approval needed')).toBeVisible()
     await expect(canvas.queryByText('Running')).toBeNull()
   },
 }
@@ -86,14 +86,14 @@ export const States: Story = {
   render: () => <AllStates />,
   play: async ({ canvas }) => {
     for (const text of [
-      'Needs Approval',
-      'Needs Input',
+      'Approval needed',
+      'Input needed',
       'Running',
       'Compacting context…',
       'finished · 2 tasks running',
       'Finished',
       'Failed',
-      'Host Unreachable',
+      'Host unreachable',
     ]) {
       await expect(canvas.getByText(text)).toBeVisible()
     }

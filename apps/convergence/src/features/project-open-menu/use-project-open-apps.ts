@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { notify } from '@convergence/ui'
-import { projectOpenApi, type ProjectOpenApp } from '@/entities/project-open'
+import {
+  NO_APPS_FOUND_LABEL,
+  projectOpenApi,
+  type ProjectOpenApp,
+} from '@/entities/project-open'
 
 /** The apps a path can open in, and the one way to open it in one. */
 export function useProjectOpenApps(targetPath: string | null) {
@@ -30,7 +34,7 @@ export function useProjectOpenApps(targetPath: string | null) {
 
   const disabledReason = useMemo(() => {
     if (!targetPath) return 'No project path available'
-    if (!loading && apps.length === 0) return 'No supported apps found'
+    if (!loading && apps.length === 0) return NO_APPS_FOUND_LABEL
     return null
   }, [apps.length, loading, targetPath])
 

@@ -209,6 +209,7 @@ export { CrewMark } from './crew-mark.presentational'
 export type { CrewMarkCrew, CrewMarkVariant } from './crew-mark.presentational'
 export { buildSessionCards } from './mission-control-cards.pure'
 export { SessionStateChips } from './session-state-chips.presentational'
+export { SessionFiltersClear } from './session-filters-clear.presentational'
 export { SessionFacetPicker } from './session-facet-picker.container'
 export {
   EMPTY_SESSION_CARD_FILTER,
@@ -218,6 +219,7 @@ export {
   getSessionCardProjectKey,
   isEmptySessionCardFilter,
   matchesSessionCardQuery,
+  narrowsByFacet,
   toggleFilterId,
   toggleSessionCardState,
 } from './session-card-filter.pure'

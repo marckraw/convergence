@@ -648,7 +648,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       // exists to prevent — the work is the expensive part, not the row.
       setSaveError(
         useSessionRelayStore.getState().error ??
-          'Convergence could not store this connection.',
+          'Couldn’t store this connection.',
       )
       return
     }
@@ -1282,7 +1282,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         setHistoryError(
           error instanceof Error
             ? error.message
-            : 'Convergence could not read this crew’s history.',
+            : 'Couldn’t read this crew’s history.',
         )
       }
       setHistoryLoading(false)
@@ -1319,7 +1319,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       setOlderError(
         error instanceof Error
           ? error.message
-          : 'Convergence could not read this crew’s history.',
+          : 'Couldn’t read this crew’s history.',
       )
     }
     setHistoryLoadingOlder(false)

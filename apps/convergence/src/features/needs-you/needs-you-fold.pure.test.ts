@@ -105,7 +105,7 @@ it('MAR-3366 R4 folded Review counts its PRs, and says nothing without one', () 
   expect(foldedSectionSummary('Review', [finished('z')]).line).toBeNull()
 })
 
-it('MAR-3366 R4 folded Needs attention and Pinned say their states in words', () => {
+it('MAR-3366 R4 folded Needs you and Pinned say their states in words', () => {
   const waiting = needsYouCardModel(
     cardSession({ id: 'w1', attention: 'needs-input' }),
     cardContext,
@@ -120,7 +120,7 @@ it('MAR-3366 R4 folded Needs attention and Pinned say their states in words', ()
   )
   // MAR-3372 R4: waiting and failed are asks now — said once, by `asks`.
   const attention = (cards: NeedsYouCardModel[]) => {
-    const summary = foldedSectionSummary('Needs attention', cards)
+    const summary = foldedSectionSummary('Needs you', cards)
     return [summary.line, summary.asks.map((ask) => ask.text).join(' · ')]
   }
   expect(attention([waiting, approval])).toEqual([null, '2 waiting on you'])

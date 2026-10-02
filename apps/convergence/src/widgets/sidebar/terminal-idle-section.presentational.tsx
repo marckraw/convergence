@@ -24,7 +24,7 @@ export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
   return (
     <div className="px-3 pb-2">
       <SectionHeader
-        label="Terminals Idle"
+        label="Idle terminals"
         count={notices.length}
         className="mb-1"
       />
