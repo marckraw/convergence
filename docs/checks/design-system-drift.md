@@ -105,6 +105,8 @@ mapping in its message is the DS5 codemod's table
 | `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
 | `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
+| `use-section-label`       | a hand-typed eyebrow: `uppercase` and a `tracking-…` utility in one class string (a `className`, an argument to `cn`, a `*.styles.ts` constant), in the app                                                                                | `SectionLabel` (`size="sm"` for the 10 px step, `as="h3"` when it names a section), or `sectionLabel` / `sectionLabelVariants({ size })` where the element can't be one                      | DS-20       |
+| `use-badge-caps`          | `uppercase` in a `<Badge>`'s `className`                                                                                                                                                                                                   | Badge's `caps`: one look for a kind or a short state in capitals                                                                                                                             | DLG         |
 
 A regex reads text, not code, so it sees only what's written where it looks: a size override kept
 in a `*.styles.ts` constant passes `use-button-sizes`, and `repeated-classes` is what catches that
@@ -113,6 +115,13 @@ the tag, past arrow functions"), so attribute order and line breaks don't matter
 a variant (`[&_svg]:size-4`, the size of the icon inside) is not the button's size, and doesn't
 count. Every regex rule skips a line that starts with a comment (`//`, `*`, `/*` or `{/*`), so a doc
 comment may name the recipe it replaced.
+
+`use-section-label` reads one class string at a time, wherever it is written, so a constant handed
+to an element is seen as well as a `className`; an eyebrow split across two strings is not. A
+Badge's capitals are `caps`, which `use-badge-caps` asks for: it reads the Badge's tag past a glyph
+handed in a prop (`icon={<CheckCircle2 />}`), whose `/>` would otherwise end it. Both came with
+DS6's labels sweep (MAR-3608), which brought each to zero first; their canary is
+`features/skill-tags/skill-tags.presentational.tsx`.
 
 ## 3. A raw element needs a reason
 
@@ -261,6 +270,8 @@ Streamdown name.
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
+| `use-section-label`          | `design-system-drift.json`      | error    |
+| `use-badge-caps`             | `design-system-drift.json`      | error    |
 
 A rule is never relaxed to reach zero, and never turned back into a warning to let a change
 through. When one fires, fix what it found ([When one fires](#when-one-fires)). When it can't be
