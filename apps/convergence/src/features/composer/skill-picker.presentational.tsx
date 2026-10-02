@@ -69,11 +69,9 @@ function renderSkillRow(
           {skill.shortDescription || skill.description || 'No description.'}
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <Badge className="uppercase">{skill.sourceLabel}</Badge>
-          <Badge className="uppercase">{skill.providerName}</Badge>
-          {!skill.enabled ? (
-            <Badge className="uppercase">Disabled</Badge>
-          ) : null}
+          <Badge caps>{skill.sourceLabel}</Badge>
+          <Badge caps>{skill.providerName}</Badge>
+          {!skill.enabled ? <Badge caps>Disabled</Badge> : null}
         </span>
       </span>
     </Button>

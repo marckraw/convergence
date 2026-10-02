@@ -1,8 +1,8 @@
 import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
 import { isEditableTarget } from '@/shared/lib/editable-target.pure'
-import { Button, cn } from '@convergence/ui'
-import { annotationChipFrame } from './annotation.styles'
+import { Badge, Button, cn, SectionLabel } from '@convergence/ui'
+import { annotationBody, annotationChipFrame } from './annotation.styles'
 import {
   formatAnnotationCount,
   stripNavigationTarget,
@@ -80,16 +80,13 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
     className="mx-auto mb-2 flex w-full max-w-conversation items-center gap-2"
     data-testid="annotation-tray"
   >
-    <span className="shrink-0 text-3xs uppercase tracking-wide text-ink-muted">
+    <SectionLabel size="sm" className="shrink-0">
       Responding to
-    </span>
+    </SectionLabel>
     {/* Live, so a removal is announced as the number it leaves behind. */}
-    <span
-      aria-live="polite"
-      className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-3xs font-medium text-ink-muted"
-    >
+    <Badge shape="count" aria-live="polite">
       {formatAnnotationCount(annotations.length)}
-    </span>
+    </Badge>
     {/* The side padding matches the fade, so no pill sits under it at rest
         and a focused pill scrolls clear of it; the vertical padding leaves
         room for the focus ring, which the scroll container would clip. */}
@@ -139,7 +136,7 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
               <span aria-hidden="true" className="shrink-0 text-ink-muted">
                 →
               </span>{' '}
-              <span className="min-w-0 truncate">
+              <span className={annotationBody}>
                 {toPillBody(annotation.body)}
               </span>
             </Button>

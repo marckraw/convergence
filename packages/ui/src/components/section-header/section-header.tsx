@@ -10,6 +10,12 @@ type SectionHeaderProps = Omit<
   className?: string
   /** The section's name: its heading's words. */
   label: ReactNode
+  /**
+   * Said beside its name, inside the heading: what a folded section still
+   * shows of what it holds (Activity's state glyphs). Not a control: an
+   * action goes in `action`.
+   */
+  summary?: ReactNode
   /** How many it holds, at its end, figures one width. */
   count?: ReactNode
   /**
@@ -38,6 +44,7 @@ type SectionHeaderProps = Omit<
  */
 function SectionHeader({
   label,
+  summary,
   count,
   countStyle = 'plain',
   action,
@@ -56,7 +63,7 @@ function SectionHeader({
       )}
       {...props}
     >
-      <Heading className="flex min-w-0 flex-1 items-center">
+      <Heading className="flex min-w-0 flex-1 items-center gap-1.5">
         {collapsible ? (
           <CollapsibleTrigger className="max-w-full transition-colors hover:text-ink">
             <span className="min-w-0 truncate">{label}</span>
@@ -64,6 +71,7 @@ function SectionHeader({
         ) : (
           <span className="min-w-0 truncate">{label}</span>
         )}
+        {summary}
       </Heading>
       {count == null ? null : countStyle === 'badge' ? (
         <Badge shape="count">{count}</Badge>

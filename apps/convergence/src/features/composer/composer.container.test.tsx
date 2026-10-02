@@ -1788,9 +1788,13 @@ describe('ComposerContainer', () => {
       expect(classTokens(label)).toContain('text-ink-muted')
 
       // The machine governs every turn above it and is still 11px. That is the
-      // reading that was heard and declined, held in place.
-      const fact = screen.getByText('Removed endpoint (daemon-b)')
-      expect(textSizeClasses(fact)).toEqual([STRIP_TEXT_SIZE_CLASS])
+      // reading that was heard and declined, held in place. The fact is a
+      // label Badge (CONV-18), so its scale is the Badge's own element's.
+      const fact = screen
+        .getByText('Removed endpoint (daemon-b)')
+        .closest('[data-slot="badge"]')
+      expect(fact).not.toBeNull()
+      expect(textSizeClasses(fact!)).toEqual([STRIP_TEXT_SIZE_CLASS])
 
       // The one exception, and an exception in colour alone: a session that
       // will refuse to run is a live signal, not context.

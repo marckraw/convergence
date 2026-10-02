@@ -36,9 +36,7 @@ function renderSkillRow(
             </span>
           ) : null}
           {renderScopeChip(skill.scope)}
-          {!skill.enabled ? (
-            <Badge className="uppercase">Disabled</Badge>
-          ) : null}
+          {!skill.enabled ? <Badge caps>Disabled</Badge> : null}
           {renderWarningBadge(skill.warnings.length)}
         </>
       }
@@ -78,9 +76,7 @@ export const SkillsListPane: FC<SkillsListPaneProps> = ({
                 {group.skills.length === 1 ? '' : 's'}
               </p>
             </div>
-            <Badge className="uppercase">
-              {group.catalogSource.replace('-', ' ')}
-            </Badge>
+            <Badge caps>{group.catalogSource.replace('-', ' ')}</Badge>
           </div>
 
           {group.error ? (

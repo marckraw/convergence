@@ -20,7 +20,13 @@ import {
   type FeedView,
   type buildFeedView,
 } from '@/features/needs-you'
-import { Button, cn, EmptyState, textStack } from '@convergence/ui'
+import {
+  Button,
+  cn,
+  EmptyState,
+  SectionHeader,
+  textStack,
+} from '@convergence/ui'
 import {
   noConversationMatchesLine,
   normalizeNameQuery,
@@ -67,17 +73,18 @@ export function NeedsYouControls({
       aria-label="Activity controls"
     >
       <div className="flex h-control-sm items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium">Activity</span>
-          <span
-            className="tabular-nums text-ink-muted"
-            aria-label={`${result.shown} of ${result.total} cards shown`}
-          >
-            {result.filtered
-              ? `${result.shown} of ${result.total}`
-              : result.total}
-          </span>
-        </div>
+        {/* The feed's head, the kit's SectionHeader (NAV-12). */}
+        <SectionHeader
+          className="flex-1"
+          label="Activity"
+          count={
+            <span aria-label={`${result.shown} of ${result.total} cards shown`}>
+              {result.filtered
+                ? `${result.shown} of ${result.total}`
+                : result.total}
+            </span>
+          }
+        />
         {result.filtered && (
           <Button
             type="button"

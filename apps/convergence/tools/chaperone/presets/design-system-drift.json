@@ -200,6 +200,24 @@
         "files": "packages/ui/.storybook/preview.tsx",
         "requiredPatterns": ["a11y:\\s*\\{\\s*test:\\s*[\"']error[\"']"],
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
+      },
+      {
+        "id": "use-section-label",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)([\"'\\`])(?=(?:(?!\\1)[^\\n])*?(?<![\\w-])uppercase\\b)(?=(?:(?!\\1)[^\\n])*?(?<![\\w-])tracking-)(?:(?!\\1)[^\\n])*\\1",
+        "message": "An eyebrow typed by hand (uppercase with tracking-… in one class string): use SectionLabel from @convergence/ui (size=\"sm\" for the 10 px step, as=\"h3\" when it names a section), or sectionLabel / sectionLabelVariants({ size }) where the element can't be a SectionLabel. Copies drifted into three trackings and four weights (R0, R4; DS-20; MAR-3608)."
+      },
+      {
+        "id": "use-badge-caps",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.tsx",
+        "exclude": ["**/*.test.tsx"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<Badge\\b(?:[^>]|=>|/>\\})*?\\bclassName=(?:[^>]|=>|/>\\})*?(?<![\\w-])uppercase\\b",
+        "message": "A Badge put in capitals by className: give it caps, Badge's own prop, so every badge in capitals is one look (the third copy is a part; MAR-3608)."
       }
     ]
   }
