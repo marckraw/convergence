@@ -56,16 +56,12 @@ const meta = {
     accentColor: crewTokens.violet,
     onEmojiChange: fn(),
     onAccentColorChange: fn(),
-    memberCount: members.length,
     includePositions: false,
     lastExportPath: null,
     exporting: false,
-    confirmingDelete: false,
     onIncludePositionsChange: fn(),
     onExport: fn(),
     onRequestDelete: fn(),
-    onCancelDelete: fn(),
-    onConfirmDelete: fn(),
     updateError: null,
     savedName: 'convergence development',
     crewName: 'convergence development',
@@ -204,7 +200,7 @@ export const AddMenu: Story = {
 
 /** No seats yet: what a seat is, and both ways to add one, without a menu. */
 export const Empty: Story = {
-  args: { members: [], memberCount: 0 },
+  args: { members: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No seats yet')).toBeVisible()
     await expect(canvas.queryByRole('button', { name: 'Add' })).toBeNull()
@@ -223,7 +219,6 @@ export const Long: Story = {
         batonName: `horse-${n + 1}`,
       }),
     ),
-    memberCount: 9,
   },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.type(
@@ -243,7 +238,6 @@ export const Long: Story = {
  */
 export const Details: Story = {
   args: {
-    confirmingDelete: true,
     running: true,
     lastExportPath: '/Users/marcin/recipes/convergence-development.crew.yaml',
   },
@@ -277,8 +271,9 @@ export const Details: Story = {
     ).toBeVisible()
     await userEvent.click(canvas.getByRole('button', { name: 'Export crew…' }))
     await expect(args.onExport).toHaveBeenCalledOnce()
-    await userEvent.click(canvas.getByRole('button', { name: 'Delete crew' }))
-    await expect(args.onConfirmDelete).toHaveBeenCalledOnce()
+    // Delete crew… asks in ConfirmDialog, which the container opens (R5).
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete crew…' }))
+    await expect(args.onRequestDelete).toHaveBeenCalledOnce()
   },
 }
 

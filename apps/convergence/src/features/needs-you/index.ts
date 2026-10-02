@@ -25,7 +25,11 @@ export {
   FOLD_GLYPH_LIMIT,
   FOLD_PROJECT_LIMIT,
 } from './needs-you-fold.pure'
-export { cardStateTone, cardStateToneKeys } from './needs-you-card-state.styles'
+export {
+  cardStateTone,
+  cardStateToneKeys,
+  cardStateToneName,
+} from './needs-you-card-state.styles'
 export {
   currentSectionTitle,
   NEEDS_YOU,

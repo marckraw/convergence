@@ -1,3 +1,5 @@
+import { fullDateLabel } from '@convergence/ui'
+import { metaText } from '@/shared/testing/meta-line'
 import { render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
@@ -79,7 +81,7 @@ it('RUN64 R2 unknown last sighting has a relative age and provisional identity s
   expect({
     title: Boolean(screen.queryByText('Subagent')),
     idInTitle: container.textContent?.includes('tool-provisional'),
-    fixed: Boolean(screen.queryByText('Unknown · last seen 4 m ago')),
+    fixed: Boolean(screen.queryByText(metaText('Unknown · last seen 4 m ago'))),
   }).toEqual({ title: true, idInTitle: false, fixed: true })
 })
 
@@ -98,7 +100,10 @@ it.each([
       onClose={vi.fn()}
     />,
   )
-  expect(screen.getByText(text)).toBeInTheDocument()
+  // A line of facts is a MetaLine (CONV-23): read it as the eye does.
+  expect(
+    screen.getByText(text.includes(' · ') ? metaText(text) : text),
+  ).toBeInTheDocument()
 })
 
 it('R7 renders the frozen empty state — mutation omit empty copy turns red', () => {
@@ -138,7 +143,9 @@ it.each([
         onClose={vi.fn()}
       />,
     )
-    expect(screen.getByText(`${label} · < 1 m ago`)).toBeInTheDocument()
+    expect(
+      screen.getByText(metaText(`${label} · < 1 m ago`)),
+    ).toBeInTheDocument()
   },
 )
 
@@ -314,12 +321,16 @@ it('RUN64 R2′ task labels distinguish sighting and missing time with ISO title
   )
   expect({
     seen: screen
-      .queryByText('Running · seen 4 m ago')
+      .queryByText(metaText('Running · seen 4 m ago'))
       ?.getAttribute('data-tooltip'),
     legacy: screen
-      .queryByText('Running · time not reported')
+      .queryByText(metaText('Running · time not reported'))
       ?.hasAttribute('data-tooltip'),
-  }).toEqual({ seen: '2026-09-09T00:00:00Z', legacy: false })
+  }).toEqual({
+    // The whole moment, as a Timestamp's tooltip says it (CONV-22).
+    seen: fullDateLabel(new Date('2026-09-09T00:00:00Z')),
+    legacy: false,
+  })
 })
 
 it('RUN64 round3 bucket uses the folded seen anchor — mutation restate ended-only newest in the view turns red', () => {
@@ -413,8 +424,13 @@ it('RUN64 round3 computes one time per rendered row — mutation recompute the l
   )
   expect({
     calls: time.mock.calls,
-    title: screen.getByText('Running · 4 m').getAttribute('data-tooltip'),
-  }).toEqual({ calls: [[rows[0], now]], title: agent.startedAt })
+    title: screen
+      .getByText(metaText('Running · 4 m'))
+      .getAttribute('data-tooltip'),
+  }).toEqual({
+    calls: [[rows[0], now]],
+    title: fullDateLabel(new Date(agent.startedAt!)),
+  })
 })
 
 it.each([

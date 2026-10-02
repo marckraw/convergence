@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import type { ProjectContextItem } from '@/entities/project-context'
-import { Badge, Button, EmptyState, IconButton } from '@convergence/ui'
+import { Badge, Button, Card, EmptyState, IconButton } from '@convergence/ui'
 
 interface ProjectContextListProps {
   items: ProjectContextItem[]
@@ -58,9 +58,9 @@ export const ProjectContextList: FC<ProjectContextListProps> = ({
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (
-            <li
+            <Card
+              render={<li />}
               key={item.id}
-              className="rounded-lg border border-line-soft bg-surface/30 px-3 py-3"
               data-testid={`project-context-item-${item.id}`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -102,7 +102,7 @@ export const ProjectContextList: FC<ProjectContextListProps> = ({
                   </IconButton>
                 </div>
               </div>
-            </li>
+            </Card>
           ))}
         </ul>
       )}

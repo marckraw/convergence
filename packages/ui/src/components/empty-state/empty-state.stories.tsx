@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { CloudOff, MessageSquare, Search } from 'lucide-react'
 import { useState } from 'react'
 import { expect, waitFor } from 'storybook/test'
+import { Button } from '../button/button'
 import { EmptyState } from './empty-state'
 
 /** A panel's list with nothing in it yet. */
@@ -152,4 +153,41 @@ export const Long: Story = {
     ) as HTMLElement
     await expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth)
   },
+}
+
+/**
+ * Page: a screen with nothing else on it, as the welcome and a route that
+ * leads nowhere are. Its title is the page's heading, in the large print,
+ * and its action sits a little further down (NAV-19).
+ */
+export const Page: Story = {
+  render: () => (
+    <div className="flex h-96 w-160 flex-col rounded-md bg-canvas">
+      <EmptyState
+        size="page"
+        variant="plain"
+        layout="centred"
+        title="Session not found"
+        detail="It may have been deleted, or it lives in a project that isn't open."
+        action={<Button>Open the conversations</Button>}
+      />
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const heading = canvas.getByRole('heading', {
+      level: 1,
+      name: 'Session not found',
+    })
+    await expect(getComputedStyle(heading).fontSize).toBe('24px')
+    await expect(getComputedStyle(heading).fontWeight).toBe('600')
+    await expect(
+      canvas.getByRole('button', { name: 'Open the conversations' }),
+    ).toBeVisible()
+  },
+}
+
+/** The page in the dark theme. */
+export const PageDark: Story = {
+  ...Page,
+  globals: { theme: 'dark' },
 }

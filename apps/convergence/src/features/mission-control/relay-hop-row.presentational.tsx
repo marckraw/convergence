@@ -1,11 +1,23 @@
 import type { FC } from 'react'
-import { ArrowRight, ChevronRight } from 'lucide-react'
-import { cn, IconButton, StatusDot, toneInk, Tooltip } from '@convergence/ui'
+import { ArrowRight } from 'lucide-react'
+import {
+  cn,
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+  IconButton,
+  StatusDot,
+  Timestamp,
+  toneInk,
+  Tooltip,
+} from '@convergence/ui'
 import { RELAY_HOP_TONE } from './hop-tone.styles'
 import type { RelayHopLine } from './relay-hop.pure'
 
 interface RelayHopRowProps {
   line: RelayHopLine
+  /** The trail's one clock, so every relative time in it is measured alike; now unless told. */
+  now?: Date
   expanded: boolean
   onToggle: () => void
 }
@@ -16,10 +28,12 @@ interface RelayHopRowProps {
  * Errors say what went wrong right here rather than behind a click -- a
  * failure the user has to expand to read is a failure they will not read. The
  * payload is the only thing folded away, because it is long and rarely the
- * question being asked.
+ * question being asked: a Collapsible, its chevron turning (MC-17). The time
+ * is a Timestamp, relative, with the whole moment in its tooltip (MC-13).
  */
 export const RelayHopRow: FC<RelayHopRowProps> = ({
   line,
+  now,
   expanded,
   onToggle,
 }) => {
@@ -28,7 +42,10 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
   const tone = RELAY_HOP_TONE[line.tone]
 
   return (
-    <li
+    <Collapsible
+      render={<li />}
+      open={expanded}
+      onOpenChange={() => onToggle()}
       data-relay-hop
       className={cn(
         'rounded px-1.5 py-1',
@@ -37,9 +54,11 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
     >
       <div className="flex items-center gap-1.5 text-2xs leading-tight">
         <StatusDot tone={tone} size="sm" />
-        <span className="shrink-0 tabular-nums text-ink-muted">
-          {line.timeLabel}
-        </span>
+        <Timestamp
+          date={line.firedAt}
+          now={now}
+          className="shrink-0 text-ink-muted"
+        />
         <span className="truncate text-ink">{line.sourceName}</span>
         {line.targetName ? (
           <>
@@ -89,25 +108,22 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
         </Tooltip>
 
         {canExpand ? (
-          <IconButton
-            label={
-              expanded ? 'Hide the message carried' : 'Show the message carried'
+          // Collapsible's trigger, drawn as the row's 24 px icon button: one
+          // chevron that turns (MC-31), as every disclosure's does.
+          <CollapsibleTrigger
+            render={
+              <IconButton
+                label={
+                  expanded
+                    ? 'Hide the message carried'
+                    : 'Show the message carried'
+                }
+                variant="quiet"
+                size="xs"
+                className="shrink-0"
+              />
             }
-            type="button"
-            variant="quiet"
-            aria-expanded={expanded}
-            onClick={onToggle}
-            size="xs"
-            className="shrink-0"
-          >
-            {/* One chevron that turns (MC-31), as every disclosure does. */}
-            <ChevronRight
-              className={cn(
-                'size-3 transition-transform',
-                expanded && 'rotate-90',
-              )}
-            />
-          </IconButton>
+          />
         ) : null}
       </div>
 
@@ -126,11 +142,13 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
         </p>
       ) : null}
 
-      {expanded && line.payloadPreview ? (
-        <p className="mt-1 rounded bg-surface-sunken px-2 py-1 text-2xs leading-snug text-ink-muted">
-          {line.payloadPreview}
-        </p>
+      {line.payloadPreview ? (
+        <CollapsiblePanel>
+          <p className="mt-1 rounded bg-surface-sunken px-2 py-1 text-2xs leading-snug text-ink-muted">
+            {line.payloadPreview}
+          </p>
+        </CollapsiblePanel>
       ) : null}
-    </li>
+    </Collapsible>
   )
 }

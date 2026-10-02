@@ -21,6 +21,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   SectionLabel,
+  StatusPillButton,
   Tooltip,
   useConfirm,
 } from '@convergence/ui'
@@ -191,22 +192,24 @@ export const LocalModelTunnelStatusContainer: FC = () => {
           label="Local model tunnels. Click to view status and controls."
           side="top"
         >
+          {/* The tunnels' state in a pill you can press: the kit's StatusPillButton. */}
           <PopoverTrigger
             render={
-              <Button
+              <StatusPillButton
                 type="button"
-                variant="ghost"
                 data-testid="local-model-tunnel-pill"
-                className="h-auto max-w-70 rounded-full border border-line-soft bg-canvas/50 px-2 py-0.5 text-2xs font-medium shadow-none hover:bg-fill-hover"
+                leading={<StatusDot state={aggregate.state} />}
+                className="max-w-70 font-medium"
               >
-                <StatusDot state={aggregate.state} />
-                <span className="min-w-0 truncate text-ink">
-                  {aggregate.label}
+                <span className="flex min-w-0 gap-2">
+                  <span className="min-w-0 truncate text-ink">
+                    {aggregate.label}
+                  </span>
+                  <span className="truncate text-ink-muted">
+                    {aggregate.detail}
+                  </span>
                 </span>
-                <span className="truncate text-ink-muted">
-                  {aggregate.detail}
-                </span>
-              </Button>
+              </StatusPillButton>
             }
           />
         </Tooltip>

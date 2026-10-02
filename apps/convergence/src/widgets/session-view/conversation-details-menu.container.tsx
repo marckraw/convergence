@@ -5,9 +5,8 @@ import {
   type Ref,
   type RefObject,
 } from 'react'
-import { ChevronDown } from 'lucide-react'
 import {
-  Button,
+  MenuButton,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -70,19 +69,8 @@ export const ConversationDetailsMenu: FC<ConversationDetailsMenuProps> = ({
       }}
     >
       <Tooltip label="Session details, harness history, CPU and memory">
-        <PopoverTrigger
-          render={
-            <Button
-              ref={triggerRef}
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1"
-            />
-          }
-        >
+        <PopoverTrigger render={<MenuButton ref={triggerRef} type="button" />}>
           Details
-          <ChevronDown className="h-3 w-3" />
         </PopoverTrigger>
       </Tooltip>
       <PopoverContent

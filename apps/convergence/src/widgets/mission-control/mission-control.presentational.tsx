@@ -13,6 +13,7 @@ import {
   Button,
   cn,
   EmptyState,
+  ScreenHeader,
   SearchField,
   SegmentedControl,
   SegmentedControlItem,
@@ -74,52 +75,37 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
 
   return (
     <div className={ROOM_COLUMN_CLASS}>
-      {/* The room's top strip drags the window (NAV-4): `app-drag` on the
-          strip, and every control in it is a part that carries `app-no-drag`
-          itself (SegmentedControl, SearchField, SelectTrigger, Toggle,
-          Button, Combobox), so each still takes its click. */}
-      <div
+      {/* The room's top strip (NAV-4): a ScreenHeader, 48 px on the line
+          every other screen's strip draws, so its edge meets the sidebar's.
+          It drags the window, and every control in it is a part that carries
+          `app-no-drag` itself (SegmentedControl, SearchField, SelectTrigger,
+          Toggle, Button, Combobox), so each still takes its click. The
+          search and the filters wrap in the row under it. */}
+      <ScreenHeader
         data-mission-control-header
-        className="app-drag flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3"
-      >
-        <div className="flex items-baseline gap-3">
-          <h1 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <Satellite className="size-4" />
-            Mission Control
-          </h1>
-          <p className="text-xs text-ink-muted">
-            {totalCount === 0
-              ? 'no sessions'
-              : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${needsYouCount(attentionCount)} · ${runningCount} running`}
-          </p>
-        </div>
-
-        <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-          <SegmentedControl
-            aria-label="Mission Control layout"
-            size="sm"
-            value={mode}
-            onValueChange={(value) =>
-              onModeChange(value as MissionControlViewMode)
-            }
-          >
-            {modes.map((entry) => (
-              <SegmentedControlItem key={entry.value} value={entry.value}>
-                {entry.label}
-              </SegmentedControlItem>
-            ))}
-          </SegmentedControl>
-
+        start={<Satellite aria-hidden className="size-4" />}
+        title="Mission Control"
+        subtitle={
+          totalCount === 0
+            ? 'no sessions'
+            : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${needsYouCount(attentionCount)} · ${runningCount} running`
+        }
+        end={
           <>
-            <SearchField
-              size="md"
-              value={query}
-              placeholder="Search cards by name, project, provider, model, status…"
-              aria-label="Search session cards"
-              className="w-full max-w-xs"
-              onChange={(event) => onQueryChange(event.target.value)}
-              onClear={() => onQueryChange('')}
-            />
+            <SegmentedControl
+              aria-label="Mission Control layout"
+              size="sm"
+              value={mode}
+              onValueChange={(value) =>
+                onModeChange(value as MissionControlViewMode)
+              }
+            >
+              {modes.map((entry) => (
+                <SegmentedControlItem key={entry.value} value={entry.value}>
+                  {entry.label}
+                </SegmentedControlItem>
+              ))}
+            </SegmentedControl>
 
             <Select
               items={Object.fromEntries(
@@ -150,19 +136,26 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
               </SelectContent>
             </Select>
           </>
-        </div>
-
-        <div className="flex w-full flex-wrap items-center gap-1.5">
+        }
+      >
+        <div className="flex flex-wrap items-center gap-1.5 pb-3">
+          <SearchField
+            size="md"
+            value={query}
+            placeholder="Search cards by name, project, provider, model, status…"
+            aria-label="Search session cards"
+            className="w-full max-w-xs"
+            onChange={(event) => onQueryChange(event.target.value)}
+            onClear={() => onQueryChange('')}
+          />
           {filters}
         </div>
-      </div>
+      </ScreenHeader>
 
       <div
         className={cn(
           'min-h-0 flex-1',
-          fillsContent
-            ? 'overflow-hidden'
-            : 'app-scrollbar overflow-y-auto px-5 py-4',
+          fillsContent ? 'overflow-hidden' : 'overflow-y-auto px-5 py-4',
         )}
       >
         {mode === 'canvas' && totalCount === 0 ? (

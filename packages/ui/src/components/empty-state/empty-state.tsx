@@ -11,8 +11,12 @@ import { Button } from '../button/button'
  */
 type EmptyStateVariant = 'plain' | 'dashed'
 
-/** `compact` is for sidebars and pickers: smaller print, less room round it. */
-type EmptyStateSize = 'default' | 'compact'
+/**
+ * `compact` is for sidebars and pickers: smaller print, less room round it.
+ * `page` is a screen with nothing else on it (the welcome, a route that leads
+ * nowhere): its title is the page's heading, an h1 in the large print.
+ */
+type EmptyStateSize = 'default' | 'compact' | 'page'
 
 /** `top` sits where the list would start; `centred` fills its parent and sits in its middle. */
 type EmptyStateLayout = 'top' | 'centred'
@@ -71,6 +75,14 @@ const VARIANTS: Record<EmptyStateVariant, string> = {
 const SIZES: Record<EmptyStateSize, string> = {
   default: 'px-4 py-5 text-sm',
   compact: 'px-3 py-2 text-xs',
+  page: 'gap-2 px-6 py-5 text-sm',
+}
+
+/** The title's print: a page's is its heading (NAV-19: one weight for the welcome and the fallback). */
+const TITLES: Record<EmptyStateSize, string> = {
+  default: 'font-medium text-ink',
+  compact: 'font-medium text-ink',
+  page: 'text-2xl font-semibold tracking-tight text-ink',
 }
 
 const LAYOUTS: Record<EmptyStateLayout, string> = {
@@ -94,6 +106,8 @@ const rootClasses = ({
 
 /** Words that stay in the middle, however long: a long query breaks rather than overflows. */
 const words = 'max-w-sm text-balance wrap-anywhere'
+/** A page's words have a page's measure. */
+const pageWords = 'max-w-md text-balance wrap-anywhere'
 
 type ContentProps = {
   icon?: LucideIcon
@@ -104,6 +118,8 @@ type ContentProps = {
 
 /** The picture, the heading and the sentences, stacked in the middle. */
 function Content({ icon: Icon, title, detail, size }: ContentProps) {
+  const measure = size === 'page' ? pageWords : words
+  const Title = size === 'page' ? 'h1' : 'p'
   return (
     <>
       {Icon ? (
@@ -116,14 +132,25 @@ function Content({ icon: Icon, title, detail, size }: ContentProps) {
         />
       ) : null}
       {title ? (
-        <p className={cn(words, 'font-medium text-ink')}>{title}</p>
+        <Title className={cn(measure, TITLES[size])}>{title}</Title>
       ) : null}
-      {detail ? <p className={cn(words, 'text-ink-muted')}>{detail}</p> : null}
+      {detail ? (
+        <p
+          className={cn(
+            measure,
+            'text-ink-muted',
+            size === 'page' && 'leading-6',
+          )}
+        >
+          {detail}
+        </p>
+      ) : null}
     </>
   )
 }
 
 const actionRow = 'mt-2 flex flex-wrap justify-center gap-2'
+const pageActionRow = 'mt-4 flex flex-wrap justify-center gap-2'
 
 /**
  * On its way: nothing for the first 300 ms, so a quick load shows nothing at
@@ -211,7 +238,11 @@ function EmptyState(props: EmptyStateProps) {
         detail={detail}
         size={props.size ?? 'default'}
       />
-      {action ? <div className={actionRow}>{action}</div> : null}
+      {action ? (
+        <div className={props.size === 'page' ? pageActionRow : actionRow}>
+          {action}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -61,7 +61,6 @@ const meta = {
     onSelectTab: fn(),
     onNewTab: fn(),
     onSplit: fn(),
-    onCloseActiveTab: fn(),
     onCloseTab: fn(),
     onFocusLeaf: fn(),
     onResizeSplit: fn(),

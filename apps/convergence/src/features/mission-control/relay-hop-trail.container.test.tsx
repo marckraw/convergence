@@ -1,7 +1,16 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { UiProvider } from '@convergence/ui'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import type { RelayHop } from '@/entities/session-relay'
+import { answerConfirm } from '@/shared/testing/confirm'
 import { RelayHopTrail } from './relay-hop-trail.container'
 
 const NAMES: Record<string, string> = {
@@ -36,8 +45,13 @@ let listHops: ReturnType<typeof vi.fn>
 let clearHops: ReturnType<typeof vi.fn>
 let hopListeners: Array<(hop: RelayHop) => void>
 
+// The app's root providers: clearing asks through its host (R5).
 function renderTrail() {
-  return render(<RelayHopTrail crewId="c1" resolveName={resolveName} />)
+  return render(
+    <UiProvider>
+      <RelayHopTrail crewId="c1" resolveName={resolveName} />
+    </UiProvider>,
+  )
 }
 
 describe('RelayHopTrail', () => {
@@ -246,20 +260,42 @@ describe('RelayHopTrail', () => {
   })
 
   describe('clearing the trail', () => {
-    it('asks before it wipes, and says what it is wiping', async () => {
+    it('asks before it wipes, and says what it is wiping (mutation: clear without confirm)', async () => {
       listHops.mockResolvedValue([hop({ id: 'h1' })])
       renderTrail()
 
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Clear trail' }),
+        await screen.findByRole('button', { name: 'Clear trail…' }),
       )
 
+      const question = await screen.findByRole('alertdialog', {
+        name: 'Clear the trail?',
+      })
       expect(clearHops).not.toHaveBeenCalled()
       expect(
-        screen.getByRole('button', {
-          name: 'Clear every hop? The wires and sessions stay.',
-        }),
+        within(question).getByText(
+          'Every hop goes from the trail. The wires and sessions stay.',
+        ),
       ).toBeVisible()
+      // Danger: the focus starts on Cancel (R5).
+      await waitFor(() =>
+        expect(
+          within(question).getByRole('button', { name: 'Cancel' }),
+        ).toHaveFocus(),
+      )
+    })
+
+    it('keeps the trail when the question is cancelled', async () => {
+      listHops.mockResolvedValue([hop({ id: 'h1' })])
+      renderTrail()
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Clear trail…' }),
+      )
+      await answerConfirm('Cancel')
+
+      expect(clearHops).not.toHaveBeenCalled()
+      expect(screen.getByText('1 hop')).toBeInTheDocument()
     })
 
     it('names the alerts a wipe takes with it', async () => {
@@ -270,30 +306,27 @@ describe('RelayHopTrail', () => {
       renderTrail()
 
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Clear trail' }),
+        await screen.findByRole('button', { name: 'Clear trail…' }),
       )
 
+      const question = await screen.findByRole('alertdialog')
       expect(
-        screen.getByRole('button', {
-          name: 'Clear every hop? The wires and sessions stay. This also dismisses 2 alerts.',
-        }),
+        within(question).getByText(
+          'Every hop goes from the trail. The wires and sessions stay. This also dismisses 2 alerts.',
+        ),
       ).toBeVisible()
     })
 
-    it('empties the trail on the second press', async () => {
+    it('empties the trail once confirmed', async () => {
       listHops
         .mockResolvedValueOnce([hop({ id: 'h1' })])
         .mockResolvedValueOnce([])
       renderTrail()
 
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Clear trail' }),
+        await screen.findByRole('button', { name: 'Clear trail…' }),
       )
-      fireEvent.click(
-        screen.getByRole('button', {
-          name: 'Clear every hop? The wires and sessions stay.',
-        }),
-      )
+      await answerConfirm('Clear trail')
 
       await waitFor(() => expect(clearHops).toHaveBeenCalledWith('c1'))
       await waitFor(() => {
@@ -309,13 +342,9 @@ describe('RelayHopTrail', () => {
       renderTrail()
 
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Clear trail' }),
+        await screen.findByRole('button', { name: 'Clear trail…' }),
       )
-      fireEvent.click(
-        screen.getByRole('button', {
-          name: 'Clear every hop? The wires and sessions stay.',
-        }),
-      )
+      await answerConfirm('Clear trail')
 
       expect(
         await screen.findByText(
@@ -333,13 +362,9 @@ describe('RelayHopTrail', () => {
       renderTrail()
 
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Clear trail' }),
+        await screen.findByRole('button', { name: 'Clear trail…' }),
       )
-      fireEvent.click(
-        screen.getByRole('button', {
-          name: 'Clear every hop? The wires and sessions stay.',
-        }),
-      )
+      await answerConfirm('Clear trail')
 
       expect(
         await screen.findByText(

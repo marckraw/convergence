@@ -30,9 +30,9 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
     variant="ghost"
     aria-pressed={selected}
     onClick={() => onSelect(id)}
-    size="lg"
+    size="md"
     className={cn(
-      'shrink-0 justify-start px-2 text-left text-xs sm:w-full py-0',
+      'shrink-0 justify-start text-left sm:w-full',
       // R7: the chosen look is the selected fill; hover is half of it.
       selected
         ? 'bg-fill-selected text-on-highlight'
@@ -66,7 +66,8 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
           <Badge
             tone="warning"
             shape="label"
-            className="shrink-0 uppercase leading-none font-semibold"
+            caps
+            className="shrink-0 leading-none font-semibold"
           >
             {provider.badge.label}
           </Badge>

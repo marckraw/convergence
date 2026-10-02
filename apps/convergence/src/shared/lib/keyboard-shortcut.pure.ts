@@ -20,6 +20,20 @@ export const DEFAULT_COMMAND_CENTER_SHORTCUT: KeyboardShortcutBinding = {
   altKey: false,
 }
 
+/** ⌘↵ (Ctrl+Enter off the Mac): a form's submit from any of its fields, and the composer's send. */
+export const SUBMIT_SHORTCUT: KeyboardShortcutBinding = {
+  key: 'enter',
+  shiftKey: false,
+  altKey: false,
+}
+
+/** ⌘. (Ctrl+. off the Mac): a conversation's Actions. */
+export const ACTIONS_SHORTCUT: KeyboardShortcutBinding = {
+  key: '.',
+  shiftKey: false,
+  altKey: false,
+}
+
 const ALLOWED_KEY_PATTERN = /^[a-z0-9]$/
 
 interface ReservedShortcut {
@@ -99,6 +113,13 @@ export function detectShortcutPlatform(navigatorPlatform?: string): Platform {
   return navigatorPlatform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
 
+/** The platform this page runs on, from the browser's own word; 'other' with no browser (Node). */
+export function runningShortcutPlatform(): Platform {
+  return detectShortcutPlatform(
+    typeof navigator === 'undefined' ? undefined : navigator.platform,
+  )
+}
+
 export type ShortcutRecordingResult =
   | { kind: 'cancel' }
   | { kind: 'ignore' }
@@ -152,6 +173,16 @@ export function matchPaletteShortcut(
   return matchKeyboardShortcut(event, platform, DEFAULT_COMMAND_CENTER_SHORTCUT)
 }
 
+/** The keys with a name, as each platform writes them: the Mac its glyphs, elsewhere words. */
+const NAMED_KEYS: Record<string, { mac: string; other: string }> = {
+  enter: { mac: '↵', other: 'Enter' },
+  escape: { mac: 'Esc', other: 'Esc' },
+  arrowleft: { mac: '←', other: '←' },
+  arrowright: { mac: '→', other: '→' },
+  arrowup: { mac: '↑', other: '↑' },
+  arrowdown: { mac: '↓', other: '↓' },
+}
+
 export function formatShortcutLabel(
   binding: KeyboardShortcutBinding,
   platform: Platform,
@@ -160,8 +191,12 @@ export function formatShortcutLabel(
   const parts = [primary]
   if (binding.shiftKey) parts.push(platform === 'mac' ? '⇧' : 'Shift')
   if (binding.altKey) parts.push(platform === 'mac' ? '⌥' : 'Alt')
-  const keyLabel =
-    binding.key.length === 1 ? binding.key.toUpperCase() : binding.key
+  const named = NAMED_KEYS[normalizeBindingKey(binding.key)]
+  const keyLabel = named
+    ? named[platform]
+    : binding.key.length === 1
+      ? binding.key.toUpperCase()
+      : binding.key
   parts.push(keyLabel)
   return platform === 'mac' ? parts.join('') : parts.join('+')
 }

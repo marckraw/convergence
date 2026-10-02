@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { selectOption } from '@/shared/testing/select-option'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
@@ -8,6 +8,12 @@ import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { SpaceWorkboardDialogContainer } from './space-workboard.container'
+
+/** The sidebar's menus open it through the dialog store; it has no trigger of its own (NAV-34). */
+const openSpaces = () =>
+  act(() => {
+    useDialogStore.getState().open('space-workboard')
+  })
 
 const space: Space = {
   id: 'i1',
@@ -200,7 +206,7 @@ describe('SpaceWorkboardDialogContainer', () => {
   it('loads Spaces when opened', async () => {
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
 
     await waitFor(() => {
       expect(mockElectronAPI.space.list).toHaveBeenCalled()
@@ -214,7 +220,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     mockElectronAPI.space.list.mockResolvedValue([])
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     expect(screen.queryByLabelText(/new space title/i)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Create Space…' }))
 
@@ -228,7 +234,7 @@ describe('SpaceWorkboardDialogContainer', () => {
   it('saves stable Space fields', async () => {
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Agent-native work tracking')
     fireEvent.change(screen.getByDisplayValue('Agent-native work tracking'), {
       target: { value: 'Spaces V1' },
@@ -272,7 +278,7 @@ describe('SpaceWorkboardDialogContainer', () => {
   it('creates a manual Artifact for the selected Space', async () => {
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Agent-native work tracking')
     fireEvent.click(screen.getByRole('button', { name: /add artifact/i }))
     fireEvent.change(screen.getByLabelText(/new artifact label/i), {
@@ -299,7 +305,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     mockElectronAPI.space.listArtifacts.mockResolvedValue([artifact])
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByDisplayValue('Public PR')
     selectOption(/status for public pr/i, 'Ready')
     fireEvent.click(
@@ -327,7 +333,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     })
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Implement artifact suggestions')
     fireEvent.click(screen.getByRole('button', { name: /discover/i }))
 
@@ -352,7 +358,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     mockElectronAPI.space.listAttempts.mockResolvedValue([attempt])
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Implement artifact suggestions')
     fireEvent.click(screen.getByRole('button', { name: /synthesize/i }))
 
@@ -397,7 +403,7 @@ describe('SpaceWorkboardDialogContainer', () => {
     })
     render(<SpaceWorkboardDialogContainer />)
 
-    fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
+    openSpaces()
     await screen.findByText('Implement artifact suggestions')
     fireEvent.click(screen.getByRole('button', { name: /synthesize/i }))
 

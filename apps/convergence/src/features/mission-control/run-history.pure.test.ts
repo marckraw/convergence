@@ -197,13 +197,13 @@ describe('the run list', () => {
     expect(row.flowRunId).toBe('run-1')
   })
 
-  it('reads today as a clock and older days by name', () => {
+  it('reads today as a clock and older days with their date (MC-13)', () => {
     const now = new Date('2026-09-06T15:00:00.000Z')
     expect(formatRunTime('2026-09-06T14:32:00.000Z', now)).toMatch(
       /^\d\d:\d\d$/,
     )
-    expect(formatRunTime('2026-09-05T17:46:00.000Z', now)).toContain(
-      'Yesterday',
+    expect(formatRunTime('2026-09-04T17:46:00.000Z', now)).toMatch(
+      /^Sep 4, \d\d:\d\d$/,
     )
     expect(formatRunTime('2026-09-01T17:46:00.000Z', now)).toContain('Sep')
     expect(formatRunTime('not a time', now)).toBe('unknown time')

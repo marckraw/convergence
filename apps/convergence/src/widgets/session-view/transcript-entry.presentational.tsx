@@ -27,6 +27,7 @@ import {
   CollapsiblePanel,
   CollapsibleTrigger,
   Divider,
+  MetaLine,
 } from '@convergence/ui'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { ANNOTATION_MESSAGE_ID_ATTRIBUTE } from '@/features/response-annotations'
@@ -37,6 +38,7 @@ import {
   type Attachment,
 } from '@/entities/attachment'
 import { ConversationItemShell } from './conversation-item-shell.presentational'
+import { copyButtonRoom } from './conversation-item.styles'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
 import { ToolVisibilityBadge } from './tool-visibility-badge.presentational'
@@ -162,7 +164,12 @@ function renderToolEntry({
             />
           </div>
           <Collapsible className="min-w-0">
-            <CollapsibleTrigger className="flex w-full gap-2 rounded-md border border-line-soft bg-surface-muted/20 px-2 py-1.5 pr-10 text-ink-muted hover:bg-fill-hover">
+            <CollapsibleTrigger
+              className={cn(
+                'flex w-full gap-2 rounded-md border border-line-soft bg-surface-muted/20 px-2 py-1.5 text-ink-muted hover:bg-fill-hover',
+                copyButtonRoom,
+              )}
+            >
               <span className="min-w-0 flex-1 truncate font-mono text-xs">
                 {viewModel.toolPreview}
               </span>
@@ -253,7 +260,8 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                     <Badge
                       tone="warning"
                       data-testid="user-message-delivery-mode"
-                      className="font-medium uppercase tracking-eyebrow"
+                      caps
+                      className="font-medium"
                     >
                       {viewModel.deliveryModeLabel}
                     </Badge>
@@ -419,14 +427,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               size="sm"
             />
             {entry.permissionDetails && (
-              <p className="mt-1 break-words text-xs text-ink-muted">
-                {[
-                  entry.permissionDetails.blockedPath,
-                  entry.permissionDetails.decisionReason,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
+              // The path and the reason, joined by MetaLine (CONV-23).
+              <MetaLine wrap className="mt-1 text-xs text-ink-muted">
+                {entry.permissionDetails.blockedPath}
+                {entry.permissionDetails.decisionReason}
+              </MetaLine>
             )}
             {viewModel.actionableApproval && onApprove && onDeny && (
               <div className="mt-3 flex flex-wrap gap-2">

@@ -26,6 +26,8 @@ interface WorkspaceCreateDialogProps {
   isSubmitting: boolean
   error: string | null
   onSubmit: () => void
+  /** The key that also creates it, in words ("⌘↵"), for Create's tooltip. */
+  submitShortcut?: string
 }
 
 export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
@@ -42,6 +44,7 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
   isSubmitting,
   error,
   onSubmit,
+  submitShortcut,
 }) => (
   <FormDialog
     open={open}
@@ -50,6 +53,7 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
     description={`Create a new git worktree for ${projectName}.`}
     saves="on-save"
     onSave={onSubmit}
+    saveShortcut={submitShortcut}
     saveLabel="Create workspace"
     pendingLabel="Creating…"
     pending={isSubmitting}

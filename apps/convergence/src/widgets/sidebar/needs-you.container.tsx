@@ -147,7 +147,7 @@ export const NeedsYou = memo(function NeedsYou({
           variant="ghost"
           type="button"
           onClick={() => setHeldOrder(null)}
-          className="mx-3 text-2xs text-ink-muted underline"
+          className="mx-3 text-ink-muted underline"
         >
           Order paused · Update order
         </Button>

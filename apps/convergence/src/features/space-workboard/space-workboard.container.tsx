@@ -7,7 +7,6 @@ import {
   type ReactElement,
 } from 'react'
 import type { FC } from 'react'
-import { GitBranch } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import {
   useSpaceStore,
@@ -22,7 +21,6 @@ import {
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
-import { Button } from '@convergence/ui'
 import {
   SpaceWorkboardDialog,
   type SpaceAttemptView,
@@ -394,8 +392,8 @@ export const SpaceWorkboardDialogContainer: FC<{
     }
   }, [addArtifact, artifactDraft, selectedSpace])
 
-  // Enable cmd+Enter to submit the Add Artifact form
-  useFormSubmitShortcut(
+  // Enable cmd+Enter to submit the Add Artifact form; Add says so (DS-34)
+  const artifactShortcut = useFormSubmitShortcut(
     artifactDialogOpen &&
       !!artifactDraft.label.trim() &&
       !!artifactDraft.value.trim(),
@@ -599,21 +597,7 @@ export const SpaceWorkboardDialogContainer: FC<{
   return (
     <SpaceWorkboardDialog
       open={open}
-      trigger={
-        trigger ?? (
-          <Button
-            type="button"
-            variant="quiet"
-            className="w-full justify-between px-2"
-          >
-            <span className="flex items-center gap-2">
-              <GitBranch className="h-3.5 w-3.5" />
-              Spaces
-            </span>
-            <span className="text-2xs text-ink-muted/80">Open</span>
-          </Button>
-        )
-      }
+      trigger={trigger}
       spaces={spaces}
       selectedSpace={selectedSpace}
       selectedDraft={draft}
@@ -637,6 +621,7 @@ export const SpaceWorkboardDialogContainer: FC<{
       onArtifactDraftChange={setArtifactDraft}
       onArtifactDialogOpenChange={setArtifactDialogOpen}
       onCreateArtifact={handleCreateArtifact}
+      artifactShortcut={artifactShortcut}
       onArtifactKindChange={handleArtifactKindChange}
       onArtifactStatusChange={handleArtifactStatusChange}
       onArtifactSourceSessionChange={handleArtifactSourceSessionChange}

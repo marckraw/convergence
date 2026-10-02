@@ -29,6 +29,8 @@ export const durationsMs = {
   breath: 2800,
   /** --motion-tooltip-delay: how long the pointer rests before a tooltip shows. */
   tooltipDelay: 200,
+  /** --motion-tooltip-warm: after a tooltip closes, how long the next one still shows at once. */
+  tooltipWarm: 300,
 } as const
 
 /** Cubic béziers, CSS keywords written out, as Motion and the Web Animations API take them. */

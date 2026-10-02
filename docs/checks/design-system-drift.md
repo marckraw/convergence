@@ -45,15 +45,15 @@ Backpack (MAR-2705).
 `regex` rules over the app and `packages/ui/src`, but not `packages/ui/src/styles/**`, where the
 tokens and their TypeScript mirrors are written.
 
-| Rule                  | Fails on                                                                                                                                                                                                                                                                                                                       | Use instead                                                                                                                                                                                                                                                                               | Audit      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `no-magic-values`     | an arbitrary value on a sizing, spacing, type, colour, border, shadow, layering, outline or motion utility: `w-[37px]`, `text-[11px]`, `grid-cols-[1fr_auto]`, `bg-[#0b0b0f]`                                                                                                                                                  | the token's utility (`text-2xs`, `w-side-panel`, `bg-terminal-bg`), or a new token in `tokens.css` and `theme.css`; a custom property is `w-(--name)`, never `w-[var(--name)]`                                                                                                            | DS-20      |
-| `no-raw-colors`       | a hex colour, or `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(`, `oklab(`, `lab(` or `lch(` with a value, in `.ts`, `.tsx` or `.css`                                                                                                                                                                                               | a colour token (`bg-surface`, `text-danger-ink`, `var(--line)`); code that can't read CSS takes a mirror from `@convergence/ui`, as xterm takes `terminalTokens`                                                                                                                          | DS-26      |
-| `no-palette-colors`   | a Tailwind palette class: `text-`, `bg-`, `border-` (and its sides), `ring-`, `fill-`, `stroke-`, `from-`, `to-`, `via-`, `outline-`, `decoration-`, `divide-` or `shadow-` with `slate` … `rose` and a shade                                                                                                                  | a tone (R1): `text-<tone>-ink`, `bg-<tone>-soft`, `border-<tone>-line`, `bg-<tone>-solid` for `neutral`, `info`, `success`, `warning` and `danger`, or the `tone` of Badge, StatusPill, StatusDot and Notice; a named category is a hue token (`merged`, `crew-*`, `provider-*`, `tag-*`) | DS-1       |
-| `no-dark-variant`     | a `dark:` class, in the app only                                                                                                                                                                                                                                                                                               | the colour fixed in its token: every token is `light-dark(LIGHT, DARK)`, so a utility is right in both themes by itself. `dark:` belongs inside `@convergence/ui` (`packages/ui/AGENTS.md`)                                                                                               | DS-1, DS-2 |
-| `no-white-overlays`   | `border-white/`, `bg-white/`, `ring-white/`, `divide-white/` and their `black` twins, in the app only                                                                                                                                                                                                                          | the theme-safe tokens: `border-line-soft` for a hairline, `bg-fill-hover` and `bg-fill-selected` for the hover and chosen fills, `bg-fill-quiet` for a faint panel, `bg-chip` for a chip                                                                                                  | DS-2       |
-| `no-streamdown-names` | a name `theme.css` keeps painting for Streamdown's bundle alone, on any colour utility, with any variant or opacity: `bg-background`, `text-foreground`, `bg-muted`, `text-muted-foreground`, `border-border`, `bg-sidebar`, `bg-primary`, `text-primary-foreground`, `bg-black`; or its custom property, `var(--color-muted)` | the token the DS5 codemod moved each one to: `canvas`, `ink`, `surface-muted`, `ink-muted`, `line` (`line-soft` for `border-border/60` to `/80`), `surface-sunken`, `strong`, `on-strong`; black is `viewer` behind a picture and `scrim` behind a dialog                                 | MAR-3618   |
-| `motion-from-tokens`  | `duration-150`, `delay-75`, `transition-all`                                                                                                                                                                                                                                                                                   | `duration-exit`, `duration-fast`, `duration-panel`, `duration-slow` (a bare `transition` is already `duration-fast`), and a transition that names what moves: `transition-colors`, `transition-opacity`, `transition-transform`                                                           | DS-33      |
+| Rule                  | Fails on                                                                                                                                                                                                                                                                                                                       | Use instead                                                                                                                                                                                                                                                                                | Audit      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `no-magic-values`     | an arbitrary value on a sizing, spacing, type, colour, border, shadow, layering, outline or motion utility: `w-[37px]`, `text-[11px]`, `grid-cols-[1fr_auto]`, `bg-[#0b0b0f]`; an arbitrary viewport breakpoint, `min-[860px]:` or `max-[…]:` (DS6)                                                                            | the token's utility (`text-2xs`, `w-side-panel`, `bg-terminal-bg`), or a new token in `tokens.css` and `theme.css`; a custom property is `w-(--name)`, never `w-[var(--name)]`; a breakpoint is Tailwind's (`md:`, `lg:`) or a `--breakpoint-*` of a theme (`learn-loom:`)                 | DS-20      |
+| `no-raw-colors`       | a hex colour, or `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(`, `oklab(`, `lab(` or `lch(` with a value, in `.ts`, `.tsx` or `.css`                                                                                                                                                                                               | a colour token (`bg-surface`, `text-danger-ink`, `var(--line)`); code that can't read CSS takes a mirror from `@convergence/ui`, as xterm takes `terminalTokens`                                                                                                                           | DS-26      |
+| `no-palette-colors`   | a Tailwind palette class: `text-`, `bg-`, `border-` (and its sides), `ring-`, `fill-`, `stroke-`, `from-`, `to-`, `via-`, `outline-`, `decoration-`, `divide-` or `shadow-` with `slate` … `rose` and a shade                                                                                                                  | a tone (R1): `text-<tone>-ink`, `bg-<tone>-soft`, `border-<tone>-line`, `bg-<tone>-solid` for `neutral`, `info`, `success`, `warning` and `danger`, or the `tone` of Badge, StatusPill, StatusDot and Notice; a named category is a hue token (`merged`, `crew-*`, `provider-*`, `tag-*`)  | DS-1       |
+| `no-dark-variant`     | a `dark:` class, in the app only                                                                                                                                                                                                                                                                                               | the colour fixed in its token: every token is `light-dark(LIGHT, DARK)`, so a utility is right in both themes by itself. `dark:` belongs inside `@convergence/ui` (`packages/ui/AGENTS.md`)                                                                                                | DS-1, DS-2 |
+| `no-white-overlays`   | `border-white/`, `bg-white/`, `ring-white/`, `divide-white/` and their `black` twins, in the app only                                                                                                                                                                                                                          | the theme-safe tokens: `border-line-soft` for a hairline, `bg-fill-hover` and `bg-fill-selected` for the hover and chosen fills, `bg-fill-quiet` for a faint panel, `bg-chip` for a chip                                                                                                   | DS-2       |
+| `no-streamdown-names` | a name `theme.css` keeps painting for Streamdown's bundle alone, on any colour utility, with any variant or opacity: `bg-background`, `text-foreground`, `bg-muted`, `text-muted-foreground`, `border-border`, `bg-sidebar`, `bg-primary`, `text-primary-foreground`, `bg-black`; or its custom property, `var(--color-muted)` | the token the DS5 codemod moved each one to: `canvas`, `ink`, `surface-muted`, `ink-muted`, `line` (`line-soft` for `border-border/60` to `/80`), `surface-sunken`, `strong`, `on-strong`; black is `viewer` behind a picture and `scrim` behind a dialog                                  | MAR-3618   |
+| `motion-from-tokens`  | `duration-150`, `delay-75`, `transition-all`; and in a stylesheet too (`.css`, DS6), an `animation` or `transition` (or its `-duration`, `-delay`, `-timing-function`) with a time or an easing typed out: `600ms`, `ease-out`, `cubic-bezier(…)`                                                                              | `duration-exit`, `duration-fast`, `duration-panel`, `duration-slow` (a bare `transition` is already `duration-fast`), and a transition that names what moves: `transition-colors`, `transition-opacity`, `transition-transform`; in CSS, `var(--motion-pulse)`, `var(--motion-ease-enter)` | DS-33      |
 
 `no-raw-colors` is narrower than accent.'s on purpose, so that it fires only on colours:
 
@@ -71,6 +71,18 @@ The terminal needs no exclusion. xterm can't read CSS, so `@convergence/ui` expo
 tokens that a test keeps equal to `tokens.css`; it sits under `src/styles`, out of the rule's
 reach. The app's xterm theme (`features/terminal-pane/xterm-setup.pure.ts`) still writes the same
 twenty hex values out again, and the sweep replaces them with `terminalTokens`.
+
+A breakpoint can't be a token's `var()`, since a media query doesn't read custom properties, so a
+breakpoint Tailwind doesn't name is a `--breakpoint-*` in a theme block: Learn Loom's two-column
+point is `--breakpoint-learn-loom: 53.75rem` in the app's `global.css`, worn as `learn-loom:`. The
+breakpoint branch reads viewport breakpoints only: an arbitrary container query (`@min-[56rem]:`,
+the Actions button's placement in `conversation-actions.styles.ts`) is a container size, which
+the placement test reads by its number, and is left for the sweep that names container sizes.
+
+`motion-from-tokens` reads the app's stylesheets as well as its code (DS6): `global.css` had typed
+the notifications pulse's `600ms ease-out` and the working card's `ease-in-out` where the tokens
+say the same, and a class rule can't see a stylesheet. The tokens' own files
+(`packages/ui/src/styles/**`) are out of its reach, as for every token rule.
 
 A transition that names what moves is a utility too: `transition-[width]` is an arbitrary value,
 which `no-magic-values` reports. Besides Tailwind's `transition-colors`, `transition-opacity` and
@@ -97,15 +109,23 @@ mapping in its message is the DS5 codemod's table
 `regex` rules over the app, where a hand-built copy drifts. (`no-invisible-focus-ring` reads
 `packages/ui/src` too: an invisible ring is a bug wherever it's typed.)
 
-| Rule                      | Fails on                                                                                                                                                                                                                                   | Use instead                                                                                                                                                                                  | Audit       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `use-focus-ring`          | a ring typed by hand: `focus-visible:outline-focus`, `focus-visible:ring-focus`, the names before DS5 (`ring-ring`, `outline-ring`), each also behind `focus:`, `focus-within:` or `has-focus-visible:`, or a bare `focus-visible:outline` | `focusRing`, `focusRingInset`, `focusRingField`, `focusRingWithin` from `@convergence/ui`, which pick the ring by where the element sits; Button, IconButton, Input and TextLink have theirs | DS-7        |
-| `no-invisible-focus-ring` | one string with `outline-none` and `focus-visible:outline-…` but no `focus-visible:outline-solid`: in Tailwind 4 that ring draws nothing (MAR-3588)                                                                                        | the same                                                                                                                                                                                     | DS-7        |
-| `use-spinner`             | `animate-spin`                                                                                                                                                                                                                             | Button's `pending` (with `pendingLabel`), or `Spinner`: both run on the motion tokens and stand still under reduced motion                                                                   | DS-12       |
-| `use-form-error`          | `<p … role="alert"`                                                                                                                                                                                                                        | `FormError` (`FieldError` in a `Field`, DS3c)                                                                                                                                                | DS-5, DS-13 |
-| `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
-| `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
-| `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
+| Rule                      | Fails on                                                                                                                                                                                                                                   | Use instead                                                                                                                                                                                  | Audit         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `use-focus-ring`          | a ring typed by hand: `focus-visible:outline-focus`, `focus-visible:ring-focus`, the names before DS5 (`ring-ring`, `outline-ring`), each also behind `focus:`, `focus-within:` or `has-focus-visible:`, or a bare `focus-visible:outline` | `focusRing`, `focusRingInset`, `focusRingField`, `focusRingWithin` from `@convergence/ui`, which pick the ring by where the element sits; Button, IconButton, Input and TextLink have theirs | DS-7          |
+| `no-invisible-focus-ring` | one string with `outline-none` and `focus-visible:outline-…` but no `focus-visible:outline-solid`: in Tailwind 4 that ring draws nothing (MAR-3588)                                                                                        | the same                                                                                                                                                                                     | DS-7          |
+| `use-spinner`             | `animate-spin`                                                                                                                                                                                                                             | Button's `pending` (with `pendingLabel`), or `Spinner`: both run on the motion tokens and stand still under reduced motion                                                                   | DS-12         |
+| `use-form-error`          | `<p … role="alert"`                                                                                                                                                                                                                        | `FormError` (`FieldError` in a `Field`, DS3c)                                                                                                                                                | DS-5, DS-13   |
+| `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3          |
+| `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`; there also a text size, a padding, a min/max height or a height token, and `[&_button]:` resizing every button in a box                          | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4          |
+| `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6          |
+| `use-timestamp`           | a time written by hand: `Intl.DateTimeFormat`, `Intl.RelativeTimeFormat`, `toLocaleDateString(`, `toLocaleTimeString(`, a Date's own `toLocaleString(`, or `toLocaleString(` with a date's parts in its options                            | `<Timestamp>` (`relative`, `clock`, `date`, `datetime`, `log`): a `<time>`, the whole moment in our Tooltip; `formatTimestamp` where it must be a string                                     | CONV-22       |
+| `no-native-title`         | `title=` on any lowercase JSX element (`title=""` is no hint) or an SVG `<title>`, in the app and `packages/ui/src`                                                                                                                        | `<Tooltip label>` (`when="truncated"` for text cut short); an icon-only button is an IconButton, whose `label` is its tooltip (R2)                                                           | NAV-20        |
+| `no-buttons-as-rows`      | `h-auto` in a `<Button>`'s or `<IconButton>`'s `className`: a button stretched so more lines fit, as a row or a card                                                                                                                       | `ListRow` for a row, `Card` with a `CardAction` for a box that opens, `ChoiceCard` for an option with a sentence, a link Button for words                                                    | DS-21         |
+| `use-notify`              | an import of `sonner` (its `toast`, its `Toaster`, or a type) anywhere in the app, tests too                                                                                                                                               | `notify` from `@convergence/ui`: `notify.failure("update Codex", error)` reads "Couldn’t update Codex." with the reason under it (R10); `toast` for the rest                                 | DS-8          |
+| `use-section-label`       | a hand-typed eyebrow: `uppercase` and a `tracking-…` utility in one class string (a `className`, an argument to `cn`, a `*.styles.ts` constant), in the app                                                                                | `SectionLabel` (`size="sm"` for the 10 px step, `as="h3"` when it names a section), or `sectionLabel` / `sectionLabelVariants({ size })` where the element can't be one                      | DS-20         |
+| `use-badge-caps`          | `uppercase` in a `<Badge>`'s `className`                                                                                                                                                                                                   | Badge's `caps`: one look for a kind or a short state in capitals                                                                                                                             | DLG           |
+| `no-inline-drag-region`   | a window drag region written by hand, in the app or `packages/ui/src`: `WebkitAppRegion` (an inline style), `data-app-region`, or `-webkit-app-region:` in a style string                                                                  | the theme's classes, `app-drag` on a strip and `app-no-drag` on what sits on it, or `ScreenHeader` and `DragRegion`, which own the drag; every part and popup carries `app-no-drag` itself   | DS-19, NAV-11 |
+| `no-removed-libraries`    | an import (types too) of a library DS1–DS5 removed, anywhere in `apps/*/src` or `packages/*/src`: `@radix-ui/*`, `radix-ui`, `cmdk`, `motion`, `framer-motion` (a `forbidden-import` rule)                                                 | `@convergence/ui`'s part (Base UI underneath); Combobox and Listbox for a command list; CSS on the motion tokens, or a primitive in `packages/ui/src/motion`                                 | DS-30         |
 
 A regex reads text, not code, so it sees only what's written where it looks: a size override kept
 in a `*.styles.ts` constant passes `use-button-sizes`, and `repeated-classes` is what catches that
@@ -114,6 +134,59 @@ the tag, past arrow functions"), so attribute order and line breaks don't matter
 a variant (`[&_svg]:size-4`, the size of the icon inside) is not the button's size, and doesn't
 count. Every regex rule skips a line that starts with a comment (`//`, `*`, `/*` or `{/*`), so a doc
 comment may name the recipe it replaced.
+
+`use-timestamp` (DS6, MAR-3608) reads the app and `packages/ui/src`, but not
+`packages/ui/src/components/timestamp/`, where Timestamp and its helpers (`formatTimestamp`,
+`fullDateLabel`, `exactDateLabel`, `calendarDaysBefore`) write every time through Intl. It is as
+precise as a regex can be about a type it can't see. `toLocaleDateString` and `toLocaleTimeString`
+are always times, and so is `Intl.DateTimeFormat`. `toLocaleString` is a number's too (`1,234`), so
+the rule reports it only where the text shows a date: called on `new Date(…)`, or with options that
+name a date's parts (`month:`, `hour:`, `dateStyle:` …). A bare `when.toLocaleString()` on a Date
+held in a variable reads exactly like a count's, and passes; review catches that one. A time built
+from `getHours()` and `padStart` is not a call the rule can name either. Five formats cover the app:
+`relative`, `clock` and `date`, `datetime`, and `log` (the transcript's "Today, 14:07:33"); `seconds`
+writes a clock to the second, and `hour12: false` keeps Mission Control's and Loom's 24-hour clocks.
+
+DS6 (MAR-3608) widened three of these after sweeping each to zero. `use-focus-ring` also fails on
+`focus-visible:outline-none` (and its `focus:`, `focus-within:` and `has-focus-visible:` twins):
+tailwind-merge puts it and a part's own `outline-solid` in one group, so a className that carries
+it cancels the part's ring. A field inside a box that rings for it is `Input` or `Textarea`
+`variant="bare"`, with `focusRingWithin` on the box. `use-button-sizes` reads a size the scale
+doesn't name, typed over a `size`: a text size, a padding, a min or max height or a height token
+(`size="sm" className="px-3 text-2xs"`, `min-h-10`), and `[&_button]:` raising every button in a
+box. Two kinds are left out on purpose: a `variant="link"` Button, which has no box, so its words
+may take the sentence's size; and a Button with `h-auto`, grown into a row, which
+`no-buttons-as-rows` reports. `no-native-title` replaced the sidebar-only walk in
+`sidebar-tooltip-sites.test.ts`: it reads every `.tsx` in the app and `packages/ui/src`, not only the
+app, since the browser's hint is wrong wherever it's typed; a part's `title` prop (EmptyState's,
+Notice's) is its words, so only a lowercase element counts.
+
+`no-buttons-as-rows` (DS6, MAR-3608) is `use-button-sizes`' sibling, kept apart from it: `h-auto` is
+not a size but the undoing of one, and it means a Button was made to hold more than a control's
+line. Before it turned red, sixteen Buttons had it, and each became the part for what it was. Boxes
+that open something are a `Card` with a `CardAction` that holds their lines: the Needs-you card,
+History's runs, a conversation to add to a crew, the session intents, a choice request's answers,
+the parallel-work marker and the activity filters' summary. The turn card is a Collapsible, its
+files in the panel, and the work block a ListRow. The local tunnels' pill is a `StatusPillButton`. A
+picture, two section titles and "New workspace" are link Buttons, which have no box to undo, and
+"Forked from" is one line on the 28 px Button. Like `use-button-sizes`, it reads only the tag: an
+`h-auto` kept in a `*.styles.ts` constant, or handed to a component that passes it on to a Button,
+is out of its reach.
+
+`use-notify` is the one rule here that reads imports rather than text: a `forbidden-import` rule
+(the type Chaperone's import rules use), so a comment or a string that names `sonner` is not an
+import, and a type import counts too (`includeTypeImports`). Ruling 2 (2 Oct 2026) moved the
+toasts onto the design system: `Toaster` draws each one on the popup surface with its kind in R1's
+tones, and `notify` words a failure as R10 does, so a toast raised from `sonner` itself would skip
+both. Tests count too, unlike the regex rules': a test mocks `notify` from `@convergence/ui`, and a
+`vi.mock('sonner')` under it is not an import.
+
+`use-section-label` reads one class string at a time, wherever it is written, so a constant handed
+to an element is seen as well as a `className`; an eyebrow split across two strings is not. A
+Badge's capitals are `caps`, which `use-badge-caps` asks for: it reads the Badge's tag past a glyph
+handed in a prop (`icon={<CheckCircle2 />}`), whose `/>` would otherwise end it. Both came with
+DS6's labels sweep (MAR-3608), which brought each to zero first; their canary is
+`features/skill-tags/skill-tags.presentational.tsx`.
 
 ## 3. A raw element needs a reason
 
@@ -143,6 +216,11 @@ It replaced the two warnings that read presentational parts for `<button>` and `
 Containers keep theirs, `no-raw-button-outside-shared` and `no-raw-input-outside-shared`, which
 take no reason: a container wires state, and a control it draws belongs in a presentational part
 or the design system.
+
+A raw `<pre` is the rule's since DS6 (MAR-3608): a block of preformatted text is CodeBlock's job,
+scrolling inside itself and focusable while it does (CONV-32). Three keep theirs with a reason: a
+run's live log, whose stdout and stderr each wear their own ink (CodeBlock takes one string), a
+prompt shown in the body font as it was written, and the debug drawer's payloads, dozens to a page.
 
 ## 4. Every part has stories
 
@@ -227,9 +305,10 @@ review's: a space before the dots (`'Loading ...'`), and words that reach the sc
   `space-workboard`, drawn with `buttonVariants` as an icon button, which TextLink can't be. That
   link is the case for the helper: if the sweep wants it, `externalLinkProps` goes into
   `@convergence/ui` first, and the rule after it.
-- **`use-timestamp`, `no-cursor-pointer`, `no-tap-highlight-per-element`.** Not part of DS4's
-  brief. `Timestamp` exists (DS3d) and can take the first when the sweep wants it; the cursor is
-  DS5's base layer's job (DS-35); and Convergence is a desktop app with no tap highlight.
+- **`no-cursor-pointer`, `no-tap-highlight-per-element`.** Not part of DS4's brief. The cursor is
+  DS5's base layer's job (DS-35), and Convergence is a desktop app with no tap highlight.
+  (`use-timestamp` was in this list until DS6 ported it, as hand-formatted times rather than
+  accent.'s `<time title>`: see section 2.)
 
 ## When one fires
 
@@ -253,7 +332,10 @@ the day it couldn't be wrong: DS4 swept each area to zero against the baseline b
 (MAR-3618) re-measured with `npm run chaperone -- check --format json` and changed every
 `"severity"` to `"error"`. Each canary still proves its rule fires (`npm run canaries`). `no-streamdown-names` came after
 (DS5c) and was an error from its first day: by then nothing outside `theme.css` wrote a
-Streamdown name.
+Streamdown name. DS6 (MAR-3608) swept each straggler first and added its rule at error the same
+way: `no-inline-drag-region` and `no-removed-libraries` are new, `no-magic-values` reads arbitrary
+breakpoints and `motion-from-tokens` reads stylesheets, each with a canary that goes silent when
+its new pattern is taken out.
 
 | Rule                         | Where it's set                  | Severity |
 | ---------------------------- | ------------------------------- | -------- |
@@ -271,14 +353,22 @@ Streamdown name.
 | `no-title-on-buttons`        | `design-system-drift.json`      | error    |
 | `use-button-sizes`           | `design-system-drift.json`      | error    |
 | `no-native-confirm`          | `design-system-drift.json`      | error    |
+| `no-inline-drag-region`      | `design-system-drift.json`      | error    |
+| `no-removed-libraries`       | `design-system-drift.json`      | error    |
 | `raw-elements-need-a-reason` | `design-system-drift.json`      | error    |
 | `ui-components-have-stories` | `design-system-drift.json`      | error    |
 | `app-parts-have-stories`     | `design-system-drift.json`      | error    |
 | `stories-titled-by-group`    | `design-system-drift.json`      | error    |
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
+| `use-notify`                 | `design-system-drift.json`      | error    |
 | `no-ascii-ellipsis`          | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
+| `use-timestamp`              | `design-system-drift.json`      | error    |
+| `no-native-title`            | `design-system-drift.json`      | error    |
+| `no-buttons-as-rows`         | `design-system-drift.json`      | error    |
+| `use-section-label`          | `design-system-drift.json`      | error    |
+| `use-badge-caps`             | `design-system-drift.json`      | error    |
 
 A rule is never relaxed to reach zero, and never turned back into a warning to let a change
 through. When one fires, fix what it found ([When one fires](#when-one-fires)). When it can't be

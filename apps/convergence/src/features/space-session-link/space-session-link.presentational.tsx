@@ -195,9 +195,9 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
           ) : (
             <div className="space-y-2">
               {linkedSpaces.map(({ attempt, space }) => (
-                <div
+                <Card
                   key={attempt.id}
-                  className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-line-soft bg-surface/30 px-3 py-3"
+                  className="flex min-w-0 items-center justify-between gap-3"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">
@@ -217,7 +217,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                     <Unlink className="size-4" />
                     Detach
                   </Button>
-                </div>
+                </Card>
               ))}
             </div>
           )}

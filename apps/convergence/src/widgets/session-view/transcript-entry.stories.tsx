@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { metaText } from '@/shared/testing/meta-line'
 import type { Attachment } from '@/entities/attachment'
 import type { ConversationItem } from '@/entities/session'
 import { expect, fn, waitFor, within } from 'storybook/test'
@@ -422,7 +423,7 @@ export const ApprovalRequest: Story = {
     const card = canvas.getByRole('group', { name: 'Approval needed' })
     await expect(
       within(card).getByText(
-        'git push · Not in the allow list for this project',
+        metaText('git push · Not in the allow list for this project'),
       ),
     ).toBeVisible()
     await userEvent.click(within(card).getByRole('button', { name: 'Approve' }))

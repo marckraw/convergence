@@ -69,11 +69,9 @@ function renderSkillRow(
           {skill.shortDescription || skill.description || 'No description.'}
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <Badge className="uppercase">{skill.sourceLabel}</Badge>
-          <Badge className="uppercase">{skill.providerName}</Badge>
-          {!skill.enabled ? (
-            <Badge className="uppercase">Disabled</Badge>
-          ) : null}
+          <Badge caps>{skill.sourceLabel}</Badge>
+          <Badge caps>{skill.providerName}</Badge>
+          {!skill.enabled ? <Badge caps>Disabled</Badge> : null}
         </span>
       </span>
     </Button>
@@ -104,7 +102,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
           variant="quiet"
           aria-label="Select skills"
           disabled={disabled}
-          size="sm"
+          size="md"
           className={triggerClassName}
         >
           <Library className="h-3.5 w-3.5" />
@@ -141,7 +139,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
         />
       </div>
 
-      <div className="app-scrollbar max-h-80 overflow-y-auto p-2">
+      <div className="max-h-80 overflow-y-auto p-2">
         {notice ? (
           <p
             className="px-2 py-1.5 text-xs text-ink-muted"

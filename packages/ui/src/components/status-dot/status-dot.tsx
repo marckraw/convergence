@@ -10,6 +10,18 @@ const SIZES = {
 
 type StatusDotSize = keyof typeof SIZES
 
+/**
+ * A hollow dot: the tone's solid as a ring with nothing inside. Written out
+ * whole, so Tailwind finds each class here.
+ */
+const RINGS: Record<Tone, string> = {
+  neutral: 'border border-neutral-solid',
+  info: 'border border-info-solid',
+  success: 'border border-success-solid',
+  warning: 'border border-warning-solid',
+  danger: 'border border-danger-solid',
+}
+
 type StatusDotProps = {
   /** What the state says (R1). */
   tone?: Tone
@@ -17,6 +29,11 @@ type StatusDotProps = {
   size?: StatusDotSize
   /** It beats while something is under way. Reduced motion stands it still. */
   pulse?: boolean
+  /**
+   * An empty ring in the tone: what should be there isn't (a seat with no
+   * card), where the filled dot says it is.
+   */
+  hollow?: boolean
   /**
    * The state in words, for a screen reader, when no word beside the dot says
    * it already. Without one the dot is decoration (R1: never colour alone).
@@ -36,6 +53,7 @@ function StatusDot({
   tone = 'neutral',
   size = 'md',
   pulse = false,
+  hollow = false,
   label,
   className,
 }: StatusDotProps) {
@@ -46,10 +64,11 @@ function StatusDot({
       data-tone={tone}
       data-size={size}
       data-pulse={pulse ? '' : undefined}
+      data-hollow={hollow ? '' : undefined}
       className={cn(
         'inline-block shrink-0 rounded-full',
         SIZES[size],
-        toneSolid[tone],
+        hollow ? RINGS[tone] : toneSolid[tone],
         pulse && 'animate-pulse motion-reduce:animate-none',
         className,
       )}

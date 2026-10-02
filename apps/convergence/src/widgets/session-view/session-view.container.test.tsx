@@ -1,3 +1,4 @@
+import { metaLine } from '@/shared/testing/meta-line'
 import {
   act,
   fireEvent,
@@ -175,6 +176,17 @@ const devRun = {
 
 /** One task running: Parallel work holds its place in the row (CH4 R2). */
 const oneRunning = { running: 1, unknown: 0, failed: 0, stopped: 0 }
+
+/**
+ * Whether Electron would let the window drag from here: the nearest
+ * ancestor-or-self that says, in the one spelling there is (`app-drag`,
+ * `app-no-drag`; NAV-11). jsdom computes no styles, so the class is read.
+ */
+const appRegion = (element: Element) => {
+  const at = element.closest('.app-drag, .app-no-drag')
+  if (at === null) return null
+  return at.classList.contains('app-no-drag') ? 'no-drag' : 'drag'
+}
 const runParallel = () =>
   useSessionStore.setState((state) => ({
     sessions: state.sessions.map((session) => ({
@@ -727,7 +739,7 @@ describe('SessionView', () => {
     const failed = {
       main: !!screen.queryByText('main immediately'),
       child: !!screen.queryByText('child hidden'),
-      error: !!screen.queryByText('Parallel work could not be read ·'),
+      error: !!screen.queryByText("Couldn't read parallel work."),
     }
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() =>
@@ -735,9 +747,7 @@ describe('SessionView', () => {
     )
     expect({
       failed,
-      errorAfterRetry: !!screen.queryByText(
-        'Parallel work could not be read ·',
-      ),
+      errorAfterRetry: !!screen.queryByText("Couldn't read parallel work."),
       reads: vi.mocked(window.electronAPI.session.listAgentRuns).mock.calls
         .length,
     }).toEqual({
@@ -1303,7 +1313,7 @@ describe('SessionView', () => {
       await screen.findByRole('button', { name: /^Pull request/ }),
     )
     await screen.findByText('PR unknown — gh not found')
-    expect(screen.getByText('#42 · open')).toBeInTheDocument()
+    expect(metaLine('#42 · open')).toBeDefined()
   })
 
   it('opening Session actions does not refresh the PR (mutation: refresh on every menu)', async () => {
@@ -2462,19 +2472,20 @@ describe('SessionView', () => {
       const statusRow = header.querySelector<HTMLElement>(
         '[data-header-status-row]',
       )!
-      expect(statusRow).not.toHaveAttribute('data-app-region')
+      expect(statusRow).not.toHaveClass('app-no-drag')
       expect(statusRow.style.getPropertyValue('-webkit-app-region')).toBe('')
-      expect(
-        statusRow.closest('[data-app-region]')?.getAttribute('data-app-region'),
-      ).toBe('drag')
+      expect(appRegion(statusRow)).toBe('drag')
       const buttons = statusRow.querySelectorAll('button')
       expect([...buttons].map((button) => button.textContent)).toEqual([
         'Parallel work · 2',
       ])
-      for (const button of buttons)
-        expect(
-          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
-        ).toBe('no-drag')
+      for (const button of buttons) {
+        expect(appRegion(button)).toBe('no-drag')
+        // The slot around it says so too, not only the part (R7).
+        expect(appRegion(button.closest('[data-header-inner]')!)).toBe(
+          'no-drag',
+        )
+      }
     })
 
     it('R7 every button in the header sits inside a no-drag region, and the header itself drags — mutation remove no-drag from the right-hand group turns red', () => {
@@ -2492,7 +2503,7 @@ describe('SessionView', () => {
       const header = document.querySelector<HTMLElement>(
         '[data-conversation-header]',
       )!
-      expect(header).toHaveAttribute('data-app-region', 'drag')
+      expect(appRegion(header)).toBe('drag')
       const buttons = header.querySelectorAll('button')
       // The right-hand group is in the sweep: Stop and More live there.
       expect(
@@ -2501,10 +2512,9 @@ describe('SessionView', () => {
         expect.arrayContaining(['Stop Test session', 'Session actions']),
       )
       for (const button of buttons)
-        expect(
-          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
-          button.textContent ?? '',
-        ).toBe('no-drag')
+        expect(appRegion(button.parentElement!), button.textContent ?? '').toBe(
+          'no-drag',
+        )
     })
   })
   describe('MAR-3429 CH4 the header’s groups', () => {
@@ -2691,7 +2701,8 @@ describe('SessionView', () => {
         name: 'Harness history',
       })
       await waitFor(() => expect(document.activeElement).toBe(harness))
-      expect(harness).toHaveTextContent('linear · failed')
+      // The row is a MetaLine (CONV-23): read it as the eye does.
+      expect(metaLine('linear · failed', harness)).toBeDefined()
       await act(async () =>
         fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' }),
       )

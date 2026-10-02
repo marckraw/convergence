@@ -1,3 +1,5 @@
+import { durationsMs } from '../../motion/tokens'
+
 /** Where a tooltip shows, beside what it explains. */
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
 
@@ -6,12 +8,16 @@ export type TooltipInstant = 'focus' | 'delay' | undefined
 
 /**
  * How long a pointer rests on something before its tooltip shows, in ms: the
- * delay the app's root provider has always used (R0, MAR-3616).
+ * delay the app's root provider has always used (R0, MAR-3616), the
+ * `--motion-tooltip-delay` token (DS-33).
  */
-export const TOOLTIP_DELAY_MS = 200
+export const TOOLTIP_DELAY_MS = durationsMs.tooltipDelay
 
-/** After a tooltip closes, how long the next one still shows at once, in ms. */
-export const TOOLTIP_WARM_MS = 300
+/**
+ * After a tooltip closes, how long the next one still shows at once, in ms:
+ * the `--motion-tooltip-warm` token (DS-33).
+ */
+export const TOOLTIP_WARM_MS = durationsMs.tooltipWarm
 
 /** Between a tooltip and what it explains, in px: today's `sideOffset`. */
 export const TOOLTIP_OFFSET = 4
@@ -51,20 +57,27 @@ export const openingOf = (
 /**
  * Whether an anchor's tooltip may show now. An empty label shows nothing. A
  * trigger whose menu or popover is open says enough already: Base UI marks it
- * `data-popup-open`, Radix (until DS3b) `aria-expanded="true"`; so does a
- * trigger with a TooltipCard of its own (`popupOpen` covers both). A tooltip
+ * `data-popup-open`, and so does a trigger with a TooltipCard of its own
+ * (`popupOpen` covers both); a popup trigger that says `aria-haspopup` and
+ * `aria-expanded="true"` is open too. A disclosure that is merely expanded (a
+ * branch row, a fold) has no popup, and keeps its name (NAV-13). A tooltip
  * asked for only when its text is cut short shows only then.
  */
 export const mayShow = (anchor: {
   label: string | null
   popupOpen: boolean
   expanded: string | null
+  hasPopup: string | null
   onlyWhenTruncated: boolean
   truncated: boolean
 }): boolean =>
   Boolean(anchor.label) &&
   !anchor.popupOpen &&
-  anchor.expanded !== 'true' &&
+  !(
+    anchor.expanded === 'true' &&
+    anchor.hasPopup !== null &&
+    anchor.hasPopup !== 'false'
+  ) &&
   (!anchor.onlyWhenTruncated || anchor.truncated)
 
 type Box = { top: number; left: number; width: number; height: number }

@@ -13,7 +13,20 @@ export type TextareaProps = Omit<ComponentProps<'textarea'>, 'className'> & {
   autoGrow?: boolean
   /** With `autoGrow`: the most lines it grows to before it scrolls. */
   maxRows?: number
+  /**
+   * `field` (the default) wears the field frame and rings over its border.
+   * `bare` is the text inside a card of its own, such as the composer's: no
+   * border, padding, shadow, resize handle or ring of its own, because the
+   * card is what reads as the field. Never a className that cancels the ring
+   * (DS-7).
+   */
+  variant?: TextareaVariant
 }
+
+export type TextareaVariant = 'field' | 'bare'
+
+/** A bare field: the card around it has the edge, the room and the focus. */
+const bare = 'min-h-0 resize-none border-0 px-0 py-0 shadow-none outline-none'
 
 /**
  * Base UI types its field control as an <input>; drawn as a <textarea>, it
@@ -27,13 +40,14 @@ type ControlProps = Omit<FieldPrimitive.Control.Props, 'render'>
  * Input; on its own it needs a <label> or an aria-label. It wears the field
  * frame, with its border on the control line (MAR-3460) instead of today's
  * faint hairline, and the app's scrollbar. `rows` sets its height; `autoGrow`
- * lets it grow.
+ * lets it grow; `bare` puts it inside a card that is the field.
  */
 export function Textarea({
   className,
   style,
   autoGrow = false,
   maxRows,
+  variant = 'field',
   ...props
 }: TextareaProps) {
   // py-2 and the 1 px border: what a line count adds to make a height.
@@ -46,12 +60,13 @@ export function Textarea({
       {...(props as unknown as ControlProps)}
       data-slot="textarea"
       data-auto-grow={autoGrow ? '' : undefined}
+      data-variant={variant}
       render={<textarea />}
       className={cn(
-        'app-scrollbar flex min-h-9 px-3 py-2',
+        'flex min-h-9 px-3 py-2',
         controlFrame,
         autoGrow && 'field-sizing-content',
-        focusRingField,
+        variant === 'bare' ? bare : focusRingField,
         className,
       )}
       style={growLimit}

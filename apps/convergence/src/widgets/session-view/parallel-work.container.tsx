@@ -15,10 +15,14 @@ import {
 import { useElementWidth } from '@/shared/hooks/use-element-width'
 import {
   ConfirmDialog,
+  DescriptionItem,
+  DescriptionList,
   DialogTitle,
+  EmptyState,
   FormError,
   Sheet,
   SheetContent,
+  Timestamp,
 } from '@convergence/ui'
 import { ConversationItem } from './conversation-item.container'
 import { ParallelWorkPanel } from './parallel-work.presentational'
@@ -300,8 +304,19 @@ export const ParallelWork: FC<Props> = ({
                 ['Depth', selected.run.depth],
               ]
             : []),
-          ['Started', fact.startedAt],
-          ['Ended', fact.endedAt],
+          // Moments as Timestamps, to the second as the transcript's (CONV-22).
+          [
+            'Started',
+            fact.startedAt ? (
+              <Timestamp date={fact.startedAt} format="log" />
+            ) : null,
+          ],
+          [
+            'Ended',
+            fact.endedAt ? (
+              <Timestamp date={fact.endedAt} format="log" />
+            ) : null,
+          ],
           ['Usage', selected.run?.usageJson],
           [
             'Transcript source',
@@ -360,7 +375,11 @@ export const ParallelWork: FC<Props> = ({
       }}
     >
       {loading && (
-        <p className="p-5 text-xs text-ink-muted">Loading parallel work…</p>
+        <EmptyState
+          state="loading"
+          title="Loading parallel work…"
+          variant="plain"
+        />
       )}
       {(error || results.error) && (
         <FormError className="p-5">
@@ -417,16 +436,19 @@ export const ParallelWork: FC<Props> = ({
         transcript={transcript}
         details={
           details ? (
-            <dl className="space-y-3 border-t pt-3 text-xs">
+            // Terms and values, each value under its term (CONV-24).
+            <DescriptionList
+              density="compact"
+              className="border-t border-line pt-3"
+            >
               {detailFields.map(([label, value]) => (
-                <div key={String(label)}>
-                  <dt className="text-ink-muted">{label}</dt>
-                  <dd className="break-all whitespace-pre-wrap">
+                <DescriptionItem key={String(label)} term={label}>
+                  <span className="whitespace-pre-wrap">
                     {value ?? 'Not reported'}
-                  </dd>
-                </div>
+                  </span>
+                </DescriptionItem>
               ))}
-            </dl>
+            </DescriptionList>
           ) : undefined
         }
       />

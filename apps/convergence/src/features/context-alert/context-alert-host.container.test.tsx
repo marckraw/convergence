@@ -1,13 +1,13 @@
 import { act, render } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { contextDrillApi, useContextDrillStore } from '@/entities/context-drill'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import type { ContextAlertSettings } from '@/shared/lib/context-alert-settings.pure'
 import { ContextAlertHostContainer } from './context-alert-host.container'
 
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('@convergence/ui', () => ({ notify: { message: vi.fn() } }))
 
 vi.mock('@/entities/context-drill', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/entities/context-drill')>()),
@@ -21,7 +21,7 @@ vi.mock('@/entities/context-drill', async (importOriginal) => ({
 
 const describeDrill = vi.mocked(contextDrillApi.describe)
 
-const toastMock = toast as unknown as ReturnType<typeof vi.fn>
+const toastMock = vi.mocked(notify.message)
 
 function session(
   id: string,
@@ -289,10 +289,10 @@ describe('ContextAlertHostContainer', () => {
 
       expect(describeDrill).toHaveBeenCalledWith('a')
       const options = toastMock.mock.calls[0]![1] as {
-        cancel: { label: string; onClick: () => void }
+        secondaryAction: { label: string; onClick: () => void }
       }
-      expect(options.cancel.label).toBe('Run the drill')
-      options.cancel.onClick()
+      expect(options.secondaryAction.label).toBe('Run the drill')
+      options.secondaryAction.onClick()
       expect(run).toHaveBeenCalledWith('a')
       run.mockRestore()
     })

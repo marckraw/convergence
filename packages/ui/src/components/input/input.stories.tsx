@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn } from 'storybook/test'
 import { tokenColor } from '../../../.storybook/color-testing'
+import { focusRingWithin } from '#lib/focus-ring.styles'
 import { Input } from './input'
 
 const meta = {
@@ -98,6 +99,37 @@ export const Disabled: Story = {
     await expect(field).toBeDisabled()
     await userEvent.tab()
     await expect(field).not.toHaveFocus()
+  },
+}
+
+/**
+ * Bare: a field inside a box of its own, like a stepper's. The field has no
+ * edge or ring; the box has both, and rings while the keyboard is in it.
+ */
+export const Bare: Story = {
+  render: () => (
+    <div
+      data-testid="stepper"
+      className={`flex h-control-md w-24 items-center rounded-md border border-hairline-strong ${focusRingWithin}`}
+    >
+      <Input
+        variant="bare"
+        size="sm"
+        type="number"
+        aria-label="WIP limit"
+        defaultValue="2"
+        className="text-center"
+      />
+    </div>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByLabelText('WIP limit')
+    const box = canvas.getByTestId('stepper')
+    await expect(field).toHaveAttribute('data-variant', 'bare')
+    await userEvent.tab()
+    await expect(field).toHaveFocus()
+    await expect(getComputedStyle(field).outlineStyle).toBe('none')
+    await expect(getComputedStyle(box).outlineStyle).toBe('solid')
   },
 }
 

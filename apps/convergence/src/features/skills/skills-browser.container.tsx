@@ -6,7 +6,6 @@ import {
   type ReactElement,
 } from 'react'
 import type { FC } from 'react'
-import { Library } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import {
@@ -20,7 +19,6 @@ import {
   type ProjectOpenApp,
   type ProjectOpenAppId,
 } from '@/entities/project-open'
-import { Button } from '@convergence/ui'
 import {
   filterSkillCatalog,
   findSkillInGroups,
@@ -374,24 +372,7 @@ export const SkillsBrowserDialogContainer: FC<
       editorApps={editorApps}
       editorAppsLoading={editorAppsLoading}
       onOpenInEditor={handleOpenInEditor}
-      trigger={
-        trigger ?? (
-          <Button
-            type="button"
-            variant="quiet"
-            disabled={!projectId}
-            className="w-full justify-between px-2"
-          >
-            <span className="flex items-center gap-2">
-              <Library className="h-3.5 w-3.5" />
-              Skills
-            </span>
-            <span className="text-2xs text-ink-muted/80">
-              {catalog ? totalSkillCount : 'View'}
-            </span>
-          </Button>
-        )
-      }
+      trigger={trigger}
     />
   )
 }

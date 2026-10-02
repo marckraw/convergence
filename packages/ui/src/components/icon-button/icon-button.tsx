@@ -1,3 +1,4 @@
+import { cn } from '#lib/cn.pure'
 import { ButtonBase, type ButtonProps } from '../button/button'
 import { type TooltipSide, tooltipAttributes } from '../tooltip/tooltip'
 
@@ -13,9 +14,17 @@ type IconButtonProps = Omit<ButtonProps, 'aria-label' | 'pendingLabel'> & {
   tooltipDetail?: string
   /** The same action's key, already formatted ("⌘,"): a Kbd in the tooltip. */
   shortcut?: string
-  /** A toggle's state, as aria-pressed: a pinned or an active control. */
+  /**
+   * A toggle's state, as aria-pressed: a pinned or an active control. Pressed,
+   * it wears R7's chosen look, the raised chip, as Toggle and SegmentedControl
+   * do, so no call site paints "on" itself (DS-28, MC-8).
+   */
   pressed?: boolean
 }
+
+/** R7: on is the raised chip, over the variant's hover. */
+const pressedLook =
+  'aria-pressed:bg-chip aria-pressed:text-ink aria-pressed:shadow-raised'
 
 /**
  * A button that shows only an icon (MAR-3616, R2). Its label is both its
@@ -34,6 +43,7 @@ function IconButton({
   pressed,
   variant = 'ghost',
   size = 'md',
+  className,
   ...props
 }: IconButtonProps) {
   return (
@@ -41,6 +51,7 @@ function IconButton({
       variant={variant}
       size={size}
       aria-pressed={pressed}
+      className={cn(pressed !== undefined && pressedLook, className)}
       {...props}
       shape="icon"
       aria-label={label}

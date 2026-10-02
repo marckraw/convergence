@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { feedbackApi, type FeedbackPriority } from '@/entities/feedback'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
@@ -42,7 +42,7 @@ export function FeedbackButtonContainer() {
         },
       })
 
-      toast.success('Feedback received')
+      notify.success('Feedback received')
       setOpen(false)
       setPriority('medium')
       setTitle('')
@@ -52,14 +52,14 @@ export function FeedbackButtonContainer() {
       const nextError =
         err instanceof Error ? err.message : 'Failed to send feedback.'
       setError(nextError)
-      toast.error(nextError)
+      notify.failure('send the feedback', err)
     } finally {
       setSubmitting(false)
     }
   }
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(open, handleSubmit)
+  // Enable cmd+Enter to submit the form; Send says so in its tooltip (DS-34)
+  const submitShortcut = useFormSubmitShortcut(open, handleSubmit)
 
   return (
     <FeedbackButton
@@ -76,6 +76,7 @@ export function FeedbackButtonContainer() {
       onDescriptionChange={setDescription}
       onContactChange={setContact}
       onSubmit={handleSubmit}
+      submitShortcut={submitShortcut}
     />
   )
 }

@@ -6,6 +6,7 @@ import type {
 } from '@/entities/app-settings'
 import {
   Button,
+  Card,
   Field,
   FieldError,
   FieldLabel,
@@ -130,9 +131,11 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
   onTestDaemonConnection,
   onRequestRemove,
 }) => (
-  <section
+  <Card
+    render={<section />}
     data-endpoint-id={endpointId}
-    className="space-y-4 rounded-2xl border border-line bg-surface/45 p-4"
+    padding="md"
+    className="space-y-4"
   >
     <div className={blockHead}>
       <Field className="min-w-0 flex-1">
@@ -146,14 +149,14 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
       </Field>
       <Button
         type="button"
-        variant="ghost"
+        variant="danger-quiet"
         aria-label={`Remove endpoint ${displayName}`}
         onClick={onRequestRemove}
         disabledReason={removalBlock ?? undefined}
         className="mt-6 shrink-0"
       >
         <Trash2 className="size-4" />
-        Remove
+        Remove…
       </Button>
     </div>
 
@@ -199,7 +202,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="danger-quiet"
             aria-label={`Remove token for ${displayName}`}
             onClick={onDeleteDaemonToken}
             disabled={
@@ -302,5 +305,5 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
         </Notice>
       )}
     </div>
-  </section>
+  </Card>
 )

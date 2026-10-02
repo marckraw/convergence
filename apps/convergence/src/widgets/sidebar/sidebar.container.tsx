@@ -6,6 +6,7 @@ import { usePullRequestStore } from '@/entities/pull-request'
 import { useSpaceStore } from '@/entities/space'
 import { useWorkspaceStore } from '@/entities/workspace'
 import {
+  SESSION_STATE_TONE,
   sessionApi,
   useSessionStore,
   type SessionSummary,
@@ -60,10 +61,10 @@ import {
 } from 'lucide-react'
 import { type ChatSidebarSpace } from './global-chat-session-list.presentational'
 import { SidebarConversations } from './sidebar-conversations.container'
-import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
+import { SidebarToolsMenuContainer } from './sidebar-tools-menu.container'
 import { SurfaceSwitcher } from './surface-switcher.presentational'
 import { peekHandleClass, railMarkRing } from './sidebar.styles'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useSidebarSearchShortcut } from './sidebar-search.container'
 import { useFeedClock } from './use-feed-clock'
 import { sidebarCards } from './sidebar-sessions.pure'
@@ -240,7 +241,7 @@ export const Sidebar: FC<SidebarProps> = ({
         ...prev,
         [sessionId]: requestId,
       }))
-      toast.loading('Regenerating session name…', { id: toastId })
+      notify.loading('Regenerating the session name…', { id: toastId })
 
       void sessionApi
         .regenerateName(sessionId, requestId)
@@ -249,26 +250,26 @@ export const Sidebar: FC<SidebarProps> = ({
             useTaskProgressStore.getState().snapshots[requestId] ?? null
           const outcome = progress?.settled?.outcome ?? null
           if (outcome === 'error' || outcome === 'timeout') {
-            toast.error('Could not regenerate name', {
-              id: toastId,
-              description:
-                outcome === 'timeout'
-                  ? 'The naming request timed out.'
-                  : 'The provider returned an error.',
-            })
+            notify.failure(
+              'regenerate the session name',
+              outcome === 'timeout'
+                ? 'The naming request timed out.'
+                : 'The provider returned an error.',
+              { id: toastId },
+            )
             return
           }
           if (updated) {
-            toast.success('Session name regenerated', { id: toastId })
+            notify.success('Session name regenerated', { id: toastId })
             return
           }
-          toast('No new name generated', {
+          notify.message('No new name generated', {
             id: toastId,
             description: 'The provider returned no usable title.',
           })
         })
-        .catch(() => {
-          toast.error('Could not start name regeneration', { id: toastId })
+        .catch((error: unknown) => {
+          notify.failure('regenerate the session name', error, { id: toastId })
         })
         .finally(() => {
           setRegeneratingSessionRequests((prev) => {
@@ -691,10 +692,10 @@ export const Sidebar: FC<SidebarProps> = ({
       await syncWorkspaceEnvFiles(workspaceId, activeProject.id)
       const error = useWorkspaceStore.getState().error
       if (error) {
-        toast.error(error)
+        notify.failure('sync the workspace env files', error)
         return
       }
-      toast.success('Workspace env files synced')
+      notify.success('Workspace env files synced')
     },
   )
 
@@ -741,8 +742,11 @@ export const Sidebar: FC<SidebarProps> = ({
   })
 
   const handlePin = useStableCallback((id: string, pinned: boolean) => {
-    void setPinned(id, pinned).catch((error) =>
-      toast.error(error instanceof Error ? error.message : String(error)),
+    void setPinned(id, pinned).catch((error: unknown) =>
+      notify.failure(
+        pinned ? 'pin the conversation' : 'unpin the conversation',
+        error,
+      ),
     )
   })
   const handleNewGlobalSession = useStableCallback(() => onNewGlobalSession())
@@ -822,6 +826,7 @@ export const Sidebar: FC<SidebarProps> = ({
           variant="ghost"
           onClick={pinPeek}
           tooltipSide="bottom"
+          size="sm"
         >
           <Pin className="h-4 w-4" />
         </IconButton>
@@ -832,6 +837,7 @@ export const Sidebar: FC<SidebarProps> = ({
           variant="ghost"
           onClick={collapse}
           tooltipSide="bottom"
+          size="sm"
         >
           <PanelLeftClose className="h-4 w-4" />
         </IconButton>
@@ -839,42 +845,33 @@ export const Sidebar: FC<SidebarProps> = ({
     [peek, pinPeek, collapse],
   )
 
-  const hiddenDialogTrigger = () => (
-    <Button
-      type="button"
-      variant="ghost"
-      tabIndex={-1}
-      aria-hidden="true"
-      className="hidden"
-    />
-  )
-
   const dialogHosts = (
     <>
-      <SpaceWorkboardDialogContainer trigger={hiddenDialogTrigger()} />
+      <SpaceWorkboardDialogContainer />
       <ProjectSettingsDialogContainer
         contextSection={(projectId) => (
           <ProjectContextSettings projectId={projectId} />
         )}
-        trigger={hiddenDialogTrigger()}
       />
-      <ProviderStatusDialogContainer trigger={hiddenDialogTrigger()} />
-      <McpServersDialogContainer trigger={hiddenDialogTrigger()} />
-      <SkillsBrowserDialogContainer trigger={hiddenDialogTrigger()} />
-      <PromptLibraryBrowserDialogContainer trigger={hiddenDialogTrigger()} />
-      <ReleaseNotesDialogContainer trigger={hiddenDialogTrigger()} />
-      <AppSettingsDialogContainer trigger={hiddenDialogTrigger()} />
+      <ProviderStatusDialogContainer />
+      <McpServersDialogContainer />
+      <SkillsBrowserDialogContainer />
+      <PromptLibraryBrowserDialogContainer />
+      <ReleaseNotesDialogContainer />
+      <AppSettingsDialogContainer />
       <ProjectCreateDialogContainer />
       <LaneCreateDialogContainer />
     </>
   )
 
+  // R3: 28 px in the header, the rail's one size (32) on the rail (NAV-6).
   const settingsGear = (side: 'right' | 'bottom') => (
     <IconButton
       label="Open settings"
       variant="ghost"
       onClick={() => openDialog('app-settings')}
       tooltipSide={side}
+      size={side === 'bottom' ? 'sm' : 'md'}
     >
       <Settings className="h-4 w-4" />
     </IconButton>
@@ -882,14 +879,15 @@ export const Sidebar: FC<SidebarProps> = ({
 
   if (collapsed) {
     // R1: the loudest card waiting decides the rail's tone, and its count
-    // wears the same one (no red count beside a green ring).
+    // wears the same one (no red count beside a green ring), in the
+    // session's own tones (NAV-1).
     const railTone = attentionCards.some(
       (card) => card.attentionGroup === 'Waiting on you',
     )
-      ? 'warning'
+      ? SESSION_STATE_TONE.waiting
       : attentionCards.some(({ session }) => session.attention === 'failed')
-        ? 'danger'
-        : 'success'
+        ? SESSION_STATE_TONE.failed
+        : SESSION_STATE_TONE.finished
     return (
       // As wide as the layout's collapsed sidebar, which sizes it (NAV-17).
       <div className="relative flex h-full w-full flex-col items-center">
@@ -917,7 +915,7 @@ export const Sidebar: FC<SidebarProps> = ({
             variant="ghost"
             onClick={onExpand}
             tooltipSide="right"
-            size="lg"
+            size="md"
           >
             <PanelLeftOpen className="h-4 w-4" />
           </IconButton>
@@ -938,7 +936,7 @@ export const Sidebar: FC<SidebarProps> = ({
             type="button"
             variant="ghost"
             tooltipSide="right"
-            size="lg"
+            size="md"
             className="relative"
             onClick={onPeek}
           >
@@ -974,7 +972,7 @@ export const Sidebar: FC<SidebarProps> = ({
             variant="ghost"
             onClick={onPeek}
             tooltipSide="right"
-            size="lg"
+            size="md"
           >
             {activeSurface === 'chat' ? (
               <MessageSquareText className="h-4 w-4" />
@@ -991,14 +989,14 @@ export const Sidebar: FC<SidebarProps> = ({
               activeSurface === 'chat' ? onNewGlobalSession : openProjectDialog
             }
             tooltipSide="right"
-            size="lg"
+            size="md"
           >
             <Plus className="h-4 w-4" />
           </IconButton>
         </div>
 
         <div className="app-sidebar-footer flex w-full flex-col items-center gap-1 border-t border-hairline py-3">
-          <SidebarToolsMenu
+          <SidebarToolsMenuContainer
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
             tooltipSide="right"
@@ -1031,17 +1029,19 @@ export const Sidebar: FC<SidebarProps> = ({
                 openDialog('app-settings', { appSettingsSection: 'insights' })
               }
               tooltipSide="bottom"
+              size="sm"
             >
               <BarChart3 className="h-4 w-4" />
             </IconButton>
 
-            <SidebarToolsMenu
+            <SidebarToolsMenuContainer
               activeSurface={activeSurface}
               hasActiveProject={!!activeProject}
               onOpenDialog={openDialog}
+              size="sm"
             />
             {settingsGear('bottom')}
-            <ThemeToggleButton tooltipSide="bottom" />
+            <ThemeToggleButton tooltipSide="bottom" size="sm" />
           </>
         }
       />

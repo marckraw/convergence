@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { FC } from 'react'
-import { Cable } from 'lucide-react'
 import { mcpServerApi } from '@/entities/mcp-server'
 import { useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { ProjectMcpVisibility } from '@/shared/types/mcp.types'
-import { Button } from '@convergence/ui'
 import { McpServersDialog } from './mcp-servers.presentational'
 
 interface McpServersDialogContainerProps {
@@ -102,32 +100,7 @@ export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
       isLoading={isLoading}
       error={error}
       onRefresh={load}
-      trigger={
-        trigger ?? (
-          <Button
-            type="button"
-            variant="quiet"
-            disabled={activeSurface === 'code' && !projectId}
-            className="w-full justify-between px-2"
-          >
-            <span className="flex items-center gap-2">
-              <Cable className="size-3.5" />
-              MCP servers
-            </span>
-            <span className="text-2xs text-ink-muted">
-              {snapshot
-                ? snapshot.providers.reduce(
-                    (count, provider) =>
-                      count +
-                      provider.globalServers.length +
-                      provider.projectServers.length,
-                    0,
-                  )
-                : 'View'}
-            </span>
-          </Button>
-        )
-      }
+      trigger={trigger}
     />
   )
 }

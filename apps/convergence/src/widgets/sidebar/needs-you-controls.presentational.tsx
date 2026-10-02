@@ -21,7 +21,15 @@ import {
   type FeedView,
   type buildFeedView,
 } from '@/features/needs-you'
-import { Button, cn, EmptyState, textStack } from '@convergence/ui'
+import {
+  Button,
+  Card,
+  CardAction,
+  cn,
+  EmptyState,
+  SectionHeader,
+  textStack,
+} from '@convergence/ui'
 import {
   noConversationMatchesLine,
   normalizeNameQuery,
@@ -68,17 +76,18 @@ export function NeedsYouControls({
       aria-label={`${NEEDS_YOU} controls`}
     >
       <div className="flex h-control-sm items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium">{NEEDS_YOU}</span>
-          <span
-            className="tabular-nums text-ink-muted"
-            aria-label={`${result.shown} of ${result.total} cards shown`}
-          >
-            {result.filtered
-              ? `${result.shown} of ${result.total}`
-              : result.total}
-          </span>
-        </div>
+        {/* The feed's head, the kit's SectionHeader (NAV-12). */}
+        <SectionHeader
+          className="flex-1"
+          label={NEEDS_YOU}
+          count={
+            <span aria-label={`${result.shown} of ${result.total} cards shown`}>
+              {result.filtered
+                ? `${result.shown} of ${result.total}`
+                : result.total}
+            </span>
+          }
+        />
         {result.filtered && (
           <Button
             type="button"
@@ -86,42 +95,42 @@ export function NeedsYouControls({
             onClick={onReset}
             aria-label="Clear activity filters"
             size="sm"
-            className="gap-1 px-1.5 text-2xs font-normal"
+            className="gap-1 font-normal"
           >
             <X aria-hidden="true" className="size-3" /> Clear
           </Button>
         )}
       </div>
-      <Button
-        ref={triggerRef}
-        type="button"
-        variant="ghost"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        aria-controls={controlsId}
-        aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
-        size="lg"
-        className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-ink/25 bg-ink/5 px-2.5 text-left text-2xs font-normal"
-      >
-        <SlidersHorizontal
-          aria-hidden="true"
-          className="size-3.5 text-ink-muted"
-        />
-        <span className={textStack}>
-          <span className="font-medium">{summary.activity}</span>
-          <span className="break-words text-ink-muted">{summary.scope}</span>
-          <span className="break-words text-ink-muted">
-            Order: {summary.order}
+      {/* The filters' summary is a card whose door opens them (DS-21). */}
+      <Card interactive padding="none">
+        <CardAction
+          ref={triggerRef}
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-controls={controlsId}
+          aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
+          className="flex min-h-14 w-full items-center gap-2.5 px-2.5 py-2"
+        >
+          <SlidersHorizontal
+            aria-hidden="true"
+            className="size-3.5 shrink-0 text-ink-muted"
+          />
+          <span className={textStack}>
+            <span className="font-medium">{summary.activity}</span>
+            <span className="break-words text-ink-muted">{summary.scope}</span>
+            <span className="break-words text-ink-muted">
+              Order: {summary.order}
+            </span>
           </span>
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          className={cn(
-            'size-3.5 text-ink-muted transition-transform motion-reduce:transition-none',
-            expanded && 'rotate-180',
-          )}
-        />
-      </Button>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'size-3.5 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none',
+              expanded && 'rotate-180',
+            )}
+          />
+        </CardAction>
+      </Card>
       <div id={controlsId} hidden={!expanded} className="space-y-2.5">
         <div
           role="group"
@@ -268,7 +277,7 @@ export function NeedsYouControls({
             type="button"
             variant="ghost"
             onClick={onCollapse}
-            className="text-2xs font-normal"
+            className="font-normal"
           >
             Collapse filters
           </Button>

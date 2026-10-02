@@ -53,7 +53,8 @@ export type AppSettingsSectionId = AppSettingsDialogSection
 interface AppSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   providers: ProviderInfo[]
   allProviders: ProviderInfo[]
   selection: ResolvedProviderSelection
@@ -451,7 +452,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         <aside className={cn(dialogRail, 'bg-surface/30 sm:w-64')}>
           <nav
             aria-label="Settings sections"
-            className="app-scrollbar flex gap-1 overflow-x-auto p-3 sm:h-full sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto"
+            className="flex gap-1 overflow-x-auto p-3 sm:h-full sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto"
           >
             {sections.map((section) => (
               <ListRow

@@ -1,3 +1,4 @@
+import { exactDateLabel, formatTimestamp } from '@convergence/ui'
 import type { Attachment } from '@/entities/attachment'
 import type { ConversationItem } from '@/entities/session'
 
@@ -169,79 +170,20 @@ export function formatConversationItemTimestamp(
   if (Number.isNaN(date.getTime())) {
     return value
   }
-
-  const time = formatConversationItemTime(date, options)
-  const dayDiff = getCalendarDayDiff(date, options)
-
-  if (dayDiff === 0) {
-    return `Today, ${time}`
-  }
-
-  if (dayDiff === 1) {
-    return `Yesterday, ${time}`
-  }
-
-  return new Intl.DateTimeFormat(options.locale, {
-    dateStyle: 'medium',
-    timeStyle: 'medium',
-    hour12: false,
-    ...(options.timeZone ? { timeZone: options.timeZone } : {}),
-  }).format(date)
+  // The transcript's own form, now Timestamp's `log` (DS6, use-timestamp).
+  return formatTimestamp(date, 'log', timestampOptions(options))
 }
 
-function formatConversationItemTime(
-  date: Date,
-  options: ConversationItemTimingOptions,
-): string {
-  return new Intl.DateTimeFormat(options.locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-    ...(options.timeZone ? { timeZone: options.timeZone } : {}),
-  }).format(date)
-}
-
-function getCalendarDayDiff(
-  date: Date,
-  options: ConversationItemTimingOptions,
-): number | null {
-  const now =
-    options.now instanceof Date
-      ? options.now
-      : new Date(options.now ?? Date.now())
-  if (Number.isNaN(now.getTime())) {
-    return null
+/** The transcript's options, as Timestamp takes them: `now` as a Date. */
+function timestampOptions(options: ConversationItemTimingOptions) {
+  return {
+    locale: options.locale,
+    timeZone: options.timeZone,
+    now:
+      options.now instanceof Date
+        ? options.now
+        : new Date(options.now ?? Date.now()),
   }
-
-  const targetDay = getCalendarDaySerial(date, options)
-  const currentDay = getCalendarDaySerial(now, options)
-  if (targetDay === null || currentDay === null) {
-    return null
-  }
-
-  return currentDay - targetDay
-}
-
-function getCalendarDaySerial(
-  date: Date,
-  options: ConversationItemTimingOptions,
-): number | null {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    ...(options.timeZone ? { timeZone: options.timeZone } : {}),
-  }).formatToParts(date)
-  const year = Number(parts.find((part) => part.type === 'year')?.value)
-  const month = Number(parts.find((part) => part.type === 'month')?.value)
-  const day = Number(parts.find((part) => part.type === 'day')?.value)
-
-  if (!year || !month || !day) {
-    return null
-  }
-
-  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000)
 }
 
 export function formatConversationItemAbsoluteTimestamp(
@@ -253,11 +195,10 @@ export function formatConversationItemAbsoluteTimestamp(
     return value
   }
 
-  return new Intl.DateTimeFormat(options.locale, {
-    dateStyle: 'medium',
-    timeStyle: 'medium',
-    ...(options.timeZone ? { timeZone: options.timeZone } : {}),
-  }).format(date)
+  return exactDateLabel(date, {
+    locale: options.locale,
+    timeZone: options.timeZone,
+  })
 }
 
 export function formatDuration(durationMs: number): string {

@@ -1,4 +1,9 @@
 import type { FC, ReactNode } from 'react'
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from '@convergence/ui'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { waveRowKey, type WaveRow } from './wave-sections.pure'
 import { WaveRowView } from './wave-row.presentational'
@@ -83,16 +88,26 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
   ) : null
 
   return disclosure ? (
-    <details
+    // A Collapsible (MC-17): its title says aria-expanded and its chevron
+    // turns. Keyed on `disclosure`, so a search that opens every group opens
+    // this one, as the old <details open> did; the rows stay in the document,
+    // hidden, while it is folded.
+    <Collapsible
+      key={disclosure}
+      render={<section />}
+      defaultOpen={disclosure === 'open'}
       aria-label={title}
       data-wave-group={title}
-      open={disclosure === 'open'}
       className="flex flex-col"
     >
-      <summary className={WAVE_SECTION_TITLE_CLASS}>{heading}</summary>
-      {hintLine}
-      {content}
-    </details>
+      <CollapsibleTrigger className={WAVE_SECTION_TITLE_CLASS}>
+        {heading}
+      </CollapsibleTrigger>
+      <CollapsiblePanel keepMounted className="flex flex-col">
+        {hintLine}
+        {content}
+      </CollapsiblePanel>
+    </Collapsible>
   ) : (
     <section id={id} aria-label={title} className="flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2">

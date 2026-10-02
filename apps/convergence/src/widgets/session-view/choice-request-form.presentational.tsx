@@ -3,7 +3,7 @@ import type {
   InteractionQuestion,
   InteractionResponse,
 } from '@/entities/session'
-import { Button } from '@convergence/ui'
+import { Button, Card, CardAction, cn } from '@convergence/ui'
 
 interface ChoiceRequestFormProps {
   questions: InteractionQuestion[]
@@ -54,40 +54,44 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
                 option.label,
               )
               return (
-                <Button
+                // An answer is a card whose door presses it (DS-21).
+                <Card
                   key={option.label}
-                  type="button"
-                  variant="ghost"
-                  size="lg"
-                  aria-pressed={selected}
-                  className={[
-                    'h-auto w-full justify-start whitespace-normal rounded-md border px-3 py-2 text-left text-sm shadow-none',
+                  interactive
+                  padding="none"
+                  className={cn(
+                    'text-sm',
                     // R7: the chosen answer is ChoiceCard's chosen look, raised with a
                     // stronger edge, not a blue tint.
                     selected
                       ? 'border-control-line bg-raised text-ink shadow-raised hover:bg-raised'
-                      : 'border-line-soft bg-canvas/60 text-ink-muted hover:bg-fill-hover hover:text-ink',
-                  ].join(' ')}
-                  onClick={() => {
-                    setAnswers((current) => ({
-                      ...current,
-                      [question.id]: toggleChoiceAnswer({
-                        current: current[question.id] ?? [],
-                        value: option.label,
-                        multiSelect: question.multiSelect,
-                      }),
-                    }))
-                  }}
+                      : 'border-line-soft bg-canvas/60 text-ink-muted hover:text-ink',
+                  )}
                 >
-                  <span className="min-w-0 break-words">
-                    <span className="block font-medium">{option.label}</span>
-                    {option.description ? (
-                      <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
-                        {option.description}
-                      </span>
-                    ) : null}
-                  </span>
-                </Button>
+                  <CardAction
+                    aria-pressed={selected}
+                    className="block w-full min-w-0 px-3 py-2 font-medium"
+                    onClick={() => {
+                      setAnswers((current) => ({
+                        ...current,
+                        [question.id]: toggleChoiceAnswer({
+                          current: current[question.id] ?? [],
+                          value: option.label,
+                          multiSelect: question.multiSelect,
+                        }),
+                      }))
+                    }}
+                  >
+                    <span className="block min-w-0 break-words">
+                      <span className="block">{option.label}</span>
+                      {option.description ? (
+                        <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
+                          {option.description}
+                        </span>
+                      ) : null}
+                    </span>
+                  </CardAction>
+                </Card>
               )
             })}
           </div>

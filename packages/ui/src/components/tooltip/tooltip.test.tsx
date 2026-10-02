@@ -99,7 +99,7 @@ describe('the tooltip host (MAR-3616)', () => {
     render(
       <TooltipProvider>
         <Tooltip label="More actions">
-          <button type="button" aria-expanded="true">
+          <button type="button" aria-haspopup="menu" aria-expanded="true">
             More
           </button>
         </Tooltip>
@@ -107,6 +107,20 @@ describe('the tooltip host (MAR-3616)', () => {
     )
     await hover(screen.getByRole('button', { name: 'More' }))
     expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('names a disclosure that is open, which opens no popup (NAV-13)', async () => {
+    render(
+      <TooltipProvider>
+        <Tooltip label="feature/tooltips">
+          <button type="button" aria-expanded="true">
+            Branch
+          </button>
+        </Tooltip>
+      </TooltipProvider>,
+    )
+    await hover(screen.getByRole('button', { name: 'Branch' }))
+    expect(screen.getByRole('tooltip')).toHaveTextContent('feature/tooltips')
   })
 
   it('shows a second, muted line for a detail', async () => {

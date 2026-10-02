@@ -40,8 +40,6 @@
 
   * {
     @apply border-line;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
   body {
     @apply text-ink;
@@ -74,7 +72,11 @@
       );
   }
 
-  /* The sidebar's panel; its width moves on the motion tokens when it folds or peeks. */
+  /*
+   * The sidebar's panel; its width moves on the motion tokens when it folds or peeks. Its right
+   * edge is the aside's own hairline (border-r border-hairline), drawn once: an inset line here
+   * drew a second, white one beside it in light (NAV-10).
+   */
   .app-sidebar-panel {
     position: relative;
     background: linear-gradient(
@@ -82,9 +84,7 @@
       var(--chrome-sidebar),
       color-mix(in srgb, var(--chrome-sidebar) 84%, var(--canvas) 16%)
     );
-    box-shadow:
-      inset -1px 0 0 var(--chrome-edge),
-      24px 0 48px -34px var(--chrome-shadow);
+    box-shadow: 24px 0 48px -34px var(--chrome-shadow);
     transition: width var(--motion-fast) var(--motion-ease-move);
   }
 
@@ -125,9 +125,9 @@
   }
 
   /*
-   * Every scrollbar in the app (MAR-3617 NAV-34: the .app-scrollbar class
-   * repeated these rules for elements * already matches, so it changed
-   * nothing and goes; a leftover class name in markup is inert).
+   * Every scrollbar in the app, written once (NAV-34: the .app-scrollbar
+   * class repeated these rules for elements `*` already matches, so it changed
+   * nothing; the class and the base layer's second copy are gone).
    */
   * {
     scrollbar-width: thin;
@@ -190,6 +190,16 @@
     var(--motion-panel) both;
 }
 
+/*
+ * Learn Loom's quick reference takes two columns from 860 px of viewport, where
+ * a card's two columns stay readable inside the dialog (LL3 R5): a breakpoint
+ * of the app's own, `learn-loom:`, since a media query can't read a token's
+ * var() (R11). learn-loom.render.test.ts pins the value.
+ */
+@theme {
+  --breakpoint-learn-loom: 53.75rem;
+}
+
 @keyframes loom-enter {
   from {
     opacity: 0;
@@ -211,14 +221,25 @@
   }
 }
 
+/*
+ * A row that just changed pulses once, on the motion tokens (DS-33): the
+ * pulse's 600 ms, and the CSS keyword ease-out it has always used. A ring that
+ * grows is motion reduced motion drops, under both switches: the system's
+ * setting and data-motion="reduced" on <html> or any subtree.
+ */
 [data-pulse='true'] {
-  animation: notifications-pulse 600ms ease-out 1;
+  animation: notifications-pulse var(--motion-pulse) var(--motion-ease-enter) 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
   [data-pulse='true'] {
     animation: none;
   }
+}
+
+[data-motion='reduced'] [data-pulse='true'],
+[data-motion='reduced'][data-pulse='true'] {
+  animation: none;
 }
 
 /*
@@ -254,7 +275,7 @@
   pointer-events: none;
   box-shadow: 0 0 var(--breathe-blur) var(--breathe-spread) var(--breathe-color);
   opacity: var(--breathe-max);
-  animation: session-card-breathe var(--breathe-period) ease-in-out
+  animation: session-card-breathe var(--breathe-period) var(--motion-ease-blink)
     var(--motion-loops);
 }
 

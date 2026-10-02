@@ -7,8 +7,8 @@
         "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:w|h|size|p[xytrbl]?|m[xytrbl]?|gap|text|bg|border|rounded|shadow|leading|tracking|duration|z|inset|top|right|bottom|left|basis|grid-cols|grid-rows|outline|ring|opacity|delay|ease|animate|transition)-\\[",
-        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f]): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)] (MAR-3617; docs/checks/design-system-drift.md)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:w|h|size|p[xytrbl]?|m[xytrbl]?|gap|text|bg|border|rounded|shadow|leading|tracking|duration|z|inset|top|right|bottom|left|basis|grid-cols|grid-rows|outline|ring|opacity|delay|ease|animate|transition)-\\[|(?<![\\w@-])(?:min|max)-\\[)",
+        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f], a min-[860px]: breakpoint): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)]; a breakpoint is Tailwind's (md:, lg:) or a --breakpoint-* of the theme's, since a media query can't read var() (MAR-3617; DS6, MAR-3608; docs/checks/design-system-drift.md)."
       },
       {
         "id": "no-raw-colors",
@@ -64,10 +64,10 @@
         "id": "motion-from-tokens",
         "type": "regex",
         "severity": "error",
-        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx,css}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:duration|delay)-\\d+\\b|\\btransition-all\\b)",
-        "message": "Motion by hand (duration-150, delay-75, transition-all): durations are the motion tokens, duration-exit, duration-fast, duration-panel and duration-slow (a bare transition is already duration-fast), and a transition names what moves (transition-colors, transition-opacity, transition-transform), never all (MAR-3617)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:duration|delay)-\\d+\\b|\\btransition-all\\b|(?<![\\w-])(?:animation|transition)(?:-duration|-delay|-timing-function)?\\s*:[^;{}]*?(?:(?<![\\w.-])\\d*\\.?\\d+m?s\\b|(?<![\\w-])(?:ease(?:-in|-out|-in-out)?|linear|step-start|step-end)(?![\\w-])|\\b(?:cubic-bezier|steps|linear)\\())",
+        "message": "Motion by hand (duration-150, delay-75, transition-all, or in CSS an animation or transition with 600ms or ease-out typed out): durations are the motion tokens, duration-exit, duration-fast, duration-panel and duration-slow (a bare transition is already duration-fast), a transition names what moves (transition-colors, transition-opacity, transition-transform), never all, and a stylesheet writes var(--motion-pulse) and var(--motion-ease-enter) (MAR-3617; DS-33)."
       },
       {
         "id": "use-focus-ring",
@@ -75,8 +75,8 @@
         "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:focus(?:-visible|-within)?|has-focus-visible):(?:(?:outline|ring)-(?:focus|ring)\\b|outline(?![\\w-]))",
-        "message": "A focus ring typed by hand (focus-visible:outline-focus, focus-visible:ring-focus, or the old ring-ring): use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588; MAR-3617; MAR-3618; DS-7)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:focus(?:-visible|-within)?|has-focus-visible):(?:(?:outline|ring)-(?:focus|ring)\\b|outline(?![\\w-])|outline-none\\b)",
+        "message": "A focus ring typed by hand (focus-visible:outline-focus, focus-visible:ring-focus, or the old ring-ring), or cancelled (focus-visible:outline-none, which tailwind-merge lets win over a part's own ring): use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). A field inside a box that rings for it is Input or Textarea variant=\"bare\". Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588; MAR-3617; MAR-3618; MAR-3608; DS-7)."
       },
       {
         "id": "no-invisible-focus-ring",
@@ -120,8 +120,8 @@
         "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:size|h|w)-(?:\\d+(?:\\.5)?|px)\\b",
-        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). A height typed on top drifts from every other control (MAR-3617; DS-4)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:size|h|w)-(?:\\d+(?:\\.5)?|px)\\b|<(?:Button|IconButton)\\b(?!(?:[^>]|=>)*?(?<![\\w:\\]-])h-auto\\b)(?!(?:[^>]|=>)*?\\svariant=[\"']link[\"'])(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xytrbl]?-(?:\\d+(?:\\.5)?|px)|(?:min-|max-)?h-(?:\\d+(?:\\.5)?|px|control-[\\w-]+|\\(--[\\w-]+\\)))(?![\\w-])|(?<![\\w-])\\[&_button\\]:(?:(?:min-|max-)?h|size|w|p[xytrbl]?|text)-)",
+        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). Each size is a height, a padding and a text size together, so a height, a min-height, a padding or a text size typed on top (size=\"sm\" className=\"px-3 text-2xs\") is a size the scale doesn't name and drifts from every other control: take the nearest size instead, and never resize every button in a box at once ([&_button]:min-h-10). A link has no box, so its words may take a size; a Button grown into a row (h-auto) is no-buttons-as-rows' to report (MAR-3617; MAR-3608; DS-4)."
       },
       {
         "id": "no-native-confirm",
@@ -137,8 +137,8 @@
         "type": "regex",
         "severity": "error",
         "files": "apps/convergence/src/**/*.presentational.tsx",
-        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!(?://|/\\*)[ \\t]*raw-element:[ \\t]*(?!\\*/)\\S[^\\n]*\\n(?:[ \\t]*(?://|\\{?/\\*)[ \\t]*eslint-disable-next-line[^\\n]*\\n)?[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a|input|textarea|select)\\b(?!(?:[^>]|=>)*?\\bbuttonVariants\\()",
-        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; MAR-3617; DS-27)."
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!(?://|/\\*)[ \\t]*raw-element:[ \\t]*(?!\\*/)\\S[^\\n]*\\n(?:[ \\t]*(?://|\\{?/\\*)[ \\t]*eslint-disable-next-line[^\\n]*\\n)?[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a|input|textarea|select|pre)\\b(?!(?:[^>]|=>)*?\\bbuttonVariants\\()",
+        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. A raw <pre> is CodeBlock's job: tool output, a payload, a preview, scrolling inside itself with its own focus (MAR-3608; CONV-32). Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; MAR-3617; DS-27)."
       },
       {
         "id": "ui-components-have-stories",
@@ -200,6 +200,102 @@
         "files": "packages/ui/.storybook/preview.tsx",
         "requiredPatterns": ["a11y:\\s*\\{\\s*test:\\s*[\"']error[\"']"],
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
+      },
+      {
+        "id": "use-notify",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "restrictions": [
+          {
+            "source": "^sonner(/|$)",
+            "allowedIn": [],
+            "message": "sonner is the design system's toast engine, not the app's: raise a toast with notify from @convergence/ui (notify.failure(\"update Codex\", error) writes R10's \"Couldn’t update Codex.\" with the reason under it), or toast from @convergence/ui for what notify doesn't cover; the Toaster part draws it on the popup surface in R1's tones (ruling 2; MAR-3608; DS-8, DLG-31)."
+          }
+        ],
+        "includeTypeImports": true
+      },
+      {
+        "id": "use-section-label",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)([\"'\\`])(?=(?:(?!\\1)[^\\n])*?(?<![\\w-])uppercase\\b)(?=(?:(?!\\1)[^\\n])*?(?<![\\w-])tracking-)(?:(?!\\1)[^\\n])*\\1",
+        "message": "An eyebrow typed by hand (uppercase with tracking-… in one class string): use SectionLabel from @convergence/ui (size=\"sm\" for the 10 px step, as=\"h3\" when it names a section), or sectionLabel / sectionLabelVariants({ size }) where the element can't be a SectionLabel. Copies drifted into three trackings and four weights (R0, R4; DS-20; MAR-3608)."
+      },
+      {
+        "id": "use-badge-caps",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.tsx",
+        "exclude": ["**/*.test.tsx"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<Badge\\b(?:[^>]|=>|/>\\})*?\\bclassName=(?:[^>]|=>|/>\\})*?(?<![\\w-])uppercase\\b",
+        "message": "A Badge put in capitals by className: give it caps, Badge's own prop, so every badge in capitals is one look (the third copy is a part; MAR-3608)."
+      },
+      {
+        "id": "no-buttons-as-rows",
+        "type": "regex",
+        "severity": "error",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])h-auto\\b",
+        "message": "A Button or IconButton stretched into a row or a card (h-auto in its className, which undoes its height so more lines fit): a row is a ListRow (render a button or a link), a box that opens something is a Card with a CardAction over it, an option that needs a sentence is a ChoiceCard, and something that opens and closes in place is Collapsible's trigger. Words that act are a link Button, which has no box to undo (MAR-3608; DS-21; docs/checks/design-system-drift.md)."
+      },
+      {
+        "id": "no-native-title",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.tsx",
+        "exclude": ["**/*.test.tsx"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:<[a-z][\\w.-]*\\b(?:[^>]|=>)*?\\stitle=(?!\"\"|\\{[\"'`]{2}\\})|<title>)",
+        "message": "A native title (R2): title= on a page element, or an SVG's <title>, is the browser's hint, slow, unstyled and never shown on focus. Wrap the element in <Tooltip label> from @convergence/ui (when=\"truncated\" for text cut short); an icon-only button is an IconButton, whose label is its tooltip. A part's title prop (EmptyState, Notice) is its words, not a hint, so only a lowercase element counts (MAR-3608; NAV-20; DS-3)."
+      },
+      {
+        "id": "use-timestamp",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": [
+          "**/*.test.{ts,tsx}",
+          "packages/ui/src/components/timestamp/**"
+        ],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\bIntl\\.(?:DateTimeFormat|RelativeTimeFormat)\\b|\\.toLocale(?:Date|Time)String\\(|\\bnew\\s+Date\\([^()\\n]*(?:\\([^()\\n]*\\)[^()\\n]*)*\\)\\s*\\.toLocaleString\\(|\\.toLocaleString\\([^)]*?\\{[^}]*?\\b(?:year|month|day|weekday|hour|minute|second|dateStyle|timeStyle|era|timeZoneName|hour12|hourCycle)\\s*:)",
+        "message": "A time written by hand (Intl.DateTimeFormat, toLocaleTimeString, a Date's toLocaleString): render it with <Timestamp date={…} format=\"relative\" | \"clock\" | \"date\" | \"datetime\" | \"log\" /> from @convergence/ui, a <time> with the whole moment in our Tooltip, or write it with formatTimestamp (and fullDateLabel, exactDateLabel) where it must be a string. One vocabulary for every time in the app (MAR-3608; CONV-22; MC-13)."
+      },
+      {
+        "id": "no-inline-drag-region",
+        "type": "regex",
+        "severity": "error",
+        "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
+        "exclude": ["**/*.test.{ts,tsx}"],
+        "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\bWebkitAppRegion\\b|\\bdata-app-region\\b|(?<![\\w-])-webkit-app-region[\"'`]?\\s*:)",
+        "message": "A window drag region written by hand (style={{ WebkitAppRegion }}, data-app-region): the drag region has one spelling, the theme's classes, app-drag on a strip and app-no-drag on what sits on it, or ScreenHeader and DragRegion, which own the drag. Every design-system control and popup carries app-no-drag itself (NAV-11; DS-19; MAR-3608)."
+      },
+      {
+        "id": "no-removed-libraries",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "{apps/*/src,packages/*/src}/**/*.{ts,tsx}",
+        "restrictions": [
+          {
+            "source": "^(@radix-ui/|radix-ui$)",
+            "allowedIn": [],
+            "message": "Radix is gone: @convergence/ui is built on Base UI (MAR-3610). Use its part, or give the part a variant there (DS6; MAR-3608)."
+          },
+          {
+            "source": "^cmdk$",
+            "allowedIn": [],
+            "message": "cmdk is gone: the Command Center and the pickers are @convergence/ui's Combobox and Listbox (DS6; MAR-3608)."
+          },
+          {
+            "source": "^(motion|framer-motion)(/|$)",
+            "allowedIn": [],
+            "message": "Motion is gone (DS-33): motion is CSS on the motion tokens, through @convergence/ui's parts and primitives; a new kind of motion is a primitive in packages/ui/src/motion (DS6; MAR-3608)."
+          }
+        ],
+        "checkPatterns": [],
+        "includeTypeImports": true
       },
       {
         "id": "no-ascii-ellipsis",

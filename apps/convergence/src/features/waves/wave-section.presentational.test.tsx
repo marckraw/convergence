@@ -59,10 +59,11 @@ describe('MAR-3301 section layout', () => {
       expect(grid.contains(screen.getByText('Finished · 2'))).toBe(false)
       expect(grid.contains(screen.getByText('A hint'))).toBe(false)
       for (const row of rows()) expect(row.className).not.toMatch(/\bmb-/)
+      // A folded group is a Collapsible (MC-17): open says data-open.
       if (disclosure)
-        expect(grid.parentElement!.hasAttribute('open')).toBe(
-          disclosure === 'open',
-        )
+        expect(
+          grid.closest('[data-wave-group]')!.hasAttribute('data-open'),
+        ).toBe(disclosure === 'open')
       else expect(grid.contains(screen.getByText('More'))).toBe(false)
     },
   )
@@ -121,8 +122,8 @@ describe('MAR-3301 Before sheet width', () => {
         )
         expect(row.classList.contains('mb-2')).toBe(!wide)
       }
-      for (const group of document.querySelectorAll('details'))
-        expect(group.open).toBe(true)
+      for (const group of document.querySelectorAll('[data-wave-group]'))
+        expect(group.hasAttribute('data-open')).toBe(true)
       expect(screen.getByText(LOOM_DONE_IS_NOT_RELEASED)).toBeTruthy()
     },
   )
@@ -141,7 +142,9 @@ describe('MAR-3301 Before sheet width', () => {
     )
     expect(grids()).toHaveLength(2)
     expect(
-      [...document.querySelectorAll('details')].map((group) => group.open),
+      [...document.querySelectorAll('[data-wave-group]')].map((group) =>
+        group.hasAttribute('data-open'),
+      ),
     ).toEqual([true, false])
     expect(screen.getByText('1 older issue not shown')).toBeTruthy()
   })

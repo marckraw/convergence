@@ -16,6 +16,8 @@ interface TabGroupProps {
   onSelect: (tabId: string) => void
   onCloseTab: (tabId: string) => void
   onNewTab: () => void
+  /** New tab's key in words ("⌘T"), for its tooltip (NAV-23). */
+  newTabShortcut?: string
   trailingSlot?: ReactNode
 }
 
@@ -31,6 +33,7 @@ export const TabGroup: FC<TabGroupProps> = ({
   onSelect,
   onCloseTab,
   onNewTab,
+  newTabShortcut,
   trailingSlot,
 }) => {
   return (
@@ -39,7 +42,8 @@ export const TabGroup: FC<TabGroupProps> = ({
       className="flex items-center gap-1 border-b border-line-soft bg-terminal-strip pl-1 pr-2"
     >
       <Tabs
-        variant="strip"
+        // The strip on the terminal's own tab tokens (R12).
+        variant="terminal"
         value={activeTabId}
         onValueChange={(value) => onSelect(String(value))}
         className="min-w-0 flex-1 flex-row items-center gap-0.5"
@@ -70,6 +74,7 @@ export const TabGroup: FC<TabGroupProps> = ({
         </TabsList>
         <IconButton
           label="New tab"
+          shortcut={newTabShortcut}
           type="button"
           variant="ghost"
           onClick={onNewTab}

@@ -63,7 +63,8 @@ type ListRowProps = Omit<
   /**
    * Controls of its own, beside it (a ⋯ menu, Archive): hidden until the row
    * is hovered or anything in it has the keyboard's focus, so they are never
-   * out of sight of the keyboard (DS-7).
+   * out of sight of the keyboard (DS-7), and kept in sight while a popup one
+   * of them opened is open (RowActions' menu), whose focus is elsewhere.
    */
   actions?: ReactNode
 }
@@ -200,7 +201,7 @@ function ListRow({
       {actions == null ? null : (
         <span
           data-slot="list-row-actions"
-          className="app-no-drag flex shrink-0 items-center gap-0.5 pr-1 opacity-0 transition-opacity group-focus-within/list-row:opacity-100 group-hover/list-row:opacity-100"
+          className="app-no-drag flex shrink-0 items-center gap-0.5 pr-1 opacity-0 transition-opacity group-focus-within/list-row:opacity-100 group-hover/list-row:opacity-100 has-data-popup-open:opacity-100"
         >
           {actions}
         </span>

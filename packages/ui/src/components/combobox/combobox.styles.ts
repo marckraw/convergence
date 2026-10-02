@@ -31,8 +31,7 @@ export const comboboxNameRow = 'flex min-w-0 items-center gap-2'
 export const comboboxSearch = 'shrink-0 border-b border-line p-1.5'
 
 /** The list: it scrolls inside the popup, under the search. */
-export const comboboxList =
-  'app-scrollbar min-h-0 flex-1 overflow-y-auto p-1 outline-none'
+export const comboboxList = 'min-h-0 flex-1 overflow-y-auto p-1 outline-none'
 
 /**
  * A row: the highlight (keyboard or pointer) takes today's hover fill. A

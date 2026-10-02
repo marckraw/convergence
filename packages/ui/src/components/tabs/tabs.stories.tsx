@@ -28,14 +28,15 @@ function DocumentTabs({
   const [value, setValue] = useState(docs[0]?.id)
   const tabs = (
     <Tabs
-      variant={variant}
+      // The terminal's strip wears its own tokens (R12).
+      variant={terminal ? 'terminal' : variant}
       value={value}
       onValueChange={(next: string) => {
         setValue(next)
         onValueChange(next)
       }}
       className={
-        variant === 'strip'
+        variant !== 'segmented'
           ? cn(
               'w-96 max-w-full gap-0 border-b border-line-soft px-1 py-1',
               terminal && 'bg-terminal-strip',
@@ -48,7 +49,9 @@ function DocumentTabs({
           <TabsTab
             key={doc.id}
             value={doc.id}
-            onClose={variant === 'strip' ? () => onClose(doc.id) : undefined}
+            onClose={
+              variant !== 'segmented' ? () => onClose(doc.id) : undefined
+            }
             closeLabel={`Close ${doc.title}`}
           >
             {doc.title}
@@ -164,7 +167,8 @@ export const Strip: Story = {
 
 /**
  * Terminal (R12): in the light theme, the strip in its dark ThemeScope stays
- * dark; the open tab wears the dark canvas.
+ * dark; the open tab wears the terminal's own tab token, the dark canvas's
+ * value, and its words the terminal's tab ink.
  */
 export const Terminal: Story = {
   args: {
@@ -178,6 +182,13 @@ export const Terminal: Story = {
     const open = canvas.getByRole('tab', { name: 'zsh' })
       .parentElement as HTMLElement
     await expect(getComputedStyle(open).backgroundColor).toBe(
+      tokenColor('--terminal-tab', scope),
+    )
+    await expect(getComputedStyle(open).color).toBe(
+      tokenColor('--terminal-tab-ink', scope),
+    )
+    // The same value as the dark canvas, in both themes.
+    await expect(tokenColor('--terminal-tab', scope)).toBe(
       tokenColor('--canvas', scope),
     )
     await expect(tokenColor('--canvas', scope)).not.toBe(tokenColor('--canvas'))

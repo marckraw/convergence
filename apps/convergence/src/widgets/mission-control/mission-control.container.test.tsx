@@ -1,8 +1,11 @@
 import { useWorkLedgerStore } from '@/entities/work-ledger'
 import { DEFAULT_CREW_MEMBER_SEAT } from '@/entities/session-crew'
 import { useAppSettingsStore } from '@/entities/app-settings'
-import { toast } from 'sonner'
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+import { notify } from '@convergence/ui'
+vi.mock('@convergence/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@convergence/ui')>()),
+  notify: { success: vi.fn(), failure: vi.fn() },
+}))
 import { useCrewHailStore } from '@/entities/crew-hail'
 import type { RelayHop } from '@/entities/session-relay'
 import {
@@ -238,11 +241,18 @@ function seedRelays(relays: SessionRelay[]) {
   listRelays.mockResolvedValue(relays)
 }
 
+/**
+ * A History row's door (DS-21): each run or event is a Card in its list
+ * item, and its CardAction is the pressable row.
+ */
+const HISTORY_ROW_DOORS =
+  'ul > li > [data-slot="card"] > [data-slot="card-action"][aria-pressed]'
+
 describe('MissionControl', () => {
   beforeEach(() => {
     useWorkLedgerStore.setState({ snapshots: {}, unsubscribeBroadcast: null })
-    vi.mocked(toast.success).mockClear()
-    vi.mocked(toast.error).mockClear()
+    vi.mocked(notify.success).mockClear()
+    vi.mocked(notify.failure).mockClear()
     localStorage.clear()
     useAppSettingsStore.setState((state) => ({
       settings: { ...state.settings, executionHostEndpoints: [] },
@@ -2282,7 +2292,7 @@ describe('MissionControl', () => {
       fireEvent.blur(wip)
       expect(await screen.findByText(refused)).toBeInTheDocument()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Remove from crew' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from crew…' }))
       // Removing a seat asks first (R5, MC-22).
       expect(api.removeMember).not.toHaveBeenCalled()
       await answerConfirm('Remove seat')
@@ -2467,27 +2477,30 @@ describe('MissionControl', () => {
       fireEvent.change(screen.getByLabelText('Crew name'), {
         target: { value: ' ' },
       })
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew…' }))
       expect(
-        within(screen.getByRole('region', { name: 'Danger' })).getByText(
-          /Delete “Night shift” with 2 conversations/,
-        ),
+        await screen.findByRole('alertdialog', {
+          name: 'Delete crew “Night shift”?',
+        }),
       ).toBeInTheDocument()
     })
 
     it('asks before deleting, and says the sessions survive (mutation: delete without confirm)', async () => {
       const api = await openCrewSettings()
 
-      fireEvent.click(await screen.findByText('Delete crew'))
+      fireEvent.click(await screen.findByText('Delete crew…'))
 
+      const question = await screen.findByRole('alertdialog')
       expect(
-        screen.getByText(/stay exactly where they are/),
+        within(question).getByText(/stay exactly where they are/),
       ).toBeInTheDocument()
-      expect(
-        within(screen.getByRole('region', { name: 'Danger' })).getByText(
-          /2 conversations/,
-        ),
-      ).toBeInTheDocument()
+      expect(within(question).getByText(/2 conversations/)).toBeInTheDocument()
+      // Danger: the focus starts on Cancel (R5).
+      await waitFor(() =>
+        expect(
+          within(question).getByRole('button', { name: 'Cancel' }),
+        ).toHaveFocus(),
+      )
       expect(api.delete).not.toHaveBeenCalled()
     })
 
@@ -2500,8 +2513,8 @@ describe('MissionControl', () => {
             refuse = reject
           }),
       )
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew…' }))
+      await answerConfirm('Delete crew')
       expect(
         screen.getByRole('region', { name: 'Crew settings' }),
       ).toBeInTheDocument()
@@ -2541,8 +2554,8 @@ describe('MissionControl', () => {
         if (state.error === 'Delete refused') finishUpdate()
       })
       try {
-        fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
-        fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Delete crew…' }))
+        await answerConfirm('Delete crew')
         await waitFor(() =>
           expect(useSessionCrewStore.getState().crews[0]?.name).toBe('Owls'),
         )
@@ -2554,7 +2567,7 @@ describe('MissionControl', () => {
       }
     })
 
-    it('sends one delete while confirmation is busy and unlocks on refusal (mutation: drop confirm disabled)', async () => {
+    it('sends one delete while it is busy and unlocks on refusal (mutation: drop the trigger disabled)', async () => {
       const api = await openCrewSettings()
       let refuse!: (error: Error) => void
       vi.mocked(api.delete).mockImplementationOnce(
@@ -2563,26 +2576,26 @@ describe('MissionControl', () => {
             refuse = reject
           }),
       )
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
-      const confirm = screen.getByRole('button', { name: 'Delete crew' })
-      const cancel = screen.getByRole('button', { name: 'Cancel' })
-      fireEvent.click(confirm)
-      fireEvent.click(confirm)
+      const trigger = screen.getByRole('button', { name: 'Delete crew…' })
+      fireEvent.click(trigger)
+      await answerConfirm('Delete crew')
       expect(api.delete).toHaveBeenCalledExactlyOnceWith('crew-1')
-      expect(confirm).toBeDisabled()
-      expect(cancel).toBeDisabled()
+      // While the delete is under way, the trigger can't ask again.
+      expect(trigger).toBeDisabled()
+      fireEvent.click(trigger)
+      expect(screen.queryByRole('alertdialog')).toBeNull()
       await act(async () => {
         refuse(new Error('Delete refused'))
       })
-      expect(confirm).toBeEnabled()
-      expect(cancel).toBeEnabled()
+      expect(trigger).toBeEnabled()
+      expect(api.delete).toHaveBeenCalledOnce()
     })
 
     it('deletes once confirmed (mutation: omit delete)', async () => {
       const api = await openCrewSettings()
 
-      fireEvent.click(await screen.findByText('Delete crew'))
-      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      fireEvent.click(await screen.findByText('Delete crew…'))
+      await answerConfirm('Delete crew')
 
       await waitFor(() => expect(api.delete).toHaveBeenCalledWith('crew-1'))
     })
@@ -2590,8 +2603,8 @@ describe('MissionControl', () => {
     it('backs out of the confirm without deleting (mutation: omit cancel)', async () => {
       const api = await openCrewSettings()
 
-      fireEvent.click(await screen.findByText('Delete crew'))
-      fireEvent.click(screen.getByText('Cancel'))
+      fireEvent.click(await screen.findByText('Delete crew…'))
+      await answerConfirm('Cancel')
 
       await waitFor(() =>
         expect(
@@ -2607,7 +2620,7 @@ describe('MissionControl', () => {
       await waitFor(() =>
         expect({
           calls: vi.mocked(api.export).mock.calls,
-          toast: vi.mocked(toast.success).mock.calls,
+          toast: vi.mocked(notify.success).mock.calls,
         }).toEqual({
           calls: [['crew-1', { includePositions: false }]],
           toast: [
@@ -2642,13 +2655,12 @@ describe('MissionControl', () => {
       window.electronAPI.projectOpen = { listApps: vi.fn(), open }
       fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
       await waitFor(() => {
-        if (!vi.mocked(toast.success).mock.calls.length)
+        if (!vi.mocked(notify.success).mock.calls.length)
           throw new Error('No toast yet')
       })
-      const action = vi.mocked(toast.success).mock.calls[0]![1]!.action
-      if (!action || typeof action !== 'object' || !('onClick' in action))
-        throw new Error('Missing Reveal action')
-      action.onClick({} as Parameters<typeof action.onClick>[0])
+      const action = vi.mocked(notify.success).mock.calls[0]![1]?.action
+      if (!action) throw new Error('Missing Reveal action')
+      action.onClick()
       await waitFor(() =>
         expect(open.mock.calls).toEqual([
           [{ appId: 'finder', path: '/home/repo/.convergence/crews' }],
@@ -2748,7 +2760,7 @@ describe('MissionControl', () => {
         'History',
         'Import crew…',
         'Export crew…',
-        'Delete crew',
+        'Delete crew…',
       ]) {
         expect(screen.getByRole('button', { name })).toBeEnabled()
       }
@@ -2768,8 +2780,8 @@ describe('MissionControl', () => {
         ).toBeEnabled(),
       )
       expect({
-        success: vi.mocked(toast.success).mock.calls,
-        errors: vi.mocked(toast.error).mock.calls,
+        success: vi.mocked(notify.success).mock.calls,
+        errors: vi.mocked(notify.failure).mock.calls,
       }).toEqual({ success: [], errors: [] })
       expect(screen.queryByText(/Last exported to/)).not.toBeInTheDocument()
     })
@@ -2792,7 +2804,7 @@ describe('MissionControl', () => {
         return { path, yaml: 'version: 1' }
       })
       fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
-      await waitFor(() => expect(toast.success).toHaveBeenCalled())
+      await waitFor(() => expect(notify.success).toHaveBeenCalled())
       fireEvent.click(screen.getByRole('button', { name: 'Crew settings' }))
       expect(await screen.findByText(/Last exported to/)).toHaveAttribute(
         // The full path is its tooltip (R2: our Tooltip, never a title).
@@ -3202,16 +3214,13 @@ describe('MissionControl', () => {
           await screen.findByRole('button', { name: 'Load older runs' }),
         )
         await waitFor(() =>
-          expect(
-            document.querySelectorAll('ul > li > button[aria-pressed]'),
-          ).toHaveLength(3),
+          expect(document.querySelectorAll(HISTORY_ROW_DOORS)).toHaveLength(3),
         )
         const debtShown = Boolean(
           screen.queryByText(/Waiting · Fable · since .*10:03 · running/),
         )
-        const selected = document.querySelectorAll<HTMLButtonElement>(
-          'ul > li > button[aria-pressed]',
-        )[2]
+        const selected =
+          document.querySelectorAll<HTMLButtonElement>(HISTORY_ROW_DOORS)[2]
         fireEvent.click(selected)
         const scroll = selected.closest('ul')!
         scroll.scrollTop = 72
@@ -3268,8 +3277,7 @@ describe('MissionControl', () => {
             pressed: selected.getAttribute('aria-pressed'),
             connected: selected.isConnected,
             scroll: scroll.scrollTop,
-            rows: document.querySelectorAll('ul > li > button[aria-pressed]')
-              .length,
+            rows: document.querySelectorAll(HISTORY_ROW_DOORS).length,
           }
           fireEvent.click(screen.getByRole('button', { name: 'Close history' }))
           act(() => broadcast('crew-1'))
@@ -3371,8 +3379,7 @@ describe('MissionControl', () => {
           })
           expect({
             calls: listRuns.mock.calls.length,
-            rows: document.querySelectorAll('ul > li > button[aria-pressed]')
-              .length,
+            rows: document.querySelectorAll(HISTORY_ROW_DOORS).length,
             error: screen.queryByText('obsolete failure')?.textContent ?? null,
             older:
               screen.queryByRole('button', { name: 'Load older runs' })

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useDialogStore, type NewSpacePrefill } from '@/entities/dialog'
 import { useSpaceStore, type Space } from '@/entities/space'
 import { SpaceCreateDialog } from './space-create.presentational'
@@ -101,7 +101,7 @@ export const SpaceCreateDialogContainer: FC<
         return
       }
 
-      toast.success(`Space ${created.title} created`)
+      notify.success(`Space ${created.title} created`)
       const seedSessionId = prefill?.seedSessionId
       leave(created)
       // The session joins its new Space as the seed, as "Create from
@@ -139,8 +139,8 @@ export const SpaceCreateDialogContainer: FC<
     title,
   ])
 
-  // Enable cmd+Enter to submit the form
-  useFormSubmitShortcut(open, handleSubmit)
+  // Enable cmd+Enter to submit the form; Create says so in its tooltip (DS-34)
+  const submitShortcut = useFormSubmitShortcut(open, handleSubmit)
 
   return (
     <SpaceCreateDialog
@@ -154,6 +154,7 @@ export const SpaceCreateDialogContainer: FC<
       onTitleChange={setTitle}
       onBriefChange={setBrief}
       onSubmit={() => void handleSubmit()}
+      submitShortcut={submitShortcut}
     />
   )
 }

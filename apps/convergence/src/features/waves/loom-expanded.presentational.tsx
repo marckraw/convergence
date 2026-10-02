@@ -1,24 +1,23 @@
 import type { FC } from 'react'
 import { Minimize2, PanelLeftClose } from 'lucide-react'
-import { Button, IconButton, Tooltip } from '@convergence/ui'
+import { Button, cn, IconButton } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
-  DRAG_REGION_STYLE,
   LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_EXPANDED_CLASS,
   LOOM_GUIDE_ENTRY_CLASS,
   LOOM_SEARCH_EXPANDED_CLASS,
-  NO_DRAG_STYLE,
 } from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 import { LoomSearchFieldView } from './loom-search.presentational'
 import { isLoomSearchShortcut } from './loom-search.pure'
 
 /**
- * One string per control, the label and the hint alike (MAR-3311 R1).
+ * One string per control (MAR-3311 R1): Fold's words, and Collapse's name and
+ * tooltip.
  */
 const FOLD_LOOM = 'Fold Loom'
 const COLLAPSE_LOOM = 'Collapse Loom'
@@ -27,11 +26,13 @@ const COLLAPSE_LOOM = 'Collapse Loom'
  * Opaque cover: the transcript underneath retains its measured box.
  *
  * And a cover has to answer the window-drag question for everything it hides
- * (MAR-3284 R1). `no-drag` on the section, because the views underneath
- * declare `drag` strips Electron still honours through the cover; `drag` back
- * on the header row, so Loom's own title strip moves the window like every
- * other title strip in the app; `no-drag` once more on each control in that
- * row, so none of them is a place to pick the window up instead.
+ * (MAR-3284 R1). `app-no-drag` on the section, because the views underneath
+ * declare `drag` strips Electron still honours through the cover; `app-drag`
+ * back on the header row, so Loom's own title strip moves the window like
+ * every other title strip in the app; and each control in that row is
+ * `app-no-drag` once more, as every Button, IconButton and field of the
+ * design system is by itself, so none of them is a place to pick the window
+ * up instead.
  */
 export const LoomExpandedView: FC<
   LoomStackProps & { onFold: () => void; onCollapse: () => void }
@@ -39,8 +40,7 @@ export const LoomExpandedView: FC<
   <section
     aria-label="Loom"
     data-loom="expanded"
-    className={LOOM_EXPANDED_CLASS}
-    style={NO_DRAG_STYLE}
+    className={cn(LOOM_EXPANDED_CLASS, 'app-no-drag')}
     onKeyDown={(event) => {
       if (isLoomSearchShortcut(event)) {
         event.preventDefault()
@@ -55,8 +55,7 @@ export const LoomExpandedView: FC<
   >
     <div
       data-loom-header
-      className="flex shrink-0 items-center gap-4 px-6 py-3"
-      style={DRAG_REGION_STYLE}
+      className="app-drag flex shrink-0 items-center gap-4 px-6 py-3"
     >
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
       {/* A box, not a paragraph (MAR-3284 R4): the crew picker lives here.
@@ -70,7 +69,6 @@ export const LoomExpandedView: FC<
       <LoomSearchFieldView
         field={props.field}
         className={LOOM_SEARCH_EXPANDED_CLASS}
-        style={NO_DRAG_STYLE}
       />
       {/* Before Fold Loom, so the lesson is reachable without leaving the
           panel it explains (MAR-3201 R9). */}
@@ -78,36 +76,31 @@ export const LoomExpandedView: FC<
         type="button"
         variant="ghost"
         ref={props.guideRef}
-        style={NO_DRAG_STYLE}
         onClick={props.onOpenGuide}
-        size="lg"
+        size="md"
         className={LOOM_GUIDE_ENTRY_CLASS}
       >
         {LEARN_LOOM_ENTRY}
       </Button>
-      <Tooltip label={FOLD_LOOM} side="bottom">
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label={FOLD_LOOM}
-          style={NO_DRAG_STYLE}
-          onClick={onFold}
-          size="lg"
-          className="shrink-0 px-3 text-xs py-0"
-        >
-          <Minimize2 className="size-3.5" />
-          {FOLD_LOOM}
-        </Button>
-      </Tooltip>
+      {/* Its words are on it: no tooltip to say them again (MC-15). */}
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={onFold}
+        size="md"
+        className="shrink-0"
+      >
+        <Minimize2 className="size-3.5" />
+        {FOLD_LOOM}
+      </Button>
       {/* Past Fold Loom, because it goes one step further (MAR-3292 R4):
-          Fold gives the column back, Collapse takes it away. `no-drag` like
-          every other control in this header row. */}
+          Fold gives the column back, Collapse takes it away. `app-no-drag`,
+          its own, like every other control in this header row. */}
 
       <IconButton
         label={COLLAPSE_LOOM}
         type="button"
         variant="ghost"
-        style={NO_DRAG_STYLE}
         onClick={onCollapse}
         tooltipSide="bottom"
         size="sm"

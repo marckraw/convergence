@@ -29,6 +29,8 @@ interface FeedbackButtonProps {
   onDescriptionChange: (description: string) => void
   onContactChange: (contact: string) => void
   onSubmit: () => void
+  /** The key that also sends it, in words ("⌘↵"), for Send's tooltip. */
+  submitShortcut?: string
 }
 
 const priorities: Array<{
@@ -66,6 +68,7 @@ export function FeedbackButton({
   onDescriptionChange,
   onContactChange,
   onSubmit,
+  submitShortcut,
 }: FeedbackButtonProps) {
   const missing =
     title.trim().length < 3
@@ -96,6 +99,7 @@ export function FeedbackButton({
         size="md"
         saves="on-save"
         onSave={onSubmit}
+        saveShortcut={submitShortcut}
         saveLabel="Send"
         pendingLabel="Sending…"
         pending={submitting}

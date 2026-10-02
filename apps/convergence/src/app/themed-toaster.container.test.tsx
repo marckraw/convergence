@@ -1,52 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
+import type { ToasterProps } from '@convergence/ui'
 import { FLOATING_CORNER_CLEAR_BOTTOM } from '@/shared/ui/floating-corner.pure'
 import { ThemedToasterContainer } from './themed-toaster.container'
 
-vi.mock('sonner', () => ({
-  Toaster: ({
-    theme,
-    offset,
-  }: {
-    theme?: string
-    offset?: { bottom?: number }
-  }) => (
-    <div
-      data-testid="toaster"
-      data-toaster-theme={theme}
-      data-offset-bottom={offset?.bottom}
-    />
+// The toasts' look and theme are the design system's, and its Toaster stories
+// check them in both themes (Components/Toaster). What the app decides is
+// where the stack stands.
+vi.mock('@convergence/ui', () => ({
+  Toaster: ({ offset }: ToasterProps) => (
+    <div data-testid="toaster" data-offset-bottom={offset?.bottom} />
   ),
 }))
 
 afterEach(() => {
   cleanup()
-  document.documentElement.removeAttribute('data-theme')
 })
 
 describe('ThemedToasterContainer (audit DS-8)', () => {
-  it('draws toasts in the theme on screen, not sonner’s light default', () => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    render(<ThemedToasterContainer />)
-    // Mutation: drop `theme={theme}` -> the attribute is missing, red.
-    expect(screen.getByTestId('toaster')).toHaveAttribute(
-      'data-toaster-theme',
-      'dark',
-    )
-  })
-
-  it('follows a theme change while it is open', async () => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    render(<ThemedToasterContainer />)
-    document.documentElement.setAttribute('data-theme', 'light')
-    await waitFor(() =>
-      expect(screen.getByTestId('toaster')).toHaveAttribute(
-        'data-toaster-theme',
-        'light',
-      ),
-    )
-  })
-
   it('starts the stack clear above the feedback corner (NAV-7)', () => {
     render(<ThemedToasterContainer />)
     // Mutation: drop `offset` -> sonner's 24 px puts toasts over the corner.

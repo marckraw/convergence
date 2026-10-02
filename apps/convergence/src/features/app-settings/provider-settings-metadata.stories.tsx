@@ -96,9 +96,10 @@ export const Default: Story = {
     await expect(canvas.getByText('Agent')).toBeVisible()
     await expect(canvas.getByText('Unsupported')).toBeVisible()
     await expect(canvas.getByText('Partial')).toBeVisible()
+    // A link that looks like a button: it goes somewhere (DS-24).
     await expect(
-      canvas.getByRole('button', { name: 'Cursor dashboard' }),
-    ).toBeVisible()
+      canvas.getByRole('link', { name: 'Cursor dashboard' }),
+    ).toHaveAttribute('href', 'https://cursor.com/dashboard')
   },
 }
 

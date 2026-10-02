@@ -301,7 +301,7 @@ describe('the connection inspector, rendered', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Delete connection' }),
+      screen.getByRole('button', { name: 'Delete connection…' }),
     ).toBeInTheDocument()
   })
 
@@ -325,7 +325,7 @@ describe('the connection inspector, rendered', () => {
     renderInspector({ isNew: true })
 
     expect(
-      screen.queryByRole('button', { name: 'Delete connection' }),
+      screen.queryByRole('button', { name: 'Delete connection…' }),
     ).not.toBeInTheDocument()
   })
 })

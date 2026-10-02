@@ -233,6 +233,7 @@ export {
   ResizeHandle,
   type ResizeHandleProps,
 } from './components/resize-handle/resize-handle'
+export { resizeHandleStyles } from './components/resize-handle/resize-handle.styles'
 export {
   DragRegion,
   type DragRegionProps,
@@ -359,7 +360,6 @@ export {
   focusRingInset,
   focusRingWithin,
 } from './lib/focus-ring.styles'
-export { DRAG_REGION_STYLE, NO_DRAG_STYLE } from './lib/no-drag.styles'
 export type {
   PopupCloseType,
   PopupFinalFocus,
@@ -425,3 +425,34 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export {
+  calendarDaysBefore,
+  exactDateLabel,
+} from './components/timestamp/timestamp.pure'
+// DS6 sweep E (MAR-3608): appended, so the parallel sweeps' additions merge as unions.
+export { type InputVariant } from './components/input/input'
+export { type TextareaVariant } from './components/textarea/textarea'
+export {
+  MenuButton,
+  type MenuButtonProps,
+} from './components/menu-button/menu-button'
+export {
+  RowActions,
+  type RowActionsProps,
+} from './components/row-actions/row-actions'
+export {
+  Toaster,
+  type ToasterOffset,
+  type ToasterProps,
+  toast,
+} from './components/toaster/toaster'
+export {
+  notify,
+  type NotifyAction,
+  type NotifyOptions,
+} from './components/toaster/notify'
+export { chipFrame } from './components/chip/chip'
+export {
+  type SectionLabelSize,
+  sectionLabelVariants,
+} from './components/section-label/section-label'

@@ -119,6 +119,8 @@ const config: StorybookConfig = {
           '@xterm/addon-web-links',
           '@xterm/addon-webgl',
           'react-resizable-panels',
+          // The Toaster's stack (MAR-3608): every toast the app raises.
+          'sonner',
         ],
       },
     })

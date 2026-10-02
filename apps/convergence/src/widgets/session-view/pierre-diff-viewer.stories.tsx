@@ -86,10 +86,15 @@ export const Default: Story = {
       }),
     )
     await expect(args.onExpandContextBoth).toHaveBeenCalledOnce()
-    // Nothing expanded yet, so there is nothing to reset.
-    await expect(
-      canvas.getByRole('button', { name: 'Reset visible diff context' }),
-    ).toBeDisabled()
+    // Nothing expanded yet, so there is nothing to reset, and it says so
+    // (R2): unavailable, still reachable, with its reason.
+    const reset = canvas.getByRole('button', {
+      name: 'Reset visible diff context',
+    })
+    await expect(reset).toHaveAttribute('aria-disabled', 'true')
+    await expect(reset).toHaveAccessibleDescription(
+      'This is the usual context already.',
+    )
   },
 }
 
@@ -106,7 +111,7 @@ export const Expanded: Story = {
     await expect(args.onResetContext).toHaveBeenCalledOnce()
     await expect(
       canvas.getByRole('button', { name: 'Show more context above changes' }),
-    ).toBeDisabled()
+    ).toHaveAttribute('aria-disabled', 'true')
   },
 }
 

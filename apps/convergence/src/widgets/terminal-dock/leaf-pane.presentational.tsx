@@ -1,5 +1,9 @@
 import { Fragment, type FC, type ReactNode } from 'react'
-import type { LeafNode, SplitDirection } from '@/entities/terminal'
+import type {
+  LeafNode,
+  SplitDirection,
+  TerminalShortcutLabels,
+} from '@/entities/terminal'
 import { PaneToolbar } from '@/features/terminal-pane'
 import { cn } from '@convergence/ui'
 import { TabGroup } from './tab-group.presentational'
@@ -15,11 +19,12 @@ export interface LeafPaneHandlers {
   onSelectTab: (leafId: string, tabId: string) => void
   onNewTab: (leafId: string) => void
   onSplit: (leafId: string, direction: SplitDirection) => void
-  onCloseActiveTab: (leafId: string) => void
   onCloseTab: (leafId: string, tabId: string) => void
   onFocusLeaf: (leafId: string) => void
   /** Draws the open tab's terminal; a story passes a still picture of one. */
   renderTerminal: (pane: TerminalPaneSlot) => ReactNode
+  /** The keys for New tab, the splits and Close, in words, for their tooltips (NAV-23). */
+  shortcutLabels?: TerminalShortcutLabels
 }
 
 interface LeafPaneViewProps extends LeafPaneHandlers {
@@ -27,8 +32,9 @@ interface LeafPaneViewProps extends LeafPaneHandlers {
 }
 
 /**
- * One pane of the terminal dock: its tab strip, the split and close buttons,
- * and the open tab's terminal under them.
+ * One pane of the terminal dock: its tab strip, the split buttons, and the
+ * open tab's terminal under them. Each tab carries its own ✕, so the toolbar
+ * draws no second close for the open one (NAV-9).
  */
 export const LeafPaneView: FC<LeafPaneViewProps> = ({
   leaf,
@@ -36,10 +42,10 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
   onSelectTab,
   onNewTab,
   onSplit,
-  onCloseActiveTab,
   onCloseTab,
   onFocusLeaf,
   renderTerminal,
+  shortcutLabels,
 }) => {
   const activeTab = leaf.tabs.find((t) => t.id === leaf.activeTabId)
   const isFocused = focusedLeafId === leaf.id
@@ -58,11 +64,12 @@ export const LeafPaneView: FC<LeafPaneViewProps> = ({
         onSelect={(tabId) => onSelectTab(leaf.id, tabId)}
         onCloseTab={(tabId) => onCloseTab(leaf.id, tabId)}
         onNewTab={() => onNewTab(leaf.id)}
+        newTabShortcut={shortcutLabels?.['new-tab']}
         trailingSlot={
           <PaneToolbar
             onSplitHorizontal={() => onSplit(leaf.id, 'horizontal')}
             onSplitVertical={() => onSplit(leaf.id, 'vertical')}
-            onClose={() => onCloseActiveTab(leaf.id)}
+            shortcuts={shortcutLabels}
           />
         }
       />

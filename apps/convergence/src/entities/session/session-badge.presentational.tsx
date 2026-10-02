@@ -6,12 +6,13 @@ import type { FC } from 'react'
 import {
   Loader2,
   CheckCircle2,
+  CircleHelp,
   XCircle,
   AlertTriangle,
   MessageSquare,
 } from 'lucide-react'
 import { cn, Spinner, toneInk } from '@convergence/ui'
-import { attentionTone } from './session-tone.pure'
+import { attentionTone, SESSION_STATE_TONE } from './session-tone.pure'
 
 interface SessionBadgeProps {
   parallelWork?: ParallelWorkCounts
@@ -63,17 +64,26 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
     return (
       <Glyph data-tone={tone} className={cn(iconClassName, toneInk[tone])} />
     )
-  return <Spinner size="xs" className={cn(className, 'text-ink-muted')} />
+  // At work: the spinner, in the working tone (R1: working is info), as the
+  // Activity feed and Mission Control draw it (MC-1).
+  const working = SESSION_STATE_TONE.working
+  return (
+    <span data-tone={working} className={cn('inline-flex shrink-0', className)}>
+      <Spinner size="xs" className={toneInk[working]} />
+    </span>
+  )
 }
 
 /**
- * A settled state's glyph; its tone is the session's map (session-tone.pure).
- * Anything else, a machine out of reach included, is still at work: the
- * spinner.
+ * A state's glyph; its tone is the session's map (session-tone.pure). A
+ * machine out of reach has its own, "we cannot see it", in the warning tone
+ * (R1, NAV-1), never the working spinner. Anything else is still at work:
+ * the spinner.
  */
 const GLYPHS: Partial<Record<string, typeof CheckCircle2>> = {
   'needs-approval': AlertTriangle,
   'needs-input': MessageSquare,
   finished: CheckCircle2,
   failed: XCircle,
+  'host-unreachable': CircleHelp,
 }

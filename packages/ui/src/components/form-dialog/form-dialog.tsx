@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../dialog/dialog'
+import { Tooltip } from '../tooltip/tooltip'
 
 type FormDialogSaves = 'as-you-go' | 'on-save'
 
@@ -57,6 +58,12 @@ type FormDialogProps = {
   pendingLabel?: ReactNode
   /** Why Save is unavailable, if it is: a missing name, say (R2). */
   saveDisabledReason?: string
+  /**
+   * A key that saves from anywhere in the form, already formatted ("⌘↵",
+   * `formatShortcutLabel`): Save's tooltip shows it (DS-34). The form that
+   * listens for the key passes the label it listens for.
+   */
+  saveShortcut?: string
   /** Saving is under way: Save says so after 300 ms and further presses wait. */
   pending?: boolean
   /** It didn't save: why, and what to do. Shown above the buttons. */
@@ -91,6 +98,7 @@ function FormDialog({
   saveLabel = 'Save',
   pendingLabel = 'Saving…',
   saveDisabledReason,
+  saveShortcut,
   pending = false,
   error,
   children,
@@ -143,14 +151,25 @@ function FormDialog({
               <DialogClose render={<Button variant="secondary" />}>
                 Cancel
               </DialogClose>
-              <Button
-                type="submit"
-                pending={busy}
-                pendingLabel={pendingLabel}
-                disabledReason={saveDisabledReason}
+              <Tooltip
+                label={
+                  saveShortcut
+                    ? typeof saveLabel === 'string'
+                      ? saveLabel
+                      : 'Save'
+                    : undefined
+                }
+                shortcut={saveShortcut}
               >
-                {saveLabel}
-              </Button>
+                <Button
+                  type="submit"
+                  pending={busy}
+                  pendingLabel={pendingLabel}
+                  disabledReason={saveDisabledReason}
+                >
+                  {saveLabel}
+                </Button>
+              </Tooltip>
             </DialogFooter>
           </form>
         ) : (

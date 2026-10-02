@@ -1,4 +1,4 @@
-import type { CSSProperties, FC } from 'react'
+import type { FC } from 'react'
 import { cn, SearchField } from '@convergence/ui'
 import type { LoomSearchField } from './loom-stack.types'
 import { LOOM_SEARCH_NAME } from './loom-search.pure'
@@ -15,15 +15,13 @@ import { LOOM_SEARCH_FIELD_CLASS } from './wave-panel.styles'
 export const LoomSearchFieldView: FC<{
   field: LoomSearchField
   className?: string
-  /** Expanded Loom's header is a window-drag strip; this field is not
-      (MAR-3284 R1). */
-  style?: CSSProperties
-}> = ({ field, className, style }) => (
+}> = ({ field, className }) => (
+  // Expanded Loom's header is a window-drag strip; this field is not, in
+  // either shape (MAR-3284 R1).
   <div
     role="search"
     data-loom-search=""
-    className={cn(LOOM_SEARCH_FIELD_CLASS, className)}
-    style={style}
+    className={cn(LOOM_SEARCH_FIELD_CLASS, 'app-no-drag', className)}
   >
     <SearchField
       size="md"

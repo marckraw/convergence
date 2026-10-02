@@ -317,8 +317,9 @@ export const Busy: Story = {
     ).toHaveAttribute('aria-checked', 'true')
     await userEvent.click(within(modes).getByRole('radio', { name: 'Steer' }))
     await expect(args.onDeliveryModeChange).toHaveBeenCalledWith('steer')
-    const quiet = canvas.getByRole('switch', { name: 'Send quiet' })
-    await expect(quiet).toHaveAttribute('aria-checked', 'false')
+    // A Toggle: pressed, not a switch (DS-14).
+    const quiet = canvas.getByRole('button', { name: 'Send quiet' })
+    await expect(quiet).toHaveAttribute('aria-pressed', 'false')
     await userEvent.click(quiet)
     await expect(args.onRelaysMutedChange).toHaveBeenCalledWith(true)
   },

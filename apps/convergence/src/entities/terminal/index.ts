@@ -1,4 +1,4 @@
-export { useTerminalStore } from './terminal.model'
+export { dockSizeBounds, useTerminalStore } from './terminal.model'
 export type { TerminalStore } from './terminal.model'
 export { terminalApi } from './terminal.api'
 export { terminalLayoutApi } from './terminal-layout.api'
@@ -23,7 +23,12 @@ export type {
   TerminalIdleNotice,
 } from './terminal.types'
 export { findLeaf, collectAllPtyIds, makeLeaf } from './pane-tree.pure'
-export { matchShortcut } from './keymap.pure'
-export type { TerminalShortcut, KeyEventLike, Platform } from './keymap.pure'
+export { matchShortcut, terminalShortcutLabels } from './keymap.pure'
+export type {
+  TerminalShortcut,
+  KeyEventLike,
+  Platform,
+  TerminalShortcutLabels,
+} from './keymap.pure'
 export { findAdjacentLeaf } from './focus-navigation.pure'
 export type { FocusDirection } from './focus-navigation.pure'

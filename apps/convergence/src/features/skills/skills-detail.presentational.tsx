@@ -109,7 +109,8 @@ function renderDependencyList(dependencies: SkillDependency[]) {
           </span>
           <Badge
             tone={DEPENDENCY_STATE_TONES[dependency.state]}
-            className="shrink-0 font-medium uppercase"
+            caps
+            className="shrink-0 font-medium"
           >
             {DEPENDENCY_STATE_LABELS[dependency.state]}
           </Badge>
@@ -193,7 +194,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
       <div className="mb-4 min-w-0">
         <div className="mb-3 flex items-end justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className="uppercase">{selectedSkill.providerName}</Badge>
+            <Badge caps>{selectedSkill.providerName}</Badge>
             {renderScopeChip(selectedSkill.scope)}
             {renderStatusBadge(selectedSkill.enabled)}
             {renderWarningBadge(selectedSkill.warnings.length)}

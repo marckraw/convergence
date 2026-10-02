@@ -237,12 +237,14 @@ export const LEARN_LOOM_EMPHASIS_CLASS: Readonly<
  *
  * A viewport breakpoint rather than a container query: the dialog is
  * `min(1000px, 100vw - 48px)`, so its width is a function of the viewport's
- * and the two are the same question. 860 is where a card's two columns stop
- * being readable inside the 64 px of dialog padding. Electron's View -> Zoom
- * In shrinks the CSS viewport, so zoom folds these cards for free.
+ * and the two are the same question. 860 px is where a card's two columns
+ * stop being readable inside the 64 px of dialog padding: the app's own
+ * breakpoint, `--breakpoint-learn-loom` in global.css (R11; an arbitrary
+ * `min-[860px]` is a magic value). Electron's View -> Zoom In shrinks the CSS
+ * viewport, so zoom folds these cards for free.
  */
 export const LEARN_LOOM_REFERENCE_GRID_CLASS =
-  'grid grid-cols-1 min-[860px]:grid-cols-2 gap-3'
+  'grid grid-cols-1 learn-loom:grid-cols-2 gap-3'
 /** No border in `559:2312`; a fill, radius 12, and 14/15 padding. */
 export const LEARN_LOOM_REFERENCE_CARD_CLASS =
   'flex min-h-38 flex-col gap-2 rounded-xl bg-surface px-4 pt-3.5 pb-4'

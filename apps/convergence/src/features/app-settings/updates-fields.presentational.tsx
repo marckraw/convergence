@@ -1,5 +1,9 @@
 import type { FC } from 'react'
-import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
+import {
+  RELEASE_NOTES_TITLE,
+  type UpdatePrefs,
+  type UpdateStatus,
+} from '@/entities/updates'
 import { Button, ChoiceField, Switch } from '@convergence/ui'
 
 interface UpdatesFieldsProps {
@@ -54,13 +58,17 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
       </ChoiceField>
 
       <div className="flex flex-wrap items-center gap-2">
+        {/* Busy is the Button's own (DLG-17): aria-busy, and a width that
+            holds while the words change. */}
         <Button
           type="button"
           variant="secondary"
           onClick={onCheckNow}
           disabled={actionsDisabled}
+          pending={isChecking}
+          pendingLabel="Checking…"
         >
-          {isChecking ? 'Checking…' : 'Check now'}
+          Check now
         </Button>
         {status.phase === 'available' && (
           <Button
@@ -87,7 +95,7 @@ export const UpdatesFields: FC<UpdatesFieldsProps> = ({
             onClick={onOpenReleaseNotes}
             disabled={isDev || isSaving}
           >
-            Release notes
+            {RELEASE_NOTES_TITLE}
           </Button>
         )}
       </div>

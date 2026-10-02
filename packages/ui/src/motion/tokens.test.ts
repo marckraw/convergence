@@ -44,6 +44,7 @@ describe('the motion tokens in code match tokens.css', () => {
     ['wire', 'motion-wire'],
     ['breath', 'motion-breath'],
     ['tooltipDelay', 'motion-tooltip-delay'],
+    ['tooltipWarm', 'motion-tooltip-warm'],
   ] as const)('durationsMs.%s is --%s', (key, name) => {
     expect(durationsMs[key]).toBe(milliseconds(token(name)))
   })

@@ -2,12 +2,16 @@ import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
 import {
   Button,
   cn,
+  DescriptionItem,
+  DescriptionList,
   IconButton,
+  MetaLine,
   Meter,
   Popover,
   PopoverContent,
   PopoverTrigger,
   Spinner,
+  Timestamp,
 } from '@convergence/ui'
 import { RefreshCw } from 'lucide-react'
 import {
@@ -32,14 +36,10 @@ interface CodexUsagePillContainerProps {
   onOpenSettings: () => void
 }
 
-function formatCheckedAt(value: string | null | undefined): string {
-  if (!value) return 'not checked'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'not checked'
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
+/** When the usage was read: a Timestamp, the whole moment in its tooltip (CONV-22). */
+function checkedAt(value: string | null | undefined) {
+  if (!value || Number.isNaN(new Date(value).getTime())) return 'not checked'
+  return <Timestamp date={value} format="clock" />
 }
 
 export function CodexUsagePillContainer({
@@ -114,7 +114,7 @@ export function CodexUsagePillContainer({
           title: 'Codex usage',
           detail: (
             <>
-              checked {formatCheckedAt(snapshot?.lastCheckedAt)}
+              checked {checkedAt(snapshot?.lastCheckedAt)}
               {snapshot?.status === 'available' && snapshot.stale
                 ? ' (stale)'
                 : ''}
@@ -153,25 +153,25 @@ export function CodexUsagePillContainer({
               reset={weekly?.resetsAt ?? null}
             />
             {snapshot.credits ? (
-              <div
-                className={cn(usageSection, 'flex items-center gap-2 text-xs')}
+              // A term and its value (CONV-24): what is left, then how much.
+              <DescriptionList
+                layout="inline"
+                density="compact"
+                className={usageSection}
               >
-                <span className="w-18 shrink-0 font-medium text-ink">
-                  Credits
-                </span>
-                <span className="min-w-0 flex-1 truncate text-ink-muted">
-                  {snapshot.credits.unlimited
-                    ? 'Unlimited'
-                    : snapshot.credits.hasCredits
-                      ? 'Available'
-                      : 'No credits remaining'}
-                </span>
-                <span className="w-10 shrink-0 text-right font-medium text-ink">
-                  {snapshot.credits.unlimited
-                    ? 'Any'
-                    : (snapshot.credits.balance ?? '0')}
-                </span>
-              </div>
+                <DescriptionItem term="Credits">
+                  <MetaLine>
+                    {snapshot.credits.unlimited
+                      ? 'Unlimited'
+                      : snapshot.credits.hasCredits
+                        ? 'Available'
+                        : 'No credits remaining'}
+                    {snapshot.credits.unlimited
+                      ? 'Any'
+                      : (snapshot.credits.balance ?? '0')}
+                  </MetaLine>
+                </DescriptionItem>
+              </DescriptionList>
             ) : null}
           </div>
         ) : (

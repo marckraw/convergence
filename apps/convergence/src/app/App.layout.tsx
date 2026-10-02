@@ -10,9 +10,16 @@ import { NotificationsOnboardingContainer } from '@/features/notifications-onboa
 import { WavePanel } from '@/features/waves'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { SessionSummary } from '@/entities/session'
-import { cn, DragRegion, ResizeHandle } from '@convergence/ui'
+import { cn, DragRegion, EmptyState, ResizeHandle } from '@convergence/ui'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
 import { RouteFallbackView } from './route-fallback.presentational'
+import { loadSidebarLayout, saveSidebarLayout } from './sidebar-layout.api'
+import {
+  COLLAPSED_SIDEBAR,
+  DEFAULT_SIDEBAR,
+  MAX_SIDEBAR,
+  MIN_SIDEBAR,
+} from './sidebar-layout.pure'
 import type { MainViewRouteFallback } from './routes/main-view-route-resolution.pure'
 
 interface AppShellProps {
@@ -46,11 +53,6 @@ interface AppShellProps {
   showDevelopmentRibbon: boolean
 }
 
-const MIN_SIDEBAR = 220
-const MAX_SIDEBAR = 400
-const DEFAULT_SIDEBAR = 260
-const COLLAPSED_SIDEBAR = 56
-
 export const AppShell: FC<AppShellProps> = ({
   activeSessionId,
   activeGlobalSessionId,
@@ -76,8 +78,16 @@ export const AppShell: FC<AppShellProps> = ({
   hasProject,
   showDevelopmentRibbon,
 }) => {
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // The sidebar comes back as it was left: its width and its fold (NAV-16).
+  const [sidebarWidth, setSidebarWidth] = useState(
+    () => loadSidebarLayout().width,
+  )
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => loadSidebarLayout().collapsed,
+  )
+  useEffect(() => {
+    saveSidebarLayout({ width: sidebarWidth, collapsed: sidebarCollapsed })
+  }, [sidebarWidth, sidebarCollapsed])
   const [sidebarPeekOpen, setSidebarPeekOpen] = useState(false)
   /**
    * Loom has the content area (MAR-3189 R5).
@@ -264,9 +274,14 @@ export const AppShell: FC<AppShellProps> = ({
         {/* The window moves from its top while the app loads (NAV-4). */}
         <DragRegion />
         {showDevelopmentRibbon ? <DevBuildRibbon /> : null}
-        <p className="flex flex-1 items-center justify-center pb-12 text-ink-muted">
-          Loading…
-        </p>
+        {/* Nothing for a quick boot, then a spinner and the words (NAV-19). */}
+        <EmptyState
+          state="loading"
+          variant="plain"
+          layout="centred"
+          title="Loading…"
+          className="pb-12"
+        />
       </div>
     )
   }
@@ -422,14 +437,15 @@ export const AppShell: FC<AppShellProps> = ({
               <div className="flex h-full flex-col">
                 {/* No header here, and the window still moves from its top (NAV-4). */}
                 <DragRegion />
-                <div className="flex flex-1 flex-col items-center justify-center pb-12">
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Welcome to Convergence
-                  </h1>
-                  <p className="mt-2 text-sm text-ink-muted">
-                    Open a project to get started.
-                  </p>
-                </div>
+                {/* One page-sized EmptyState with the route fallback (NAV-19). */}
+                <EmptyState
+                  size="page"
+                  variant="plain"
+                  layout="centred"
+                  title="Welcome to Convergence"
+                  detail="Open a project to get started."
+                  className="pb-12"
+                />
               </div>
             )}
           </div>

@@ -1,8 +1,7 @@
 import { X } from 'lucide-react'
-import { Button, IconButton, TextLink } from '@convergence/ui'
+import { Badge, Button, IconButton, TextLink } from '@convergence/ui'
 import type { LoomIssueDetail } from './loom-detail.pure'
 import {
-  LOOM_DETAIL_CHIP_CLASS,
   LOOM_DETAIL_CLASS,
   LOOM_DETAIL_FOOTER_CLASS,
   LOOM_DETAIL_MUTED_CLASS,
@@ -66,9 +65,9 @@ export const LoomDetailView = <TSession,>({
         <span className={LOOM_DETAIL_MUTED_CLASS}>{detail.labelsEmpty}</span>
       ) : (
         detail.labels.map((label) => (
-          <span key={label} className={LOOM_DETAIL_CHIP_CLASS}>
+          <Badge key={label} outline>
             {label}
-          </span>
+          </Badge>
         ))
       )}
     </section>
@@ -106,7 +105,7 @@ export const LoomDetailView = <TSession,>({
               }
             }}
             size="xs"
-            className="justify-start px-1"
+            className="justify-start"
           >
             Open conversation →
           </Button>

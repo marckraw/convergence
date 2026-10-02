@@ -5,6 +5,7 @@ import { Plus, Users, X } from 'lucide-react'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import { Button, cn, Combobox, IconButton, Input } from '@convergence/ui'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
+import { CrewMark } from './crew-mark.presentational'
 import {
   CREW_SEARCH_THRESHOLD,
   crewsHoldingSession,
@@ -87,29 +88,21 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
               ? 'opacity-100'
               : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100',
           )}
+          // The crew's own mark (MC-14): its emoji, or the people glyph;
+          // in the list, its emoji or its colour's dot, in the hue token.
           icon={
-            holding.length === 1 && holding[0]?.emoji ? (
-              <span aria-hidden className="leading-none">
-                {holding[0].emoji}
-              </span>
+            holding.length === 1 && holding[0] ? (
+              <CrewMark crew={holding[0]} variant="glyph" />
             ) : (
-              <Users className="size-3" />
+              <Users aria-hidden className="size-3" />
             )
           }
           items={crews.map((crew) => ({
             id: crew.id,
             label: crew.name,
-            icon: crew.emoji ? (
-              <span aria-hidden className="leading-none">
-                {crew.emoji}
-              </span>
-            ) : crew.accentColor ? (
-              <span
-                aria-hidden
-                style={{ backgroundColor: crew.accentColor }}
-                className="size-2 shrink-0 rounded-full"
-              />
-            ) : undefined,
+            icon: (
+              <CrewMark crew={crew} variant={crew.emoji ? 'glyph' : 'dot'} />
+            ),
             trailing: crew.sessionIds.length,
           }))}
           // A crew matches by its name or its emoji.
@@ -186,7 +179,6 @@ export const SessionCrewPicker: FC<SessionCrewPickerProps> = ({
                   disabled={!isValidCrewName(draftName)}
                   onClick={() => void submitDraft()}
                   size="sm"
-                  className="px-3"
                 >
                   Create &amp; add this session
                 </Button>

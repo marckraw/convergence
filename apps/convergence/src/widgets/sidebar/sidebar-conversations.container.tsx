@@ -15,6 +15,7 @@ import {
   type ChatSidebarSpace,
 } from './global-chat-session-list.presentational'
 import { NeedsYou } from './needs-you.container'
+import { EmptyState } from '@convergence/ui'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { ProjectTree } from './project-tree.container'
 import { useSidebarConversationSearch } from './sidebar-search.container'
@@ -180,7 +181,7 @@ export const SidebarConversations = memo(function SidebarConversations({
 
       {search.field}
 
-      <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto py-3">
         <NeedsYou
           groups={cardGroups}
           nameSearchQuery={search.query}
@@ -210,6 +211,7 @@ export const SidebarConversations = memo(function SidebarConversations({
             sessions={ungroupedGlobalChatSessions}
             nameSearchQuery={search.query}
             activeSessionId={activeGlobalSessionId}
+            pulsingSessionIds={pulsingSessionIds}
             selectedSpaceId={selectedSpaceId}
             expandedSpaceIds={expandedSpaceIds}
             archivedSpacesExpanded={archivedSpacesExpanded}
@@ -266,8 +268,8 @@ export const SidebarConversations = memo(function SidebarConversations({
                 onOpenCreateWorkspace={onOpenCreateWorkspace}
               />
             ) : (
-              <div className="px-3 text-center">
-                <p className="mb-3 text-sm text-ink-muted">No project loaded</p>
+              <div className="mb-3 px-3">
+                <EmptyState size="compact" title="No project loaded" />
               </div>
             )}
           </>

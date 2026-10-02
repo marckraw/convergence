@@ -180,7 +180,7 @@ export const Default: Story = {
     await expect(args.onSetDefault).toHaveBeenCalledWith('acct-work')
     await userEvent.click(work.getByRole('button', { name: 'Reconnect' }))
     await expect(args.onReconnect).toHaveBeenCalledWith('acct-work')
-    await userEvent.click(work.getByRole('button', { name: 'Remove' }))
+    await userEvent.click(work.getByRole('button', { name: 'Remove…' }))
     await expect(args.onRequestRemove).toHaveBeenCalledWith('acct-work')
     await userEvent.click(work.getByRole('button', { name: 'Connectors' }))
     await expect(args.onToggleConnectors).toHaveBeenCalledWith('acct-work')

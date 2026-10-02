@@ -1,98 +1,58 @@
-import type { FC, PointerEvent } from 'react'
-import { useCallback, useEffect, useRef } from 'react'
-import { useTerminalStore, type DockPlacement } from '@/entities/terminal'
-import { cn } from '@convergence/ui'
+import type { FC } from 'react'
+import {
+  dockSizeBounds,
+  useTerminalStore,
+  type DockPlacement,
+} from '@/entities/terminal'
+import { ResizeHandle } from '@convergence/ui'
 
 interface DockResizeHandleProps {
   sessionId: string
   placement: DockPlacement
 }
 
+/**
+ * The line between the dock and the conversation (NAV-16): the kit's
+ * ResizeHandle, so it is focusable, says its size and its range, moves with
+ * the arrow keys (Home and End to its ends) as well as the pointer, and a
+ * double-click puts the default size back. The store keeps the size, per
+ * session, and clamps it to the window.
+ */
 export const DockResizeHandle: FC<DockResizeHandleProps> = ({
   sessionId,
   placement,
 }) => {
+  const atBottom = placement === 'bottom'
+  const size = useTerminalStore((s) =>
+    atBottom ? s.getDockHeight(sessionId) : s.getDockWidth(sessionId),
+  )
   const setDockHeight = useTerminalStore((s) => s.setDockHeight)
   const resetDockHeight = useTerminalStore((s) => s.resetDockHeight)
   const setDockWidth = useTerminalStore((s) => s.setDockWidth)
   const resetDockWidth = useTerminalStore((s) => s.resetDockWidth)
-
-  const dragStateRef = useRef<{
-    startX: number
-    startY: number
-    startSize: number
-    pointerId: number
-  } | null>(null)
-
-  const handlePointerMove = useCallback(
-    (event: globalThis.PointerEvent) => {
-      const drag = dragStateRef.current
-      if (!drag) return
-      if (placement === 'bottom') {
-        const delta = drag.startY - event.clientY
-        setDockHeight(sessionId, drag.startSize + delta, window.innerHeight)
-        return
-      }
-      const delta =
-        placement === 'right'
-          ? drag.startX - event.clientX
-          : event.clientX - drag.startX
-      setDockWidth(sessionId, drag.startSize + delta, window.innerWidth)
-    },
-    [sessionId, placement, setDockHeight, setDockWidth],
-  )
-
-  const handlePointerUp = useCallback(() => {
-    dragStateRef.current = null
-    window.removeEventListener('pointermove', handlePointerMove)
-    window.removeEventListener('pointerup', handlePointerUp)
-  }, [handlePointerMove])
-
-  useEffect(() => {
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-  }, [handlePointerMove, handlePointerUp])
-
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    const startSize =
-      placement === 'bottom'
-        ? useTerminalStore.getState().getDockHeight(sessionId)
-        : useTerminalStore.getState().getDockWidth(sessionId)
-    dragStateRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      startSize,
-      pointerId: event.pointerId,
-    }
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-  }
-
-  const onDoubleClick = () => {
-    if (placement === 'bottom') resetDockHeight(sessionId)
-    else resetDockWidth(sessionId)
-  }
-
-  const isVertical = placement === 'bottom'
+  const windowSize = atBottom ? window.innerHeight : window.innerWidth
+  const { min, max } = dockSizeBounds(placement, windowSize)
 
   return (
-    <div
-      role="separator"
-      aria-orientation={isVertical ? 'horizontal' : 'vertical'}
-      aria-label="Resize terminal dock"
-      onPointerDown={onPointerDown}
-      onDoubleClick={onDoubleClick}
-      data-testid="dock-resize-handle"
-      data-placement={placement}
-      className={cn(
-        'shrink-0 bg-line/40 transition-colors hover:bg-line',
-        isVertical
-          ? 'h-1 w-full cursor-row-resize'
-          : 'h-full w-1 cursor-col-resize',
-      )}
+    <ResizeHandle
+      // A dock at the bottom has a line across it, which sizes a height; a
+      // dock at a side has a line down, which sizes a width.
+      orientation={atBottom ? 'horizontal' : 'vertical'}
+      // The dock sits after the line at the bottom and on the right, so
+      // moving the line towards the start makes it larger.
+      reverse={placement !== 'left'}
+      value={size}
+      min={min}
+      max={max}
+      label="Resize terminal dock"
+      onChange={(next) => {
+        if (atBottom) setDockHeight(sessionId, next, window.innerHeight)
+        else setDockWidth(sessionId, next, window.innerWidth)
+      }}
+      onReset={() => {
+        if (atBottom) resetDockHeight(sessionId)
+        else resetDockWidth(sessionId)
+      }}
     />
   )
 }

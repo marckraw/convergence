@@ -2,6 +2,7 @@ import {
   formatCodexRemainingPercent,
   getCodexUsageTone,
 } from './codex-usage-pill.pure'
+import { Timestamp } from '@convergence/ui'
 import { UsageMeterRow } from './usage-popover.presentational'
 
 interface CodexUsageQuotaRowProps {
@@ -10,16 +11,16 @@ interface CodexUsageQuotaRowProps {
   reset: string | null
 }
 
-function formatReset(value: string | null): string {
-  if (!value) return 'Reset time unavailable'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Reset time unavailable'
-  return `Resets ${new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)}`
+/** When the window resets: a Timestamp, the whole moment in its tooltip (CONV-22). */
+function resetDetail(value: string | null) {
+  if (!value || Number.isNaN(new Date(value).getTime())) {
+    return 'Reset time unavailable'
+  }
+  return (
+    <>
+      Resets <Timestamp date={value} format="datetime" />
+    </>
+  )
 }
 
 export function CodexUsageQuotaRow({
@@ -33,7 +34,7 @@ export function CodexUsageQuotaRow({
   return (
     <UsageMeterRow
       label={label}
-      detail={formatReset(reset)}
+      detail={resetDetail(reset)}
       value={safeRemaining}
       valueLabel={formatCodexRemainingPercent(remaining)}
       tone={getCodexUsageTone(remaining)}

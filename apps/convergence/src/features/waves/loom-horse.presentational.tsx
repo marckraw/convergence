@@ -1,6 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import { Circle, CircleHelp, CircleX, LoaderCircle } from 'lucide-react'
-import { Button, cn, Spinner } from '@convergence/ui'
+import { Button, Card, CardAction, cn, Spinner } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomHorseTicketLine,
@@ -12,6 +12,7 @@ import {
   LOOM_CARD_HEAD_CLASS,
   LOOM_HORSE_CARD_CLASS,
   LOOM_HORSE_META_CLASS,
+  LOOM_HORSE_META_INK,
   LOOM_HORSE_RUNTIME_CLASS,
   LOOM_HORSE_TICKET_DOOR_CLASS,
   LOOM_HORSE_TINT_CLASS,
@@ -89,35 +90,21 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
     .join(' · ')
   const ids = loomSeatCardIds('horse', horse.key)
   const doorLabel = horse.runtime === 'failed' ? 'View run error →' : 'Open →'
+  const metaClass = cn(
+    LOOM_HORSE_META_CLASS,
+    LOOM_HORSE_META_INK[horse.runtime],
+  )
 
   return (
     <div className="px-3 py-0.5" data-loom-horse={horse.key}>
-      <div
+      <Card
+        interactive={openable}
+        padding="none"
         className={cn(
           LOOM_HORSE_CARD_CLASS,
           LOOM_HORSE_TINT_CLASS[horse.runtime],
-          'relative',
-          openable && 'hover:bg-fill-hover',
         )}
       >
-        {openable ? (
-          <Button
-            type="button"
-            variant="ghost"
-            aria-labelledby={[
-              `${ids}-seat`,
-              `${ids}-runtime`,
-              `${ids}-ticket`,
-              meta ? `${ids}-meta` : null,
-              `${ids}-open`,
-            ]
-              .filter((id): id is string => id !== null)
-              .join(' ')}
-            onClick={() => onOpenSeat?.(horse.sessionId!)}
-            size="lg"
-            className={LOOM_SEAT_CARD_DOOR_CLASS}
-          />
-        ) : null}
         <span className={LOOM_CARD_HEAD_CLASS}>
           {/* A horse at work turns the kit's Spinner, which stands still
               under reduced motion (MC-25); the others wear their glyph. */}
@@ -126,9 +113,28 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           ) : (
             <Icon className="size-3 shrink-0" aria-hidden />
           )}
-          <span id={`${ids}-seat`} className="min-w-0 truncate font-medium">
-            {horse.seat ?? 'unnamed seat'}
-          </span>
+          {openable ? (
+            <CardAction
+              id={`${ids}-seat`}
+              aria-labelledby={[
+                `${ids}-seat`,
+                `${ids}-runtime`,
+                `${ids}-ticket`,
+                meta ? `${ids}-meta` : null,
+                `${ids}-open`,
+              ]
+                .filter((id): id is string => id !== null)
+                .join(' ')}
+              onClick={() => onOpenSeat?.(horse.sessionId!)}
+              className={LOOM_SEAT_CARD_DOOR_CLASS}
+            >
+              {horse.seat ?? 'unnamed seat'}
+            </CardAction>
+          ) : (
+            <span id={`${ids}-seat`} className={LOOM_SEAT_CARD_DOOR_CLASS}>
+              {horse.seat ?? 'unnamed seat'}
+            </span>
+          )}
           <span className="flex-1" />
           <span id={`${ids}-runtime`} className={LOOM_HORSE_RUNTIME_CLASS}>
             {loomHorseRuntimeLabel(horse)}
@@ -139,13 +145,15 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
         {ticketDoor ? (
           <Button
             type="button"
-            variant="ghost"
+            variant="link"
             data-loom-horse-ticket={horse.key}
             onClick={onShowDetail}
-            size="lg"
             className={LOOM_HORSE_TICKET_DOOR_CLASS}
           >
-            <span id={`${ids}-ticket`} className="line-clamp-2 min-w-0">
+            <span
+              id={`${ids}-ticket`}
+              className="line-clamp-2 min-w-0 text-left"
+            >
               {ticket}
             </span>
           </Button>
@@ -158,18 +166,18 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           </span>
         )}
         {meta ? (
-          <span id={`${ids}-meta`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-meta`} className={metaClass}>
             {meta}
           </span>
         ) : null}
         {openable ? (
-          <span id={`${ids}-open`} className={LOOM_HORSE_META_CLASS}>
+          <span id={`${ids}-open`} className={metaClass}>
             {doorLabel}
           </span>
         ) : (
           // The same words a row uses when it cannot be opened, so the two
           // surfaces refuse in one vocabulary.
-          <span className={LOOM_HORSE_META_CLASS}>
+          <span className={metaClass}>
             {horse.kind === 'dynamic'
               ? 'no conversation for this seat'
               : horse.conversationMissing
@@ -180,7 +188,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
                 : 'conversation not loaded'}
           </span>
         )}
-      </div>
+      </Card>
       {ticketDoor ? (
         <Button
           type="button"
@@ -188,7 +196,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           data-loom-horse-details={horse.key}
           onClick={onShowDetail}
           size="xs"
-          className="px-1 text-ink-muted"
+          className="text-ink-muted"
         >
           Details
         </Button>
@@ -199,7 +207,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           variant="ghost"
           onClick={onShowNext}
           size="xs"
-          className="px-1 text-ink-muted"
+          className="text-ink-muted"
         >
           View next work →
         </Button>

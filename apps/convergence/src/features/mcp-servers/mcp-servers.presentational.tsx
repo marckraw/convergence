@@ -38,7 +38,8 @@ import { mcpStatusTone } from './mcp-servers.pure'
 interface McpServersDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  trigger: ReactElement
+  /** What opens it; left out where the dialog store opens it (the sidebar's menus). */
+  trigger?: ReactElement
   projectName: string | null
   snapshot: ProjectMcpVisibility | null
   isLoading: boolean
@@ -65,7 +66,7 @@ function renderStatusIcon(status: McpServerStatus) {
 
 function renderStatusBadge(status: McpServerStatus, label: string) {
   return (
-    <Badge tone={mcpStatusTone(status)} className="font-medium uppercase">
+    <Badge tone={mcpStatusTone(status)} caps className="font-medium">
       {label}
     </Badge>
   )
@@ -140,9 +141,7 @@ function renderServerRow(
         }
         trailing={
           <span className="flex items-center gap-2">
-            <Badge className="uppercase">
-              {server.transportType.replace('_', ' ')}
-            </Badge>
+            <Badge caps>{server.transportType.replace('_', ' ')}</Badge>
             {renderStatusBadge(server.status, server.statusLabel)}
           </span>
         }
@@ -156,10 +155,7 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
     provider.globalServers.length + provider.projectServers.length
 
   return (
-    <section
-      key={provider.providerId}
-      className="rounded-xl border border-line-soft bg-surface/40"
-    >
+    <Card render={<section />} key={provider.providerId} padding="none">
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
         <div className="flex items-center gap-2">
           <ServerCog className="size-4 text-ink-muted" />
@@ -217,7 +213,7 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
           )}
         </div>
       </div>
-    </section>
+    </Card>
   )
 }
 
@@ -233,7 +229,7 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
 }) => {
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogTrigger render={trigger} />
+      {trigger ? <DialogTrigger render={trigger} /> : null}
       {/* A dialog you look at and leave: Refresh in its header, no footer (R6). */}
       <DialogContent>
         <DialogHeader
@@ -258,7 +254,7 @@ export const McpServersDialog: FC<McpServersDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="app-scrollbar">
+        <DialogBody>
           {!projectName ? (
             <EmptyState
               title="No project open"

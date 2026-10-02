@@ -148,6 +148,25 @@ function renderConversations(
   )
 }
 
+describe('SidebarConversations (pulse wiring)', () => {
+  it('NAV-21 hands the pulsing sessions to the chat list too — mutation drop the prop turns red', () => {
+    const chat = session({
+      id: 'chat-1',
+      name: 'Planning chat',
+      contextKind: 'global',
+      projectId: null,
+    })
+    renderConversations({
+      activeSurface: 'chat',
+      ungroupedGlobalChatSessions: [chat],
+      pulsingSessionIds: { [chat.id]: true },
+    })
+    expect(
+      screen.getByRole('button', { name: 'Open chat session Planning chat' }),
+    ).toHaveAttribute('data-pulse', 'true')
+  })
+})
+
 describe('SidebarConversations (production search wiring)', () => {
   const pinnedA = session({
     id: 'pin-a',
@@ -181,9 +200,9 @@ describe('SidebarConversations (production search wiring)', () => {
       sessions: [treeMatch],
     })
     const toggle = screen.getByRole('button', { name: 'Search conversations' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
     const field = screen.getByRole('searchbox', {
       name: 'Search conversations',
     })
