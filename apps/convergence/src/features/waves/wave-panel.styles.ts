@@ -126,9 +126,9 @@ export const WAVE_ROW_OPENABLE_CLASS = 'has-focus-visible:bg-fill-hover'
 /** A Loom card's first line: the identifier (or glyph) and the words beside it. */
 export const LOOM_CARD_HEAD_CLASS = 'flex w-full items-baseline gap-1.5'
 
-/** Loom's issue card: a quiet fill, a faint edge, its own padding. */
+/** Loom's issue card: a quiet fill, the hairline edge, its own padding. */
 export const LOOM_ROW_CARD_CLASS =
-  'gap-2 rounded-lg border-ink/5 bg-fill-quiet p-3'
+  'gap-2 rounded-lg border-hairline bg-fill-quiet p-3'
 
 /** A row outside Loom's cards: no edge, no fill of its own. */
 export const WAVE_ROW_PLAIN_CLASS = 'border-transparent bg-transparent'
