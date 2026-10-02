@@ -237,10 +237,6 @@ export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
   }
 
 /**
- * The ticket line as a door (MAR-3204 R4): raised above the card's stretched
- * button so a click lands here, and marked as a link so it reads as one.
- */
-/**
  * A seat card's door: a button stretched over the whole card, named by the
  * card's own text, with the card's other doors raised above it (MC-26: one
  * constant for the horse and the mastermind card).
@@ -248,6 +244,10 @@ export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
 export const LOOM_SEAT_CARD_DOOR_CLASS =
   'absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent'
 
+/**
+ * The ticket line as a door (MAR-3204 R4): raised above the card's stretched
+ * button so a click lands here, and marked as a link so it reads as one.
+ */
 export const LOOM_HORSE_TICKET_DOOR_CLASS =
   'relative z-10 h-auto w-full min-w-0 justify-start whitespace-normal rounded-sm p-0 text-left text-xs font-normal underline-offset-2 hover:bg-transparent hover:text-inherit hover:underline'
 
