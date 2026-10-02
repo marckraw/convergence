@@ -375,6 +375,83 @@ describe('TerminalDock container', () => {
     expect(closeSpy).toHaveBeenCalledWith('s-1', 'l1', 't-1')
   })
 
+  // MAR-3608: ⌘` hid the dock with nothing on screen saying so. Hide
+  // terminal is that key's action on a button, and says the key. Mutation:
+  // drop the container's onHide (or the button's onClick) -> the dock stays:
+  // red.
+  it('Hide terminal hides the dock, as Cmd-` does, and leaves its terminals running', () => {
+    useSessionStore.setState({
+      sessions: [makeSession()],
+      activeSessionId: 's-1',
+    } as Partial<ReturnType<typeof useSessionStore.getState>>)
+    useTerminalStore.setState({
+      treesBySessionId: { 's-1': leaf('l1', [makeTab('t-1')]) },
+      focusedLeafBySessionId: { 's-1': 'l1' },
+    })
+    const closeAllSpy = vi.spyOn(
+      useTerminalStore.getState(),
+      'closeAllForSession',
+    )
+    const closeTabSpy = vi.spyOn(useTerminalStore.getState(), 'closeTab')
+
+    render(<TerminalDock />)
+    const hide = screen.getByRole('button', { name: 'Hide terminal' })
+    // Its tooltip says the key (the tests run as a Mac).
+    expect(hide).toHaveAttribute('data-tooltip-shortcut', '⌘`')
+    fireEvent.click(hide)
+
+    expect(screen.queryByTestId('terminal-dock')).toBeNull()
+    expect(useTerminalStore.getState().isDockVisible('s-1')).toBe(false)
+    // Hidden, not closed: the header's Close terminal is the one that ends
+    // them. The tree stays, and nothing was closed.
+    expect(useTerminalStore.getState().getTree('s-1')).not.toBeNull()
+    expect(closeAllSpy).not.toHaveBeenCalled()
+    expect(closeTabSpy).not.toHaveBeenCalled()
+  })
+
+  it('draws one Hide terminal, on the pane at the dock’s top-right corner', () => {
+    useSessionStore.setState({
+      sessions: [makeSession()],
+      activeSessionId: 's-1',
+    } as Partial<ReturnType<typeof useSessionStore.getState>>)
+    const tree = split('s1', 'horizontal', [
+      leaf('l1', [makeTab('t-1')]),
+      split('s2', 'vertical', [
+        leaf('l2', [makeTab('t-2')]),
+        leaf('l3', [makeTab('t-3')]),
+      ]),
+    ])
+    useTerminalStore.setState({
+      treesBySessionId: { 's-1': tree },
+      focusedLeafBySessionId: { 's-1': 'l1' },
+    })
+
+    render(<TerminalDock />)
+
+    const hides = screen.getAllByRole('button', { name: 'Hide terminal' })
+    expect(hides).toHaveLength(1)
+    expect(hides[0]!.closest('[data-leaf-id]')).toHaveAttribute(
+      'data-leaf-id',
+      'l2',
+    )
+  })
+
+  it('draws no Hide terminal when the terminal is the main surface, where Cmd-` does nothing', () => {
+    useSessionStore.setState({
+      sessions: [makeSession({ primarySurface: 'terminal' })],
+      activeSessionId: 's-1',
+    } as Partial<ReturnType<typeof useSessionStore.getState>>)
+    useTerminalStore.setState({
+      treesBySessionId: { 's-1': leaf('l1', [makeTab('t-1')]) },
+      focusedLeafBySessionId: { 's-1': 'l1' },
+    })
+
+    render(<TerminalDock mode="main" />)
+
+    expect(screen.getByTestId('terminal-dock')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hide terminal' })).toBeNull()
+  })
+
   describe('keyboard shortcuts', () => {
     function setupSingleLeaf() {
       useSessionStore.setState({

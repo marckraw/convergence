@@ -90,7 +90,7 @@ export const TabGroup: FC<TabGroupProps> = ({
         </IconButton>
       </Tabs>
       {trailingSlot ? (
-        <div className="flex shrink-0 items-center">{trailingSlot}</div>
+        <div className="flex shrink-0 items-center gap-0.5">{trailingSlot}</div>
       ) : null}
     </ThemeScope>
   )

@@ -17,10 +17,15 @@ interface SplitNodeProps extends SplitNodeHandlers {
 const panelId = (splitId: string, childId: string) => `${splitId}:${childId}`
 
 export const SplitNodeView: FC<SplitNodeProps> = (props) => {
-  const { tree, onResizeSplit, ...leafHandlers } = props
+  const { tree, onResizeSplit, dockControls, ...leafHandlers } = props
   if (tree.kind === 'leaf') {
-    return <LeafPaneView {...leafHandlers} leaf={tree} />
+    return (
+      <LeafPaneView {...leafHandlers} leaf={tree} dockControls={dockControls} />
+    )
   }
+  // The dock's controls are drawn once, at its top-right corner: on the
+  // right-hand pane of panes side by side, on the top one of panes stacked.
+  const corner = tree.direction === 'horizontal' ? tree.children.length - 1 : 0
   return (
     <Group
       orientation={tree.direction}
@@ -43,6 +48,7 @@ export const SplitNodeView: FC<SplitNodeProps> = (props) => {
             <SplitNodeView
               {...leafHandlers}
               onResizeSplit={onResizeSplit}
+              dockControls={index === corner ? dockControls : undefined}
               tree={child}
             />
           </Panel>

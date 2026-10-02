@@ -24,6 +24,7 @@ import { dockStyles } from './terminal-dock.styles'
 import { SplitNodeView } from './split-node.presentational'
 import type { TerminalPaneSlot } from './leaf-pane.presentational'
 import { DockResizeHandle } from './dock-resize.container'
+import { HideDockButton } from './hide-dock-button.presentational'
 
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
@@ -393,6 +394,16 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
   const resizeHandle = (
     <DockResizeHandle sessionId={activeSessionId} placement={dockPlacement} />
   )
+  // Hide terminal is ⌘`'s action on a button, through the same dispatch, so
+  // the two can't part. It keeps the terminals running; the header's Project ›
+  // Close terminal (closeAllForSession) is the control that ends them.
+  const hideDock = (
+    <HideDockButton
+      placement={dockPlacement}
+      shortcut={SHORTCUT_LABELS['toggle-dock']}
+      onHide={() => dispatchShortcut({ kind: 'toggle-dock' })}
+    />
+  )
   const inner = (
     <div className={dockStyles.inner}>
       <SplitNodeView
@@ -406,6 +417,7 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
         onFocusLeaf={handleFocusLeaf}
         onResizeSplit={handleResizeSplit}
         shortcutLabels={SHORTCUT_LABELS}
+        dockControls={hideDock}
       />
     </div>
   )

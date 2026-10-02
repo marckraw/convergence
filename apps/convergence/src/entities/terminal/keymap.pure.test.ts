@@ -150,6 +150,7 @@ describe('the pane buttons say the keys matchShortcut answers to (NAV-23)', () =
     'split-vertical': { kind: 'split', direction: 'vertical' },
     'split-horizontal': { kind: 'split', direction: 'horizontal' },
     'close-tab': { kind: 'close-tab' },
+    'toggle-dock': { kind: 'toggle-dock' },
   } as const
 
   for (const platform of ['mac', 'other'] as const) {
@@ -176,9 +177,11 @@ describe('the pane buttons say the keys matchShortcut answers to (NAV-23)', () =
       'split-vertical': '⌘D',
       'split-horizontal': '⌘⇧D',
       'close-tab': '⌘W',
+      'toggle-dock': '⌘`',
     })
     expect(terminalShortcutLabels('other')['split-horizontal']).toBe(
       'Ctrl+Shift+D',
     )
+    expect(terminalShortcutLabels('other')['toggle-dock']).toBe('Ctrl+`')
   })
 })

@@ -70,16 +70,17 @@ export function matchShortcut(
   return null
 }
 
-/** A shortcut the pane's buttons name: new tab, the two splits, close. */
+/** A shortcut the dock's buttons name: new tab, the two splits, close, and hide the dock. */
 export type TerminalButtonShortcut =
   | 'new-tab'
   | 'split-vertical'
   | 'split-horizontal'
   | 'close-tab'
+  | 'toggle-dock'
 
 /**
- * The keys `matchShortcut` answers to for the pane's buttons, as bindings, so
- * a button can say its key (NAV-23). A test runs each one back through
+ * The keys `matchShortcut` answers to for the pane's and the dock's buttons,
+ * as bindings, so a button can say its key (NAV-23). A test runs each one back through
  * `matchShortcut`, so the words and the keymap can't drift apart.
  */
 export const TERMINAL_BUTTON_BINDINGS: Record<
@@ -90,6 +91,7 @@ export const TERMINAL_BUTTON_BINDINGS: Record<
   'split-vertical': { key: 'd', shiftKey: false, altKey: false },
   'split-horizontal': { key: 'd', shiftKey: true, altKey: false },
   'close-tab': { key: 'w', shiftKey: false, altKey: false },
+  'toggle-dock': { key: '`', shiftKey: false, altKey: false },
 }
 
 /** Each button's key in words for this platform: "⌘T", "Ctrl+Shift+D". */
@@ -113,6 +115,10 @@ export function terminalShortcutLabels(
     ),
     'close-tab': formatShortcutLabel(
       TERMINAL_BUTTON_BINDINGS['close-tab'],
+      platform,
+    ),
+    'toggle-dock': formatShortcutLabel(
+      TERMINAL_BUTTON_BINDINGS['toggle-dock'],
       platform,
     ),
   }

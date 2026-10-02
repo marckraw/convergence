@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { LeafNode, TerminalTab } from '@/entities/terminal'
 import { expect, fn } from 'storybook/test'
+import { HideDockButton } from './hide-dock-button.presentational'
 import { LeafPaneView, type TerminalPaneSlot } from './leaf-pane.presentational'
 
 const tab = (
@@ -110,4 +111,29 @@ export const Default: Story = {
 export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
+}
+
+const onHide = fn()
+
+/**
+ * The pane at the dock's top-right corner carries the dock's own control
+ * after the splits: Hide terminal, which says ⌘` and puts the dock away
+ * without ending its terminals.
+ */
+export const DockControls: Story = {
+  args: {
+    dockControls: (
+      <HideDockButton placement="bottom" shortcut="⌘`" onHide={onHide} />
+    ),
+  },
+  play: async ({ canvas, userEvent }) => {
+    onHide.mockClear()
+    const hide = canvas.getByRole('button', { name: 'Hide terminal' })
+    await expect(hide).toHaveAttribute('data-tooltip-shortcut', '⌘`')
+    await userEvent.click(hide)
+    await expect(onHide).toHaveBeenCalledOnce()
+    // It sits after the splits, at the strip's end.
+    const buttons = canvas.getAllByRole('button')
+    await expect(buttons.at(-1)).toBe(hide)
+  },
 }
