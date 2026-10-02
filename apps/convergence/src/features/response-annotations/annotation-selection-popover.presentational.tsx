@@ -1,6 +1,6 @@
 import type { FC, FormEvent } from 'react'
 import { MessageSquareQuote, X } from 'lucide-react'
-import { Button, IconButton, Input } from '@convergence/ui'
+import { Button, cn, IconButton, Input, popupSurface } from '@convergence/ui'
 
 /**
  * The floating affordance over a selection: react in one click, or say
@@ -62,7 +62,10 @@ export const AnnotationSelectionPopover: FC<
       {isCommenting ? (
         <form
           onSubmit={handleSubmit}
-          className="flex w-80 max-w-[80vw] flex-col gap-2 rounded-lg border border-border bg-popover p-2 shadow-lg"
+          className={cn(
+            'flex w-80 max-w-full flex-col gap-2 p-2',
+            popupSurface,
+          )}
         >
           <p className="line-clamp-2 border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground">
             {quotedExcerpt}

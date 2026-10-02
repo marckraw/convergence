@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { cn, Button } from '@convergence/ui'
+import { cn, Button, FormError } from '@convergence/ui'
 import { ConversationRoutineRow } from './conversation-routine-row.presentational'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
@@ -18,9 +18,7 @@ export const ConversationActionsRoutines: FC<ConversationActionsViewProps> = ({
       </p>
     ) : null}
     {routines.error ? (
-      <p className={styles.refusal} role="alert">
-        {routines.error}
-      </p>
+      <FormError className={styles.refusal}>{routines.error}</FormError>
     ) : null}
     <div className={styles.list}>
       {routines.rows.map((row) => (
