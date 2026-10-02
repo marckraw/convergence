@@ -74,9 +74,11 @@ export const SkillFolder: Story = {
   },
   play: async ({ canvas, userEvent }) => {
     const menu = await openMenu(canvas, userEvent, 'Open in editor')
-    await expect(
-      within(menu).getByRole('menuitem', { name: 'Open in Cursor' }),
-    ).toBeVisible()
+    await waitFor(() =>
+      expect(
+        within(menu).getByRole('menuitem', { name: 'Open in Cursor' }),
+      ).toBeVisible(),
+    )
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
   },
