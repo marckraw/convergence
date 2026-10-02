@@ -560,9 +560,10 @@ describe('App', () => {
     fireEvent.click(spaceButton)
 
     expect(screen.getByText('Space')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /chats/i })).toBeInTheDocument()
+    // Space home's sections are tabs, and its strip names it too (MAR-3617).
+    expect(screen.getByRole('tab', { name: /chats/i })).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Launch plan' }),
+      screen.getByRole('heading', { level: 1, name: 'Launch plan' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Coordinate launch work.')).toBeInTheDocument()
   })
