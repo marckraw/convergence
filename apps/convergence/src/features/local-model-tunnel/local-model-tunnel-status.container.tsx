@@ -119,7 +119,35 @@ export const LocalModelTunnelStatusContainer: FC = () => {
     setManageOpen(true)
   }
 
+  /**
+   * Tunnels save as you go, each profile with its own Save: leaving a
+   * profile with its changes unsaved asks before dropping them (DLG-10, R5),
+   * whether that is Done, another profile in the rail, or a new one. True
+   * when there was nothing to drop, or the answer was to drop it.
+   */
+  const confirmDropUnsaved = async (): Promise<boolean> => {
+    const unsaved =
+      selected !== undefined &&
+      draft !== null &&
+      JSON.stringify(draft) !== JSON.stringify(profileToInput(selected.profile))
+    if (!unsaved) return true
+    return confirm({
+      title: `Discard your changes to “${selected.profile.name}”?`,
+      description: 'They haven’t been saved to the profile.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      variant: 'danger',
+    })
+  }
+
+  const handleSelectProfile = async (profileId: string) => {
+    if (profileId === selectedProfileId) return
+    if (!(await confirmDropUnsaved())) return
+    setSelectedProfileId(profileId)
+  }
+
   const handleAddProfile = async () => {
+    if (!(await confirmDropUnsaved())) return
     const existingIds = new Set(profiles.map((item) => item.profile.id))
     const nextSnapshot = await createProfile(NEW_PROFILE_INPUT)
     const created = nextSnapshot?.profiles.find(
@@ -128,29 +156,12 @@ export const LocalModelTunnelStatusContainer: FC = () => {
     if (created) setSelectedProfileId(created.profile.id)
   }
 
-  /**
-   * Tunnels save as you go, each profile with its own Save: Done with that
-   * profile's changes unsaved asks before dropping them (DLG-10, R5).
-   */
   const handleManageOpenChange = async (next: boolean) => {
     if (next) {
       setManageOpen(true)
       return
     }
-    const unsaved =
-      selected !== undefined &&
-      draft !== null &&
-      JSON.stringify(draft) !== JSON.stringify(profileToInput(selected.profile))
-    if (unsaved) {
-      const discard = await confirm({
-        title: `Discard your changes to “${selected.profile.name}”?`,
-        description: 'They haven’t been saved to the profile.',
-        confirmLabel: 'Discard',
-        cancelLabel: 'Keep editing',
-        variant: 'danger',
-      })
-      if (!discard) return
-    }
+    if (!(await confirmDropUnsaved())) return
     setManageOpen(false)
   }
 
@@ -277,7 +288,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
             <TunnelProfileList
               profiles={profiles}
               selectedProfileId={selectedProfileId}
-              onSelect={setSelectedProfileId}
+              onSelect={(profileId) => void handleSelectProfile(profileId)}
             />
           </aside>
 

@@ -461,7 +461,6 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             onStart={onStart}
             onStop={onStop}
             onRestart={onRestart}
-            onManage={() => undefined}
           />
           <Button
             type="button"
