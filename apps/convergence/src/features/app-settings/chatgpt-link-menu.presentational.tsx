@@ -31,17 +31,17 @@ export const ChatGptLinkMenu: FC<ChatGptLinkMenuProps> = ({
       render={
         <Button type="button" variant="secondary" className="min-h-10">
           {label}
-          <ChevronDown className="ml-1.5 size-3.5" aria-hidden="true" />
+          <ChevronDown className="size-3.5" aria-hidden="true" />
         </Button>
       }
     />
     <MenuContent align="end">
       <MenuItem onClick={() => onChoose('open')}>
-        <ExternalLink className="mr-2 size-3.5" aria-hidden="true" />
+        <ExternalLink className="size-3.5" aria-hidden="true" />
         {CHATGPT_LINK_ACTION_LABEL.open}
       </MenuItem>
       <MenuItem onClick={() => onChoose('copy')}>
-        <Copy className="mr-2 size-3.5" aria-hidden="true" />
+        <Copy className="size-3.5" aria-hidden="true" />
         {CHATGPT_LINK_ACTION_LABEL.copy}
       </MenuItem>
     </MenuContent>
