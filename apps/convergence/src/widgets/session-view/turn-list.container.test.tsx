@@ -220,7 +220,11 @@ describe('TurnList', () => {
       )
     })
 
-    expect(await screen.findByTitle('apps/web/README.md')).toBeInTheDocument()
+    expect(
+      await screen.findByText('apps/web/README.md', {
+        selector: 'p[data-tooltip]',
+      }),
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'apps/api/README.md' }))
     await waitFor(() => {
@@ -232,7 +236,11 @@ describe('TurnList', () => {
     })
     // Through the real turnsApi, the real container and the real diff header:
     // the second repository's row is the one on screen, not the first.
-    expect(await screen.findByTitle('apps/api/README.md')).toBeInTheDocument()
+    expect(
+      await screen.findByText('apps/api/README.md', {
+        selector: 'p[data-tooltip]',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('reaches the diff of a repository whose root is spelled with backslashes', async () => {
@@ -270,7 +278,11 @@ describe('TurnList', () => {
         'apps\\web',
       )
     })
-    expect(await screen.findByTitle('apps/web/README.md')).toBeInTheDocument()
+    expect(
+      await screen.findByText('apps/web/README.md', {
+        selector: 'p[data-tooltip]',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('reaches both diffs when one repository is nested inside the other', async () => {
@@ -308,7 +320,9 @@ describe('TurnList', () => {
     // The diff pane's header is the rendered end of the selection: it names
     // the row whose diff is on screen.
     expect(
-      await screen.findByTitle('a/b/c.ts (repository a/b)'),
+      await screen.findByText('a/b/c.ts (repository a/b)', {
+        selector: 'p[data-tooltip]',
+      }),
     ).toBeInTheDocument()
 
     fireEvent.click(outerRow)
@@ -316,7 +330,9 @@ describe('TurnList', () => {
       expect(getFileDiff).toHaveBeenCalledWith('turn-1', 'b/c.ts', 'a')
     })
     expect(
-      await screen.findByTitle('a/b/c.ts (repository a)'),
+      await screen.findByText('a/b/c.ts (repository a)', {
+        selector: 'p[data-tooltip]',
+      }),
     ).toBeInTheDocument()
   })
 

@@ -62,9 +62,11 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
                   aria-pressed={selected}
                   className={[
                     'h-auto w-full justify-start whitespace-normal rounded-md border px-3 py-2 text-left text-sm shadow-none',
+                    // R7: the chosen answer is ChoiceCard's chosen look, raised with a
+                    // stronger edge, not a blue tint.
                     selected
-                      ? 'border-blue-500/60 bg-blue-500/10 text-foreground hover:bg-blue-500/10'
-                      : 'border-border/70 bg-background/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                      ? 'border-control-line bg-raised text-ink shadow-raised hover:bg-raised'
+                      : 'border-line-soft bg-canvas/60 text-ink-muted hover:bg-fill-hover hover:text-ink',
                   ].join(' ')}
                   onClick={() => {
                     setAnswers((current) => ({
@@ -80,7 +82,7 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
                   <span className="min-w-0 break-words">
                     <span className="block font-medium">{option.label}</span>
                     {option.description ? (
-                      <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                      <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
                         {option.description}
                       </span>
                     ) : null}

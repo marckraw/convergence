@@ -3195,11 +3195,9 @@ describe('SessionView', () => {
             name: /harness/i,
           }),
         ).toHaveLength(1)
+        // focusRingInset (MAR-3617): the drawn outline, inside the edge.
         expect(harness.className.split(/\s+/)).toEqual(
-          expect.arrayContaining([
-            'focus-visible:ring-2',
-            'focus-visible:ring-ring',
-          ]),
+          expect.arrayContaining(['focus-visible:outline-solid']),
         )
       })
     })

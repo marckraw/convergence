@@ -54,11 +54,6 @@ const fileChanges = [
   change('src/features/composer/legacy-focus.pure.ts', 'deleted', 0, 31),
 ]
 
-// a11y-known: in light, the +/− line counts (green-500, red-500) and the in-progress and errored chips fall under 4.5:1 on the card — fixed by the sweep (DS4)
-const knownLightContrast = {
-  a11y: { config: { rules: [{ id: 'color-contrast', enabled: false }] } },
-}
-
 const meta = {
   title: 'Widgets/SessionView/TurnCard',
   component: TurnCard,
@@ -87,7 +82,6 @@ type Story = StoryObj<typeof meta>
 
 /** A finished turn: its summary, how many files, and the lines it changed. */
 export const Default: Story = {
-  parameters: knownLightContrast,
   play: async ({ args, canvas, userEvent }) => {
     const card = canvas.getByRole('button', { name: /Turn 4/ })
     await expect(card).toHaveTextContent(
@@ -103,7 +97,6 @@ export const Default: Story = {
 
 /** Open: the turn's files as a tree. */
 export const Expanded: Story = {
-  parameters: knownLightContrast,
   args: { expanded: true },
   play: async ({ args, canvasElement, userEvent }) => {
     // The tree is drawn by @pierre/trees inside its own shadow root.
@@ -133,7 +126,6 @@ export const Expanded: Story = {
 
 /** Still running, nothing changed yet. */
 export const Busy: Story = {
-  parameters: knownLightContrast,
   args: {
     turn: { ...turn, status: 'running', endedAt: null, summary: null },
     fileChanges: [],
@@ -148,7 +140,6 @@ export const Busy: Story = {
 
 /** The turn errored. */
 export const Failed: Story = {
-  parameters: knownLightContrast,
   args: { turn: { ...turn, status: 'errored' } },
   play: async ({ canvas }) => {
     await expect(
@@ -169,7 +160,6 @@ export const Empty: Story = {
 
 /** A summary longer than the card stays on one line. */
 export const Long: Story = {
-  parameters: knownLightContrast,
   args: {
     turn: {
       ...turn,
@@ -189,16 +179,6 @@ export const Dark: Story = {
 export const ExpandedDark: Story = {
   ...Expanded,
   name: 'Expanded, dark',
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: in dark, the file tree keeps a light row background under its dark-theme text (1.35:1) and its git-status colours — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   globals: { theme: 'dark' },
 }
 

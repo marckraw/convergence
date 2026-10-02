@@ -49,6 +49,8 @@ import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
 import {
   Button,
+  cn,
+  focusRingInset,
   IconButton,
   MenuCheckboxItem,
   MenuItem,
@@ -845,7 +847,10 @@ export const SessionView: FC = () => {
                     <section
                       aria-label="Harness history"
                       tabIndex={-1}
-                      className="mt-2 rounded-sm border-t border-border/70 px-2 pt-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className={cn(
+                        'mt-2 rounded-sm border-t border-line-soft px-2 pt-2',
+                        focusRingInset,
+                      )}
                       {...{ [DETAILS_SECTION]: 'harness' }}
                     >
                       <HarnessFactsSections

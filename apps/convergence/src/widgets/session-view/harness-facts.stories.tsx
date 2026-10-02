@@ -310,7 +310,7 @@ export const McpReconnectFailed: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'Reconnect sentry failed: spawn sentry-mcp ENOENT',
+      "Couldn't reconnect sentry: spawn sentry-mcp ENOENT",
     )
   },
 }

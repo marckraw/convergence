@@ -12,6 +12,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  StatusDot,
   Tooltip,
 } from '@convergence/ui'
 import type { HeaderMenuFocus } from './conversation-header.container'
@@ -69,17 +70,10 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
         type="button"
         variant="ghost"
         size="sm"
-        className={cn(
-          'gap-1',
-          running && 'text-emerald-600 dark:text-emerald-300',
-        )}
+        // R1: an action under way is working, the info tone.
+        className={cn('gap-1', running && 'text-info-ink')}
       >
-        {running && (
-          <span
-            aria-hidden
-            className="h-1.5 w-1.5 rounded-full bg-emerald-500"
-          />
-        )}
+        {running && <StatusDot tone="info" size="sm" />}
         Project
         {running && <span className="sr-only">, an action is running</span>}
         <ChevronDown className="h-3 w-3" />

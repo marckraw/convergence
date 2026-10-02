@@ -126,7 +126,8 @@ export const Empty: Story = {
 export const Busy: Story = {
   args: { diff: '', loading: true },
   play: async ({ canvas, canvasElement }) => {
-    await expect(canvas.getByText('Loading diff...')).toBeVisible()
+    const words = await canvas.findByText('Loading diff…')
+    await waitFor(() => expect(words).toBeVisible())
     await expect(
       canvasElement.querySelector('[aria-busy="true"]'),
     ).not.toBeNull()

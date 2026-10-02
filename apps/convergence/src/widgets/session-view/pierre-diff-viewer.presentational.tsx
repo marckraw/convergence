@@ -10,14 +10,8 @@ import {
   Virtualizer,
   WorkerPoolContextProvider,
 } from '@pierre/diffs/react'
-import {
-  ChevronDown,
-  ChevronUp,
-  ChevronsUpDown,
-  Loader2,
-  RotateCcw,
-} from 'lucide-react'
-import { IconButton } from '@convergence/ui'
+import { ChevronDown, ChevronUp, ChevronsUpDown, RotateCcw } from 'lucide-react'
+import { EmptyState, IconButton } from '@convergence/ui'
 import {
   DEFAULT_DIFF_CONTEXT_LINES,
   foldUnifiedDiffContext,
@@ -132,10 +126,14 @@ export const PierreDiffViewerView = <TAnnotation,>({
           loading,
         })}
         <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
-          <div className="flex h-full min-h-32 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span>Loading diff...</span>
-          </div>
+          <EmptyState
+            state="loading"
+            variant="plain"
+            size="compact"
+            layout="centred"
+            title="Loading diff…"
+            className="min-h-32"
+          />
         </div>
       </div>
     )
