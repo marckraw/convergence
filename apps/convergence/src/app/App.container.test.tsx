@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -642,6 +643,75 @@ describe('App', () => {
       } else expect(indicator.querySelectorAll('span')).toHaveLength(1)
     },
   )
+
+  describe('the collapsed rail and its peek (NAV-17, NAV-27)', () => {
+    async function renderCollapsed() {
+      mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+      mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
+      render(<App />)
+      await waitFor(() =>
+        expect(screen.getAllByText('my-project').length).toBeGreaterThan(0),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+      await screen.findByRole('button', { name: 'Expand sidebar' })
+    }
+
+    it('the project button opens the sidebar it is named for (mutation: re-select the surface)', async () => {
+      await renderCollapsed()
+      fireEvent.click(screen.getByRole('button', { name: 'my-project' }))
+      expect(
+        await screen.findByRole('button', { name: 'Pin sidebar' }),
+      ).toBeInTheDocument()
+    })
+
+    it('tabbing onto the edge does not open it; Enter or a click does, and the focus lands inside (mutation: open on focus; drop the focus move)', async () => {
+      await renderCollapsed()
+      const handle = screen.getByRole('button', { name: 'Peek sidebar' })
+      act(() => handle.focus())
+      expect(screen.queryByRole('button', { name: 'Pin sidebar' })).toBeNull()
+
+      fireEvent.click(handle)
+      const pin = await screen.findByRole('button', { name: 'Pin sidebar' })
+      // The edge went with the rail; the keyboard is on the panel, not lost.
+      await waitFor(() => expect(pin).toHaveFocus())
+    })
+
+    it('closes when the focus leaves it for the page, and not for a menu it opened (mutation: no blur close)', async () => {
+      await renderCollapsed()
+      fireEvent.click(screen.getByRole('button', { name: 'Peek sidebar' }))
+      const pin = await screen.findByRole('button', { name: 'Pin sidebar' })
+      await waitFor(() => expect(pin).toHaveFocus())
+
+      // A menu the panel opens is portalled out of it, and stays its own.
+      fireEvent.click(
+        getSidebarQueries().getByRole('button', { name: 'Open sidebar tools' }),
+      )
+      const menu = await screen.findByRole('menu')
+      await waitFor(() =>
+        expect(menu.contains(document.activeElement)).toBe(true),
+      )
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(screen.getByRole('button', { name: 'Pin sidebar' })).toBeVisible()
+      fireEvent.keyDown(menu, { key: 'Escape' })
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+
+      // Tabbing on past the panel, onto the page, puts it away.
+      const outside = document.createElement('button')
+      document.body.appendChild(outside)
+      act(() => outside.focus())
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('button', { name: 'Pin sidebar' }),
+        ).toBeNull(),
+      )
+      expect(
+        screen.getByRole('button', { name: 'Expand sidebar' }),
+      ).toBeInTheDocument()
+      outside.remove()
+    })
+  })
 
   it('keeps project cards on the chat surface (mutation: restore surface scope)', async () => {
     const projectSession = makeSessionSummary({
