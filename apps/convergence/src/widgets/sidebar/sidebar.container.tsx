@@ -59,7 +59,7 @@ import { SidebarConversations } from './sidebar-conversations.container'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
 import { SurfaceSwitcher } from './surface-switcher.presentational'
 import { peekHandleClass, railMarkRing } from './sidebar.styles'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import { useSidebarSearchShortcut } from './sidebar-search.container'
 import { useFeedClock } from './use-feed-clock'
 import { sidebarCards } from './sidebar-sessions.pure'
@@ -236,7 +236,7 @@ export const Sidebar: FC<SidebarProps> = ({
         ...prev,
         [sessionId]: requestId,
       }))
-      toast.loading('Regenerating session name...', { id: toastId })
+      notify.loading('Regenerating the session name…', { id: toastId })
 
       void sessionApi
         .regenerateName(sessionId, requestId)
@@ -245,26 +245,26 @@ export const Sidebar: FC<SidebarProps> = ({
             useTaskProgressStore.getState().snapshots[requestId] ?? null
           const outcome = progress?.settled?.outcome ?? null
           if (outcome === 'error' || outcome === 'timeout') {
-            toast.error('Could not regenerate name', {
-              id: toastId,
-              description:
-                outcome === 'timeout'
-                  ? 'The naming request timed out.'
-                  : 'The provider returned an error.',
-            })
+            notify.failure(
+              'regenerate the session name',
+              outcome === 'timeout'
+                ? 'The naming request timed out.'
+                : 'The provider returned an error.',
+              { id: toastId },
+            )
             return
           }
           if (updated) {
-            toast.success('Session name regenerated', { id: toastId })
+            notify.success('Session name regenerated', { id: toastId })
             return
           }
-          toast('No new name generated', {
+          notify.message('No new name generated', {
             id: toastId,
             description: 'The provider returned no usable title.',
           })
         })
-        .catch(() => {
-          toast.error('Could not start name regeneration', { id: toastId })
+        .catch((error: unknown) => {
+          notify.failure('regenerate the session name', error, { id: toastId })
         })
         .finally(() => {
           setRegeneratingSessionRequests((prev) => {
@@ -687,10 +687,10 @@ export const Sidebar: FC<SidebarProps> = ({
       await syncWorkspaceEnvFiles(workspaceId, activeProject.id)
       const error = useWorkspaceStore.getState().error
       if (error) {
-        toast.error(error)
+        notify.failure('sync the workspace env files', error)
         return
       }
-      toast.success('Workspace env files synced')
+      notify.success('Workspace env files synced')
     },
   )
 
@@ -737,8 +737,11 @@ export const Sidebar: FC<SidebarProps> = ({
   })
 
   const handlePin = useStableCallback((id: string, pinned: boolean) => {
-    void setPinned(id, pinned).catch((error) =>
-      toast.error(error instanceof Error ? error.message : String(error)),
+    void setPinned(id, pinned).catch((error: unknown) =>
+      notify.failure(
+        pinned ? 'pin the conversation' : 'unpin the conversation',
+        error,
+      ),
     )
   })
   const handleNewGlobalSession = useStableCallback(() => onNewGlobalSession())

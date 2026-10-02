@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
-import { toast } from 'sonner'
+import { toast } from '@convergence/ui'
 import { useNotificationsStore } from '@/entities/notifications'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
@@ -17,7 +17,7 @@ import type {
   NotificationEvent,
 } from '@/entities/notifications'
 
-vi.mock('sonner', () => {
+vi.mock('@convergence/ui', () => {
   const fn = Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn() })
   return { toast: fn }
 })
