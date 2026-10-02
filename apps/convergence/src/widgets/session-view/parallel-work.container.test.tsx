@@ -236,9 +236,10 @@ it('R2 back restores the panel list scroll and selection — mutation reset list
   expect({
     transcript,
     scroll: container.querySelector('[data-parallel-scroll]')?.scrollTop,
-    selected: container
-      .querySelector('[data-work-id="agent:agent"]')
-      ?.className.includes('border-blue-500'),
+    selected:
+      container
+        .querySelector('[data-work-id="agent:agent"]')
+        ?.getAttribute('data-tone') === 'info',
   }).toEqual({ transcript: true, scroll: 132, selected: true })
 })
 
@@ -360,9 +361,11 @@ it('H2 a missed-adoption row stops by the harness id and settles from its task w
   if (result) fireEvent.click(result)
   expect({
     requests: vi.mocked(parallelWorkApi.stop).mock.calls,
-    disabled: (
-      screen.getByRole('button', { name: 'Stop' }) as HTMLButtonElement
-    ).disabled,
+    // Unavailable with its reason: aria-disabled, still focusable (CONV-27).
+    disabled:
+      screen
+        .getByRole('button', { name: 'Stop' })
+        .getAttribute('aria-disabled') === 'true',
     destination: input.onNavigate.mock.calls,
   }).toEqual({
     requests: [['s', 'harness']],
@@ -421,7 +424,9 @@ it('RUN64 R2 open-only 30s clock and ISO title — mutation tick closed or use 1
   const { rerender, unmount } = render(<ParallelWork {...input} open={false} />)
   const closed = interval.mock.calls.length
   rerender(<ParallelWork {...input} />)
-  const first = screen.queryByText('Running · 4 m')?.getAttribute('title')
+  const first = screen
+    .queryByText('Running · 4 m')
+    ?.getAttribute('data-tooltip')
   act(() => vi.advanceTimersByTime(60000))
   const later = Boolean(screen.queryByText('Running · 5 m'))
   rerender(<ParallelWork {...input} open={false} />)
@@ -1106,7 +1111,7 @@ it('MAR-3310 O0b R2 a failed detail read says so beside what is loaded — mutat
   render(<ParallelWork {...props()} selectedId="agent:agent" />)
   await act(async () => {})
   expect(screen.getByRole('alert').textContent).toBe(
-    'Could not read the earlier part of this work: database is locked',
+    "Couldn't read the earlier part of this work: database is locked",
   )
 })
 

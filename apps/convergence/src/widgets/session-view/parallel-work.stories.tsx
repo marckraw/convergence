@@ -144,11 +144,12 @@ export const Stop: Story = {
     await userEvent.click(stops[0])
     await expect(args.onStop).toHaveBeenCalledOnce()
     // Message is not offered yet; it says why.
-    await expect(
-      canvas.getAllByRole('button', {
-        name: 'Message is not available on this Claude Code version',
-      })[0],
-    ).toBeDisabled()
+    const reasons = canvas
+      .getAllByRole('button', { name: 'Message' })
+      .map((button) => button.getAttribute('aria-description'))
+    await expect(reasons).toContain(
+      'Message is not available on this Claude Code version',
+    )
   },
 }
 
@@ -166,16 +167,6 @@ export const Busy: Story = {
 
 /** A run the harness reports failed, and a stop that did not go through. */
 export const Failed: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the failure lines are red-500 on the failed card's red tint, under 4.5:1 in both themes — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     rows: [
       {

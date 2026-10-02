@@ -22,7 +22,7 @@ import {
   workStatus,
   parallelWorkRefusal,
   parallelWorkCardTone,
-  PARALLEL_WORK_CARD_TONE_CLASS,
+  PARALLEL_WORK_CARD_TONE,
   withFetchedWorkItems,
 } from './parallel-work.pure'
 
@@ -262,18 +262,18 @@ it('MAR-3308 R1 every state word has one tone and every other word has none — 
   })
 })
 
-it('MAR-3308 R1 each tone is its own class pair — mutation reuse one tone for two states turns red', () => {
-  const tones = Object.values(PARALLEL_WORK_CARD_TONE_CLASS)
+it('MAR-3308 R1 each state wears its own R1 tone — mutation reuse one tone for two states turns red', () => {
+  const tones = Object.values(PARALLEL_WORK_CARD_TONE)
   expect({
-    map: PARALLEL_WORK_CARD_TONE_CLASS,
+    map: PARALLEL_WORK_CARD_TONE,
     distinct: new Set(tones).size,
   }).toEqual({
     map: {
-      running: 'border-blue-500/40 bg-blue-500/10',
-      completed: 'border-emerald-500/30 bg-emerald-500/[0.06]',
-      failed: 'border-red-500/40 bg-red-500/10',
-      stopped: 'border-amber-500/30 bg-amber-500/[0.06]',
-      none: 'border-border/50 bg-muted/30',
+      running: 'info',
+      completed: 'success',
+      failed: 'danger',
+      stopped: 'warning',
+      none: 'neutral',
     },
     distinct: 5,
   })

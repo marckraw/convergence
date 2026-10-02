@@ -1,3 +1,4 @@
+import type { Tone } from '@convergence/ui'
 import {
   isSubagentWork,
   parallelWorkParents,
@@ -255,23 +256,15 @@ export function parallelWorkCardTone(status?: string): ParallelWorkCardTone {
 }
 
 /**
- * The classes must stay literal here: Tailwind reads source text, so a tone
- * assembled from parts (`border-${colour}-500/40`) would generate no CSS and
- * the card would silently lose its colour.
+ * The tone each card state wears (R1): running is working (info), completed
+ * is finished (success), failed is danger, a stop is warning, and a state the
+ * harness didn't report is neutral. The Card paints the tone; this map holds
+ * no classes, so a pure file says what a state means and never how it looks.
  */
-export const PARALLEL_WORK_CARD_TONE_CLASS: Record<
-  ParallelWorkCardTone,
-  string
-> = {
-  running: 'border-blue-500/40 bg-blue-500/10',
-  completed: 'border-emerald-500/30 bg-emerald-500/[0.06]',
-  failed: 'border-red-500/40 bg-red-500/10',
-  stopped: 'border-amber-500/30 bg-amber-500/[0.06]',
-  none: 'border-border/50 bg-muted/30',
+export const PARALLEL_WORK_CARD_TONE: Record<ParallelWorkCardTone, Tone> = {
+  running: 'info',
+  completed: 'success',
+  failed: 'danger',
+  stopped: 'warning',
+  none: 'neutral',
 }
-
-/**
- * The mark for the card you came back to from a detail view. A ring rather
- * than a tint, so it sits on top of the state tone instead of replacing it.
- */
-export const PARALLEL_WORK_RETURNED_CLASS = 'ring-1 ring-inset ring-blue-500/50'
