@@ -120,6 +120,12 @@ export const Default: Story = {
         metaText('This session · 3 running · 1 completed'),
       ),
     ).toBeVisible()
+    // A finished row's moment is a Timestamp (CONV-22).
+    const ended = canvas.getByText(metaText('Completed · 6 minutes ago'))
+    await expect(ended.querySelector('time')).toHaveAttribute(
+      'datetime',
+      '2026-10-01T14:04:00.000Z',
+    )
     // A parent folds its children.
     const fold = canvas.getByRole('button', {
       name: 'Collapse Audit the IPC handlers for missing guards',
@@ -232,6 +238,23 @@ export const Selected: Story = {
   },
 }
 
+/**
+ * A folded branch says what it hides, on the same control that folded it:
+ * its chevron turns a quarter back, nothing moves under the pointer (CONV-12).
+ */
+export const Folded: Story = {
+  args: { collapsed: new Set(['agent:run-audit']) },
+  play: async ({ args, canvas, userEvent }) => {
+    const fold = canvas.getByRole('button', { name: '1 descendants running' })
+    await expect(fold).toHaveAttribute('aria-expanded', 'false')
+    await expect(
+      canvas.queryByText('Write failing tests for the unguarded handlers'),
+    ).toBeNull()
+    await userEvent.click(fold)
+    await expect(args.onToggle).toHaveBeenCalledWith('agent:run-audit')
+  },
+}
+
 /** Work finished over an hour ago folds under one line. */
 export const Older: Story = {
   args: {
@@ -252,7 +275,7 @@ export const Older: Story = {
     ],
   },
   play: async ({ args, canvas, userEvent }) => {
-    const older = canvas.getByRole('button', { name: /1 older · newest/ })
+    const older = canvas.getByRole('button', { name: /1 older, newest/ })
     await expect(older).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(older)
     await expect(args.onToggleOlder).toHaveBeenCalledOnce()
