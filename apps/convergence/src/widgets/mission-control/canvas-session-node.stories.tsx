@@ -170,8 +170,9 @@ export const Failed: Story = {
 
 /**
  * A running session on a host the room cannot see (MC-4): the node keeps the
- * card's guard, so it says "Host unreachable" with a still warning dot, never
- * a working pulse or an attention badge.
+ * card's guard, so it says "Host unreachable" with unreachable's own glyph in
+ * the warning tone (R1, MC-2), never a working pulse or a dot that reads as
+ * the run's state.
  */
 export const HostUnreachable: Story = {
   args: {
@@ -185,9 +186,10 @@ export const HostUnreachable: Story = {
     await waitFor(() => expect(node).toBeVisible())
     const card = cardOfDoor(node)
     await expect(card).toHaveTextContent('Host unreachable')
-    const dot = card.querySelector('[data-slot="status-dot"]')!
-    await expect(dot).toHaveAttribute('data-tone', 'warning')
-    await expect(dot).not.toHaveAttribute('data-pulse')
+    await expect(card.querySelector('[data-slot="status-dot"]')).toBeNull()
+    const glyph = card.querySelector('svg[data-tone]')!
+    await expect(glyph).toHaveAttribute('data-tone', 'warning')
+    await expect(card.querySelector('[data-pulse]')).toBeNull()
   },
 }
 

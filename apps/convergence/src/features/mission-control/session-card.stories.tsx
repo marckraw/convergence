@@ -234,7 +234,11 @@ export const FailedDark: Story = {
   globals: { theme: 'dark' },
 }
 
-/** The host stopped answering: the card says so instead of guessing a state. */
+/**
+ * The host stopped answering: the card says so instead of guessing a state,
+ * and its corner wears unreachable's own glyph in the warning tone, never a
+ * dot (R1, MC-2).
+ */
 export const HostUnreachable: Story = {
   args: {
     card: cardOf(
@@ -247,9 +251,15 @@ export const HostUnreachable: Story = {
       { hostLiveness: 'little-monster · 8m silent' },
     ),
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText('Host unreachable')).toBeVisible()
     await expect(canvas.getByText('little-monster · 8m silent')).toBeVisible()
+    await expect(
+      canvasElement.querySelector('[data-slot="status-dot"]'),
+    ).toBeNull()
+    await expect(
+      canvasElement.querySelector('svg[data-tone="warning"]'),
+    ).toBeVisible()
   },
 }
 

@@ -155,13 +155,14 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
                 {grid ? attention : null}
               </span>
             </Tooltip>
+          ) : signal.hostUnreachable ? (
+            // A host out of reach wears its own glyph in the warning tone
+            // (R1), as the sidebar's rows and Needs you draw it (MC-2): a dot
+            // would read as the run's state, and the run is not what changed.
+            <SessionStateBadge session={session} className="mt-0.5" />
           ) : (
             <StatusDot
-              tone={
-                signal.hostUnreachable
-                  ? SESSION_STATE_TONE.unreachable
-                  : STATUS_DOT_TONE[session.status]
-              }
+              tone={STATUS_DOT_TONE[session.status]}
               pulse={signal.running}
               className="mt-1"
             />

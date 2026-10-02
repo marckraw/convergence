@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import { Circle, CircleHelp, CircleX, LoaderCircle } from 'lucide-react'
-import { Button, Card, CardAction, cn, Spinner } from '@convergence/ui'
+import { SESSION_STATE_TONE } from '@/entities/session'
+import { Button, Card, CardAction, cn, Spinner, toneInk } from '@convergence/ui'
 import {
   loomHorseRuntimeLabel,
   loomHorseTicketLine,
@@ -107,9 +108,16 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
       >
         <span className={LOOM_CARD_HEAD_CLASS}>
           {/* A horse at work turns the kit's Spinner, which stands still
-              under reduced motion (MC-25); the others wear their glyph. */}
+              under reduced motion (MC-25), in the working tone (R1: info), as
+              Mission Control's card, Needs you and the sidebar's rows draw it
+              (MC-2); the others wear their glyph. */}
           {horse.runtime === 'working' ? (
-            <Spinner size="xs" />
+            <span data-tone={SESSION_STATE_TONE.working} className="flex">
+              <Spinner
+                size="xs"
+                className={toneInk[SESSION_STATE_TONE.working]}
+              />
+            </span>
           ) : (
             <Icon className="size-3 shrink-0" aria-hidden />
           )}
