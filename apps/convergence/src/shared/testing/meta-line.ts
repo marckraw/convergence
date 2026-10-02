@@ -35,3 +35,17 @@ export function metaLine(
     ...inside.querySelectorAll<HTMLElement>('[data-slot="meta-line"]'),
   ].find((line) => matches('', line))
 }
+
+/**
+ * The accessible name a MetaLine gives what it names, as a matcher: the
+ * facts of `text` ("a · b") joined by the comma a screen reader hears. The
+ * comma is an sr-only span, placed absolutely, which a browser sets apart by
+ * spaces and jsdom (with no stylesheet) doesn't, so the spaces around it are
+ * free: `getByRole('button', { name: metaName('Harness · retry 3') })`.
+ */
+export function metaName(text: string): RegExp {
+  const facts = text
+    .split(' · ')
+    .map((fact) => fact.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp(`^${facts.join('\\s*,\\s*')}$`)
+}

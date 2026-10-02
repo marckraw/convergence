@@ -9,6 +9,7 @@ import {
 } from '@/entities/session'
 import { expect, fn, within } from 'storybook/test'
 import { Composer } from './composer.presentational'
+import { metaText } from '@/shared/testing/meta-line'
 import { filterComposerInjectionRootItems } from './composer-injection-trigger.pure'
 
 /*
@@ -291,7 +292,7 @@ export const WithResources: Story = {
       canvas.getByRole('button', { name: 'Add composer resources' }),
     ).toHaveTextContent('3')
     await expect(
-      canvas.getByText('Every-turn context active · 1 item'),
+      canvas.getByText(metaText('Every-turn context active · 1 item')),
     ).toBeVisible()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Remove diagnose' }),

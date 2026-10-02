@@ -111,7 +111,7 @@ export const Empty: Story = {
   play: async () => {
     const dialog = await openDialog()
     await expect(
-      within(dialog).getByText('No events captured yet.'),
+      within(dialog).getByText('No events captured yet'),
     ).toBeVisible()
     await expect(
       within(dialog).getByRole('button', { name: 'Copy all' }),

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { metaName, metaText } from '@/shared/testing/meta-line'
 import { expect } from 'storybook/test'
 import { CompactionMarker } from './compaction-marker.presentational'
 
@@ -33,9 +34,16 @@ type Story = StoryObj<typeof meta>
 /** A line across the transcript where the harness compacted the context. */
 export const Default: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('separator')).toHaveTextContent(
-      'Compacted (auto) · 167.4k → 12.3k tokens',
-    )
+    // Named by its facts, which a MetaLine joins (CONV-23): a screen reader
+    // hears a comma where the eye reads a dot.
+    await expect(
+      canvas.getByRole('separator', {
+        name: metaName('Compacted (auto) · 167.4k → 12.3k tokens'),
+      }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByText(metaText('Compacted (auto) · 167.4k → 12.3k tokens')),
+    ).toBeVisible()
   },
 }
 
@@ -55,9 +63,13 @@ export const Long: Story = {
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('separator')).toHaveTextContent(
-      'Compacted (manual) · 98k tokens before · record truncated · text truncated',
-    )
+    await expect(
+      canvas.getByText(
+        metaText(
+          'Compacted (manual) · 98k tokens before · record truncated · text truncated',
+        ),
+      ),
+    ).toBeVisible()
   },
 }
 

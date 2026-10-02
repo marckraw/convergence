@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn } from 'storybook/test'
 import { ComposerAccountNotice } from './composer-account-notice.presentational'
+import { metaText } from '@/shared/testing/meta-line'
 
 const meta = {
   title: 'Features/Composer/ComposerAccountNotice',
@@ -59,7 +60,9 @@ export const Failed: Story = {
   },
   play: async ({ args, canvas, userEvent }) => {
     const alert = canvas.getByRole('alert')
-    await expect(alert).toHaveTextContent(/^Not sent · /)
+    // Its title's facts on a MetaLine (CONV-23); it names the alert.
+    await expect(alert).toHaveAccessibleName(/^Not sent\s*,\s*\S/)
+    await expect(canvas.getByText(metaText(/^Not sent · /))).toBeVisible()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Manage accounts' }),
     )

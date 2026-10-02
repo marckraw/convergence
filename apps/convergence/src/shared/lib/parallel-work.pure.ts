@@ -173,18 +173,49 @@ export function formatRelativeTime(from: string, now: number): string {
   return `${Math.floor(minutes / 1440)} d`
 }
 
+/**
+ * The clock a moment is told against: never before the moment, so a
+ * reporter whose clock runs ahead of ours reads "now", never the future, as
+ * the panel's own labels always did (CONV-22).
+ */
+export function parallelWorkClock(at: string, now: number): number {
+  return Math.max(now, Date.parse(at))
+}
+
+/**
+ * A row's time, as the panel tells it (CONV-22).
+ *
+ * - `duration`: a running row's time since it started ("8 m"). It is a span,
+ *   not a moment, so it keeps its own words: Timestamp writes moments.
+ * - `moment`: when it ended, or was last seen. The panel writes it with
+ *   Timestamp ("4 minutes ago"), after the words that say which moment it is
+ *   ("seen", "last seen"), told against `now` (parallelWorkClock).
+ * - `none`: nothing reported.
+ */
+export type ParallelWorkTime =
+  | { kind: 'duration'; at: string; label: string }
+  | {
+      kind: 'moment'
+      at: string
+      prefix: 'seen' | 'last seen' | null
+      now: number
+    }
+  | { kind: 'none'; at: null; label: string }
+
 export function parallelWorkTime(
   row: ParallelWorkRow,
   now: number,
-): { at: string | null; label: string } {
+): ParallelWorkTime {
   const { at, phase } = parallelWorkAnchor(row)
-  const prefix =
-    phase === 'lastSeen' ? 'last seen ' : phase === 'seen' ? 'seen ' : ''
+  if (!at) return { kind: 'none', at: null, label: 'time not reported' }
+  if (phase === 'started')
+    return { kind: 'duration', at, label: formatRelativeTime(at, now) }
   return {
+    kind: 'moment',
     at,
-    label: at
-      ? `${prefix}${formatRelativeTime(at, now)}${phase === 'started' ? '' : ' ago'}`
-      : 'time not reported',
+    prefix:
+      phase === 'lastSeen' ? 'last seen' : phase === 'seen' ? 'seen' : null,
+    now: parallelWorkClock(at, now),
   }
 }
 

@@ -1,8 +1,8 @@
 import type { FC, ReactNode } from 'react'
-import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { ArrowLeft, ChevronRight, X } from 'lucide-react'
 import {
+  parallelWorkClock,
   parallelWorkTime,
-  formatRelativeTime,
   parallelWorkRowState,
   type AttributedWorkItem,
   type ParallelWorkRow,
@@ -11,12 +11,14 @@ import {
   Button,
   Card,
   cn,
+  disclosureChevron,
   EmptyState,
   FormError,
   fullDateLabel,
   IconButton,
   MetaLine,
   PanelHeader,
+  Timestamp,
   Tooltip,
 } from '@convergence/ui'
 import {
@@ -192,13 +194,30 @@ export const ParallelWorkPanelView: FC<
             {row.task?.taskType ?? 'Not reported'}
           </p>
         )}
-        {/* The whole moment in our Tooltip, as a Timestamp's (CONV-22). */}
-        <Tooltip label={time.at ? fullDateLabel(new Date(time.at)) : undefined}>
+        {time.kind === 'duration' ? (
+          // How long it has run is a span, in its own words; when it
+          // started is in our Tooltip, as a Timestamp's (CONV-22).
+          <Tooltip label={fullDateLabel(new Date(time.at))}>
+            <MetaLine wrap className="text-2xs">
+              {workStatus(row)}
+              {time.label}
+            </MetaLine>
+          </Tooltip>
+        ) : (
+          // A moment is a Timestamp: its words, and the whole moment in
+          // its Tooltip (CONV-22).
           <MetaLine wrap className="text-2xs">
             {workStatus(row)}
-            {time.label}
+            {time.kind === 'moment' ? (
+              <span>
+                {time.prefix ? `${time.prefix} ` : null}
+                <Timestamp date={time.at} now={new Date(time.now)} />
+              </span>
+            ) : (
+              time.label
+            )}
           </MetaLine>
-        </Tooltip>
+        )}
         {row.run && (
           <p className="text-2xs text-ink-muted">
             Last tool: {row.run.lastToolName ?? 'Not reported'}
@@ -238,35 +257,37 @@ export const ParallelWorkPanelView: FC<
           data-tone={tone}
           data-returned={returned ? '' : undefined}
         >
-          {/* Open, the toggle is an icon: an IconButton, whose label is its
-              name and its tooltip. Folded, it says what it hides, and those
-              words are its name, with what it does in the tooltip (CONV-5). */}
-          {children.length > 0 &&
-            (hidden ? (
-              <Tooltip label={`Expand ${workTitle(row)}`}>
-                <Button
-                  variant="quiet"
-                  size="xs"
-                  aria-expanded={false}
-                  onClick={() => props.onToggle?.(key)}
-                  className="-ml-2"
-                >
-                  <ChevronRight className="size-3" />
-                  {`${descendantCounts.get(key) ?? 0} descendants running`}
-                </Button>
-              </Tooltip>
-            ) : (
-              <IconButton
-                label={`Collapse ${workTitle(row)}`}
+          {/* One control folds the branch, so nothing changes under the
+              pointer: its chevron turns a quarter, as a Collapsible's does
+              (CONV-12). Folded, it says what it hides, and those words are
+              its name; open, it is the chevron alone, named by its label.
+              What it does is its tooltip (CONV-5). */}
+          {children.length > 0 && (
+            <Tooltip
+              label={`${hidden ? 'Expand' : 'Collapse'} ${workTitle(row)}`}
+            >
+              <Button
                 variant="quiet"
                 size="xs"
-                aria-expanded
+                aria-expanded={!hidden}
+                aria-label={hidden ? undefined : `Collapse ${workTitle(row)}`}
                 onClick={() => props.onToggle?.(key)}
                 className="-ml-2"
               >
-                <ChevronDown className="size-3" />
-              </IconButton>
-            ))}
+                <ChevronRight
+                  aria-hidden
+                  className={cn(
+                    'size-3',
+                    disclosureChevron,
+                    !hidden && 'rotate-90',
+                  )}
+                />
+                {hidden
+                  ? `${descendantCounts.get(key) ?? 0} descendants running`
+                  : null}
+              </Button>
+            </Tooltip>
+          )}
           {content(row)}
           {controls(row)}
         </Card>
@@ -343,10 +364,21 @@ export const ParallelWorkPanelView: FC<
                   size="md"
                   className="text-ink-muted"
                 >
-                  {archive.older.length} older ·{' '}
-                  {archive.newest
-                    ? `newest ${formatRelativeTime(archive.newest, now)} ago`
-                    : 'time not reported'}
+                  {/* Its facts on a MetaLine, its moment a Timestamp (CONV-23, CONV-22). */}
+                  <MetaLine>
+                    {`${archive.older.length} older`}
+                    {archive.newest ? (
+                      <span>
+                        newest{' '}
+                        <Timestamp
+                          date={archive.newest}
+                          now={new Date(parallelWorkClock(archive.newest, now))}
+                        />
+                      </span>
+                    ) : (
+                      'time not reported'
+                    )}
+                  </MetaLine>
                 </Button>
                 {props.olderOpen &&
                   roots

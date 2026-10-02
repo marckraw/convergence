@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import type { ProviderModelOption } from '@/entities/session'
 import {
   Button,
+  Card,
   Checkbox,
   ChoiceField,
   EmptyState,
@@ -51,11 +52,15 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
             {modelsJsonModels.length}
           </span>
         </div>
-        <div className="max-h-48 overflow-y-auto rounded-md border border-line bg-surface/35">
+        {/* The list's well is a Card, edge to edge (DS-10); an empty one
+            says so on EmptyState (DLG-18). */}
+        <Card padding="none" className="max-h-48 overflow-y-auto">
           {modelsJsonModels.length === 0 ? (
-            <p className="px-3 py-3 text-sm text-ink-muted">
-              No Pi models were found in models.json.
-            </p>
+            <EmptyState
+              variant="plain"
+              size="compact"
+              title="No Pi models in models.json yet"
+            />
           ) : (
             <ul className="divide-y divide-line-soft">
               {modelsJsonModels.map((model) => (
@@ -66,7 +71,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
               ))}
             </ul>
           )}
-        </div>
+        </Card>
       </section>
 
       <section className="space-y-3">
@@ -107,11 +112,17 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
           )}
         </div>
 
-        <div className="max-h-80 overflow-y-auto rounded-md border border-line bg-surface/35">
+        <Card padding="none" className="max-h-80 overflow-y-auto">
           {optionalModels.length === 0 ? (
-            <p className="px-3 py-3 text-sm text-ink-muted">
-              No matching Pi models.
-            </p>
+            <EmptyState
+              variant="plain"
+              size="compact"
+              title={
+                query.trim()
+                  ? `No Pi models match “${query.trim()}”`
+                  : 'No other Pi models'
+              }
+            />
           ) : (
             <ul className="divide-y divide-line-soft">
               {optionalModels.map((model) => {
@@ -139,7 +150,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
               })}
             </ul>
           )}
-        </div>
+        </Card>
       </section>
     </div>
   )

@@ -150,9 +150,8 @@ export const Default: Story = {
     await expect(canvas.getByText('Utilization').tagName).toBe('DT')
     await expect(canvas.getByText('82%').tagName).toBe('DD')
     await expect(canvas.getByText('Claude Code 2.4.1')).toBeVisible()
-    await expect(
-      canvas.getByText('Connected: linear, figma, context7'),
-    ).toBeVisible()
+    await expect(canvas.getByText('Connected').tagName).toBe('DT')
+    await expect(canvas.getByText('linear, figma, context7').tagName).toBe('DD')
     // A hook's output stays folded until asked for.
     const preview = canvas.getByText(/prettier: apps\/convergence/)
     await expect(preview).not.toBeVisible()

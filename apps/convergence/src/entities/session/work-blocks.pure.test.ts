@@ -242,9 +242,12 @@ describe('R2: the label says only facts', () => {
       call('e1', 'Edit', { file_path: '/repo/src/widgets/session-view/a.ts' }),
       call('b1', 'Bash', { command: 'npm test' }),
     ]
-    expect(workBlockLabel(items, { working: false, root: '/repo' })).toBe(
-      'Read 2 files in src/widgets/session-view · 2 searches · edited 1 file · ran 1 command',
-    )
+    expect(workBlockLabel(items, { working: false, root: '/repo' })).toEqual([
+      'Read 2 files in src/widgets/session-view',
+      '2 searches',
+      'edited 1 file',
+      'ran 1 command',
+    ])
   })
 
   it('Pi: compact JSON with `path`, results unlinked', () => {
@@ -260,9 +263,9 @@ describe('R2: the label says only facts', () => {
         providerEventType: 'tool_execution_end',
       }),
     ]
-    expect(workBlockLabel(items, { working: false })).toBe(
+    expect(workBlockLabel(items, { working: false })).toEqual([
       'Read 2 files in src/a',
-    )
+    ])
   })
 
   it('Cursor: free text is never a path, and unknown titles are tool calls', () => {
@@ -280,7 +283,7 @@ describe('R2: the label says only facts', () => {
         providerId: 'cursor',
       }),
     ]
-    expect(workBlockLabel(items, { working: false })).toBe('2 tool calls')
+    expect(workBlockLabel(items, { working: false })).toEqual(['2 tool calls'])
   })
 
   it('Codex: no calls; command results count as commands', () => {
@@ -297,9 +300,11 @@ describe('R2: the label says only facts', () => {
       result('x4', { providerId: 'codex', providerEventType: 'fileChange' }),
       result('x5', { providerId: 'codex', providerEventType: 'mcpToolCall' }),
     ]
-    expect(workBlockLabel(items, { working: false })).toBe(
-      '1 edit · ran 3 commands · 1 tool call',
-    )
+    expect(workBlockLabel(items, { working: false })).toEqual([
+      '1 edit',
+      'ran 3 commands',
+      '1 tool call',
+    ])
   })
 
   it('unknown shapes are tool calls; a block of answers says so', () => {
@@ -307,10 +312,10 @@ describe('R2: the label says only facts', () => {
       workBlockLabel([call('u1', 'mystery', {}), call('u2', 'enigma', {})], {
         working: false,
       }),
-    ).toBe('2 tool calls')
+    ).toEqual(['2 tool calls'])
     expect(
       workBlockLabel([result('o1'), result('o2')], { working: false }),
-    ).toBe('2 tool results')
+    ).toEqual(['2 tool results'])
   })
 
   it('the folder is the one EVERY path shares, never the first one’s', () => {
@@ -318,9 +323,9 @@ describe('R2: the label says only facts', () => {
       read('m1', '/repo/src/widgets/session-view/a.ts'),
       read('m2', '/repo/src/entities/session/b.ts'),
     ]
-    expect(workBlockLabel(items, { working: false, root: '/repo' })).toBe(
+    expect(workBlockLabel(items, { working: false, root: '/repo' })).toEqual([
       'Read 2 files in src',
-    )
+    ])
     expect(commonFolder(['/a/b/c.ts', '/x/y.ts'])).toBeNull()
   })
 
@@ -329,7 +334,7 @@ describe('R2: the label says only facts', () => {
       call('n1', 'Read', '/repo/src/widgets/a.ts'),
       call('n2', 'Read', '/repo/src/widgets/b.ts'),
     ]
-    expect(workBlockLabel(items, { working: false })).toBe('2 reads')
+    expect(workBlockLabel(items, { working: false })).toEqual(['2 reads'])
     expect(parseToolInputPath('/repo/src/widgets/a.ts')).toBeNull()
     expect(parseToolInputPath('{"notebook_path":"/n.ipynb"}')).toBe('/n.ipynb')
   })
@@ -340,8 +345,8 @@ describe('R2: the label says only facts', () => {
       call('g2', 'Grep', { pattern: 'y', path: '/repo/src/app/b' }),
       call('g3', 'Grep', { pattern: 'z' }),
     ]
-    expect(workBlockLabel(searches, { working: false, root: '/repo' })).toBe(
-      '3 searches',
+    expect(workBlockLabel(searches, { working: false, root: '/repo' })).toEqual(
+      ['3 searches'],
     )
     expect(
       workBlockLabel(
@@ -352,13 +357,13 @@ describe('R2: the label says only facts', () => {
         ],
         { working: false, root: '/repo' },
       ),
-    ).toBe('Read 2 files in src/app · 3 searches')
+    ).toEqual(['Read 2 files in src/app', '3 searches'])
   })
 
   it('one path is not a folder; the same file read twice is one file', () => {
     expect(
       workBlockLabel([read('s1', '/repo/src/a.ts')], { working: false }),
-    ).toBe('Read 1 file')
+    ).toEqual(['Read 1 file'])
     expect(
       workBlockLabel(
         [read('s1', '/repo/src/a.ts'), read('s2', '/repo/src/a.ts')],
@@ -367,13 +372,13 @@ describe('R2: the label says only facts', () => {
           root: '/repo',
         },
       ),
-    ).toBe('Read 1 file in src')
+    ).toEqual(['Read 1 file in src'])
   })
 
   it('a working block says so before its facts', () => {
-    expect(workBlockLabel([read('w1')], { working: true })).toBe(
+    expect(workBlockLabel([read('w1')], { working: true })).toEqual([
       'Working… read 1 file',
-    )
+    ])
   })
 })
 
@@ -404,13 +409,13 @@ describe('R2: steps and the summary under the label', () => {
     expect([
       workBlockSummary(items),
       workBlockLabel(items, { working: false }),
-    ]).toEqual(['read 1 file', 'Read 1 file'])
+    ]).toEqual([['read 1 file'], ['Read 1 file']])
     expect(
       workBlockSummary(
         [read('l1', '/r/a/x.ts'), read('l2', '/r/a/y.ts')],
         '/r',
       ),
-    ).toBe('read 2 files in a')
+    ).toEqual(['read 2 files in a'])
   })
 })
 

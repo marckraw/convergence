@@ -1,11 +1,14 @@
 import type { FC } from 'react'
 import { ChevronRight, Layers } from 'lucide-react'
-import { cn, ListRow, Tooltip } from '@convergence/ui'
+import { cn, ListRow, MetaLine, Tooltip } from '@convergence/ui'
 import { WORK_BLOCK_SENTENCE_CLASS } from './work-block.styles'
 
 interface WorkBlockRowProps {
-  /** Built from the members' own fields by `workBlockLabel` (R2). */
-  label: string
+  /**
+   * Its facts, built from the members' own fields by `workBlockLabel` (R2),
+   * one by one: a MetaLine joins them (CONV-23).
+   */
+  label: readonly string[]
   /** How many entries the block folds, for the title. */
   memberCount: number
   open: boolean
@@ -64,7 +67,9 @@ export const WorkBlockRow: FC<WorkBlockRowProps> = ({
               <Layers className="size-4 shrink-0" />
             </span>
           }
-          title={<span className="text-xs text-ink-muted">{label}</span>}
+          title={
+            <MetaLine className="text-xs text-ink-muted">{label}</MetaLine>
+          }
         />
       </Tooltip>
       {sentence ? (

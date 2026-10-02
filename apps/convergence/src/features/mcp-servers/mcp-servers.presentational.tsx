@@ -192,9 +192,12 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
               )}
             </div>
           ) : (
-            <p className="text-sm text-ink-muted">
-              No project-specific servers.
-            </p>
+            // An empty list says so on EmptyState (DLG-18).
+            <EmptyState
+              variant="plain"
+              size="compact"
+              title="No project servers yet"
+            />
           )}
         </div>
 
@@ -209,7 +212,11 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
               )}
             </div>
           ) : (
-            <p className="text-sm text-ink-muted">No global servers.</p>
+            <EmptyState
+              variant="plain"
+              size="compact"
+              title="No global servers yet"
+            />
           )}
         </div>
       </div>
