@@ -1,4 +1,4 @@
-export { useTerminalStore } from './terminal.model'
+export { dockSizeBounds, useTerminalStore } from './terminal.model'
 export type { TerminalStore } from './terminal.model'
 export { terminalApi } from './terminal.api'
 export { terminalLayoutApi } from './terminal-layout.api'
