@@ -1,6 +1,13 @@
 import { type ComponentProps, type ReactNode, useId } from 'react'
 import { cn } from '#lib/cn.pure'
 
+/**
+ * A settings subsection's heading (DLG-11): 14 px semibold ink, the one
+ * look every settings tab's h3 or h4 wears, SettingsSection's own and the
+ * ones a card or a list draws by itself (an account's name, a token's).
+ */
+const settingsHeading = 'text-sm font-semibold text-ink'
+
 type SettingsSectionProps = Omit<
   ComponentProps<'section'>,
   'className' | 'title'
@@ -109,7 +116,7 @@ function SettingsSection({
       <div className="flex items-start gap-2">
         {glyph}
         <div className="min-w-0">
-          <Heading id={titleId} className="text-sm font-semibold text-ink">
+          <Heading id={titleId} className={settingsHeading}>
             {title}
           </Heading>
           {description == null ? null : (
@@ -124,4 +131,4 @@ function SettingsSection({
   )
 }
 
-export { SettingsSection, type SettingsSectionProps }
+export { SettingsSection, type SettingsSectionProps, settingsHeading }

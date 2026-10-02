@@ -425,3 +425,10 @@ export {
   type SpinnerSize,
 } from './motion/spinner/spinner'
 export { UiProvider, type UiProviderProps } from './ui-provider'
+export {
+  NumberField,
+  type NumberFieldProps,
+} from './components/number-field/number-field'
+export type { ChoiceFieldDensity } from './components/choice-field/choice-field'
+export { dialogPane } from './components/dialog/dialog.styles'
+export { settingsHeading } from './components/settings-section/settings-section'
