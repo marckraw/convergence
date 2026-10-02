@@ -19,6 +19,7 @@ import {
   MenuTrigger,
   type PopupFinalFocus,
   type PopupOpenChangeDetails,
+  ScreenHeader,
   tooltipAttributes,
 } from '@convergence/ui'
 import { useElementWidth } from '@/shared/hooks/use-element-width'
@@ -33,15 +34,6 @@ import {
   type HeaderItem,
   type HeaderYieldId,
 } from './conversation-header.pure'
-
-/**
- * The window drags by the header's empty space, and never by a control (R7):
- * `app-drag` on the header, `app-no-drag` on its control groups (the theme's
- * utilities, CONV-21). The data attribute states the same fact where jsdom
- * computes no styles.
- */
-export const HEADER_DRAG_REGION = { 'data-app-region': 'drag' } as const
-export const HEADER_NO_DRAG_REGION = { 'data-app-region': 'no-drag' } as const
 
 /** What More lists for a control that has yielded (R4). */
 export type HeaderMenuEntry =
@@ -240,7 +232,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   pinned = false,
   docked = '',
 }) => {
-  const headerRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
   const projectRef = useRef<HTMLSpanElement>(null)
   const nameRef = useRef<HTMLSpanElement>(null)
   const moreRef = useRef<HTMLButtonElement>(null)
@@ -414,13 +406,12 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
       >
         <div
           data-header-inner={slot.id}
-          className={cn(
-            'flex shrink-0 items-center empty:hidden',
-            yielded && 'absolute right-0 top-0',
-          )}
           // A control never drags the window, on whichever row it sits; the
           // status row's own empty space still does (R7).
-          {...HEADER_NO_DRAG_REGION}
+          className={cn(
+            'app-no-drag flex shrink-0 items-center empty:hidden',
+            yielded && 'absolute right-0 top-0',
+          )}
         >
           {node}
         </div>
@@ -504,156 +495,155 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     .filter((slot) => overflow.has(slot.id))
     .flatMap((slot) => (slot.entries ?? []).map((entry) => ({ slot, entry })))
 
+  // The screen's top strip (NAV-4): ScreenHeader draws it and owns the drag,
+  // so the window moves by the header's empty space and never by a control
+  // (R7). The 48 px row is laid out here, because its controls yield to More
+  // as it narrows; each group in it is `app-no-drag`.
   return (
-    <div
+    <ScreenHeader
       ref={headerRef}
       data-conversation-header
       data-header-rows={layout.rows.length}
-      className="app-drag relative flex shrink-0 flex-col border-b border-line px-4"
-      {...HEADER_DRAG_REGION}
-    >
-      <div className="flex h-12 items-center gap-1.5">
-        <div
-          className="app-no-drag flex min-w-0 items-center gap-1.5"
-          {...HEADER_NO_DRAG_REGION}
-        >
-          <div
-            role="group"
-            aria-label={identityLabel}
-            {...tooltipAttributes(identityTitle)}
-            data-header-identity
-            className="flex min-w-0 shrink items-center gap-1.5 text-sm"
-            style={{ minWidth: identity.minWidth }}
-          >
-            {leading?.node}
-            {projectName !== null && (
-              <>
-                <span
-                  ref={projectRef}
-                  data-header-project
-                  className="truncate text-ink-muted"
-                  style={identityStyle.project ?? undefined}
-                >
-                  {projectName}
-                </span>
-                <span
-                  aria-hidden
-                  className="w-2 shrink-0 text-center text-ink-muted/60"
-                >
-                  /
-                </span>
-              </>
-            )}
-            <span
-              ref={nameRef}
-              data-header-name
-              className="truncate font-medium"
-              style={identityStyle.name}
+      className="relative"
+      bar={
+        <>
+          <div className="app-no-drag flex min-w-0 items-center gap-1.5">
+            <div
+              role="group"
+              aria-label={identityLabel}
+              {...tooltipAttributes(identityTitle)}
+              data-header-identity
+              className="flex min-w-0 shrink items-center gap-1.5 text-sm"
+              style={{ minWidth: identity.minWidth }}
             >
-              {conversationName}
-            </span>
-            {pinned && (
-              <Pin
-                role="img"
-                aria-label="Pinned"
-                data-header-pin-mark
-                className="h-3 w-3 shrink-0 fill-current text-strong"
-              />
-            )}
+              {leading?.node}
+              {projectName !== null && (
+                <>
+                  <span
+                    ref={projectRef}
+                    data-header-project
+                    className="truncate text-ink-muted"
+                    style={identityStyle.project ?? undefined}
+                  >
+                    {projectName}
+                  </span>
+                  <span
+                    aria-hidden
+                    className="w-2 shrink-0 text-center text-ink-muted/60"
+                  >
+                    /
+                  </span>
+                </>
+              )}
+              <span
+                ref={nameRef}
+                data-header-name
+                className="truncate font-medium"
+                style={identityStyle.name}
+              >
+                {conversationName}
+              </span>
+              {pinned && (
+                <Pin
+                  role="img"
+                  aria-label="Pinned"
+                  data-header-pin-mark
+                  className="h-3 w-3 shrink-0 fill-current text-strong"
+                />
+              )}
+            </div>
+            {slots
+              .filter((slot) => slot.side === 'left' && inRow1(slot))
+              .map(renderSlot)}
           </div>
-          {slots
-            .filter((slot) => slot.side === 'left' && inRow1(slot))
-            .map(renderSlot)}
-        </div>
-        <div
-          className="app-no-drag ml-auto flex shrink-0 items-center gap-1.5"
-          {...HEADER_NO_DRAG_REGION}
-        >
-          {slots
-            .filter((slot) => slot.side === 'right' && inRow1(slot))
-            .map(renderSlot)}
-          {moreShown && (
-            <Menu open={moreOpen} onOpenChange={(open) => setMoreOpen(open)}>
-              <MenuTrigger
-                render={
-                  <IconButton
-                    ref={moreRef}
-                    data-header-more
-                    label="Session actions"
-                    variant="ghost"
-                    size="sm"
-                  />
-                }
-              >
-                <MoreVertical className="h-3.5 w-3.5" />
-              </MenuTrigger>
-              <MenuContent
-                align="end"
-                // A yielded menu chosen here opens once More has gone, and
-                // takes the focus itself (MAR-3429 CH4).
-                finalFocus={() => {
-                  const open = pendingOpen.current
-                  if (!open) return true
-                  pendingOpen.current = null
-                  open()
-                  return false
-                }}
-              >
-                {yieldedEntries.map(({ slot, entry }) =>
-                  entry.kind === 'action' ? (
-                    entry.checked === undefined ? (
+          <div className="app-no-drag ml-auto flex shrink-0 items-center gap-1.5">
+            {slots
+              .filter((slot) => slot.side === 'right' && inRow1(slot))
+              .map(renderSlot)}
+            {moreShown && (
+              <Menu open={moreOpen} onOpenChange={(open) => setMoreOpen(open)}>
+                <MenuTrigger
+                  render={
+                    <IconButton
+                      ref={moreRef}
+                      data-header-more
+                      label="Session actions"
+                      variant="ghost"
+                      size="sm"
+                    />
+                  }
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </MenuTrigger>
+                <MenuContent
+                  align="end"
+                  // A yielded menu chosen here opens once More has gone, and
+                  // takes the focus itself (MAR-3429 CH4).
+                  finalFocus={() => {
+                    const open = pendingOpen.current
+                    if (!open) return true
+                    pendingOpen.current = null
+                    open()
+                    return false
+                  }}
+                >
+                  {yieldedEntries.map(({ slot, entry }) =>
+                    entry.kind === 'action' ? (
+                      entry.checked === undefined ? (
+                        <MenuItem
+                          key={entry.key}
+                          data-yielded-entry={slot.id}
+                          onClick={entry.onSelect}
+                        >
+                          {entry.label}
+                        </MenuItem>
+                      ) : (
+                        // A toggle reads out its state.
+                        <MenuCheckboxItem
+                          key={entry.key}
+                          data-yielded-entry={slot.id}
+                          checked={entry.checked}
+                          onCheckedChange={entry.onSelect}
+                          closeOnClick
+                        >
+                          {entry.label}
+                        </MenuCheckboxItem>
+                      )
+                    ) : entry.kind === 'opens' ? (
                       <MenuItem
                         key={entry.key}
                         data-yielded-entry={slot.id}
-                        onClick={entry.onSelect}
+                        disabled={triggers[slot.id]?.disabled ?? true}
+                        onClick={() => {
+                          pendingOpen.current = entry.onOpen
+                        }}
+                      >
+                        {triggers[slot.id]?.name}
+                      </MenuItem>
+                    ) : (
+                      <MenuItem
+                        key={entry.key}
+                        data-yielded-entry={slot.id}
+                        aria-label={`${entry.name}: ${entry.label}`}
+                        className="text-xs tabular-nums text-ink-muted"
+                        // A reading: choosing it keeps More open.
+                        closeOnClick={false}
                       >
                         {entry.label}
                       </MenuItem>
-                    ) : (
-                      // A toggle reads out its state.
-                      <MenuCheckboxItem
-                        key={entry.key}
-                        data-yielded-entry={slot.id}
-                        checked={entry.checked}
-                        onCheckedChange={entry.onSelect}
-                        closeOnClick
-                      >
-                        {entry.label}
-                      </MenuCheckboxItem>
-                    )
-                  ) : entry.kind === 'opens' ? (
-                    <MenuItem
-                      key={entry.key}
-                      data-yielded-entry={slot.id}
-                      disabled={triggers[slot.id]?.disabled ?? true}
-                      onClick={() => {
-                        pendingOpen.current = entry.onOpen
-                      }}
-                    >
-                      {triggers[slot.id]?.name}
-                    </MenuItem>
-                  ) : (
-                    <MenuItem
-                      key={entry.key}
-                      data-yielded-entry={slot.id}
-                      aria-label={`${entry.name}: ${entry.label}`}
-                      className="text-xs tabular-nums text-ink-muted"
-                      // A reading: choosing it keeps More open.
-                      closeOnClick={false}
-                    >
-                      {entry.label}
-                    </MenuItem>
-                  ),
-                )}
-                {yieldedEntries.length > 0 && moreContent !== null && (
-                  <MenuSeparator />
-                )}
-                {moreContent}
-              </MenuContent>
-            </Menu>
-          )}
-        </div>
-      </div>
+                    ),
+                  )}
+                  {yieldedEntries.length > 0 && moreContent !== null && (
+                    <MenuSeparator />
+                  )}
+                  {moreContent}
+                </MenuContent>
+              </Menu>
+            )}
+          </div>
+        </>
+      }
+    >
       {statusRows.map((row, index) => (
         <div
           key={index}
@@ -663,6 +653,6 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
           {slots.filter((slot) => row.includes(slot.id)).map(renderSlot)}
         </div>
       ))}
-    </div>
+    </ScreenHeader>
   )
 }

@@ -175,6 +175,17 @@ const devRun = {
 
 /** One task running: Parallel work holds its place in the row (CH4 R2). */
 const oneRunning = { running: 1, unknown: 0, failed: 0, stopped: 0 }
+
+/**
+ * Whether Electron would let the window drag from here: the nearest
+ * ancestor-or-self that says, in the one spelling there is (`app-drag`,
+ * `app-no-drag`; NAV-11). jsdom computes no styles, so the class is read.
+ */
+const appRegion = (element: Element) => {
+  const at = element.closest('.app-drag, .app-no-drag')
+  if (at === null) return null
+  return at.classList.contains('app-no-drag') ? 'no-drag' : 'drag'
+}
 const runParallel = () =>
   useSessionStore.setState((state) => ({
     sessions: state.sessions.map((session) => ({
@@ -2456,19 +2467,20 @@ describe('SessionView', () => {
       const statusRow = header.querySelector<HTMLElement>(
         '[data-header-status-row]',
       )!
-      expect(statusRow).not.toHaveAttribute('data-app-region')
+      expect(statusRow).not.toHaveClass('app-no-drag')
       expect(statusRow.style.getPropertyValue('-webkit-app-region')).toBe('')
-      expect(
-        statusRow.closest('[data-app-region]')?.getAttribute('data-app-region'),
-      ).toBe('drag')
+      expect(appRegion(statusRow)).toBe('drag')
       const buttons = statusRow.querySelectorAll('button')
       expect([...buttons].map((button) => button.textContent)).toEqual([
         'Parallel work · 2',
       ])
-      for (const button of buttons)
-        expect(
-          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
-        ).toBe('no-drag')
+      for (const button of buttons) {
+        expect(appRegion(button)).toBe('no-drag')
+        // The slot around it says so too, not only the part (R7).
+        expect(appRegion(button.closest('[data-header-inner]')!)).toBe(
+          'no-drag',
+        )
+      }
     })
 
     it('R7 every button in the header sits inside a no-drag region, and the header itself drags — mutation remove no-drag from the right-hand group turns red', () => {
@@ -2486,7 +2498,7 @@ describe('SessionView', () => {
       const header = document.querySelector<HTMLElement>(
         '[data-conversation-header]',
       )!
-      expect(header).toHaveAttribute('data-app-region', 'drag')
+      expect(appRegion(header)).toBe('drag')
       const buttons = header.querySelectorAll('button')
       // The right-hand group is in the sweep: Stop and More live there.
       expect(
@@ -2495,10 +2507,9 @@ describe('SessionView', () => {
         expect.arrayContaining(['Stop Test session', 'Session actions']),
       )
       for (const button of buttons)
-        expect(
-          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
-          button.textContent ?? '',
-        ).toBe('no-drag')
+        expect(appRegion(button.parentElement!), button.textContent ?? '').toBe(
+          'no-drag',
+        )
     })
   })
   describe('MAR-3429 CH4 the header’s groups', () => {

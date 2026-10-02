@@ -55,6 +55,14 @@ type ScreenHeaderProps = Omit<
   subtitle?: ReactNode
   /** At the end: the screen's actions and menus. */
   end?: ReactNode
+  /**
+   * The 48 px row laid out by its owner, in place of start, title, title
+   * action and end: for a header whose controls arrange themselves, as the
+   * conversation header's yield to its More menu as the row narrows (NAV-4).
+   * What it holds carries `app-no-drag` itself; the row's empty space still
+   * drags the window.
+   */
+  bar?: ReactNode
   /** Rows under the 48 px row, inside the header: the conversation header's status rows. */
   children?: ReactNode
   /** The strip drags the window (Electron), as every top strip should; true unless told otherwise. */
@@ -85,6 +93,7 @@ function ScreenHeader({
   titleAction,
   subtitle,
   end,
+  bar,
   children,
   drag = true,
   windowControlsInset = false,
@@ -106,50 +115,58 @@ function ScreenHeader({
       {...props}
     >
       <div className="flex h-12 min-w-0 items-center gap-1.5">
-        {start == null ? null : (
-          <div data-slot="screen-header-start" className={stripSlot}>
-            {start}
-          </div>
-        )}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {title == null ? null : (
-            <div className="flex min-w-0 flex-col">
-              <Tooltip
-                label={
-                  titleLabel ?? (typeof title === 'string' ? title : undefined)
-                }
-                when="truncated"
-              >
-                <Heading
-                  ref={heading}
-                  id={titleId}
-                  className={cn(
-                    'truncate text-sm font-semibold text-ink',
-                    // A window's drag region takes the pointer from the page,
-                    // so a title cut short leaves it to show its tooltip.
-                    cutShort && 'app-no-drag',
+        {bar ?? (
+          <>
+            {start == null ? null : (
+              <div data-slot="screen-header-start" className={stripSlot}>
+                {start}
+              </div>
+            )}
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              {title == null ? null : (
+                <div className="flex min-w-0 flex-col">
+                  <Tooltip
+                    label={
+                      titleLabel ??
+                      (typeof title === 'string' ? title : undefined)
+                    }
+                    when="truncated"
+                  >
+                    <Heading
+                      ref={heading}
+                      id={titleId}
+                      className={cn(
+                        'truncate text-sm font-semibold text-ink',
+                        // A window's drag region takes the pointer from the page,
+                        // so a title cut short leaves it to show its tooltip.
+                        cutShort && 'app-no-drag',
+                      )}
+                    >
+                      {title}
+                    </Heading>
+                  </Tooltip>
+                  {subtitle == null ? null : (
+                    <div className="truncate text-xs text-ink-muted">
+                      {subtitle}
+                    </div>
                   )}
+                </div>
+              )}
+              {titleAction == null ? null : (
+                <div
+                  data-slot="screen-header-title-action"
+                  className={stripSlot}
                 >
-                  {title}
-                </Heading>
-              </Tooltip>
-              {subtitle == null ? null : (
-                <div className="truncate text-xs text-ink-muted">
-                  {subtitle}
+                  {titleAction}
                 </div>
               )}
             </div>
-          )}
-          {titleAction == null ? null : (
-            <div data-slot="screen-header-title-action" className={stripSlot}>
-              {titleAction}
-            </div>
-          )}
-        </div>
-        {end == null ? null : (
-          <div data-slot="screen-header-end" className={stripSlot}>
-            {end}
-          </div>
+            {end == null ? null : (
+              <div data-slot="screen-header-end" className={stripSlot}>
+                {end}
+              </div>
+            )}
+          </>
         )}
       </div>
       {children}
