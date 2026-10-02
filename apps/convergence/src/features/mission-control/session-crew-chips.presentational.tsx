@@ -1,18 +1,14 @@
 import type { CSSProperties, FC } from 'react'
-import { Button, cn, Toggle } from '@convergence/ui'
+import { cn, Toggle } from '@convergence/ui'
 import { CrewMark } from './crew-mark.presentational'
 import type { SessionCardCrewFacetOption } from './session-card-facets.pure'
 import { crewColor } from './session-crew-picker.pure'
-import {
-  FILTER_CHIP_ROW_CLASS,
-  FILTER_CLEAR_CLASS,
-} from './session-filter.styles'
+import { FILTER_CHIP_ROW_CLASS } from './session-filter.styles'
 
 interface SessionCrewChipsProps {
   options: readonly SessionCardCrewFacetOption[]
   selected: readonly string[]
   onToggle: (id: string) => void
-  onClear: () => void
 }
 
 /**
@@ -45,7 +41,6 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
   options,
   selected,
   onToggle,
-  onClear,
 }) => {
   if (options.length === 0) return null
 
@@ -80,17 +75,6 @@ export const SessionCrewChips: FC<SessionCrewChipsProps> = ({
           </Toggle>
         )
       })}
-
-      {selected.length > 0 ? (
-        <Button
-          type="button"
-          variant="link"
-          onClick={onClear}
-          className={FILTER_CLEAR_CLASS}
-        >
-          Clear
-        </Button>
-      ) : null}
     </div>
   )
 }

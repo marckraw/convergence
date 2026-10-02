@@ -131,6 +131,27 @@ export function isEmptySessionCardFilter(filter: SessionCardFilter): boolean {
 }
 
 /**
+ * True when a chip or a picker narrows the room: a state, a project, a
+ * provider or a crew. The search is not one of them; its field clears
+ * itself. This is when the filter row shows its one "Clear filters" (MC-7).
+ */
+export function narrowsByFacet(filter: SessionCardFilter): boolean {
+  return (
+    filter.states.length > 0 ||
+    filter.projectIds.length > 0 ||
+    filter.providerIds.length > 0 ||
+    filter.crewIds.length > 0
+  )
+}
+
+/** The filter with every chip and picker cleared, and the search kept (MC-7). */
+export function clearSessionCardFacets(
+  filter: SessionCardFilter,
+): SessionCardFilter {
+  return { ...EMPTY_SESSION_CARD_FILTER, query: filter.query }
+}
+
+/**
  * Multi-toggle semantics for one state chip: on turns it into a constraint,
  * off removes it. Order is kept canonical so two equal selections are equal.
  */

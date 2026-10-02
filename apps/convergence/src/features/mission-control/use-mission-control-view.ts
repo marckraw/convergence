@@ -5,6 +5,7 @@ import {
 } from './mission-control-view.api'
 import type { MissionControlViewMode } from './mission-control-view.pure'
 import {
+  clearSessionCardFacets,
   EMPTY_SESSION_CARD_FILTER,
   toggleFilterId,
   toggleSessionCardState,
@@ -21,13 +22,13 @@ export interface MissionControlViewState {
   setOrder: (order: SessionCardOrderPreset) => void
   setMode: (mode: MissionControlViewMode) => void
   toggleState: (state: SessionCardState) => void
-  clearStates: () => void
   toggleProject: (id: string) => void
   clearProjects: () => void
   toggleProvider: (id: string) => void
   clearProviders: () => void
   toggleCrew: (id: string) => void
-  clearCrews: () => void
+  /** Every chip and picker cleared at once, the search kept (MC-7). */
+  clearFacets: () => void
   clearFilter: () => void
 }
 
@@ -85,10 +86,6 @@ export function useMissionControlView(): MissionControlViewState {
     }))
   }, [])
 
-  const clearStates = useCallback(() => {
-    setFilter((current) => ({ ...current, states: [] }))
-  }, [])
-
   const toggleProject = useCallback((id: string) => {
     setFilter((current) => ({
       ...current,
@@ -118,8 +115,8 @@ export function useMissionControlView(): MissionControlViewState {
     }))
   }, [])
 
-  const clearCrews = useCallback(() => {
-    setFilter((current) => ({ ...current, crewIds: [] }))
+  const clearFacets = useCallback(() => {
+    setFilter(clearSessionCardFacets)
   }, [])
 
   const clearFilter = useCallback(() => {
@@ -134,13 +131,12 @@ export function useMissionControlView(): MissionControlViewState {
     setOrder,
     setMode,
     toggleState,
-    clearStates,
     toggleProject,
     clearProjects,
     toggleProvider,
     clearProviders,
     toggleCrew,
-    clearCrews,
+    clearFacets,
     clearFilter,
   }
 }

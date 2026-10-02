@@ -1,8 +1,7 @@
 import type { FC } from 'react'
-import { Button, cn, Toggle } from '@convergence/ui'
+import { cn, Toggle } from '@convergence/ui'
 import {
   FILTER_CHIP_ROW_CLASS,
-  FILTER_CLEAR_CLASS,
   STATE_CHIP_PRESSED,
 } from './session-filter.styles'
 import {
@@ -18,18 +17,17 @@ interface SessionStateChipsProps {
   selected: readonly SessionCardState[]
   counts: SessionCardStateCounts
   onToggle: (state: SessionCardState) => void
-  onClear: () => void
 }
 
 /**
  * The state chips: five multi-toggles that narrow the room to what Marcin
- * wants to see. None selected means the whole room — the default.
+ * wants to see. None selected means the whole room — the default. The row's
+ * one "Clear filters" clears them with the rest (MC-7).
  */
 export const SessionStateChips: FC<SessionStateChipsProps> = ({
   selected,
   counts,
   onToggle,
-  onClear,
 }) => {
   return (
     <div className={FILTER_CHIP_ROW_CLASS}>
@@ -54,17 +52,6 @@ export const SessionStateChips: FC<SessionStateChipsProps> = ({
           </Toggle>
         )
       })}
-
-      {selected.length > 0 ? (
-        <Button
-          type="button"
-          variant="link"
-          onClick={onClear}
-          className={FILTER_CLEAR_CLASS}
-        >
-          Clear
-        </Button>
-      ) : null}
     </div>
   )
 }

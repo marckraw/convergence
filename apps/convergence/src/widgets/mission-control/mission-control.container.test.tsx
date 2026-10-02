@@ -668,6 +668,54 @@ describe('MissionControl', () => {
       expect(await screen.findByText('Lark agent')).toBeInTheDocument()
     })
 
+    // A chip group's own "Clear", or the row's; the search field's "Clear
+    // search" is its own and stays.
+    const FILTER_CLEARS = /^clear( filters)?$/i
+
+    it('MC-7 one "Clear filters" for the whole row clears every chip, and keeps the search — mutation: a Clear per group, or clearing the search too, turns red', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Owl agent' }),
+          makeSession({ id: 'b', name: 'Lark agent' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      const crew = await screen.findByRole('button', { name: /Night shift/ })
+      // Nothing narrows the room yet: no Clear at all.
+      expect(screen.queryByRole('button', { name: FILTER_CLEARS })).toBeNull()
+
+      fireEvent.change(screen.getByLabelText('Search session cards'), {
+        target: { value: 'agent' },
+      })
+      // The search is not a chip; its own field clears it.
+      expect(screen.queryByRole('button', { name: FILTER_CLEARS })).toBeNull()
+
+      fireEvent.click(crew)
+      const idle = screen
+        .getAllByRole('button', { pressed: false })
+        .find((button) => /^Idle/.test(button.textContent ?? ''))
+      if (!idle) throw new Error('no Idle chip')
+      fireEvent.click(idle)
+
+      // Two groups narrowed, one Clear for the row.
+      const clears = screen.getAllByRole('button', { name: FILTER_CLEARS })
+      expect(clears.map((button) => button.textContent)).toEqual([
+        'Clear filters',
+      ])
+      fireEvent.click(clears[0]!)
+
+      await waitFor(() => expect(crew).toHaveAttribute('aria-pressed', 'false'))
+      expect(idle).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByLabelText('Search session cards')).toHaveValue('agent')
+      expect(screen.queryByRole('button', { name: FILTER_CLEARS })).toBeNull()
+      expect(screen.getByText('Lark agent')).toBeInTheDocument()
+    })
+
     it('counts what turning a chip on would show, not what is already shown', async () => {
       seedCrews([
         makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),

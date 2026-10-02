@@ -32,7 +32,6 @@ const meta = {
     ],
     selected: [],
     onToggle: fn(),
-    onClear: fn(),
   },
 } satisfies Meta<typeof SessionCrewChips>
 
@@ -57,15 +56,14 @@ export const Dark: Story = {
   globals: { theme: 'dark' },
 }
 
-/** One crew picked: pressed, and Clear gives the room back. */
+/** One crew picked: pressed; the row's one "Clear filters" gives the room back (MC-7). */
 export const Busy: Story = {
   args: { selected: ['crew-2'] },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ canvas }) => {
     await expect(
       canvas.getByRole('button', { name: /backpack studio 2/ }),
     ).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(canvas.getByRole('button', { name: 'Clear' }))
-    await expect(args.onClear).toHaveBeenCalledOnce()
+    await expect(canvas.queryByRole('button', { name: /clear/i })).toBeNull()
   },
 }
 

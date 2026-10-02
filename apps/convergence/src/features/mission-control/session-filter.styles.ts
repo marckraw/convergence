@@ -21,7 +21,7 @@ export const FILTER_CHIP_ROW_CLASS = 'flex flex-wrap items-center gap-1.5'
 /** A wrapping row of crew marks or swatches: on a card, in the decoration picker. */
 export const CREW_ROW_CLASS = 'flex flex-wrap items-center gap-1'
 
-/** A chip group's "Clear": words that act, quiet beside the chips (MC-15). */
+/** The filter row's "Clear filters": words that act, quiet beside the chips (MC-15, MC-7). */
 export const FILTER_CLEAR_CLASS =
   'px-2 text-2xs font-normal text-ink-muted hover:text-ink'
 
