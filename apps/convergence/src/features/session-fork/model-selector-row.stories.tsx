@@ -93,14 +93,23 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** Provider, model and effort, side by side; the effort is a searchable choice. */
+/**
+ * Provider, model and effort, side by side, each named by what it picks
+ * (DLG-7): the provider and the effort are Selects of a few fixed choices
+ * (R9, DLG-30), the model the model picker.
+ */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await expect(
-      canvas.getByRole('combobox', { name: 'Anthropic' }),
-    ).toBeVisible()
-    await userEvent.click(canvas.getByRole('combobox', { name: 'High' }))
-    await userEvent.click(await screen.findByRole('option', { name: /Medium/ }))
+      canvas.getByRole('combobox', { name: 'Provider' }),
+    ).toHaveTextContent('Anthropic')
+    await expect(
+      canvas.getByRole('combobox', { name: 'Model' }),
+    ).toHaveAccessibleDescription('Claude Opus')
+    const effort = canvas.getByRole('combobox', { name: 'Reasoning effort' })
+    await expect(effort).toHaveTextContent('High')
+    await userEvent.click(effort)
+    await userEvent.click(await screen.findByRole('option', { name: 'Medium' }))
     await expect(args.onEffortChange).toHaveBeenCalledWith('medium')
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
   },
@@ -112,7 +121,9 @@ export const Empty: Story = {
     selection: resolveProviderSelection(providers, 'pi', 'pi-default', null),
   },
   play: async ({ canvas }) => {
-    await expect(canvas.queryByRole('combobox', { name: 'High' })).toBeNull()
+    await expect(
+      canvas.queryByRole('combobox', { name: 'Reasoning effort' }),
+    ).toBeNull()
     // The provider and the model, and nothing after them.
     await expect(canvas.getAllByRole('combobox')).toHaveLength(2)
   },

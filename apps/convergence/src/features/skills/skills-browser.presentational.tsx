@@ -14,7 +14,7 @@ import type {
 } from '@/entities/skill'
 import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import {
-  cn,
+  dialogPane,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -22,9 +22,10 @@ import {
   DialogTitle,
   DialogTrigger,
   EmptyState,
+  Field,
+  FieldLabel,
   IconButton,
   SearchField,
-  sectionLabel,
   SegmentedControl,
   SegmentedControlItem,
   Select,
@@ -102,9 +103,6 @@ const VIEW_MODES: Array<{
   { id: 'list', label: 'List', icon: ListIcon },
 ]
 
-/** A pane's own scroll, inside the dialog's body. */
-const paneScroll = 'app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5'
-
 const GROUP_BY_OPTIONS: Array<{ value: SkillGroupBy; label: string }> = [
   { value: 'provider', label: 'Provider' },
   { value: 'scope', label: 'Scope' },
@@ -136,40 +134,43 @@ function renderViewSwitcher(
   )
 }
 
+/**
+ * A filter of the toolbar: a short fixed list (R9), named by a caption you
+ * can see, as the Prompt library's filters are (DLG-21).
+ */
 function renderFilterSelect({
   label,
   value,
   onChange,
   options,
-  className,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   options: Array<{ value: string; label: string }>
-  className?: string
 }) {
   return (
-    <Select
-      items={options}
-      value={value}
-      onValueChange={(next) => onChange(next)}
-    >
-      <SelectTrigger
-        size="md"
-        aria-label={label}
-        className={cn('w-37.5', className)}
+    <Field className="w-40 gap-1">
+      <FieldLabel variant="caption" nativeLabel={false} render={<div />}>
+        {label}
+      </FieldLabel>
+      <Select
+        items={options}
+        value={value}
+        onValueChange={(next) => onChange(next)}
       >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        <SelectTrigger size="md" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
   )
 }
 
@@ -190,7 +191,7 @@ function renderFilterToolbar({
   | 'onFiltersChange'
 >) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line-soft px-6 py-3">
+    <div className="flex shrink-0 flex-wrap items-end gap-2 border-b border-line-soft px-6 py-3">
       <SearchField
         size="lg"
         value={filters.query}
@@ -277,16 +278,12 @@ function renderFilterToolbar({
       })}
 
       {viewMode === 'grid' ? (
-        <div className="ml-auto flex items-center gap-1.5">
-          <span aria-hidden className={sectionLabel}>
-            Group by
-          </span>
+        <div className="ml-auto">
           {renderFilterSelect({
             label: 'Group by',
             value: groupBy,
             onChange: (value) => onGroupByChange(value as SkillGroupBy),
             options: GROUP_BY_OPTIONS,
-            className: 'w-32.5',
           })}
         </div>
       ) : null}
@@ -449,7 +446,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
           {placeholder ? (
             <div className="p-6">{placeholder}</div>
           ) : viewMode === 'overview' ? (
-            <div className={paneScroll}>
+            <div className={dialogPane}>
               <SkillsOverviewView
                 overview={overview}
                 onJumpToGrid={onJumpToGrid}
@@ -457,7 +454,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
             </div>
           ) : viewMode === 'grid' ? (
             <>
-              <div className={paneScroll}>
+              <div className={dialogPane}>
                 <SkillsGrid
                   groups={gridGroups}
                   selectedSkillId={selectedSkillId}

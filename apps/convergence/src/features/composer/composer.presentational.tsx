@@ -42,6 +42,7 @@ import {
   cn,
   IconButton,
   listboxOptionId,
+  listboxStep,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -458,123 +459,94 @@ export const Composer: FC<ComposerProps> = ({
     !attachmentsIngestInFlight &&
     (value.trim().length > 0 || attachments.length > 0 || hasPendingAnnotations)
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (rootInjectionPickerOpen && rootInjectionItems.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        onRootInjectionHover?.(
-          (rootInjectionHighlightedIndex + 1) % rootInjectionItems.length,
-        )
-        return
+  /**
+   * The picker the message field drives, if one is open (CONV-6): its rows,
+   * its active row, and what its keys do. One at a time is open; the root
+   * and mention pickers take keys only while they show rows, the skill and
+   * prompt pickers take Escape even while they're empty.
+   */
+  const pickerKeys = ((): {
+    count: number
+    active: number
+    hover?: (index: number) => void
+    pick: (index: number) => void
+    dismiss?: () => void
+  } | null => {
+    if (rootInjectionPickerOpen && rootInjectionItems.length > 0)
+      return {
+        count: rootInjectionItems.length,
+        active: rootInjectionHighlightedIndex,
+        hover: onRootInjectionHover,
+        pick: (index) => {
+          const item = rootInjectionItems[index]
+          if (item) onRootInjectionSelect?.(item)
+        },
+        dismiss: onRootInjectionDismiss,
       }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        onRootInjectionHover?.(
-          (rootInjectionHighlightedIndex - 1 + rootInjectionItems.length) %
-            rootInjectionItems.length,
-        )
-        return
-      }
-      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        const item = rootInjectionItems[rootInjectionHighlightedIndex]
-        if (item) onRootInjectionSelect?.(item)
-        return
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onRootInjectionDismiss?.()
-        return
-      }
-    }
-
-    if (skillInjectionPickerOpen) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onSkillInjectionDismiss?.()
-        return
-      }
-      if (skillInjectionItems.length > 0) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          onSkillInjectionHover?.(
-            (skillInjectionHighlightedIndex + 1) % skillInjectionItems.length,
-          )
-          return
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          onSkillInjectionHover?.(
-            (skillInjectionHighlightedIndex - 1 + skillInjectionItems.length) %
-              skillInjectionItems.length,
-          )
-          return
-        }
-        if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-          e.preventDefault()
-          const skill = skillInjectionItems[skillInjectionHighlightedIndex]
+    if (skillInjectionPickerOpen)
+      return {
+        count: skillInjectionItems.length,
+        active: skillInjectionHighlightedIndex,
+        hover: onSkillInjectionHover,
+        pick: (index) => {
+          const skill = skillInjectionItems[index]
           if (skill) onSkillInjectionSelect?.(skill)
-          return
-        }
+        },
+        dismiss: onSkillInjectionDismiss,
       }
-    }
-
-    if (promptInjectionPickerOpen) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onPromptInjectionDismiss?.()
-        return
-      }
-      if (promptInjectionItems.length > 0) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          onPromptInjectionHover?.(
-            (promptInjectionHighlightedIndex + 1) % promptInjectionItems.length,
-          )
-          return
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          onPromptInjectionHover?.(
-            (promptInjectionHighlightedIndex -
-              1 +
-              promptInjectionItems.length) %
-              promptInjectionItems.length,
-          )
-          return
-        }
-        if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-          e.preventDefault()
-          const prompt = promptInjectionItems[promptInjectionHighlightedIndex]
+    if (promptInjectionPickerOpen)
+      return {
+        count: promptInjectionItems.length,
+        active: promptInjectionHighlightedIndex,
+        hover: onPromptInjectionHover,
+        pick: (index) => {
+          const prompt = promptInjectionItems[index]
           if (prompt) onPromptInjectionSelect?.(prompt)
-          return
-        }
+        },
+        dismiss: onPromptInjectionDismiss,
       }
-    }
+    if (mentionPickerOpen && mentionItems.length > 0)
+      return {
+        count: mentionItems.length,
+        active: mentionHighlightedIndex,
+        hover: onMentionHover,
+        pick: (index) => {
+          const item = mentionItems[index]
+          if (item) onMentionSelect?.(item)
+        },
+        dismiss: onMentionDismiss,
+      }
+    return null
+  })()
 
-    if (mentionPickerOpen && mentionItems.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        onMentionHover?.((mentionHighlightedIndex + 1) % mentionItems.length)
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        onMentionHover?.(
-          (mentionHighlightedIndex - 1 + mentionItems.length) %
-            mentionItems.length,
-        )
-        return
-      }
-      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        const item = mentionItems[mentionHighlightedIndex]
-        if (item) onMentionSelect?.(item)
-        return
-      }
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (pickerKeys) {
+      // Escape dismisses; the arrows (and Home, End, Control-N and -P) move
+      // the active row, wrapping round the ends, as every Listbox the field
+      // drives does; Enter picks it. ⌘↵ still sends.
       if (e.key === 'Escape') {
         e.preventDefault()
-        onMentionDismiss?.()
+        pickerKeys.dismiss?.()
+        return
+      }
+      const next = listboxStep(
+        pickerKeys.active >= 0 ? pickerKeys.active : null,
+        pickerKeys.count,
+        e,
+      )
+      if (next !== undefined) {
+        e.preventDefault()
+        pickerKeys.hover?.(next)
+        return
+      }
+      if (
+        e.key === 'Enter' &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        pickerKeys.count > 0
+      ) {
+        e.preventDefault()
+        pickerKeys.pick(pickerKeys.active)
         return
       }
     }

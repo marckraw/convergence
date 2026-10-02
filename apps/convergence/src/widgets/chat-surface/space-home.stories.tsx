@@ -250,9 +250,7 @@ export const Artifacts: Story = {
   },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('From DS0 · the package')).toBeVisible()
-    await userEvent.click(
-      canvas.getByRole('combobox', { name: 'Artifact kind' }),
-    )
+    await userEvent.click(canvas.getByRole('combobox', { name: 'Kind' }))
     await userEvent.click(
       await screen.findByRole('option', { name: 'Documentation' }),
     )

@@ -217,7 +217,7 @@ describe('ExecutionHostSettingsContainer', () => {
     })
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Save token for backpack-automations',
+        name: 'Replace token for backpack-automations',
       }),
     )
     await waitFor(() =>
@@ -268,8 +268,41 @@ describe('ExecutionHostSettingsContainer', () => {
       ),
     ).toBe(true)
     expect(
-      screen.getByRole('button', { name: 'Save token for kuba-vps' }),
-    ).toBeDisabled()
+      isUnavailable(
+        screen.getByRole('button', { name: 'Save token for kuba-vps' }),
+      ),
+    ).toBe(true)
+  })
+
+  it('saves a token once while the save is under way, however often Save is pressed (DLG-28)', async () => {
+    let finishSave!: (status: unknown) => void
+    executionHostDaemon.setToken.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSave = resolve
+        }),
+    )
+    renderContainer()
+    await screen.findByText('Configured in Keychain, token hidden')
+
+    fireEvent.change(screen.getByLabelText('Execution host token'), {
+      target: { value: 'sk-live' },
+    })
+    const save = screen.getByRole('button', {
+      name: 'Replace token for backpack-automations',
+    })
+    fireEvent.click(save)
+    // Busy, it stays where it is and says so (Button's pending).
+    await waitFor(() => expect(save).toHaveAttribute('aria-busy', 'true'))
+    fireEvent.click(save)
+    expect(executionHostDaemon.setToken).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      finishSave(CREDENTIAL_STATUS)
+    })
+    expect(
+      await screen.findByText('Daemon API token saved.'),
+    ).toBeInTheDocument()
   })
 
   it('blocks only the connection test while the typed URL is not the saved one', async () => {
@@ -468,7 +501,7 @@ describe('ExecutionHostSettingsContainer', () => {
     })
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Save token for backpack-automations',
+        name: 'Replace token for backpack-automations',
       }),
     )
     expect(

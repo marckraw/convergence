@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { Button, Card, cn } from '@convergence/ui'
+import { Button, Card, cn, settingsHeading } from '@convergence/ui'
 import {
   CONNECTION_SERVICES,
   connectionCell,
@@ -47,7 +47,7 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
     className="space-y-3"
   >
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h3 id="connections-overview-heading" className="text-sm font-semibold">
+      <h3 id="connections-overview-heading" className={settingsHeading}>
         Who can reach Figma, Linear and GitHub
       </h3>
       {/* Busy is the Button's own (DLG-17): aria-busy, the spinner in the

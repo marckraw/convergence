@@ -4,6 +4,8 @@ import {
   arrived,
   snapshotWhileAnimating,
 } from '../../../.storybook/motion-testing'
+import { Field, FieldError, FieldLabel } from '../field/field'
+import { Input } from '../input/input'
 import {
   Select,
   SelectContent,
@@ -202,6 +204,52 @@ export const Invalid: Story = {
   args: { invalid: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('combobox', { name: 'Model' })).toBeInvalid()
+  },
+}
+
+/**
+ * In an invalid Field (DS-15): the Field's label names the trigger, its
+ * error describes it, and its border turns the danger colour an invalid
+ * Input's does, from the same frame.
+ */
+export const InvalidInField: Story = {
+  render: (args) => (
+    <div className="flex w-56 flex-col gap-4">
+      <Field invalid>
+        <FieldLabel>Branch name</FieldLabel>
+        <Input defaultValue="feature fields" />
+        <FieldError match>Branch names have no spaces.</FieldError>
+      </Field>
+      <Field invalid>
+        <FieldLabel nativeLabel={false} render={<div />}>
+          Model
+        </FieldLabel>
+        <Select items={args.models} defaultValue={args.models[0]?.value}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {args.models.map((model) => (
+              <SelectItem key={model.value} value={model.value}>
+                {model.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FieldError match>Pick a model this account can run.</FieldError>
+      </Field>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const trigger = canvas.getByRole('combobox', { name: 'Model' })
+    await expect(trigger).toHaveAttribute('data-invalid')
+    await expect(trigger).toHaveAccessibleDescription(
+      'Pick a model this account can run.',
+    )
+    const input = canvas.getByRole('textbox', { name: 'Branch name' })
+    await expect(getComputedStyle(trigger).borderTopColor).toBe(
+      getComputedStyle(input).borderTopColor,
+    )
   },
 }
 

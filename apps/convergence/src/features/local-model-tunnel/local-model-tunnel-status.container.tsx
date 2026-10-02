@@ -11,6 +11,7 @@ import {
 import {
   Button,
   cn,
+  dialogPane,
   dialogRail,
   dialogSplit,
   EmptyState,
@@ -295,7 +296,7 @@ export const LocalModelTunnelStatusContainer: FC = () => {
             />
           </aside>
 
-          <div className="app-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
+          <div className={cn(dialogPane, 'min-w-0')}>
             {selected && draft ? (
               <TunnelProfileEditor
                 item={selected}

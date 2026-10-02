@@ -367,6 +367,30 @@ describe('ComposerContainer — context mention picker', () => {
     expect(screen.queryByTestId('composer-context-mention-picker')).toBeNull()
   })
 
+  it('moves the root picker as every Listbox does: End, Home and Control-N too (CONV-6)', async () => {
+    renderComposer()
+    const textbox = getTextbox()
+    setValueAndCursor(textbox, '::')
+
+    fireEvent.keyDown(textbox, { key: 'End' })
+    fireEvent.keyDown(textbox, { key: 'Home' })
+    fireEvent.keyDown(textbox, { key: 'n', ctrlKey: true })
+    fireEvent.keyDown(textbox, { key: 'Enter' })
+
+    await waitFor(() => expect(textbox.value).toBe('::skill::'))
+  })
+
+  it('wraps the root picker round its ends with the arrows (CONV-6)', async () => {
+    renderComposer()
+    const textbox = getTextbox()
+    setValueAndCursor(textbox, '::')
+
+    fireEvent.keyDown(textbox, { key: 'ArrowUp' })
+    fireEvent.keyDown(textbox, { key: 'Enter' })
+
+    await waitFor(() => expect(textbox.value).toBe('::prompt::'))
+  })
+
   it('transitions from root picker to context picker', async () => {
     renderComposer()
     const textbox = getTextbox()

@@ -40,19 +40,29 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-/** One question, the first option chosen; picking another and answering sends it. */
+/**
+ * One question, one answer: a radio group of cards (CONV-9), named by its
+ * header and described by the question, the first option chosen. The
+ * arrow keys move the choice; answering sends it.
+ */
 export const Default: Story = {
   play: async ({ args, canvas, userEvent }) => {
-    await expect(
-      canvas.getByRole('group', { name: 'Storage' }),
-    ).toBeInTheDocument()
-    const sqlite = canvas.getByRole('button', { name: /SQLite/ })
-    const memory = canvas.getByRole('button', { name: /Memory/ })
-    await expect(sqlite).toHaveAttribute('aria-pressed', 'true')
-    await expect(memory).toHaveAttribute('aria-pressed', 'false')
+    const group = canvas.getByRole('radiogroup', { name: 'Storage' })
+    await expect(group).toHaveAccessibleDescription(
+      'Where should the draft queue live?',
+    )
+    const sqlite = canvas.getByRole('radio', { name: 'SQLite' })
+    const memory = canvas.getByRole('radio', { name: 'Memory' })
+    await expect(sqlite).toBeChecked()
+    await expect(memory).toHaveAccessibleDescription(
+      'Simplest; drafts vanish when the app quits.',
+    )
     await userEvent.click(memory)
-    await expect(memory).toHaveAttribute('aria-pressed', 'true')
-    await expect(sqlite).toHaveAttribute('aria-pressed', 'false')
+    await expect(memory).toBeChecked()
+    await expect(sqlite).not.toBeChecked()
+    await userEvent.keyboard('{ArrowUp}')
+    await expect(sqlite).toBeChecked()
+    await userEvent.click(memory)
     await userEvent.click(canvas.getByRole('button', { name: 'Answer' }))
     await expect(args.onSubmit).toHaveBeenCalledWith(
       {
@@ -64,7 +74,7 @@ export const Default: Story = {
   },
 }
 
-/** Several answers allowed: nothing is chosen at first, so Answer waits. */
+/** Several answers allowed: checkboxes, nothing ticked at first, so Answer waits. */
 export const Disabled: Story = {
   args: {
     questions: [
@@ -84,8 +94,11 @@ export const Disabled: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const answer = canvas.getByRole('button', { name: 'Answer' })
     await expect(answer).toBeDisabled()
-    await userEvent.click(canvas.getByRole('button', { name: 'Typecheck' }))
-    await userEvent.click(canvas.getByRole('button', { name: 'Story tests' }))
+    await expect(
+      canvas.getByRole('group', { name: 'Checks' }),
+    ).toHaveAccessibleDescription('Which gates should run before the PR?')
+    await userEvent.click(canvas.getByRole('checkbox', { name: 'Typecheck' }))
+    await userEvent.click(canvas.getByText('Story tests'))
     await expect(answer).toBeEnabled()
     await userEvent.click(answer)
     await expect(args.onSubmit).toHaveBeenCalledWith(
@@ -133,7 +146,7 @@ export const Long: Story = {
     ],
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getAllByRole('group')).toHaveLength(2)
+    await expect(canvas.getAllByRole('radiogroup')).toHaveLength(2)
     await expect(canvas.getByRole('button', { name: 'Answer' })).toBeEnabled()
   },
 }

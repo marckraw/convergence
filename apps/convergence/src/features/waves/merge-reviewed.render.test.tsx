@@ -82,15 +82,21 @@ it('MAR-3360 R2 three merged rows and one mergeable count only the mergeable sel
     />,
   )
   expect(screen.getByRole('button', { name: 'Merge 1' })).toBeTruthy()
-  expect(screen.getByRole('checkbox', { name: 'Select PR #1' })).toBeChecked()
-  expect(screen.getByRole('checkbox', { name: 'Select PR #1' })).toBeEnabled()
+  expect(
+    screen.getByRole('checkbox', { name: /^Select PR #1 · / }),
+  ).toBeChecked()
+  expect(
+    screen.getByRole('checkbox', { name: /^Select PR #1 · / }),
+  ).toBeEnabled()
   // Folded in a Collapsible (MC-17): its trigger says so, and opens it.
   const summary = screen.getByRole('button', { name: /Already merged · 3/ })
   expect(summary).toHaveAttribute('aria-expanded', 'false')
   fireEvent.click(summary)
   expect(summary).toHaveAttribute('aria-expanded', 'true')
   for (const row of mergedRows) {
-    const checkbox = screen.getByLabelText(`Select PR #${row.prNumber}`)
+    const checkbox = screen.getByLabelText(
+      new RegExp(`^Select PR #${row.prNumber} · `),
+    )
     expect(checkbox).not.toBeChecked()
     expect(checkbox).toBeDisabled()
   }
@@ -156,8 +162,10 @@ it('MAR-3087 sheet groups waves, shows all readings and enables a mergeable part
   expect(screen.getByText('abcdef1 · CLEAN · verify SUCCESS')).toBeTruthy()
   expect(screen.getByText('not CLEAN: DIRTY')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Merge 1' })).toBeDisabled()
-  expect(screen.getByRole('checkbox', { name: 'Select PR #2' })).toBeDisabled()
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Select PR #1' }))
+  expect(
+    screen.getByRole('checkbox', { name: /^Select PR #2 · / }),
+  ).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', { name: /^Select PR #1 · / }))
   expect(props.onToggle).toHaveBeenCalledWith('one')
   view.rerender(<MergeReviewedView {...props} selected={['one']} />)
   fireEvent.click(screen.getByRole('button', { name: 'Merge 1' }))

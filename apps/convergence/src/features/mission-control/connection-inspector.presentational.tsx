@@ -9,6 +9,9 @@ import type { ProviderAccount } from '@/entities/provider-account'
 import {
   Button,
   ChoiceField,
+  Field,
+  FieldDescription,
+  FieldLabel,
   Input,
   Combobox,
   Notice,
@@ -291,40 +294,42 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           <p className="text-2xs text-ink-muted">
             The session this connection opens
           </p>
-          <p className="text-2xs text-ink-muted">Execution host</p>
-          <Combobox
-            selectedId={spec.executionHost}
-            value={hostValue}
-            ariaLabel={`Execution host: ${hostValue}`}
-            items={hostOptions}
-            onChange={(executionHost) =>
-              onSpawnChange({
-                executionHost,
-                workAddress: null,
-                providerAccountId: null,
-              })
-            }
-            disabled={busy}
-            searchPlaceholder="Search hosts…"
-            size="sm"
-          />
+          <Field className="gap-1.5">
+            <FieldLabel variant="caption" nativeLabel={false} render={<div />}>
+              Execution host
+            </FieldLabel>
+            <Combobox
+              selectedId={spec.executionHost}
+              value={hostValue}
+              items={hostOptions}
+              onChange={(executionHost) =>
+                onSpawnChange({
+                  executionHost,
+                  workAddress: null,
+                  providerAccountId: null,
+                })
+              }
+              disabled={busy}
+              searchPlaceholder="Search hosts…"
+              size="sm"
+            />
+          </Field>
           <WorkAddressSlot
             view={workAddressSlot}
             disabled={busy}
             onChange={onWorkAddressChange}
             onBranchChange={onBranchChange}
           />
-          <label htmlFor="spawn-role-card" className="text-2xs text-ink-muted">
-            Role card
-          </label>
-          <Textarea
-            id="spawn-role-card"
-            value={spec.roleCard ?? ''}
-            disabled={busy}
-            onChange={(event) =>
-              onSpawnChange({ roleCard: event.target.value || null })
-            }
-          />
+          <Field className="gap-1.5">
+            <FieldLabel variant="caption">Role card</FieldLabel>
+            <Textarea
+              value={spec.roleCard ?? ''}
+              disabled={busy}
+              onChange={(event) =>
+                onSpawnChange({ roleCard: event.target.value || null })
+              }
+            />
+          </Field>
           <ChoiceField
             label={`Report back to ${sourceName} when it finishes`}
             disabled={busy}
@@ -342,8 +347,8 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             />
           </ChoiceField>
           {spec.returnWire ? (
-            <label className="text-2xs text-ink-muted">
-              Return instructions
+            <Field className="gap-1.5">
+              <FieldLabel variant="caption">Return instructions</FieldLabel>
               <Textarea
                 value={spec.returnWire.instruction}
                 disabled={busy}
@@ -353,7 +358,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
                   })
                 }
               />
-            </label>
+            </Field>
           ) : null}
           <Combobox
             selectedId={spec.providerId}
@@ -524,12 +529,9 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="connection-instructions" className={sectionLabel}>
-          Standing instructions
-        </label>
+      <Field className="gap-1">
+        <FieldLabel className={sectionLabel}>Standing instructions</FieldLabel>
         <Textarea
-          id="connection-instructions"
           value={draft.instructions}
           placeholder="Implement the brief. Return your result and verification evidence."
           disabled={busy}
@@ -537,11 +539,11 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           onChange={(event) => onInstructionsChange(event.target.value)}
           className="min-h-20 text-xs"
         />
-        <p className={INSPECTOR_NOTE_CLASS}>
+        <FieldDescription className={INSPECTOR_NOTE_CLASS}>
           {recipientName ?? 'The recipient'} receives {sourceName}’s full last
           response with these instructions.
-        </p>
-      </div>
+        </FieldDescription>
+      </Field>
 
       <div className="mt-auto flex flex-col gap-2">
         {/* Why it can't be saved yet: a heads-up, not a failure, so the

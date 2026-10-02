@@ -143,8 +143,8 @@ export const Default: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Attach file' }))
     await expect(args.attachmentDraft.openFileDialog).toHaveBeenCalledOnce()
     await expect(
-      canvas.getByRole('combobox', { name: 'Claude Opus' }),
-    ).toBeVisible()
+      canvas.getByRole('combobox', { name: 'Model' }),
+    ).toHaveAccessibleDescription('Claude Opus')
   },
 }
 

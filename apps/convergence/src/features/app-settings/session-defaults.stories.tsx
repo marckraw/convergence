@@ -161,9 +161,10 @@ export const Default: Story = {
     await expect(args.onEffortChange).toHaveBeenCalledWith('max')
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
 
-    await userEvent.click(
-      canvas.getByRole('combobox', { name: 'Claude Opus 5.5' }),
-    )
+    // Named by its field, the model it shows its description (DLG-7).
+    const model = canvas.getByRole('combobox', { name: 'Default model' })
+    await expect(model).toHaveAccessibleDescription('Claude Opus 5.5')
+    await userEvent.click(model)
     const picker = await screen.findByRole('dialog', { name: 'Select model' })
     await userEvent.click(
       within(picker).getByRole('option', { name: /Claude Sonnet 5/ }),
@@ -213,8 +214,8 @@ export const Empty: Story = {
     await expect(provider).toHaveTextContent('Select provider')
     await expect(provider).toHaveAttribute('data-disabled')
     await expect(
-      canvas.getByRole('combobox', { name: 'Select model' }),
-    ).toBeVisible()
+      canvas.getByRole('combobox', { name: 'Default model' }),
+    ).toHaveAccessibleDescription('Select model')
   },
 }
 

@@ -87,11 +87,11 @@ export const Default: Story = {
       within(dialog).getByRole('region', { name: 'loom-p2' }),
     ).toHaveTextContent('#901')
     const first = within(dialog).getByRole('checkbox', {
-      name: 'Select PR #901',
+      name: /^Select PR #901 · /,
     })
     await expect(first).toBeChecked()
     const dirty = within(dialog).getByRole('checkbox', {
-      name: 'Select PR #902',
+      name: /^Select PR #902 · /,
     })
     await expect(dirty).toBeDisabled()
     await expect(dirty).not.toBeChecked()

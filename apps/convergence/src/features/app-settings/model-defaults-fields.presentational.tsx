@@ -71,6 +71,7 @@ export const ModelDefaultsFields: FC<ModelDefaultsFieldsProps> = ({
             selectedProviderId={provider.id}
             selectedModelId={selectedId}
             value={selectedLabel}
+            label={`${purpose} model: ${provider.vendorLabel || provider.name}`}
             onChange={(_, modelId) => onModelChange(provider.id, modelId)}
             triggerClassName="px-2 text-xs"
           />

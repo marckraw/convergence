@@ -337,9 +337,10 @@ it('offers the errand host without changing reporting (mutations: omit host pick
     spec: { ...EMPTY_SPAWN_SPEC, providerId: 'codex' },
   }
   const handlers = renderInspector({ draft })
-  fireEvent.click(
-    screen.getByRole('combobox', { name: 'Execution host: laptop' }),
-  )
+  // Its Field names it (MC-4); the choice is what it shows.
+  const host = screen.getByRole('combobox', { name: 'Execution host' })
+  expect(host).toHaveTextContent('laptop')
+  fireEvent.click(host)
   fireEvent.click(await screen.findByRole('option', { name: 'little-monster' }))
   expect(handlers.onSpawnChange).toHaveBeenCalledWith({
     executionHost: 'little-monster',

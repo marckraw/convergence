@@ -7,6 +7,7 @@ import type {
 import {
   Button,
   Checkbox,
+  ChoiceField,
   Dialog,
   DialogBody,
   DialogContent,
@@ -188,17 +189,23 @@ export function CrewImportView({
                           </Select>
                         )}
                         {r.canUpdate && (
-                          <label className="flex items-center gap-2">
+                          <ChoiceField
+                            disabled={busy}
+                            label={
+                              <>
+                                Update{' '}
+                                <span className="sr-only">{r.label}</span> to
+                                file
+                              </>
+                            }
+                          >
                             <Checkbox
-                              aria-label={`Update ${r.label} to file`}
-                              disabled={busy}
                               checked={decisions.updates[r.key] !== false}
                               onCheckedChange={(checked) =>
                                 onUpdate(r.key, checked)
                               }
                             />
-                            Update to file
-                          </label>
+                          </ChoiceField>
                         )}
                         {r.state === 'missing-project' && (
                           <Button
@@ -215,14 +222,16 @@ export function CrewImportView({
                 </tbody>
               </table>
               {plan.hasLayout && (
-                <label className="mt-4 flex items-center gap-2 text-sm">
+                <ChoiceField
+                  disabled={busy}
+                  className="mt-4"
+                  label="Include layout"
+                >
                   <Checkbox
                     checked={decisions.includeLayout}
-                    disabled={busy}
                     onCheckedChange={(checked) => onIncludeLayout(checked)}
                   />
-                  Include layout
-                </label>
+                </ChoiceField>
               )}
             </>
           )}

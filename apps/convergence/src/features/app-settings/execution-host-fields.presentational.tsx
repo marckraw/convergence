@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Eye, EyeOff, KeyRound, Trash2, Wifi } from 'lucide-react'
+import { Trash2, Wifi } from 'lucide-react'
 import type {
   ExecutionHostDaemonCredentialStatus,
   RemoteExecutionHostConnectionResult,
@@ -10,11 +10,11 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  IconButton,
   Input,
   Notice,
 } from '@convergence/ui'
 import type { ExecutionHostEndpointActionBlocks } from './execution-host-settings.pure'
+import { SecretField } from './secret-field.presentational'
 
 interface ExecutionHostFieldsProps {
   endpointId: string
@@ -175,106 +175,47 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
       ) : null}
     </Field>
 
-    <div className="rounded-xl border border-line bg-canvas/40 p-4">
-      <div className={blockHead}>
-        <div className="min-w-0 space-y-1">
-          <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-ink-muted" />
-            <h4 className="text-sm font-semibold">Daemon API token</h4>
-          </div>
-          <p className="text-sm text-ink-muted">
-            {credentialStatusText(credentialStatus, actionBlocks.token)}
+    <SecretField
+      title="Daemon API token"
+      status={credentialStatusText(credentialStatus, actionBlocks.token)}
+      label="Execution host token"
+      noun="token"
+      owner={displayName}
+      value={daemonTokenDraft}
+      placeholder={
+        credentialStatus?.configured ? 'Saved token hidden' : 'Bearer token'
+      }
+      revealed={showDaemonToken}
+      configured={credentialStatus?.configured ?? false}
+      saving={isCredentialSaving}
+      blocked={actionBlocks.token}
+      actions={
+        <Button
+          type="button"
+          variant="secondary"
+          aria-label={`Test connection for ${displayName}`}
+          onClick={onTestDaemonConnection}
+          disabled={isCredentialSaving || isConnectionTesting}
+          disabledReason={actionBlocks.connection ?? undefined}
+          pending={isConnectionTesting}
+          pendingLabel="Testing…"
+        >
+          <Wifi className="size-4" />
+          Test connection
+        </Button>
+      }
+      note={
+        actionBlocks.connection && !actionBlocks.token ? (
+          <p className="mt-3 text-xs text-ink-muted">
+            {actionBlocks.connection}
           </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            aria-label={`Test connection for ${displayName}`}
-            onClick={onTestDaemonConnection}
-            disabled={isCredentialSaving || isConnectionTesting}
-            disabledReason={actionBlocks.connection ?? undefined}
-            pending={isConnectionTesting}
-            pendingLabel="Testing…"
-          >
-            <Wifi className="size-4" />
-            Test connection
-          </Button>
-          <Button
-            type="button"
-            variant="danger-quiet"
-            aria-label={`Remove token for ${displayName}`}
-            onClick={onDeleteDaemonToken}
-            disabled={
-              isCredentialSaving ||
-              !!actionBlocks.token ||
-              !credentialStatus?.configured
-            }
-          >
-            <Trash2 className="size-4" />
-            Remove token…
-          </Button>
-        </div>
-      </div>
-
-      {actionBlocks.connection && !actionBlocks.token && (
-        <p className="mt-3 text-xs text-ink-muted">{actionBlocks.connection}</p>
-      )}
-
-      <Field className="mt-4">
-        <FieldLabel>Execution host token</FieldLabel>
-        <div className="flex gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Input
-              size="lg"
-              type={showDaemonToken ? 'text' : 'password'}
-              autoComplete="off"
-              value={daemonTokenDraft}
-              placeholder={
-                credentialStatus?.configured
-                  ? 'Saved token hidden'
-                  : 'Bearer token'
-              }
-              onChange={(event) => onDaemonTokenChange(event.target.value)}
-              disabled={isCredentialSaving || !!actionBlocks.token}
-              className="pr-10"
-            />
-            <IconButton
-              label={
-                showDaemonToken
-                  ? `Hide token for ${displayName}`
-                  : `Show token for ${displayName}`
-              }
-              type="button"
-              variant="ghost"
-              onClick={onToggleDaemonTokenVisibility}
-              disabled={isCredentialSaving}
-              size="lg"
-              className="absolute top-0 right-0"
-            >
-              {showDaemonToken ? (
-                <EyeOff className="size-4" />
-              ) : (
-                <Eye className="size-4" />
-              )}
-            </IconButton>
-          </div>
-          <Button
-            type="button"
-            aria-label={`Save token for ${displayName}`}
-            onClick={onSaveDaemonToken}
-            disabled={
-              isCredentialSaving ||
-              !!actionBlocks.token ||
-              daemonTokenDraft.trim().length === 0
-            }
-            size="lg"
-          >
-            {credentialStatus?.configured ? 'Replace token' : 'Save token'}
-          </Button>
-        </div>
-      </Field>
-
+        ) : null
+      }
+      onValueChange={onDaemonTokenChange}
+      onToggleReveal={onToggleDaemonTokenVisibility}
+      onSave={onSaveDaemonToken}
+      onRemove={onDeleteDaemonToken}
+    >
       {credentialMessage && (
         <Notice tone="success" title={credentialMessage} className="mt-4" />
       )}
@@ -304,6 +245,6 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           )}
         </Notice>
       )}
-    </div>
+    </SecretField>
   </Card>
 )

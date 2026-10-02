@@ -30,6 +30,7 @@ import {
 import {
   Card,
   Checkbox,
+  ChoiceField,
   CodeBlock,
   IconButton,
   ScreenHeader,
@@ -500,7 +501,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
               <span>Context for this chat</span>
             </SectionLabel>
             <div className="space-y-2 text-sm">
-              <label className="flex items-center gap-2">
+              <ChoiceField label="Space brief">
                 <Checkbox
                   checked={contextSelection.includeBrief}
                   onCheckedChange={(checked) =>
@@ -510,9 +511,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                     })
                   }
                 />
-                <span>Space brief</span>
-              </label>
-              <label className="flex items-center gap-2">
+              </ChoiceField>
+              <ChoiceField label="Space memory/instructions">
                 <Checkbox
                   checked={contextSelection.includeMemory}
                   onCheckedChange={(checked) =>
@@ -522,15 +522,18 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                     })
                   }
                 />
-                <span>Space memory/instructions</span>
-              </label>
+              </ChoiceField>
               {activeSpaceSources.length > 0 ? (
                 <div className="space-y-1 border-t border-line-soft pt-2">
                   <div className="text-xs text-ink-muted">Selected sources</div>
                   {activeSpaceSources.map((source) => (
-                    <label
+                    <ChoiceField
                       key={source.id}
-                      className="flex min-w-0 items-center gap-2"
+                      label={
+                        <span className="block truncate">
+                          {source.filename}
+                        </span>
+                      }
                     >
                       <Checkbox
                         checked={selectedSourceSet.has(source.id)}
@@ -546,8 +549,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                           })
                         }}
                       />
-                      <span className="truncate">{source.filename}</span>
-                    </label>
+                    </ChoiceField>
                   ))}
                 </div>
               ) : null}

@@ -15,7 +15,16 @@ export type ChoiceFieldProps = Omit<
   label: ReactNode
   /** A line under the words, read out with the control as its description. */
   hint?: ReactNode
+  /**
+   * `default` is a settings row. `compact` is a dense panel's, as Mission
+   * Control's inspectors and a dialog's table rows have it: the control
+   * first (a switch too), the words at 12 px in the muted ink beside it,
+   * no padding, so the options stay below the facts they qualify.
+   */
+  density?: ChoiceFieldDensity
 }
+
+export type ChoiceFieldDensity = 'default' | 'compact'
 
 /**
  * A switch, a checkbox or a radio with its words, and a hint under them if
@@ -31,14 +40,17 @@ export function ChoiceField({
   children,
   label,
   hint,
+  density = 'default',
   className,
   ...props
 }: ChoiceFieldProps) {
+  const compact = density === 'compact'
   return (
     <FieldPrimitive.Root
       data-slot="choice-field"
+      data-density={density}
       className={cn(
-        'flex items-center gap-4 py-1',
+        compact ? 'flex items-center gap-2' : 'flex items-center gap-4 py-1',
         'has-data-[slot=checkbox]:items-start has-data-[slot=checkbox]:gap-2',
         'has-data-[slot=radio-group-item]:items-start has-data-[slot=radio-group-item]:gap-2',
         className,
@@ -46,11 +58,23 @@ export function ChoiceField({
       {...props}
     >
       {/* At least the words' first line tall, so a small control sits on it. */}
-      <div className="flex min-h-lh shrink-0 items-center text-sm leading-tight has-data-[slot=switch]:order-last">
+      <div
+        className={cn(
+          'flex min-h-lh shrink-0 items-center',
+          compact
+            ? 'text-xs'
+            : 'text-sm leading-tight has-data-[slot=switch]:order-last',
+        )}
+      >
         {children}
       </div>
       <div className={textStack}>
-        <FieldLabel className="w-full text-sm leading-tight font-normal">
+        <FieldLabel
+          className={cn(
+            'w-full font-normal',
+            compact ? 'text-xs text-ink-muted' : 'text-sm leading-tight',
+          )}
+        >
           {label}
         </FieldLabel>
         {hint ? <FieldDescription>{hint}</FieldDescription> : null}

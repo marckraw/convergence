@@ -5,8 +5,12 @@ import type {
 } from '@/shared/types/tracker.types'
 import {
   Button,
+  ChoiceField,
   DescriptionItem,
   DescriptionList,
+  Field,
+  FieldDescription,
+  FieldLabel,
   FormError,
   Input,
   SectionLabel,
@@ -90,15 +94,17 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
     >
       <section aria-label="Dispatch" className="flex flex-col gap-2">
         <SectionLabel as="h4">Dispatch</SectionLabel>
-        <label className="flex min-h-10 items-center gap-2 text-xs text-ink-muted">
+        <ChoiceField
+          density="compact"
+          disabled={busy || !bound}
+          className="min-h-10"
+          label="Auto-dispatch — send issues labeled groomed, grounded, their seat and dispatch into their seats' conversations"
+        >
           <Switch
             checked={autoDispatch}
-            disabled={busy || !bound}
             onCheckedChange={(checked) => onAutoDispatchChange?.(checked)}
           />
-          Auto-dispatch — send issues labeled groomed, grounded, their seat and
-          dispatch into their seats' conversations
-        </label>
+        </ChoiceField>
         <p className="text-2xs tabular-nums text-ink-muted">
           {dispatchCandidates.length
             ? `${dispatchCandidates.length} issue(s) would start now: ${dispatchCandidates.join(', ')}`
@@ -111,30 +117,30 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       <DescriptionList layout="inline" density="compact">
         <DescriptionItem term="Kind">Linear</DescriptionItem>
       </DescriptionList>
-      <label className="flex flex-col gap-1">
+      <Field className="gap-1">
         {/* What a person HAS is the URL in their address bar or the project's
             name; the id is the one thing Linear shows nowhere (MAR-3156). */}
-        <span className={LABEL}>Project ({TRACKER_PROJECT_FIELD_HINT})</span>
+        <FieldLabel variant="caption">
+          Project ({TRACKER_PROJECT_FIELD_HINT})
+        </FieldLabel>
         <Input
           size="sm"
-          aria-label="Tracker project"
           value={draft.projectId}
           disabled={busy}
           onChange={(event) => onDraftChange({ projectId: event.target.value })}
           className="text-xs"
         />
         {boundProjectName === null ? null : (
-          <span className={LABEL} data-tracker-bound-project>
+          <FieldDescription className={LABEL} data-tracker-bound-project>
             Bound to “{boundProjectName}”
-          </span>
+          </FieldDescription>
         )}
-      </label>
+      </Field>
       <div className="flex gap-2">
-        <label className="flex flex-1 flex-col gap-1">
-          <span className={LABEL}>Label prefix</span>
+        <Field className="flex-1 gap-1">
+          <FieldLabel variant="caption">Label prefix</FieldLabel>
           <Input
             size="sm"
-            aria-label="Tracker label prefix"
             value={draft.labelPrefix}
             placeholder="horse:"
             disabled={busy}
@@ -143,12 +149,11 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             }
             className="text-xs"
           />
-        </label>
-        <label className="flex flex-1 flex-col gap-1">
-          <span className={LABEL}>Wave prefix</span>
+        </Field>
+        <Field className="flex-1 gap-1">
+          <FieldLabel variant="caption">Wave prefix</FieldLabel>
           <Input
             size="sm"
-            aria-label="Tracker wave prefix"
             value={draft.wavePrefix}
             placeholder="wave:"
             disabled={busy}
@@ -157,7 +162,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
             }
             className="text-xs"
           />
-        </label>
+        </Field>
       </div>
       <div className="flex items-center gap-1.5">
         <Button

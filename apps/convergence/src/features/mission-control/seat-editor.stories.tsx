@@ -182,8 +182,9 @@ export const Long: Story = {
   },
   play: async ({ args, canvas, userEvent }) => {
     // The host is the app's Select (MC-10): its trigger shows the label.
+    // Its Field's caption names it (MC-4).
     const host = canvas.getByRole('combobox', {
-      name: 'Host for sonnet-recipe',
+      name: /^Host for sonnet-recipe/,
     })
     await expect(host).toHaveTextContent('little-monster')
     await userEvent.click(host)

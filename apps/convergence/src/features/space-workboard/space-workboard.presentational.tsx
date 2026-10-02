@@ -37,6 +37,7 @@ import {
   buttonVariants,
   Card,
   cn,
+  dialogPane,
   EmptyState,
   Field,
   FieldError,
@@ -62,7 +63,6 @@ import {
   toSelectValue,
 } from '@/shared/lib/select-value.pure'
 import {
-  fieldCaption,
   metricCardPadding,
   noteCard,
   rowActions,
@@ -309,7 +309,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
           </div>
         </section>
 
-        <section className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <section className={dialogPane}>
           {selectedSpace ? (
             <div className="space-y-5">
               <div className="flex flex-col gap-4 md:flex-row">
@@ -708,8 +708,10 @@ function renderAddArtifact(input: {
       saveDisabledReason={missing}
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <span className={fieldCaption}>Kind</span>
+        <Field>
+          <FieldLabel nativeLabel={false} render={<div />}>
+            Kind
+          </FieldLabel>
           <Select
             items={spaceArtifactKindLabels}
             value={artifactDraft.kind}
@@ -720,11 +722,7 @@ function renderAddArtifact(input: {
               })
             }
           >
-            <SelectTrigger
-              size="lg"
-              className="w-full"
-              aria-label="New Artifact kind"
-            >
+            <SelectTrigger size="lg" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -735,10 +733,10 @@ function renderAddArtifact(input: {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <span className={fieldCaption}>Label</span>
+        <Field>
+          <FieldLabel>Label</FieldLabel>
           <Input
             size="lg"
             value={artifactDraft.label}
@@ -749,12 +747,13 @@ function renderAddArtifact(input: {
               })
             }
             placeholder="Public PR"
-            aria-label="New Artifact label"
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <span className={fieldCaption}>Status</span>
+        <Field>
+          <FieldLabel nativeLabel={false} render={<div />}>
+            Status
+          </FieldLabel>
           <Select
             items={spaceArtifactStatusLabels}
             value={artifactDraft.status}
@@ -765,11 +764,7 @@ function renderAddArtifact(input: {
               })
             }
           >
-            <SelectTrigger
-              size="lg"
-              className="w-full"
-              aria-label="New Artifact status"
-            >
+            <SelectTrigger size="lg" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -780,21 +775,22 @@ function renderAddArtifact(input: {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <span className={fieldCaption}>Source</span>
+        <Field>
+          <FieldLabel nativeLabel={false} render={<div />}>
+            Source
+          </FieldLabel>
           {renderSourceSelect({
             attempts,
             value: artifactDraft.sourceSessionId,
             onChange: (sourceSessionId) =>
               onArtifactDraftChange({ ...artifactDraft, sourceSessionId }),
-            label: 'New Artifact source session',
           })}
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5 md:col-span-2">
-          <span className={fieldCaption}>Value</span>
+        <Field className="md:col-span-2">
+          <FieldLabel>Value</FieldLabel>
           <Input
             size="lg"
             value={artifactDraft.value}
@@ -805,9 +801,8 @@ function renderAddArtifact(input: {
               })
             }
             placeholder="URL, branch, file path, or note"
-            aria-label="New Artifact value"
           />
-        </div>
+        </Field>
       </div>
     </FormDialog>
   )
@@ -828,7 +823,8 @@ function renderSourceSelect(input: {
   attempts: SpaceAttemptView[]
   value: string
   onChange: (sourceSessionId: string) => void
-  label: string
+  /** Its name, where no Field's label gives it one. */
+  label?: string
 }) {
   const { attempts, value, onChange, label } = input
   return (

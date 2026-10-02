@@ -102,6 +102,7 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
           selectedProviderId={selection.providerId}
           selectedModelId={selection.modelId}
           value={selection.model?.label ?? 'Select model'}
+          label="Default model"
           onChange={(providerId, modelId) => onModelChange(modelId, providerId)}
           triggerClassName="px-2 text-xs"
         />

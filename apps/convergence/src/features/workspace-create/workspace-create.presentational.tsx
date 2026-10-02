@@ -78,19 +78,20 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
         </FieldDescription>
       </Field>
 
-      {/*
-        Not a Field: a Field's context reaches the Combobox's popup, and its
-        search field would take the label too. The trigger is named instead.
-      */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Create from</span>
+      {/* In its Field the Combobox is named by the label and described by
+          the hint; its search keeps its own name (DLG-7). It wears the field
+          frame, as the Input above does (DLG-15). */}
+      <Field disabled={isSubmitting}>
+        <FieldLabel nativeLabel={false} render={<div />}>
+          Create from
+        </FieldLabel>
         <Combobox
+          variant="field"
           selectedId={selectedBaseBranchId}
           value={selectedBaseBranchLabel}
           items={baseBranchItems}
           onChange={onBaseBranchChange}
           disabled={isSubmitting}
-          ariaLabel="Create from"
           searchPlaceholder={
             isLoadingBranches ? 'Loading branches…' : 'Search branches'
           }
@@ -100,11 +101,11 @@ export const WorkspaceCreateDialog: FC<WorkspaceCreateDialogProps> = ({
           className="w-full"
           icon={<GitBranch className="size-3.5 shrink-0" />}
         />
-        <p className="text-xs text-ink-muted">
+        <FieldDescription>
           Only used when creating a new branch. Pick “Use project default” to
           fall back to the project setting.
-        </p>
-      </div>
+        </FieldDescription>
+      </Field>
     </div>
   </FormDialog>
 )

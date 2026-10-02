@@ -21,6 +21,8 @@ import {
   Button,
   Card,
   EmptyState,
+  Field,
+  FieldLabel,
   IconButton,
   Input,
   ListRow,
@@ -368,8 +370,8 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="space-y-1 text-sm">
-                    <span className={fieldLabel}>Label</span>
+                  <Field className="gap-1">
+                    <FieldLabel className={fieldLabel}>Label</FieldLabel>
                     <Input
                       size="lg"
                       value={artifactDraft.label}
@@ -380,11 +382,16 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         })
                       }
                       placeholder="Spec, PR, exported report…"
-                      aria-label="Artifact label"
                     />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span className={fieldLabel}>Kind</span>
+                  </Field>
+                  <Field className="gap-1">
+                    <FieldLabel
+                      nativeLabel={false}
+                      render={<div />}
+                      className={fieldLabel}
+                    >
+                      Kind
+                    </FieldLabel>
                     <Select
                       items={spaceArtifactKindLabels}
                       value={artifactDraft.kind}
@@ -395,11 +402,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         })
                       }
                     >
-                      <SelectTrigger
-                        size="lg"
-                        className="w-full"
-                        aria-label="Artifact kind"
-                      >
+                      <SelectTrigger size="lg" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -410,9 +413,11 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         ))}
                       </SelectContent>
                     </Select>
-                  </label>
-                  <label className="space-y-1 text-sm md:col-span-2">
-                    <span className={fieldLabel}>Value or path</span>
+                  </Field>
+                  <Field className="gap-1 md:col-span-2">
+                    <FieldLabel className={fieldLabel}>
+                      Value or path
+                    </FieldLabel>
                     <Input
                       size="lg"
                       value={artifactDraft.value}
@@ -423,11 +428,16 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         })
                       }
                       placeholder="URL, decision, path, branch name, or durable result"
-                      aria-label="Artifact value or path"
                     />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span className={fieldLabel}>Status</span>
+                  </Field>
+                  <Field className="gap-1">
+                    <FieldLabel
+                      nativeLabel={false}
+                      render={<div />}
+                      className={fieldLabel}
+                    >
+                      Status
+                    </FieldLabel>
                     <Select
                       items={spaceArtifactStatusLabels}
                       value={artifactDraft.status}
@@ -438,11 +448,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         })
                       }
                     >
-                      <SelectTrigger
-                        size="lg"
-                        className="w-full"
-                        aria-label="Artifact status"
-                      >
+                      <SelectTrigger size="lg" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -453,9 +459,15 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         ))}
                       </SelectContent>
                     </Select>
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span className={fieldLabel}>Source attempt</span>
+                  </Field>
+                  <Field className="gap-1">
+                    <FieldLabel
+                      nativeLabel={false}
+                      render={<div />}
+                      className={fieldLabel}
+                    >
+                      Source attempt
+                    </FieldLabel>
                     <Select
                       items={{
                         [SELECT_EMPTY_VALUE]: 'None',
@@ -474,11 +486,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         })
                       }
                     >
-                      <SelectTrigger
-                        size="lg"
-                        className="w-full"
-                        aria-label="Artifact source attempt"
-                      >
+                      <SelectTrigger size="lg" className="w-full">
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent>
@@ -493,7 +501,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         ))}
                       </SelectContent>
                     </Select>
-                  </label>
+                  </Field>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">

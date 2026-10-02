@@ -25,6 +25,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  settingsHeading,
   Switch,
 } from '@convergence/ui'
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
@@ -277,7 +278,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
         {isSshTunnel ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <h4 className="text-sm font-medium">Route candidates</h4>
+              <h4 className={settingsHeading}>Route candidates</h4>
               <Button
                 type="button"
                 variant="secondary"

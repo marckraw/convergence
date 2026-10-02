@@ -596,7 +596,8 @@ describe('SessionTranscript', () => {
     )
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /Active workspace/ }),
+      // A one-answer question is a radio group of cards (CONV-9).
+      await screen.findByRole('radio', { name: 'Active workspace' }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
 
@@ -776,7 +777,7 @@ it('R4 the rendered question answer carries its provider item id — omit dialog
       onInputAnswer={onInputAnswer}
     />,
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'Blue' }))
+  fireEvent.click(await screen.findByRole('radio', { name: 'Blue' }))
   const submit = screen.queryByRole('button', {
     name: /submit|send answer|answer/i,
   })

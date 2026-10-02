@@ -63,7 +63,7 @@ export const Default: Story = {
     await userEvent.click(dispatch)
     await expect(args.onAutoDispatchChange).toHaveBeenCalledWith(true)
     await userEvent.type(
-      canvas.getByRole('textbox', { name: 'Tracker wave prefix' }),
+      canvas.getByRole('textbox', { name: 'Wave prefix' }),
       'x',
     )
     await expect(args.onDraftChange).toHaveBeenCalledWith({
@@ -160,7 +160,7 @@ export const Busy: Story = {
     ).toBeDisabled()
     await expect(canvas.getByRole('button', { name: 'Unbind' })).toBeDisabled()
     await expect(
-      canvas.getByRole('textbox', { name: 'Tracker project' }),
+      canvas.getByRole('textbox', { name: 'Project (URL, name or id)' }),
     ).toBeDisabled()
   },
 }

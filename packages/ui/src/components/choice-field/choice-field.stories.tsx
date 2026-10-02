@@ -199,3 +199,41 @@ export const Dark: Story = {
   ...Default,
   globals: { theme: 'dark' },
 }
+
+/**
+ * Compact, as an inspector has it: the control first, a switch too, and the
+ * words smaller and muted beside it. The words still name the control, and
+ * pressing them toggles it.
+ */
+export const Compact: Story = {
+  render: (args) => (
+    <div className="flex w-72 flex-col gap-2">
+      <ChoiceField
+        density="compact"
+        label="Pause automatic dispatch to this seat"
+      >
+        <Switch onCheckedChange={args.onUpdatesChange} />
+      </ChoiceField>
+      <ChoiceField density="compact" label="Include positions">
+        <Checkbox onCheckedChange={args.onMergeChange} />
+      </ChoiceField>
+    </div>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    const pause = canvas.getByRole('switch', {
+      name: 'Pause automatic dispatch to this seat',
+    })
+    const words = canvas.getByText('Pause automatic dispatch to this seat')
+    await expect(pause.getBoundingClientRect().right).toBeLessThan(
+      words.getBoundingClientRect().left,
+    )
+    await expect(getComputedStyle(words).fontSize).toBe('12px')
+    await userEvent.click(words)
+    await expect(pause).toBeChecked()
+    await expect(args.onUpdatesChange).toHaveBeenCalled()
+    await userEvent.click(canvas.getByText('Include positions'))
+    await expect(
+      canvas.getByRole('checkbox', { name: 'Include positions' }),
+    ).toBeChecked()
+  },
+}

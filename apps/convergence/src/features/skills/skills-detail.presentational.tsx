@@ -27,6 +27,7 @@ import {
   Button,
   Card,
   cn,
+  dialogPane,
   CopyButton,
   EmptyState,
   IconButton,
@@ -190,7 +191,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
   }
 
   return (
-    <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+    <div className={dialogPane}>
       <div className="mb-4 min-w-0">
         <div className="mb-3 flex items-end justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">

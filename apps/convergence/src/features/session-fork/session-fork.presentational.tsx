@@ -11,6 +11,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
+  FieldLabel,
   Input,
   Notice,
   RadioGroup,
@@ -143,19 +145,16 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
         </DialogHeader>
 
         <DialogBody className="space-y-5">
-          <section className="space-y-2">
-            <label htmlFor="fork-name" className="text-sm font-medium">
-              Name
-            </label>
+          <Field className="gap-2" render={<section />}>
+            <FieldLabel>Name</FieldLabel>
             <Input
               size="lg"
-              id="fork-name"
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
               placeholder="Fork name"
               disabled={isSubmitting}
             />
-          </section>
+          </Field>
 
           <section className="space-y-2">
             <h3 id="fork-strategy" className="text-sm font-medium">
@@ -204,6 +203,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           </section>
 
           <section className="space-y-2">
+            {/* raw-element: not a Field, whose label would name the model pickers in the composer below too; this label points at its text field alone */}
             <label htmlFor="fork-instruction" className="text-sm font-medium">
               Additional instruction (optional)
             </label>

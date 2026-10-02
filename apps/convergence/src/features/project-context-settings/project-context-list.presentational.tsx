@@ -1,7 +1,14 @@
 import type { FC } from 'react'
 import { Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import type { ProjectContextItem } from '@/entities/project-context'
-import { Badge, Button, Card, EmptyState, IconButton } from '@convergence/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  settingsHeading,
+} from '@convergence/ui'
 
 interface ProjectContextListProps {
   items: ProjectContextItem[]
@@ -33,7 +40,7 @@ export const ProjectContextList: FC<ProjectContextListProps> = ({
     <div className="space-y-3" data-testid="project-context-list">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium">Context items</h3>
+          <h3 className={settingsHeading}>Context items</h3>
           <p className="mt-1 text-xs text-ink-muted">
             Reusable text blocks that can be attached to sessions in this
             project.

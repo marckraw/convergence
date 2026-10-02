@@ -6,6 +6,8 @@ import {
   Card,
   Combobox,
   type ComboboxItem,
+  Field,
+  FieldLabel,
   FormDialog,
   Notice,
 } from '@convergence/ui'
@@ -74,30 +76,32 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
         conversation excerpts are not sent in this version.
       </Notice>
 
-      {/*
-        Not Fields: a Field's context would reach each picker's popup and name
-        its search too. Each trigger is named by its caption instead.
-      */}
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">Provider</span>
+        {/* In its Field the Combobox is named by the label, and its search
+            keeps its own name (DLG-7). */}
+        <Field>
+          <FieldLabel nativeLabel={false} render={<div />}>
+            Provider
+          </FieldLabel>
           <Combobox
             selectedId={providerId}
             value={providerLabel}
             items={providerItems}
             onChange={onProviderChange}
             disabled={isGenerating || providerItems.length === 0}
-            ariaLabel="Provider"
             searchPlaceholder="Search providers…"
             emptyMessage="No providers available."
             variant="secondary"
             className="w-full px-2 text-xs"
           />
-        </div>
+        </Field>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">Model</span>
+          <span aria-hidden className="text-sm font-medium">
+            Model
+          </span>
           <ModelPickerDialog
+            label="Model"
             providers={providers}
             selectedProviderId={providerId}
             selectedModelId={modelId}
