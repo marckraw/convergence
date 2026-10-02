@@ -791,7 +791,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     expect(notice).toHaveTextContent(
       'kuba-vps could not be re-asked: The daemon is unreachable.',
     )
-    expect(notice).toHaveClass('text-warning-foreground')
+    expect(notice).toHaveClass('text-warning-ink')
     // Still sendable: unconfirmed options are options, and gating the send on
     // "is there a sentence" rather than "are there options" would have made
     // this fix silently take the composer away.

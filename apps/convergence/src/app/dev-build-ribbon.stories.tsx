@@ -8,7 +8,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="relative h-40 bg-background p-4 text-sm text-foreground">
+      <div className="relative h-40 bg-canvas p-4 text-sm text-ink">
         <button type="button" className="mt-8 underline">
           Something under the ribbon
         </button>

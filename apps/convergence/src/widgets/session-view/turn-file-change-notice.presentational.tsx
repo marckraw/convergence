@@ -12,11 +12,11 @@ export const TurnFileChangeNotices: FC<TurnFileChangeNoticesProps> = ({
   if (notices.length === 0) return null
 
   return (
-    <div className="flex shrink-0 flex-col gap-1 border-b border-border bg-warning/5 px-3 py-2">
+    <div className="flex shrink-0 flex-col gap-1 border-b border-line bg-warning-soft/50 px-3 py-2">
       {notices.map((notice) => (
         <p
           key={notice.kind}
-          className="flex items-center gap-1.5 text-2xs text-warning-foreground"
+          className="flex items-center gap-1.5 text-2xs text-warning-ink"
         >
           {notice.kind === 'binary' ? (
             <FileQuestion className="h-3 w-3 shrink-0" />

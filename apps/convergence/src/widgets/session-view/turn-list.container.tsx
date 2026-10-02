@@ -196,12 +196,10 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-hidden">
         {loading && turns.length === 0 ? (
-          <div className="p-3 text-xs text-muted-foreground">
-            Loading turns…
-          </div>
+          <div className="p-3 text-xs text-ink-muted">Loading turns…</div>
         ) : turns.length === 0 ? (
           <div className="p-3">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-ink-muted">
               No turns yet. Changes will appear as the agent works.
             </p>
           </div>
@@ -226,7 +224,7 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
           </div>
         )}
       </div>
-      <div className="flex min-h-0 flex-[1.2] flex-col border-t border-border">
+      <div className="flex min-h-0 flex-[1.2] flex-col border-t border-line">
         <TurnFileChangeNotices notices={notices} />
         <div className="min-h-0 flex-1">
           <PierreDiffViewer

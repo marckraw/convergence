@@ -283,7 +283,7 @@ const TEXT_SIZE_CLASS =
 const LOUD_FONT_WEIGHT_CLASS = /^font-(?:semibold|bold|extrabold|black)$/
 
 /**
- * Colour that shouts. `text-foreground` and `text-muted-foreground` are the
+ * Colour that shouts. `text-ink` and `text-ink-muted` are the
  * strip's two quiet tones; everything matched here is the palette a person
  * reaches for once they have decided something deserves attention — which, in
  * this strip, exactly one sentence has.
@@ -809,7 +809,7 @@ describe('ComposerContainer', () => {
     // `bg-transparent`, `-mt-0` and `mx-0` are exactly the mutations that carry
     // the prefix a looser matcher would have taken for the real thing.
     const stripTokens = classTokens(strip)
-    expect(stripTokens).toContain('bg-sidebar')
+    expect(stripTokens).toContain('bg-surface-sunken')
     expect(spacingScale(strip, TUCK_CLASS)).toBeGreaterThan(0)
     expect(spacingScale(strip, INSET_CLASS)).toBeGreaterThan(0)
     expect(classTokens(card)).toContain('shadow-md')
@@ -1745,14 +1745,14 @@ describe('ComposerContainer', () => {
 
       const label = screen.getByText('Runs on')
       expect(textSizeClasses(label)).toEqual([STRIP_TEXT_SIZE_CLASS])
-      expect(classTokens(label)).toContain('text-muted-foreground')
+      expect(classTokens(label)).toContain('text-ink-muted')
 
       // Asserted on the rendered trigger rather than the exported constant:
       // the Button brings `text-sm` and `text-xs` of its own, and what the
       // strip is ruled to be is whatever survives that merge onto the element.
       const chooser = screen.getByRole('combobox', { name: /Local/ })
       expect(textSizeClasses(chooser)).toEqual([STRIP_TEXT_SIZE_CLASS])
-      expect(classTokens(chooser)).toContain('text-muted-foreground')
+      expect(classTokens(chooser)).toContain('text-ink-muted')
 
       // No session is live, so nothing in here could have earned emphasis.
       expect(loudClassesWithin(screen.getByTestId('execution-bar'))).toEqual([])
@@ -1785,7 +1785,7 @@ describe('ComposerContainer', () => {
 
       const label = screen.getByText('Runs on')
       expect(textSizeClasses(label)).toEqual([STRIP_TEXT_SIZE_CLASS])
-      expect(classTokens(label)).toContain('text-muted-foreground')
+      expect(classTokens(label)).toContain('text-ink-muted')
 
       // The machine governs every turn above it and is still 11px. That is the
       // reading that was heard and declined, held in place.
@@ -1798,7 +1798,7 @@ describe('ComposerContainer', () => {
         'This session names "daemon-b", an endpoint that is no longer ' +
           'configured, so it will refuse to run.',
       )
-      expect(classTokens(warning)).toContain('text-warning-foreground')
+      expect(classTokens(warning)).toContain('text-warning-ink')
       expect(textSizeClasses(warning)).toEqual([STRIP_TEXT_SIZE_CLASS])
 
       // ...and nothing else in the strip gets to shout alongside it.

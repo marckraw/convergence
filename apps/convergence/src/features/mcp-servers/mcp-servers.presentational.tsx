@@ -82,7 +82,7 @@ function renderProviderHelp(ariaLabel: string, content: ReactNode) {
         type="button"
         variant="ghost"
         size="xs"
-        className="text-muted-foreground"
+        className="text-ink-muted"
       >
         <CircleHelp className="size-3.5" />
       </IconButton>
@@ -158,9 +158,9 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
   return (
     <section
       key={provider.providerId}
-      className="rounded-xl border border-border/70 bg-card/40"
+      className="rounded-xl border border-line-soft bg-surface/40"
     >
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
         <div className="flex items-center gap-2">
           <ServerCog className="size-4 text-ink-muted" />
           <div>
@@ -171,7 +171,7 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
                 ? renderAntigravityHelp()
                 : null}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-ink-muted">
               {totalCount} configured server{totalCount === 1 ? '' : 's'}
             </p>
           </div>
@@ -196,7 +196,7 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               No project-specific servers.
             </p>
           )}
@@ -213,7 +213,7 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No global servers.</p>
+            <p className="text-sm text-ink-muted">No global servers.</p>
           )}
         </div>
       </div>

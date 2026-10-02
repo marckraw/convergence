@@ -687,11 +687,11 @@ export const Composer: FC<ComposerProps> = ({
       >
         <div
           className={cn(
-            'rounded-xl border bg-card p-3 transition-colors',
+            'rounded-xl border bg-surface p-3 transition-colors',
             // The card is the upper of two stacked surfaces: the Execution Bar
             // is its sibling below, tucked behind this bottom edge.
             composerCardDepthClassByMode[executionBar.mode],
-            isDragging ? 'border-primary border-dashed' : 'border-border',
+            isDragging ? 'border-strong border-dashed' : 'border-line',
           )}
           data-testid="composer-root"
         >
@@ -825,7 +825,7 @@ export const Composer: FC<ComposerProps> = ({
               }
               disabled={disabled}
               rows={1}
-              className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:outline-none"
+              className="min-h-0 resize-none border-0 px-0 py-0 text-ink shadow-none focus-visible:outline-none"
             />
           </div>
           <div className="mt-2 flex items-center justify-between">
@@ -865,7 +865,7 @@ export const Composer: FC<ComposerProps> = ({
                   align="start"
                   className="w-56 p-1"
                 >
-                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  <div className="px-2 py-1.5 text-xs font-medium text-ink-muted">
                     Resources
                   </div>
                   <Button
@@ -1019,7 +1019,7 @@ export const Composer: FC<ComposerProps> = ({
                       className={cn(
                         composerToolbarControl,
                         codexSpeedId !== 'default' &&
-                          'bg-secondary text-foreground',
+                          'bg-surface-muted text-ink',
                       )}
                     />
                   ) : null}
@@ -1070,7 +1070,7 @@ export const Composer: FC<ComposerProps> = ({
                           size="sm"
                           className={cn(
                             permissionAdvancedOpen &&
-                              'bg-secondary text-foreground',
+                              'bg-surface-muted text-ink',
                           )}
                         >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -1095,9 +1095,7 @@ export const Composer: FC<ComposerProps> = ({
                     onClick={() => onRelaysMutedChange(!relaysMuted)}
                     disabled={disabled}
                     size="sm"
-                    className={cn(
-                      relaysMuted && 'bg-secondary text-foreground',
-                    )}
+                    className={cn(relaysMuted && 'bg-surface-muted text-ink')}
                   >
                     {relaysMuted ? (
                       <BellOff className="h-3.5 w-3.5" />
@@ -1145,7 +1143,7 @@ export const Composer: FC<ComposerProps> = ({
             </IconButton>
           </div>
           {accountNotice ? (
-            <div className="mt-3 border-t border-border/60 pt-3">
+            <div className="mt-3 border-t border-line-soft pt-3">
               <ComposerAccountNotice
                 notice={accountNotice}
                 onManageAccounts={onManageProviderAccounts}
@@ -1164,7 +1162,7 @@ export const Composer: FC<ComposerProps> = ({
           {optionRow.status !== 'notice' &&
           permissionAdvancedOpen &&
           canCustomizePermissions ? (
-            <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-border/60 pt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-line-soft pt-2">
               {selection.providerId === 'codex' ? (
                 <>
                   <ComposerSelect

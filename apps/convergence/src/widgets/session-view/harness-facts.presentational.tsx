@@ -77,10 +77,7 @@ export function HarnessFactsSections({
         <section aria-label="Hooks" className="mb-3">
           <h3 className="mb-1 font-medium">Hooks · current turn</h3>
           {current.hooks.map((hook) => (
-            <div
-              key={hook.id}
-              className="mb-2 rounded border border-border p-2"
-            >
+            <div key={hook.id} className="mb-2 rounded border border-line p-2">
               <div>
                 {hook.name ?? 'Name not reported'} ·{' '}
                 {hook.event ?? 'Event not reported'}
@@ -242,7 +239,7 @@ export function HarnessFactsSections({
                 <p
                   key={`${entry.connector}:${entry.plugin}:${entry.server}`}
                   role="note"
-                  className="text-destructive"
+                  className="text-danger-ink"
                 >
                   {hiddenPluginSentence(entry)}
                 </p>
@@ -254,7 +251,7 @@ export function HarnessFactsSections({
                 >
                   <p
                     className={
-                      isMcpAlertStatus(server.status) ? 'text-destructive' : ''
+                      isMcpAlertStatus(server.status) ? 'text-danger-ink' : ''
                     }
                   >
                     {server.name}
@@ -314,7 +311,7 @@ export function HarnessFactsSections({
                   <p
                     key={`${index}:${server.name}`}
                     className={
-                      isMcpAlertStatus(server.status) ? 'text-destructive' : ''
+                      isMcpAlertStatus(server.status) ? 'text-danger-ink' : ''
                     }
                   >
                     {server.name} · {server.status ?? 'Not reported'}

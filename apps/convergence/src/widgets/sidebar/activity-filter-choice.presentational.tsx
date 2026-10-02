@@ -38,7 +38,7 @@ export function FilterChoice({
       {count !== undefined && (
         <span
           aria-hidden="true"
-          className="tabular-nums text-3xs text-muted-foreground"
+          className="tabular-nums text-3xs text-ink-muted"
         >
           {count}
         </span>

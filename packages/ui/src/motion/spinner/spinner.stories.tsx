@@ -11,7 +11,7 @@ type WaitingProps = {
 /** A line that waits, as the app shows one: the spinner, then what it waits for. */
 function Waiting({ text }: WaitingProps) {
   return (
-    <p className="flex w-72 max-w-full items-center gap-2 rounded-md bg-background p-2 text-sm text-muted-foreground">
+    <p className="flex w-72 max-w-full items-center gap-2 rounded-md bg-canvas p-2 text-sm text-ink-muted">
       <Spinner />
       <span className="min-w-0 truncate">{text}</span>
     </p>
@@ -52,7 +52,7 @@ export const Default: Story = {
 /** Every size: 12, 14 and 16 px. */
 export const Sizes: Story = {
   render: () => (
-    <div className="flex items-center gap-3 rounded-md bg-background p-2 text-muted-foreground">
+    <div className="flex items-center gap-3 rounded-md bg-canvas p-2 text-ink-muted">
       <Spinner size="xs" />
       <Spinner size="sm" />
       <Spinner size="md" />
@@ -69,7 +69,7 @@ export const Sizes: Story = {
 /** Busy: a spinner shown alone, with a label, is a status a screen reader reads. */
 export const Busy: Story = {
   render: () => (
-    <div className="rounded-md bg-background p-2 text-muted-foreground">
+    <div className="rounded-md bg-canvas p-2 text-ink-muted">
       <Spinner label="Loading the history…" />
     </div>
   ),

@@ -44,7 +44,7 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
         aria-label="Compacting context…"
         className={cn('inline-flex shrink-0', className)}
       >
-        <Spinner size="xs" className="text-muted-foreground" />
+        <Spinner size="xs" className="text-ink-muted" />
       </span>
     )
 
@@ -53,7 +53,7 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
     return (
       <Loader2
         aria-label={parallel}
-        className={cn(iconClassName, 'opacity-50 text-muted-foreground')}
+        className={cn(iconClassName, 'opacity-50 text-ink-muted')}
       />
     )
 
@@ -63,9 +63,7 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
     return (
       <Glyph data-tone={tone} className={cn(iconClassName, toneInk[tone])} />
     )
-  return (
-    <Spinner size="xs" className={cn(className, 'text-muted-foreground')} />
-  )
+  return <Spinner size="xs" className={cn(className, 'text-ink-muted')} />
 }
 
 /**

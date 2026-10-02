@@ -37,16 +37,12 @@ export const ChangedFilesTree: FC<ChangedFilesTreeProps> = ({
 
   if (loading) {
     return (
-      <div className="p-3 text-xs text-muted-foreground">
-        Loading changed files...
-      </div>
+      <div className="p-3 text-xs text-ink-muted">Loading changed files...</div>
     )
   }
 
   if (treeInput.paths.length === 0) {
-    return (
-      <div className="p-3 text-xs text-muted-foreground">{emptyMessage}</div>
-    )
+    return <div className="p-3 text-xs text-ink-muted">{emptyMessage}</div>
   }
 
   return (

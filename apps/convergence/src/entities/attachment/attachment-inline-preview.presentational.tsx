@@ -28,7 +28,7 @@ export const AttachmentInlinePreview: FC<AttachmentInlinePreviewProps> = ({
         size="lg"
         className="group h-auto w-full max-w-md flex-col items-stretch justify-start gap-0 whitespace-normal rounded-none p-0 text-left font-normal hover:bg-transparent hover:text-inherit"
       >
-        <span className="block aspect-[4/3] w-full overflow-hidden rounded-md border border-border bg-viewer">
+        <span className="block aspect-[4/3] w-full overflow-hidden rounded-md border border-line bg-viewer">
           {/* The button's name and the line under the picture name it already. */}
           <img
             src={`file://${previewPath}`}
@@ -36,7 +36,7 @@ export const AttachmentInlinePreview: FC<AttachmentInlinePreviewProps> = ({
             className="h-full w-full object-contain transition-opacity group-hover:opacity-90"
           />
         </span>
-        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
           <ImageIcon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{attachment.filename}</span>
         </span>

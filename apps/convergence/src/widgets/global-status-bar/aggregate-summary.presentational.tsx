@@ -14,16 +14,16 @@ export const AggregateSummary: FC<AggregateSummaryProps> = ({
   providerLabel,
 }) => {
   if (byProject.length === 0) {
-    return <p className="text-muted-foreground">No active projects.</p>
+    return <p className="text-ink-muted">No active projects.</p>
   }
   return (
     <div className="space-y-1.5">
       {byProject.map((project) => (
         <div key={project.projectId} className="min-w-0">
-          <p className="truncate text-2xs font-medium text-foreground">
+          <p className="truncate text-2xs font-medium text-ink">
             {project.projectName}
           </p>
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-2xs text-ink-muted">
             {project.running.length} running ·{' '}
             {project.needsAttention.length > 0
               ? summarizeAttentionRequests(project.needsAttention)

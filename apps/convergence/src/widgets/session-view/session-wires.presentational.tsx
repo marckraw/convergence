@@ -99,8 +99,8 @@ export const SessionWires: FC<SessionWiresProps> = ({
                 // Grey regardless of any crew accent: a disarmed wire is a
                 // switch at rest, and colour would argue otherwise.
                 line.armed
-                  ? 'text-foreground'
-                  : 'text-muted-foreground/60 line-through decoration-1',
+                  ? 'text-ink'
+                  : 'text-ink-muted/60 line-through decoration-1',
               )}
             >
               {line.text}

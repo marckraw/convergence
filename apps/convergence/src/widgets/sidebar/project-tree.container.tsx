@@ -186,7 +186,7 @@ export const ProjectTree = memo(function ProjectTree({
               size={card ? 'lg' : 'xs'}
               // A row's ⋯ shows with its row (ListRow's actions); a card's always.
               className={cn(
-                'shrink-0 text-muted-foreground hover:text-foreground',
+                'shrink-0 text-ink-muted hover:text-ink',
                 card && 'rounded-lg',
               )}
               onClick={(event) => event.stopPropagation()}
@@ -353,9 +353,7 @@ export const ProjectTree = memo(function ProjectTree({
               submitRename()
             }}
           >
-            <span className="flex shrink-0 text-muted-foreground">
-              {leading}
-            </span>
+            <span className="flex shrink-0 text-ink-muted">{leading}</span>
             <Input
               size="xs"
               value={renameDraft}
@@ -435,7 +433,7 @@ export const ProjectTree = memo(function ProjectTree({
 
       {/* Root sessions (on main branch) */}
       {!searching || rootSessions.length > 0 ? (
-        <div className="mb-1 ml-2 border-l border-border pl-2">
+        <div className="mb-1 ml-2 border-l border-line pl-2">
           <Tooltip label={baseBranchName || 'main'} side="right">
             <SectionHeader
               label={baseBranchName || 'main'}
@@ -458,7 +456,7 @@ export const ProjectTree = memo(function ProjectTree({
         const isExpanded = searching || effectiveExpanded.has(ws.id)
 
         return (
-          <div key={ws.id} className="ml-2 border-l border-border pl-2">
+          <div key={ws.id} className="ml-2 border-l border-line pl-2">
             {renderWorkspaceRow(ws, wsSessions, isExpanded)}
 
             {isExpanded && (
@@ -482,7 +480,7 @@ export const ProjectTree = memo(function ProjectTree({
           (ws) => getWorkspaceSessions(ws.id).length > 0,
         ) ||
           archivedRootSessions.length > 0)) ? (
-        <div className="mt-3 ml-2 border-l border-border pl-2">
+        <div className="mt-3 ml-2 border-l border-line pl-2">
           <TreeDisclosureRow
             title="Archived"
             icon={<Archive aria-hidden className="size-3 shrink-0" />}

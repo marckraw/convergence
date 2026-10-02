@@ -49,7 +49,7 @@ const shownSpinners = (element: Element) =>
  */
 export const Default: Story = {
   render: (args) => (
-    <div className="flex flex-col gap-3 rounded-md bg-background p-4">
+    <div className="flex flex-col gap-3 rounded-md bg-canvas p-4">
       {SIZES.map(({ size }) => (
         <div key={size} className="flex flex-wrap items-center gap-2">
           {VARIANTS.map(({ variant, label }) => (
@@ -135,7 +135,7 @@ function SaveButton() {
  */
 export const Busy: Story = {
   render: (args) => (
-    <div className="flex items-center gap-2 rounded-md bg-background p-3">
+    <div className="flex items-center gap-2 rounded-md bg-canvas p-3">
       <SaveButton />
       <Button {...args} variant="secondary" pending>
         Join
@@ -167,7 +167,7 @@ export const Busy: Story = {
  */
 export const Disabled: Story = {
   render: (args) => (
-    <div className="flex items-center gap-2 rounded-md bg-background p-3">
+    <div className="flex items-center gap-2 rounded-md bg-canvas p-3">
       <Button {...args} disabled>
         Send
       </Button>
@@ -209,7 +209,7 @@ export const Disabled: Story = {
 export const ReducedMotion: Story = {
   globals: { motion: 'reduced' },
   render: (args) => (
-    <div className="flex items-center gap-2 rounded-md bg-background p-3">
+    <div className="flex items-center gap-2 rounded-md bg-canvas p-3">
       <Button {...args}>Send</Button>
       <Button {...args} variant="secondary" pending pendingLabel="Saving…">
         Save

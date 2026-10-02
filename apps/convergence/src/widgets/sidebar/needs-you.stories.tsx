@@ -109,7 +109,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="w-80 bg-background pt-3 text-foreground">
+        <div className="w-80 bg-canvas pt-3 text-ink">
           <Story />
         </div>
       </TooltipProvider>

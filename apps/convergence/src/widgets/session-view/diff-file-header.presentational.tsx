@@ -20,10 +20,10 @@ export const DiffFileHeader: FC<DiffFileHeaderProps> = ({
   loading = false,
   actions = null,
 }) => (
-  <div className="shrink-0 border-b border-border px-3 py-2">
+  <div className="shrink-0 border-b border-line px-3 py-2">
     <div className="flex min-w-0 items-center gap-2">
       {status ? (
-        <span className="rounded border border-border px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
+        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-3xs text-ink-muted">
           {status}
         </span>
       ) : null}
@@ -39,8 +39,8 @@ export const DiffFileHeader: FC<DiffFileHeaderProps> = ({
       <p
         className={
           subtitleVariant === 'description'
-            ? 'mt-1 text-xs leading-5 text-muted-foreground'
-            : 'mt-1 text-3xs uppercase tracking-wider text-muted-foreground'
+            ? 'mt-1 text-xs leading-5 text-ink-muted'
+            : 'mt-1 text-3xs uppercase tracking-wider text-ink-muted'
         }
       >
         {subtitle}

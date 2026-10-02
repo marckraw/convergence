@@ -99,7 +99,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="h-176 w-104 max-w-full border-r border-border">
+      <div className="h-176 w-104 max-w-full border-r border-line">
         <Story />
       </div>
     ),
@@ -216,7 +216,7 @@ export const Selected: Story = {
   args: {
     selectedId: 'agent:run-audit',
     details: (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-ink-muted">
         Transcript of the agent appears here.
       </p>
     ),

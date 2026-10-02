@@ -67,7 +67,7 @@ export const AnnotationSelectionPopover: FC<
             popupSurface,
           )}
         >
-          <p className="line-clamp-2 border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground">
+          <p className="line-clamp-2 border-l-2 border-strong/40 pl-2 text-xs italic text-ink-muted">
             {quotedExcerpt}
           </p>
           <div className="flex items-center gap-1.5">
@@ -88,14 +88,14 @@ export const AnnotationSelectionPopover: FC<
               type="button"
               variant="ghost"
               onClick={onDismiss}
-              className="shrink-0 text-muted-foreground"
+              className="shrink-0 text-ink-muted"
             >
               <X className="h-3.5 w-3.5" />
             </IconButton>
           </div>
         </form>
       ) : (
-        <div className="flex items-center gap-0.5 rounded-full border border-border bg-popover p-1 shadow-lg">
+        <div className="flex items-center gap-0.5 rounded-full border border-line bg-raised p-1 shadow-lg">
           <Button
             type="button"
             variant="ghost"
@@ -107,7 +107,7 @@ export const AnnotationSelectionPopover: FC<
             <MessageSquareQuote className="h-3.5 w-3.5" />
             Comment
           </Button>
-          <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+          <span className="mx-0.5 h-4 w-px bg-line" aria-hidden="true" />
           {ANNOTATION_QUICK_REACTIONS.map((emoji) => (
             <IconButton
               label={`React with ${emoji}`}

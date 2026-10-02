@@ -127,7 +127,7 @@ export function ContextDrillHostContainer({
             <section
               key={sessionId}
               role="alert"
-              className="rounded-lg border border-border bg-popover p-4 text-sm shadow-lg"
+              className="rounded-lg border border-line bg-raised p-4 text-sm shadow-lg"
             >
               <p className="mb-1 font-medium">Needs you</p>
               <p>

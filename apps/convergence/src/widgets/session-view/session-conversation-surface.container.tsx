@@ -95,7 +95,7 @@ export const SessionConversationSurface: FC<
   return (
     <div ref={surfaceRef} className="relative flex min-h-0 flex-1 flex-col">
       {parallelError && (
-        <div role="alert" className="px-4 py-2 text-sm text-muted-foreground">
+        <div role="alert" className="px-4 py-2 text-sm text-ink-muted">
           Parallel work could not be read ·{' '}
           <Button
             type="button"
@@ -172,7 +172,7 @@ function renderComposerArea(
 ): ReactNode {
   if (composerDisabledReason) {
     return (
-      <div className="mx-auto w-full max-w-conversation rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+      <div className="mx-auto w-full max-w-conversation rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning-ink">
         {composerDisabledReason}
       </div>
     )

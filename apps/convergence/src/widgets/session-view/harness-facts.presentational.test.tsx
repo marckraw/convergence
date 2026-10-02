@@ -169,7 +169,7 @@ it.each([
       pill: screen.getByTestId('harness-pill').getAttribute('data-alert'),
       row: screen
         .getByText(`server · ${status}`)
-        .classList.contains('text-destructive'),
+        .classList.contains('text-danger-ink'),
     }).toEqual({ pill: String(alert), row: alert })
   },
 )

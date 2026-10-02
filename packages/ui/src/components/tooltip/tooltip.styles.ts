@@ -7,7 +7,7 @@
  * TooltipCard, which shows more than a label.
  */
 export const tooltipSurface = [
-  'z-50 w-fit max-w-xs overflow-hidden rounded-xl border border-border/80 bg-popover/95 px-3 py-2',
-  'text-xs break-words text-popover-foreground shadow-xl backdrop-blur-xl',
-  'in-data-[reduced-transparency=true]:bg-popover in-data-[reduced-transparency=true]:backdrop-blur-none',
+  'z-50 w-fit max-w-xs overflow-hidden rounded-xl border border-line-soft bg-glass px-3 py-2',
+  'text-xs break-words text-ink shadow-xl backdrop-blur-xl',
+  'in-data-[reduced-transparency=true]:bg-raised in-data-[reduced-transparency=true]:backdrop-blur-none',
 ].join(' ')

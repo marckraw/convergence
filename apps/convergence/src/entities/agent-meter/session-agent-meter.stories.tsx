@@ -14,7 +14,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="w-80 rounded-lg border border-border bg-background p-2 text-foreground">
+      <div className="w-80 rounded-lg border border-line bg-canvas p-2 text-ink">
         <Story />
       </div>
     ),

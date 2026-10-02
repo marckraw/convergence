@@ -72,7 +72,7 @@ export function TreeSessionRow({
                 <Spinner
                   size="xs"
                   label="Regenerating name"
-                  className="text-muted-foreground"
+                  className="text-ink-muted"
                 />
               ) : null}
             </>

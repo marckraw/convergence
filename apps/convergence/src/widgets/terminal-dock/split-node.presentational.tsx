@@ -49,7 +49,7 @@ export const SplitNodeView: FC<SplitNodeProps> = (props) => {
           {index < tree.children.length - 1 ? (
             <Separator
               className={cn(
-                'relative z-10 shrink-0 bg-border/50 transition-colors hover:bg-border',
+                'relative z-10 shrink-0 bg-line/50 transition-colors hover:bg-line',
                 tree.direction === 'horizontal'
                   ? 'w-px cursor-col-resize'
                   : 'h-px cursor-row-resize',

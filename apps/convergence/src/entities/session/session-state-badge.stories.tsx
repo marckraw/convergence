@@ -49,10 +49,7 @@ const STATES: Array<{ label: string; session: SessionStateBadgeSession }> = [
 /** The glyphs in a list, each beside the words a row would show it with. */
 function AllStates() {
   return (
-    <ul
-      aria-label="Session states"
-      className="space-y-1.5 text-xs text-foreground"
-    >
+    <ul aria-label="Session states" className="space-y-1.5 text-xs text-ink">
       {STATES.map(({ label, session }) => (
         <li key={label} className="flex items-center gap-2">
           <SessionStateBadge session={session} />

@@ -42,13 +42,13 @@ export function NeedsYouSection({
     <section
       aria-label={title}
       data-section-kind={pinned ? 'pinned' : undefined}
-      className={cn(pinned && 'border-l-2 border-foreground/40 pl-2')}
+      className={cn(pinned && 'border-l-2 border-ink/40 pl-2')}
     >
       <div className="mb-1.5">
         <h2
           className={cn(
             'flex items-center gap-1.5 text-2xs font-medium',
-            pinned ? 'text-foreground' : 'text-muted-foreground',
+            pinned ? 'text-ink' : 'text-ink-muted',
           )}
         >
           <Button
@@ -57,7 +57,7 @@ export function NeedsYouSection({
             aria-expanded={!folded}
             onClick={() => onToggleFold?.(title)}
             size="lg"
-            className="h-auto shrink-0 gap-1 rounded-sm p-0 text-2xs font-medium hover:bg-transparent hover:text-foreground"
+            className="h-auto shrink-0 gap-1 rounded-sm p-0 text-2xs font-medium hover:bg-transparent hover:text-ink"
           >
             <ChevronRight
               aria-hidden="true"

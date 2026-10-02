@@ -69,7 +69,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="w-80 max-w-full rounded-md border border-border bg-background">
+      <div className="w-80 max-w-full rounded-md border border-line bg-canvas">
         <Story />
       </div>
     ),

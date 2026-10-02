@@ -80,13 +80,13 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
     className="mx-auto mb-2 flex w-full max-w-conversation items-center gap-2"
     data-testid="annotation-tray"
   >
-    <span className="shrink-0 text-3xs uppercase tracking-wide text-muted-foreground">
+    <span className="shrink-0 text-3xs uppercase tracking-wide text-ink-muted">
       Responding to
     </span>
     {/* Live, so a removal is announced as the number it leaves behind. */}
     <span
       aria-live="polite"
-      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-3xs font-medium text-muted-foreground"
+      className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-3xs font-medium text-ink-muted"
     >
       {formatAnnotationCount(annotations.length)}
     </span>
@@ -136,10 +136,7 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
               <span className="min-w-0 truncate italic text-ink-muted">
                 {toPillQuote(annotation.quotedText)}
               </span>{' '}
-              <span
-                aria-hidden="true"
-                className="shrink-0 text-muted-foreground"
-              >
+              <span aria-hidden="true" className="shrink-0 text-ink-muted">
                 →
               </span>{' '}
               <span className="min-w-0 truncate">

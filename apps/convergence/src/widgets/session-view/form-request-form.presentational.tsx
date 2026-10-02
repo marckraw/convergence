@@ -45,12 +45,12 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
   >
     {fields.map((field) => (
       <label key={field.id} className="block min-w-0 space-y-1.5">
-        <span className="break-words text-xs font-medium text-foreground">
+        <span className="break-words text-xs font-medium text-ink">
           {field.label}
           {field.required ? <span aria-hidden="true"> *</span> : null}
         </span>
         {field.description ? (
-          <span className="block text-xs leading-relaxed text-muted-foreground">
+          <span className="block text-xs leading-relaxed text-ink-muted">
             {field.description}
           </span>
         ) : null}

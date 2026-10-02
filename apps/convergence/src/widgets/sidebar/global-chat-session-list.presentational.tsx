@@ -331,7 +331,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
 
       {!nothingMatched ? (
         <>
-          <div className="mb-3 ml-2 border-l border-border pl-2">
+          <div className="mb-3 ml-2 border-l border-line pl-2">
             <SectionHeader
               label="Spaces"
               count={activeSpaces.length > 0 ? activeSpaces.length : undefined}
@@ -424,7 +424,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
           </div>
 
           {archivedSpaces.length > 0 ? (
-            <div className="mb-3 ml-2 border-l border-border pl-2">
+            <div className="mb-3 ml-2 border-l border-line pl-2">
               {/* One control folds the archived Spaces (NAV-13: it was two side by side). */}
               <ListRow
                 density="compact"
@@ -490,7 +490,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
             </div>
           ) : null}
 
-          <div className="mb-1 ml-2 border-l border-border pl-2">
+          <div className="mb-1 ml-2 border-l border-line pl-2">
             <SectionHeader
               label="Ungrouped chats"
               count={
@@ -505,7 +505,7 @@ export const GlobalChatSessionList = memo(function GlobalChatSessionList({
           </div>
 
           {archivedSessions.length > 0 ? (
-            <div className="mt-3 ml-2 border-l border-border pl-2">
+            <div className="mt-3 ml-2 border-l border-line pl-2">
               <SectionHeader label="Archived" count={archivedSessions.length} />
               <div className="ml-4 space-y-0.5">
                 {archivedSessions.map(renderSessionRow)}

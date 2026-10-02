@@ -44,7 +44,7 @@ export const AttachmentChip: FC<AttachmentChipProps> = ({
           <img
             src={`file://${attachment.thumbnailPath}`}
             alt=""
-            className="size-4 rounded bg-background object-contain"
+            className="size-4 rounded bg-canvas object-contain"
           />
         ) : kind === 'image' ? (
           <ImageIcon className="size-3.5" />

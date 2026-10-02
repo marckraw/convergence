@@ -52,24 +52,24 @@ export const conversationActionsStyles = {
   fanClose: `absolute bottom-0 right-0 ${PILL} w-24 px-0 ${FOCUS_RING} ${POP}`,
   panel: `absolute z-40 flex flex-col overflow-hidden rounded-2xl border border-line bg-raised text-ink shadow-floating ${FOCUS_RING} ${POP}`,
   panelScroll: 'min-h-0 flex-1 overflow-y-auto overscroll-contain p-3',
-  back: `-ml-1 mb-1 h-auto gap-1 px-1 py-0.5 text-base font-medium text-popover-foreground ${FOCUS_RING}`,
+  back: `-ml-1 mb-1 h-auto gap-1 px-1 py-0.5 text-base font-medium text-ink ${FOCUS_RING}`,
   search: `mb-1 border-0 px-2 py-1.5 shadow-none ${FOCUS_RING}`,
-  notice: 'mb-1 px-2 text-xs leading-relaxed text-muted-foreground',
+  notice: 'mb-1 px-2 text-xs leading-relaxed text-ink-muted',
   list: 'flex flex-col',
-  item: `h-auto w-full justify-start whitespace-normal rounded-md px-2 py-1.5 text-left text-sm font-normal text-popover-foreground ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent`,
-  reason: 'px-2 pb-1.5 text-xs leading-relaxed text-muted-foreground',
+  item: `h-auto w-full justify-start whitespace-normal rounded-md px-2 py-1.5 text-left text-sm font-normal text-ink ${FOCUS_RING} aria-disabled:cursor-not-allowed aria-disabled:text-ink-muted aria-disabled:hover:bg-transparent`,
+  reason: 'px-2 pb-1.5 text-xs leading-relaxed text-ink-muted',
   /**
    * A Skills row (MAR-3616 DS3e): a ListboxOption the search drives, its
    * reason inside it. One not offered keeps today's muted words, undimmed.
    */
   option:
-    'rounded-md px-2 py-1.5 text-sm text-popover-foreground aria-disabled:cursor-not-allowed aria-disabled:text-muted-foreground aria-disabled:opacity-100',
-  optionReason: 'pb-0.5 text-xs leading-relaxed text-muted-foreground',
+    'rounded-md px-2 py-1.5 text-sm text-ink aria-disabled:cursor-not-allowed aria-disabled:text-ink-muted aria-disabled:opacity-100',
+  optionReason: 'pb-0.5 text-xs leading-relaxed text-ink-muted',
   // A routine's beat is working: the info ink (R1), readable in light too (CONV-2).
   progress: 'px-2 py-1 text-base text-info-ink',
-  status: 'px-2 py-1.5 text-sm text-muted-foreground',
-  emptyTitle: 'px-2 py-1.5 text-sm font-medium text-popover-foreground',
-  hint: 'mt-1 px-2 text-xs text-muted-foreground',
+  status: 'px-2 py-1.5 text-sm text-ink-muted',
+  emptyTitle: 'px-2 py-1.5 text-sm font-medium text-ink',
+  hint: 'mt-1 px-2 text-xs text-ink-muted',
   refusal: 'px-2 pb-1.5 leading-relaxed',
 } as const
 

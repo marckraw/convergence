@@ -708,7 +708,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         docked={parallelOpen ? 'parallel-work' : ''}
         leading={{
           node: (
-            <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <MessageSquareText className="h-4 w-4 shrink-0 text-ink-muted" />
           ),
           width: CHAT_LEADING_WIDTH,
         }}

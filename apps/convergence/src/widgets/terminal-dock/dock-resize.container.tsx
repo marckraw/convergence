@@ -88,7 +88,7 @@ export const DockResizeHandle: FC<DockResizeHandleProps> = ({
       data-testid="dock-resize-handle"
       data-placement={placement}
       className={cn(
-        'shrink-0 bg-border/40 transition-colors hover:bg-border',
+        'shrink-0 bg-line/40 transition-colors hover:bg-line',
         isVertical
           ? 'h-1 w-full cursor-row-resize'
           : 'h-full w-1 cursor-col-resize',

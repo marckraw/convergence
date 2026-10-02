@@ -232,11 +232,11 @@ export const AppShell: FC<AppShellProps> = ({
 
   if (loading) {
     return (
-      <div className="app-chrome flex h-screen flex-col text-foreground">
+      <div className="app-chrome flex h-screen flex-col text-ink">
         {/* The window moves from its top while the app loads (NAV-4). */}
         <DragRegion />
         {showDevelopmentRibbon ? <DevBuildRibbon /> : null}
-        <p className="flex flex-1 items-center justify-center pb-12 text-muted-foreground">
+        <p className="flex flex-1 items-center justify-center pb-12 text-ink-muted">
           Loading...
         </p>
       </div>
@@ -244,7 +244,7 @@ export const AppShell: FC<AppShellProps> = ({
   }
 
   return (
-    <div className="app-chrome flex h-screen flex-col overflow-hidden text-foreground">
+    <div className="app-chrome flex h-screen flex-col overflow-hidden text-ink">
       {showDevelopmentRibbon ? <DevBuildRibbon /> : null}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
@@ -396,7 +396,7 @@ export const AppShell: FC<AppShellProps> = ({
                   <h1 className="text-2xl font-bold tracking-tight">
                     Welcome to Convergence
                   </h1>
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <p className="mt-2 text-sm text-ink-muted">
                     Open a project to get started.
                   </p>
                 </div>

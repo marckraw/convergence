@@ -268,7 +268,7 @@ export const ModelPickerDialogPresentational: FC<
                         ) : null}
                       </span>
                     </div>
-                    <div className="break-all text-xs leading-snug text-muted-foreground">
+                    <div className="break-all text-xs leading-snug text-ink-muted">
                       {item.modelId}
                     </div>
                     {item.modelDescription || item.contextWindowTokens ? (

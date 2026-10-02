@@ -39,13 +39,13 @@ describe('shared field controls use the theme roles', () => {
     const trigger = classes(renderSelect())
     for (const name of focusRingField.split(' '))
       expect(trigger).toContain(name)
-    expect(trigger.filter((name) => name.includes('ring-ring/'))).toEqual([])
+    expect(trigger.filter((name) => name.includes('ring-focus/'))).toEqual([])
   })
 
   it('the Select outline is the control line', () => {
     const trigger = classes(renderSelect())
     expect(trigger).toContain('border-control-line')
-    expect(trigger).not.toContain('border-input')
+    expect(trigger).not.toContain('border-control-fill')
   })
 
   it.each([
@@ -57,11 +57,11 @@ describe('shared field controls use the theme roles', () => {
       renderField()
       const field = classes(screen.getByRole('textbox', { name: 'Name' }))
       expect(field).toContain('border-control-line')
-      expect(field).not.toContain('border-input')
+      expect(field).not.toContain('border-control-fill')
       for (const ring of focusRingField.split(' ')) {
         expect(field).toContain(ring)
       }
-      expect(field.filter((name) => name.includes('ring-ring/'))).toEqual([])
+      expect(field.filter((name) => name.includes('ring-focus/'))).toEqual([])
     },
   )
 })

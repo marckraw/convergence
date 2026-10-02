@@ -6,10 +6,10 @@ import { WorkspaceLayoutView } from './workspace-layout.presentational'
 const conversation = (
   <section
     aria-label="Conversation"
-    className="flex flex-1 flex-col gap-2 bg-background p-4 text-sm text-foreground"
+    className="flex flex-1 flex-col gap-2 bg-canvas p-4 text-sm text-ink"
   >
     <p className="font-medium">Fix the sidebar overflow</p>
-    <p className="text-muted-foreground">
+    <p className="text-ink-muted">
       The project list overflows below 900 px; the search field loses focus on
       Escape.
     </p>
@@ -37,7 +37,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <div className="h-120 border border-border">
+      <div className="h-120 border border-line">
         <Story />
       </div>
     ),

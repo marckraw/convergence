@@ -134,7 +134,7 @@ const meta = {
   // Room above the button, where the fan and the lists open.
   decorators: [
     (Story) => (
-      <div className="flex h-136 flex-col justify-end bg-background p-6">
+      <div className="flex h-136 flex-col justify-end bg-canvas p-6">
         <Story />
       </div>
     ),

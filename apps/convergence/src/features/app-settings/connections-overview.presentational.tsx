@@ -42,7 +42,7 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
 }) => (
   <section
     aria-labelledby="connections-overview-heading"
-    className="space-y-3 rounded-xl border border-border bg-card/45 px-4 py-4"
+    className="space-y-3 rounded-xl border border-line bg-surface/45 px-4 py-4"
   >
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 id="connections-overview-heading" className="text-sm font-semibold">
@@ -59,14 +59,14 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
         {isChecking ? 'Checking all accounts…' : 'Check all accounts'}
       </Button>
     </div>
-    <p className="text-pretty text-xs leading-relaxed text-muted-foreground">
+    <p className="text-pretty text-xs leading-relaxed text-ink-muted">
       Every OpenAI and Claude account on this Mac, checked through each app that
       reaches the service. Figma keeps one sign-in per app for each Figma user,
       so the same app works on one account at a time; every conversation on that
       account shares it.
     </p>
     {describeConnectionsCheckedAt(checkedAt) ? (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-ink-muted">
         {describeConnectionsCheckedAt(checkedAt)}
       </p>
     ) : null}
@@ -74,7 +74,7 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
       <div className="overflow-x-auto">
         <table className="w-full min-w-144 border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-border text-muted-foreground">
+            <tr className="border-b border-line text-ink-muted">
               <th scope="col" className="py-2 pr-3 font-medium">
                 Account
               </th>
@@ -93,17 +93,15 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
             {rows.map((row) => (
               <tr
                 key={row.accountId}
-                className="border-b border-border/60 align-top"
+                className="border-b border-line-soft align-top"
               >
                 <th scope="row" className="py-2 pr-3 font-normal">
                   <p className="break-all text-sm font-medium">
                     {row.identity}
                   </p>
-                  <p className="text-muted-foreground">{row.provider}</p>
+                  <p className="text-ink-muted">{row.provider}</p>
                   {rowNote(row) ? (
-                    <p className="text-pretty text-muted-foreground">
-                      {rowNote(row)}
-                    </p>
+                    <p className="text-pretty text-ink-muted">{rowNote(row)}</p>
                   ) : null}
                 </th>
                 {CONNECTION_SERVICES.map((service) => {
@@ -112,7 +110,7 @@ export const ConnectionsOverview: FC<ConnectionsOverviewProps> = ({
                     <td key={service.id} className="py-2 pr-3">
                       {row.state !== 'checked' ? null : cell.paths.length ===
                         0 ? (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-ink-muted">—</span>
                       ) : (
                         cell.paths.map((path) => {
                           const line = connectionPathLine(path)

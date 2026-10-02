@@ -24,11 +24,11 @@ const otherFacts: Readonly<Record<string, readonly string[]>> = {
   // The Delete items of the sidebar's context menus (the danger ink, under
   // either name while the sweep renames it).
   'widgets/sidebar/global-chat-session-list.presentational.tsx': [
-    'text-destructive',
+    'text-danger-ink',
     'text-danger-ink',
   ],
   'widgets/sidebar/project-tree.container.tsx': [
-    'text-destructive',
+    'text-danger-ink',
     'text-danger-ink',
   ],
 }

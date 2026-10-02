@@ -41,7 +41,7 @@ function UsagePopover({ lines, onCompact, focusCompact }: UsagePopoverProps) {
             What fills the context window.
           </PopoverDescription>
         </PopoverHeader>
-        <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+        <ul className="flex flex-col gap-1 text-sm text-ink-muted">
           {lines.map((line) => (
             <li key={line}>{line}</li>
           ))}

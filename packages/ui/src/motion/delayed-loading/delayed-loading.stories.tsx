@@ -18,7 +18,7 @@ function LoadDemo({ answers }: LoadDemoProps) {
     setTimeout(() => setPending((count) => count - 1), milliseconds)
   }
   return (
-    <div className="flex w-96 max-w-full flex-col gap-3 rounded-md bg-background p-3">
+    <div className="flex w-96 max-w-full flex-col gap-3 rounded-md bg-canvas p-3">
       <div className="flex flex-wrap gap-2">
         {Object.entries(answers).map(([label, milliseconds]) => (
           <Button key={label} onClick={() => load(milliseconds)}>
@@ -26,7 +26,7 @@ function LoadDemo({ answers }: LoadDemoProps) {
           </Button>
         ))}
       </div>
-      <p role="status" className="h-5 text-sm text-muted-foreground">
+      <p role="status" className="h-5 text-sm text-ink-muted">
         {showLoading ? 'Loading…' : ''}
       </p>
     </div>

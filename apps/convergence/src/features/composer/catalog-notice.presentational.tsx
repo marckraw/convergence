@@ -18,9 +18,9 @@ import { AlertTriangle } from 'lucide-react'
  * normal beats.
  */
 const catalogNoticeToneClass = {
-  asking: 'text-muted-foreground',
-  unreachable: 'text-warning-foreground',
-  empty: 'text-muted-foreground',
+  asking: 'text-ink-muted',
+  unreachable: 'text-warning-ink',
+  empty: 'text-ink-muted',
 } satisfies Record<OptionRowNotice['kind'], string>
 
 /**

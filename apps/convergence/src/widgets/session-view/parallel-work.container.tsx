@@ -247,12 +247,12 @@ export const ParallelWork: FC<Props> = ({
       </h3>
       {selected?.kind === 'agent' &&
         !visibleItems.some((item) => item.kind === 'message') && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             Transcript not available for sessions recorded before this version
           </p>
         )}
       {!visibleItems.length && (
-        <p className="text-xs text-muted-foreground">Not reported</p>
+        <p className="text-xs text-ink-muted">Not reported</p>
       )}
       {detail.error && (
         <FormError>
@@ -360,9 +360,7 @@ export const ParallelWork: FC<Props> = ({
       }}
     >
       {loading && (
-        <p className="p-5 text-xs text-muted-foreground">
-          Loading parallel work…
-        </p>
+        <p className="p-5 text-xs text-ink-muted">Loading parallel work…</p>
       )}
       {(error || results.error) && (
         <FormError className="p-5">
@@ -422,7 +420,7 @@ export const ParallelWork: FC<Props> = ({
             <dl className="space-y-3 border-t pt-3 text-xs">
               {detailFields.map(([label, value]) => (
                 <div key={String(label)}>
-                  <dt className="text-muted-foreground">{label}</dt>
+                  <dt className="text-ink-muted">{label}</dt>
                   <dd className="break-all whitespace-pre-wrap">
                     {value ?? 'Not reported'}
                   </dd>

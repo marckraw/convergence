@@ -755,7 +755,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
           style={{ height: rowVirtualizer.getTotalSize() }}
         >
           {hasOlder && (
-            <div className="absolute top-0 flex w-full items-center justify-center gap-2 text-xs text-muted-foreground">
+            <div className="absolute top-0 flex w-full items-center justify-center gap-2 text-xs text-ink-muted">
               {loadingOlder ? (
                 <>
                   <Spinner size="xs" />
@@ -856,7 +856,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
                   {isSubagentWork(entry) &&
                     !knownAgentIds.has(entry.agentRunId!) &&
                     entry.kind !== 'tool-call' && (
-                      <div className="mb-1 truncate text-xs text-muted-foreground">
+                      <div className="mb-1 truncate text-xs text-ink-muted">
                         {agentAttributionLabel(entry.agentAttribution)}
                       </div>
                     )}

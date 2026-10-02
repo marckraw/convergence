@@ -39,7 +39,7 @@ export const DebugLoggingFields: FC<DebugLoggingFieldsProps> = ({
           Open log folder
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-ink-muted">
         Each session writes to a separate JSONL file. Files rotate at 10 MB and
         the oldest are removed automatically. Logs are kept for 30 days.
       </p>

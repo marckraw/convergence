@@ -89,7 +89,7 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
     <div
       className={cn(
         'flex flex-col',
-        afterActions && 'mt-2 border-t border-border/70 pt-1',
+        afterActions && 'mt-2 border-t border-line-soft pt-1',
       )}
     >
       <ProjectOpenMenuSection
@@ -98,7 +98,7 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
         disabledReason={openApps.disabledReason}
         onOpen={(app) => thenClose(() => openApps.openIn(app))()}
       />
-      <div className="my-1 h-px bg-muted" />
+      <div className="my-1 h-px bg-surface-muted" />
       <Button
         variant="ghost"
         aria-pressed={pullRequestOpen}
@@ -107,7 +107,7 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
       >
         <GitPullRequest className="h-3.5 w-3.5" />
         Pull request
-        <span className="ml-auto pl-3 text-2xs text-muted-foreground">
+        <span className="ml-auto pl-3 text-2xs text-ink-muted">
           {pullRequestLabel}
         </span>
       </Button>

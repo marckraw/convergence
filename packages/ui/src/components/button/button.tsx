@@ -21,18 +21,15 @@ import { Spinner } from '../../motion/spinner/spinner'
  *   never a className (R5).
  */
 const VARIANTS = {
-  primary: 'bg-primary text-primary-foreground shadow hover:bg-primary/90',
+  primary: 'bg-strong text-on-strong shadow hover:bg-strong/90',
   secondary:
-    'border border-control-border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
-  tonal:
-    'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
-  ghost: 'hover:bg-accent hover:text-accent-foreground',
-  quiet: 'text-muted-foreground hover:bg-accent hover:text-foreground',
-  link: 'text-primary underline-offset-4 hover:underline',
-  danger:
-    'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
-  'danger-quiet':
-    'text-destructive hover:bg-destructive/10 hover:text-destructive',
+    'border border-control-line bg-canvas shadow-sm hover:bg-highlight hover:text-on-highlight',
+  tonal: 'bg-surface-muted text-ink shadow-sm hover:bg-surface-muted/80',
+  ghost: 'hover:bg-highlight hover:text-on-highlight',
+  quiet: 'text-ink-muted hover:bg-highlight hover:text-ink',
+  link: 'text-strong underline-offset-4 hover:underline',
+  danger: 'bg-danger-solid text-on-danger shadow-sm hover:bg-danger-solid/90',
+  'danger-quiet': 'text-danger-ink hover:bg-danger-soft hover:text-danger-ink',
 } as const
 
 /**

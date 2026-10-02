@@ -33,7 +33,7 @@ describe('the focus rings', () => {
         expect.arrayContaining([
           `${when}outline-solid`,
           `${when}outline-(length:--focus-width)`,
-          `${when}outline-ring`,
+          `${when}outline-focus`,
           `${when}${offset}`,
         ]),
       )

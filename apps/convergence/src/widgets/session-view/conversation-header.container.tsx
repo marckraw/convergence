@@ -509,7 +509,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
       ref={headerRef}
       data-conversation-header
       data-header-rows={layout.rows.length}
-      className="app-drag relative flex shrink-0 flex-col border-b border-border px-4"
+      className="app-drag relative flex shrink-0 flex-col border-b border-line px-4"
       {...HEADER_DRAG_REGION}
     >
       <div className="flex h-12 items-center gap-1.5">
@@ -531,14 +531,14 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                 <span
                   ref={projectRef}
                   data-header-project
-                  className="truncate text-muted-foreground"
+                  className="truncate text-ink-muted"
                   style={identityStyle.project ?? undefined}
                 >
                   {projectName}
                 </span>
                 <span
                   aria-hidden
-                  className="w-2 shrink-0 text-center text-muted-foreground/60"
+                  className="w-2 shrink-0 text-center text-ink-muted/60"
                 >
                   /
                 </span>
@@ -557,7 +557,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                 role="img"
                 aria-label="Pinned"
                 data-header-pin-mark
-                className="h-3 w-3 shrink-0 fill-current text-primary"
+                className="h-3 w-3 shrink-0 fill-current text-strong"
               />
             )}
           </div>
@@ -637,7 +637,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                       key={entry.key}
                       data-yielded-entry={slot.id}
                       aria-label={`${entry.name}: ${entry.label}`}
-                      className="text-xs tabular-nums text-muted-foreground"
+                      className="text-xs tabular-nums text-ink-muted"
                       // A reading: choosing it keeps More open.
                       closeOnClick={false}
                     >

@@ -15,7 +15,7 @@ export const ConversationItemHeader: FC<ConversationItemHeaderProps> = ({
   timing,
   children,
 }) => (
-  <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 pr-10 text-xs font-medium text-muted-foreground">
+  <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 pr-10 text-xs font-medium text-ink-muted">
     <span>{label}</span>
     {children}
     <ConversationItemTimestamp createdAt={createdAt} timing={timing} />

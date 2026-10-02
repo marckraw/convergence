@@ -44,10 +44,10 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
     >
       {questions.map((question) => (
         <fieldset key={question.id} className="min-w-0 space-y-2">
-          <legend className="text-xs font-medium text-foreground">
+          <legend className="text-xs font-medium text-ink">
             {question.header}
           </legend>
-          <p className="text-sm text-muted-foreground">{question.question}</p>
+          <p className="text-sm text-ink-muted">{question.question}</p>
           <div className="space-y-2">
             {question.options.map((option) => {
               const selected = (answers[question.id] ?? []).includes(

@@ -62,8 +62,8 @@ export const ForkComposer: FC<ForkComposerProps> = ({
   return (
     <div
       className={cn(
-        'rounded-xl border bg-card p-3 transition-colors',
-        isDragging ? 'border-primary border-dashed' : 'border-border',
+        'rounded-xl border bg-surface p-3 transition-colors',
+        isDragging ? 'border-strong border-dashed' : 'border-line',
       )}
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
@@ -88,7 +88,7 @@ export const ForkComposer: FC<ForkComposerProps> = ({
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:outline-none"
+        className="min-h-0 resize-none border-0 px-0 py-0 text-ink shadow-none focus-visible:outline-none"
       />
       <div className="mt-2 flex flex-wrap items-center gap-1">
         <Button

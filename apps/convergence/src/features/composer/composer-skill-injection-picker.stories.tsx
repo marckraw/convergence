@@ -70,7 +70,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="relative mt-72 w-144 max-w-full rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
+      <div className="relative mt-72 w-144 max-w-full rounded-md border border-line bg-surface p-3 text-sm text-ink-muted">
         <Story />
         ::skill::
       </div>

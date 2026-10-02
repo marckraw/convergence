@@ -89,7 +89,7 @@ function CopyButton({
         size="xs"
         label={actionLabel}
         onClick={handleClick}
-        className={['text-muted-foreground hover:text-foreground', className]
+        className={['text-ink-muted hover:text-ink', className]
           .filter(Boolean)
           .join(' ')}
       >

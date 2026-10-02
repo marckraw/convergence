@@ -117,7 +117,7 @@ const meta = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="w-96 max-w-full rounded-md border border-border bg-popover p-3 text-xs text-popover-foreground">
+      <div className="w-96 max-w-full rounded-md border border-line bg-raised p-3 text-xs text-ink">
         <Story />
       </div>
     ),
