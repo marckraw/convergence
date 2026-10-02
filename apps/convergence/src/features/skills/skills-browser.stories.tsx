@@ -142,16 +142,6 @@ const openDialog = async () => {
   return dialog
 }
 
-/** The overview's and the grid's section headings are h4s under the dialog's h2. */
-const skippedHeadingLevel = {
-  a11y: {
-    config: {
-      // a11y-known: the overview's and grid's section headings are h4 directly under the dialog's h2 — fixed by the sweep (DS4)
-      rules: [{ id: 'heading-order', enabled: false }],
-    },
-  },
-}
-
 const meta = {
   title: 'Features/Skills/SkillsBrowserDialog',
   component: SkillsBrowserDialog,
@@ -218,38 +208,39 @@ type Story = StoryObj<typeof meta>
  * attention, each a way into the filtered grid.
  */
 export const Default: Story = {
-  parameters: skippedHeadingLevel,
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
     await expect(dialog).toHaveAccessibleDescription(
       '5/5 skills in convergence.',
     )
+    // The view is a segmented choice (R9), in the header with Refresh (R6).
     await expect(
-      within(dialog).getByRole('button', { name: 'Overview' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+      within(dialog).getByRole('radio', { name: 'Overview' }),
+    ).toBeChecked()
     await userEvent.click(
       within(dialog).getByRole('button', { name: /Duplicate names/ }),
     )
     await expect(args.onJumpToGrid).toHaveBeenCalledWith({
       warnings: 'duplicate-name',
     })
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Grid' }))
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Grid' }))
     await expect(args.onViewModeChange).toHaveBeenCalledWith('grid')
     await userEvent.click(
       within(dialog).getByRole('button', { name: 'Refresh' }),
     )
     await expect(args.onRefresh).toHaveBeenCalledOnce()
+    // A catalogue to look at and leave: no footer.
+    await expect(dialog.querySelector('[data-slot="dialog-footer"]')).toBeNull()
   },
 }
 
 /** The grid, grouped by provider, with the filters above it. */
 export const Grid: Story = {
-  parameters: skippedHeadingLevel,
   args: { viewMode: 'grid' },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog()
     await userEvent.type(
-      within(dialog).getByPlaceholderText('Search skills'),
+      within(dialog).getByRole('searchbox', { name: 'Search skills' }),
       's',
     )
     await expect(args.onFiltersChange).toHaveBeenCalledWith({ query: 's' })
@@ -275,18 +266,6 @@ export const Grid: Story = {
 /** A skill chosen in the grid slides its details over, with a scrim to close it. */
 export const GridDetail: Story = {
   name: 'Grid, details open',
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the grid's section headings are h4 directly under the dialog's h2 — fixed by the sweep (DS4)
-          { id: 'heading-order', enabled: false },
-          // a11y-known: the details' scope, status and dependency pills use -300 text on a pale tint, unreadable in light theme — fixed by the sweep (DS4)
-          { id: 'color-contrast', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     viewMode: 'grid',
     selectedSkill: shipIt,
@@ -332,9 +311,7 @@ export const List: Story = {
     await expect(args.onSelectSkill).toHaveBeenCalledWith(
       'claude-code:update-convergence-provider-models',
     )
-    await expect(
-      within(dialog).getByText(shipIt.path ?? '', { selector: 'span' }),
-    ).toBeVisible()
+    await expect(within(dialog).getByText(shipIt.path ?? '')).toBeVisible()
   },
 }
 
@@ -349,13 +326,15 @@ export const Busy: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText('Loading skills...')).toBeVisible()
+    await waitFor(() =>
+      expect(within(dialog).getByText('Loading skills…')).toBeVisible(),
+    )
     await expect(
       within(dialog).getByText('Loading Claude Code, Codex…'),
     ).toBeVisible()
     await expect(
       within(dialog).getByRole('button', { name: 'Refresh' }),
-    ).toBeDisabled()
+    ).toHaveAttribute('aria-busy', 'true')
   },
 }
 
@@ -367,7 +346,9 @@ export const Failed: Story = {
   },
   play: async () => {
     const dialog = await openDialog()
-    await expect(within(dialog).getByText(/did not answer/)).toBeVisible()
+    await expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      /did not answer/,
+    )
   },
 }
 
@@ -384,9 +365,7 @@ export const Empty: Story = {
   play: async () => {
     const dialog = await openDialog()
     await expect(
-      within(dialog).getByText(
-        'No skill-capable providers are currently available.',
-      ),
+      within(dialog).getByText('No skill-capable providers'),
     ).toBeVisible()
   },
 }
@@ -399,9 +378,9 @@ export const Disabled: Story = {
     await expect(dialog).toHaveAccessibleDescription(
       'Select a project to browse provider skills.',
     )
-    await expect(
-      within(dialog).getByRole('button', { name: 'Refresh' }),
-    ).toBeDisabled()
+    const refresh = within(dialog).getByRole('button', { name: 'Refresh' })
+    await expect(refresh).toHaveAttribute('aria-disabled', 'true')
+    await expect(refresh).toHaveAccessibleDescription('Open a project first.')
   },
 }
 

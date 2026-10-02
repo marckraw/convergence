@@ -1,3 +1,4 @@
+import type { Tone } from '@convergence/ui'
 import type {
   ProjectSkillCatalog,
   SkillDependencyState,
@@ -42,12 +43,11 @@ export interface SkillOriginMeta {
   id: SkillOrigin
   label: string
   hint: string
-  /** Pill / chip styling (border + bg + text). */
-  chipClass: string
-  /** Small status dot styling. */
+  /**
+   * Its hue (R1, a category): the dot in its chip and the bar on its
+   * dashboard card. The project's is the strong ink, the others tag hues.
+   */
   dotClass: string
-  /** Left accent bar styling for dashboard cards. */
-  accentClass: string
 }
 
 /** Ordered for display: most local first. */
@@ -56,33 +56,25 @@ export const SKILL_ORIGINS: readonly SkillOriginMeta[] = [
     id: 'project',
     label: 'Project',
     hint: 'This folder',
-    chipClass: 'border-primary/30 bg-primary/10 text-primary',
-    dotClass: 'bg-primary',
-    accentClass: 'bg-primary',
+    dotClass: 'bg-strong',
   },
   {
     id: 'global',
     label: 'Global',
     hint: 'Your machine',
-    chipClass: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
-    dotClass: 'bg-sky-400',
-    accentClass: 'bg-sky-400',
+    dotClass: 'bg-tag-sky',
   },
   {
     id: 'plugin',
     label: 'Plugin',
     hint: 'Installed plugin packs',
-    chipClass: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
-    dotClass: 'bg-violet-400',
-    accentClass: 'bg-violet-400',
+    dotClass: 'bg-tag-violet',
   },
   {
     id: 'builtin',
     label: 'Built-in',
     hint: 'Provider built-ins',
-    chipClass: 'border-border/70 bg-muted/40 text-muted-foreground',
-    dotClass: 'bg-muted-foreground',
-    accentClass: 'bg-muted-foreground',
+    dotClass: 'bg-ink-muted',
   },
 ]
 
@@ -107,12 +99,13 @@ export const DEPENDENCY_STATE_LABELS: Record<SkillDependencyState, string> = {
   unknown: 'Unknown',
 }
 
-export const DEPENDENCY_STATE_CLASSES: Record<SkillDependencyState, string> = {
-  declared: 'border-border/70 bg-muted/30 text-muted-foreground',
-  available: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
-  'needs-auth': 'border-warning/20 bg-warning/10 text-warning-foreground',
-  'needs-install': 'border-sky-500/20 bg-sky-500/10 text-sky-200',
-  unknown: 'border-border/70 bg-muted/30 text-muted-foreground',
+/** What a dependency's state says (R1): ready, waiting on you, or a heads-up. */
+export const DEPENDENCY_STATE_TONES: Record<SkillDependencyState, Tone> = {
+  declared: 'neutral',
+  available: 'success',
+  'needs-auth': 'warning',
+  'needs-install': 'info',
+  unknown: 'neutral',
 }
 
 export const CATALOG_SOURCE_LABELS: Record<

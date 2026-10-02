@@ -93,7 +93,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="h-160 w-180 rounded-lg border border-border">
+        <div className="h-160 w-180 rounded-lg border border-line">
           <Story />
         </div>
       </TooltipProvider>
@@ -116,7 +116,7 @@ export const Default: Story = {
       canvas.getByRole('heading', { name: 'mrck-ship-it' }),
     ).toBeVisible()
     await expect(canvas.getByText('$mrck-ship-it')).toBeVisible()
-    await userEvent.click(canvas.getByRole('button', { name: 'MCP Servers' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'MCP servers' }))
     await expect(args.onOpenMcpServers).toHaveBeenCalledOnce()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Reveal in Finder' }),
@@ -163,7 +163,9 @@ export const Busy: Story = {
     editorAppsLoading: true,
   },
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByText('Loading skill details...')).toBeVisible()
+    await waitFor(() =>
+      expect(canvas.getByText('Loading the skill’s details…')).toBeVisible(),
+    )
     await expect(
       canvas.getByRole('button', { name: 'Reveal in Finder' }),
     ).toBeDisabled()
@@ -171,7 +173,7 @@ export const Busy: Story = {
       canvas.getByRole('button', { name: 'Open in editor' }),
     )
     await expect(
-      await screen.findByRole('menuitem', { name: 'Detecting apps...' }),
+      await screen.findByRole('menuitem', { name: 'Detecting apps…' }),
     ).toHaveAttribute('aria-disabled', 'true')
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
@@ -185,7 +187,7 @@ export const Failed: Story = {
     detailsError: 'Could not read SKILL.md: ENOENT, no such file or directory.',
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText(/ENOENT/)).toBeVisible()
+    await expect(canvas.getByRole('alert')).toHaveTextContent(/ENOENT/)
   },
 }
 
@@ -193,7 +195,7 @@ export const Failed: Story = {
 export const Empty: Story = {
   args: { selectedSkill: null, selectedDetails: null },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No skill selected.')).toBeVisible()
+    await expect(canvas.getByText('No skill selected')).toBeVisible()
   },
 }
 

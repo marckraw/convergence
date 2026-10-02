@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Button, cn } from '@convergence/ui'
+import { Badge, Card, CardAction, cn } from '@convergence/ui'
 import type { SkillBrowserFilters } from './skills-browser.pure'
 import { SKILL_ORIGIN_META } from './skills-browser.styles'
 import type { SkillsOverview } from './skills-overview.pure'
@@ -17,20 +17,23 @@ function renderStatTile(
   tone: 'default' | 'warning' | 'muted' = 'default',
 ) {
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/10 px-4 py-3">
+    <Card className="rounded-xl px-4 py-3">
       <p
         className={cn(
           'text-2xl font-semibold tabular-nums',
-          tone === 'warning' && 'text-warning-foreground',
-          tone === 'muted' && 'text-muted-foreground',
+          tone === 'warning' && 'text-warning-ink',
+          tone === 'muted' && 'text-ink-muted',
         )}
       >
         {value}
       </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
-    </div>
+      <p className="mt-0.5 text-xs text-ink-muted">{label}</p>
+    </Card>
   )
 }
+
+/** A dashboard heading: under the dialog's h2, so an h3. */
+const sectionHeading = 'mb-2.5 text-sm font-semibold'
 
 export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
   overview,
@@ -105,66 +108,68 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
       </section>
 
       <section>
-        <h4 className="mb-2.5 text-sm font-semibold">By origin</h4>
+        <h3 className={sectionHeading}>By origin</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {overview.byOrigin.map((bucket) => {
             const meta = SKILL_ORIGIN_META[bucket.origin]
             return (
-              <Button
+              <Card
                 key={bucket.origin}
-                type="button"
-                variant="ghost"
-                onClick={() => onJumpToGrid({ origin: bucket.origin })}
-                size="lg"
-                className="flex h-auto items-stretch justify-start gap-3 whitespace-normal rounded-xl border border-border/70 bg-muted/10 p-3 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-96"
+                interactive
+                className="flex items-stretch gap-3 rounded-xl"
               >
                 <span
-                  className={cn('w-1 shrink-0 rounded-full', meta.accentClass)}
+                  aria-hidden
+                  className={cn('w-1 shrink-0 rounded-full', meta.dotClass)}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{meta.label}</span>
+                    <CardAction
+                      onClick={() => onJumpToGrid({ origin: bucket.origin })}
+                      className="text-sm font-medium after:rounded-xl"
+                    >
+                      {meta.label}
+                    </CardAction>
                     <span className="text-xl font-semibold tabular-nums">
                       {bucket.count}
                     </span>
                   </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                  <span className="mt-0.5 block text-xs text-ink-muted">
                     {meta.hint}
                   </span>
-                  <span className="mt-1 block text-2xs text-muted-foreground">
+                  <span className="mt-1 block text-2xs text-ink-muted">
                     {bucket.enabled} enabled
                     {bucket.withWarnings > 0
                       ? ` · ${bucket.withWarnings} flagged`
                       : ''}
                   </span>
                 </span>
-              </Button>
+              </Card>
             )
           })}
         </div>
       </section>
 
       <section>
-        <h4 className="mb-2.5 text-sm font-semibold">By provider</h4>
+        <h3 className={sectionHeading}>By provider</h3>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {overview.byProvider.map((bucket) => (
-            <Button
+            <Card
               key={bucket.providerId}
-              type="button"
-              variant="ghost"
-              onClick={() => onJumpToGrid({ providerId: bucket.providerId })}
-              size="lg"
-              className="flex h-auto items-center justify-between whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-96"
+              interactive
+              className="flex items-center justify-between gap-3 py-2.5"
             >
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">
+                <CardAction
+                  onClick={() =>
+                    onJumpToGrid({ providerId: bucket.providerId })
+                  }
+                  className="block truncate text-sm font-medium"
+                >
                   {bucket.providerName}
-                </span>
+                </CardAction>
                 {bucket.errored ? (
-                  <span
-                    className="block truncate text-2xs text-destructive"
-                    title={bucket.error ?? 'Discovery error'}
-                  >
+                  <span className="block truncate text-2xs text-danger-ink">
                     {bucket.error ?? 'Discovery error'}
                   </span>
                 ) : null}
@@ -172,36 +177,35 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
               <span className="text-lg font-semibold tabular-nums">
                 {bucket.count}
               </span>
-            </Button>
+            </Card>
           ))}
         </div>
       </section>
 
       <section>
-        <h4 className="mb-2.5 text-sm font-semibold">Needs attention</h4>
+        <h3 className={sectionHeading}>Needs attention</h3>
         {attentionItems.length === 0 ? (
-          <p className="rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-sm text-muted-foreground">
+          <Card className="py-2.5 text-sm text-ink-muted">
             Everything looks healthy — no warnings or setup gaps.
-          </p>
+          </Card>
         ) : (
           <div className="space-y-1.5">
             {attentionItems.map((item) => (
-              <Button
+              <Card
                 key={item.key}
-                type="button"
-                variant="ghost"
-                onClick={() => onJumpToGrid(item.patch)}
-                size="lg"
-                className="flex h-auto w-full items-center justify-between gap-3 whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-96"
+                interactive
+                className="flex items-center justify-between gap-3 py-2.5"
               >
                 <span className="flex items-center gap-2 text-sm">
-                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-warning/30 bg-warning/10 px-1.5 text-xs font-semibold tabular-nums text-warning-foreground">
+                  <Badge tone="warning" shape="count">
                     {item.count}
-                  </span>
-                  {item.label}
+                  </Badge>
+                  <CardAction onClick={() => onJumpToGrid(item.patch)}>
+                    {item.label}
+                  </CardAction>
                 </span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </Button>
+                <ChevronRight aria-hidden className="size-4 text-ink-muted" />
+              </Card>
             ))}
           </div>
         )}
