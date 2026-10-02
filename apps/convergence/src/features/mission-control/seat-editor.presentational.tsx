@@ -194,7 +194,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           data-seat-orphan
           tone="warning"
           title={`${label}’s conversation no longer exists`}
-          size="xs"
+          size="sm"
           actions={
             <Button
               type="button"
@@ -319,7 +319,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             data-seat-no-card
             tone="warning"
             title="No card yet"
-            size="xs"
+            size="sm"
             className="border-dashed"
             actions={
               <Button

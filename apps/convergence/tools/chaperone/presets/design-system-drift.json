@@ -340,7 +340,7 @@
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Notice|Badge|Input|Textarea|SelectTrigger|Combobox|SearchField|NumberField)\\b(?:[^>]|=>|/>\\}(?=\\s*[\\w-]+=))*?\\bclassName=(?:[^>]|=>|/>\\}(?=\\s*[\\w-]+=))*?(?<![\\w:\\]-])(?:text-(?:3xs|2xs|xs|sm|base|lg|xl|[2-9]xl)|p[xy]?-(?:\\d+(?:\\.5)?|px))(?![\\w-])",
-        "message": "A Notice, a Badge or a field (Input, Textarea, SelectTrigger, Combobox, SearchField, NumberField) resized in className: its words and its room are its size (R3, ruling 10). Notice takes size=\"sm\" (12 px) or \"xs\" (11 px); Badge size=\"md\" (11 px); a field its size (xs to lg) and density=\"compact\" for 12 px words at any height. A text size or a padding typed on top is a size the scale doesn't name, and drifts (MAR-3608; DS-4; DLG-15; docs/checks/design-system-drift.md). A size handed through a constant is the sizes-in-constants guard's."
+        "message": "A Notice, a Badge or a field (Input, Textarea, SelectTrigger, Combobox, SearchField, NumberField) resized in className: its words and its room are its size (R3, ruling 10). Notice takes size=\"sm\" (12 px, its one compact size); Badge size=\"md\" (11 px); a field its size (xs to lg) and density=\"compact\" for 12 px words at any height. A text size or a padding typed on top is a size the scale doesn't name, and drifts (MAR-3608; DS-4; DLG-15; docs/checks/design-system-drift.md). A size handed through a constant is the sizes-in-constants guard's."
       }
     ]
   }

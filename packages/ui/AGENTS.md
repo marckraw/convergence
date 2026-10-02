@@ -50,8 +50,9 @@ Chaperone checks it: a class string's third copy (`repeated-classes`) and a past
   Icon buttons are 24 in rows, chips and toolbars, 28 in headers and panels. The Button alone
   has `xl`, 44 px, for a title you press, such as Loom's sheet titles and its folded strip
   (Marcin, 2 Oct 2026). Size is a prop, never a className, and that holds for the words too:
-  Notice takes `size` (`sm` 12 px, `xs` 11 px) and the field frame `density="compact"` (12 px
-  words at any height) where a dense panel wants smaller print (Marcin, 2 Oct 2026). Why: 264
+  Notice takes `size="sm"` (12 px, its one compact size, the field text's) and the field frame
+  `density="compact"` (12 px words at any height) where a dense panel wants smaller print
+  (Marcin, 2 Oct 2026). Why: 264
   Button heights were set by hand, and controls side by side line up only on one scale.
 - **R4 · Small text is `text-2xs` (11 px) or `text-3xs` (10 px)**, today's two sizes, so nothing
   moves; an 11 px floor waits for the redesign. Why: 477 arbitrary `text-[10px]` and

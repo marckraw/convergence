@@ -6,15 +6,14 @@ import { IconButton } from '../icon-button/icon-button'
 
 /**
  * How big its words are (R3: a size is a prop, never a className). `md` is
- * the body size, the default; `sm` (12 px) and `xs` (11 px) are for a dense
- * place, such as the composer's strip or a Mission Control panel, the two
- * text sizes 14 notices typed as a className (ruling 10, 2 Oct 2026). The
- * room around the words stays the default's (R0: it was most of theirs).
+ * the body size, the default; `sm` (12 px, the field text's size) is the one
+ * compact size, for a dense place such as the composer's strip or a Mission
+ * Control panel (ruling 10; one compact size, not two, Marcin, 2 Oct 2026).
+ * The room around the words stays the default's (R0: it was most of theirs).
  */
 const NOTICE_SIZES = {
   md: 'text-sm',
   sm: 'text-xs',
-  xs: 'text-2xs',
 } as const
 
 type NoticeSize = keyof typeof NOTICE_SIZES
@@ -26,7 +25,7 @@ type NoticeProps = Omit<
   className?: string
   /** What it says about the state (R1): danger for a failure, warning for a heads-up. */
   tone?: Tone
-  /** Its words' size: `md` (14 px) unless told otherwise; `sm` 12 px, `xs` 11 px (ruling 10). */
+  /** Its words' size: `md` (14 px) unless told otherwise; `sm` 12 px, the one compact size (ruling 10). */
   size?: NoticeSize
   /** A 16 px glyph before the title, decorative: the words say it. */
   icon?: ReactNode
