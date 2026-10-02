@@ -134,7 +134,9 @@ export const OpenInEditor: Story = {
     await userEvent.click(
       canvas.getByRole('button', { name: 'Open in editor' }),
     )
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Zed' }))
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: 'Open in Zed' }),
+    )
     await expect(args.onOpenInEditor).toHaveBeenCalledWith('zed')
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
   },
