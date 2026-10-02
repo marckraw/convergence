@@ -7,6 +7,7 @@ import type {
   NeedsYouDismissals,
 } from '@/entities/session'
 import type { DialogKind, DialogPayload } from '@/entities/dialog'
+import { RELEASE_NOTES_TITLE } from '@/entities/updates'
 import type {
   PaletteItem,
   ProjectPaletteItem,
@@ -93,8 +94,9 @@ export const PALETTE_DIALOGS: DialogDescriptor[] = [
   },
   {
     kind: 'release-notes',
-    title: "What's New",
+    title: RELEASE_NOTES_TITLE,
     description: 'Latest release notes and changes',
+    aliases: "what's new whats new changelog about version",
   },
 ]
 

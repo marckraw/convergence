@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { toast } from 'sonner'
-import { useUpdatesStore } from '@/entities/updates'
+import { notify } from '@convergence/ui'
+import { RELEASE_NOTES_TITLE, useUpdatesStore } from '@/entities/updates'
 import type { UpdatePhase, UpdateStatus } from '@/entities/updates'
 
 const DOWNLOADING_TOAST_ID = 'updates:downloading'
@@ -19,10 +19,17 @@ export function UpdatesToastContainer() {
   useEffect(() => {
     const phase = status.phase
     const prev = lastFiredRef.current
+    // Both offers' second button opens the release notes (NAV-31).
+    const releaseNotesAction = {
+      label: RELEASE_NOTES_TITLE,
+      onClick: () => {
+        void openReleaseNotes()
+      },
+    }
 
     switch (phase) {
       case 'available': {
-        toast.info(`Update available — Convergence v${status.version}`, {
+        notify.info(`Update available — Convergence v${status.version}`, {
           id: AVAILABLE_TOAST_ID,
           description: 'Download and install when you’re ready.',
           action: {
@@ -31,28 +38,23 @@ export function UpdatesToastContainer() {
               void download()
             },
           },
-          cancel: {
-            label: 'Release notes',
-            onClick: () => {
-              void openReleaseNotes()
-            },
-          },
-          duration: Infinity,
+          secondaryAction: releaseNotesAction,
+          persistent: true,
         })
         break
       }
       case 'downloading': {
-        toast.dismiss(AVAILABLE_TOAST_ID)
-        toast.loading(`Downloading v${status.version}…`, {
+        notify.dismiss(AVAILABLE_TOAST_ID)
+        notify.loading(`Downloading v${status.version}…`, {
           id: DOWNLOADING_TOAST_ID,
           description: formatProgressDescription(status),
-          duration: Infinity,
+          persistent: true,
         })
         break
       }
       case 'downloaded': {
-        toast.dismiss(DOWNLOADING_TOAST_ID)
-        toast.success(`Update v${status.version} ready`, {
+        notify.dismiss(DOWNLOADING_TOAST_ID)
+        notify.success(`Update v${status.version} ready`, {
           id: READY_TOAST_ID,
           description: 'Install now to restart into the new version.',
           action: {
@@ -61,19 +63,14 @@ export function UpdatesToastContainer() {
               void install()
             },
           },
-          cancel: {
-            label: 'Release notes',
-            onClick: () => {
-              void openReleaseNotes()
-            },
-          },
-          duration: Infinity,
+          secondaryAction: releaseNotesAction,
+          persistent: true,
         })
         break
       }
       case 'not-available': {
         if (phase !== prev && lastTrigger === 'user') {
-          toast('You’re up to date.', {
+          notify.message('You’re up to date.', {
             description: `Convergence v${status.currentVersion} is the latest release.`,
           })
         }
@@ -81,9 +78,7 @@ export function UpdatesToastContainer() {
       }
       case 'error': {
         if (phase !== prev && lastTrigger === 'user') {
-          toast.error('Couldn’t check for updates', {
-            description: status.message,
-          })
+          notify.failure('check for updates', status.message)
         }
         break
       }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
-import { toast } from 'sonner'
+import { notify } from '@convergence/ui'
 import {
   DEFAULT_UPDATE_PREFS,
   INITIAL_UPDATE_STATUS,
@@ -9,26 +9,18 @@ import {
 } from '@/entities/updates'
 import { UpdatesToastContainer } from './updates-toast.container'
 
-type SonnerFn = ReturnType<typeof vi.fn> & {
-  info: ReturnType<typeof vi.fn>
-  loading: ReturnType<typeof vi.fn>
-  success: ReturnType<typeof vi.fn>
-  error: ReturnType<typeof vi.fn>
-  dismiss: ReturnType<typeof vi.fn>
-}
-
-vi.mock('sonner', () => {
-  const fn = Object.assign(vi.fn(), {
+vi.mock('@convergence/ui', () => ({
+  notify: {
     info: vi.fn(),
     loading: vi.fn(),
     success: vi.fn(),
-    error: vi.fn(),
+    message: vi.fn(),
+    failure: vi.fn(),
     dismiss: vi.fn(),
-  })
-  return { toast: fn }
-})
+  },
+}))
 
-const sonnerMock = toast as unknown as SonnerFn
+const notifyMock = vi.mocked(notify)
 
 const download = vi.fn<() => Promise<void>>()
 const install = vi.fn<() => Promise<void>>()
@@ -52,12 +44,7 @@ function resetStore(status: UpdateStatus = INITIAL_UPDATE_STATUS) {
 
 describe('UpdatesToastContainer', () => {
   beforeEach(() => {
-    sonnerMock.mockReset()
-    sonnerMock.info.mockReset()
-    sonnerMock.loading.mockReset()
-    sonnerMock.success.mockReset()
-    sonnerMock.error.mockReset()
-    sonnerMock.dismiss.mockReset()
+    vi.clearAllMocks()
     download.mockReset()
     install.mockReset()
     openReleaseNotes.mockReset()
@@ -75,17 +62,21 @@ describe('UpdatesToastContainer', () => {
       },
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock.info).toHaveBeenCalledWith(
+    expect(notifyMock.info).toHaveBeenCalledWith(
       'Update available — Convergence v0.17.0',
       expect.objectContaining({
         id: 'updates:available',
         action: expect.objectContaining({ label: 'Download' }),
-        cancel: expect.objectContaining({ label: 'Release notes' }),
+        secondaryAction: expect.objectContaining({ label: 'Release notes' }),
+        persistent: true,
       }),
     )
-    const call = sonnerMock.info.mock.calls.at(-1)
-    call?.[1].action.onClick()
+    const options = notifyMock.info.mock.calls.at(-1)?.[1]
+    options?.action?.onClick()
     expect(download).toHaveBeenCalledTimes(1)
+    // NAV-31: the second button is an action of its own, named as the dialog.
+    options?.secondaryAction?.onClick()
+    expect(openReleaseNotes).toHaveBeenCalledTimes(1)
   })
 
   it('renders a persistent loading toast while downloading and updates description', () => {
@@ -99,7 +90,7 @@ describe('UpdatesToastContainer', () => {
       },
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock.loading).toHaveBeenCalledWith(
+    expect(notifyMock.loading).toHaveBeenCalledWith(
       'Downloading v0.17.0…',
       expect.objectContaining({
         id: 'updates:downloading',
@@ -116,7 +107,7 @@ describe('UpdatesToastContainer', () => {
       },
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock.loading).toHaveBeenLastCalledWith(
+    expect(notifyMock.loading).toHaveBeenLastCalledWith(
       'Downloading v0.17.0…',
       expect.objectContaining({ description: '55% · 2.0 MB/s' }),
     )
@@ -132,16 +123,16 @@ describe('UpdatesToastContainer', () => {
       },
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock.dismiss).toHaveBeenCalledWith('updates:downloading')
-    expect(sonnerMock.success).toHaveBeenCalledWith(
+    expect(notifyMock.dismiss).toHaveBeenCalledWith('updates:downloading')
+    expect(notifyMock.success).toHaveBeenCalledWith(
       'Update v0.17.0 ready',
       expect.objectContaining({
         id: 'updates:ready',
         action: expect.objectContaining({ label: 'Install now' }),
       }),
     )
-    const call = sonnerMock.success.mock.calls.at(-1)
-    call?.[1].action.onClick()
+    const call = notifyMock.success.mock.calls.at(-1)
+    call?.[1]?.action?.onClick()
     expect(install).toHaveBeenCalledTimes(1)
   })
 
@@ -156,7 +147,7 @@ describe('UpdatesToastContainer', () => {
       lastTrigger: 'background',
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock.error).not.toHaveBeenCalled()
+    expect(notifyMock.failure).not.toHaveBeenCalled()
 
     // reset tracking state and re-render with user trigger
     resetStore()
@@ -170,11 +161,9 @@ describe('UpdatesToastContainer', () => {
       lastTrigger: 'user',
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock.error).toHaveBeenCalledWith(
-      'Couldn’t check for updates',
-      expect.objectContaining({
-        description: 'Offline or GitHub unreachable.',
-      }),
+    expect(notifyMock.failure).toHaveBeenCalledWith(
+      'check for updates',
+      'Offline or GitHub unreachable.',
     )
   })
 
@@ -189,7 +178,7 @@ describe('UpdatesToastContainer', () => {
       lastTrigger: 'background',
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock).not.toHaveBeenCalled()
+    expect(notifyMock.message).not.toHaveBeenCalled()
 
     resetStore()
     rerender(<UpdatesToastContainer />)
@@ -202,7 +191,7 @@ describe('UpdatesToastContainer', () => {
       lastTrigger: 'user',
     })
     rerender(<UpdatesToastContainer />)
-    expect(sonnerMock).toHaveBeenCalledWith(
+    expect(notifyMock.message).toHaveBeenCalledWith(
       'You’re up to date.',
       expect.objectContaining({
         description: 'Convergence v0.16.0 is the latest release.',
