@@ -8,6 +8,7 @@ import type {
   RunProjectScriptInput,
   UpdateProjectScriptInput,
 } from './project-script.types'
+import { removeById, upsertById } from '@/shared/lib/by-id.pure'
 
 interface ProjectScriptState {
   scriptsByProjectId: Record<string, ProjectScript[]>
@@ -48,16 +49,6 @@ const MAX_OUTPUT_TEXT_CHARS_PER_RUN = 524288
 
 let runEventsSubscriberCount = 0
 let unsubscribeRunEvents: (() => void) | null = null
-
-function upsertById<T extends { id: string }>(items: T[], next: T): T[] {
-  return items.some((item) => item.id === next.id)
-    ? items.map((item) => (item.id === next.id ? next : item))
-    : [next, ...items]
-}
-
-function removeById<T extends { id: string }>(items: T[], id: string): T[] {
-  return items.filter((item) => item.id !== id)
-}
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback

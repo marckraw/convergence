@@ -32,9 +32,29 @@ describe('AttachmentPreview', () => {
       />,
     )
 
-    const image = screen.getByRole('img', { name: 'vertical.png' })
-    expect(image).toHaveClass('object-contain')
-    expect(image).toHaveClass('max-h-[calc(100vh-8rem)]')
-    expect(image).not.toHaveClass('object-cover')
+    // How it fits (contained, never cropped, within the window) is drawn
+    // and measured in its stories: attachment-preview.stories.tsx, Tall.
+    expect(screen.getByRole('img', { name: 'vertical.png' })).toHaveAttribute(
+      'src',
+      'blob:vertical-image',
+    )
+  })
+
+  it('says why a file cannot be read, as an alert', () => {
+    render(
+      <AttachmentPreview
+        attachment={makeAttachment()}
+        objectUrl={null}
+        textContent={null}
+        isLoading={false}
+        error="The attachment file could not be read."
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The attachment file could not be read.',
+    )
+    expect(screen.queryByRole('img')).toBeNull()
   })
 })

@@ -623,20 +623,16 @@ describe('AppSettingsDialogContainer', () => {
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveClass(
-      'h-[min(92vh,960px)]',
-      'w-[min(1280px,calc(100vw-2rem))]',
-      'max-h-[min(92vh,960px)]',
-    )
+    // The width is Dialog's size (2xl, 1280 px at most), not a class here.
+    expect(dialog).toHaveAttribute('data-size', '2xl')
+    expect(dialog).toHaveClass('h-[min(92vh,960px)]', 'max-h-[min(92vh,960px)]')
 
     fireEvent.click(screen.getByRole('button', { name: /Insights/ }))
 
     expect(await screen.findByRole('tab', { name: 'Your Usage' })).toBeVisible()
-    expect(dialog).toHaveClass(
-      'h-[min(92vh,960px)]',
-      'w-[min(1280px,calc(100vw-2rem))]',
-      'max-h-[min(92vh,960px)]',
-    )
+    // The width is Dialog's size (2xl, 1280 px at most), not a class here.
+    expect(dialog).toHaveAttribute('data-size', '2xl')
+    expect(dialog).toHaveClass('h-[min(92vh,960px)]', 'max-h-[min(92vh,960px)]')
   })
 
   it('opens the local Insights section from settings navigation', async () => {

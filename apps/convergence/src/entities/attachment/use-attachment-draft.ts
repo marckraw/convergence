@@ -9,6 +9,9 @@ import type {
 
 const REJECTION_TTL_MS = 6000
 
+/** One empty list for a draft with no refusals, so the effect below waits on a change, not a render. */
+const NO_REJECTIONS: AttachmentIngestRejection[] = []
+
 function collectFilesFromDataTransfer(
   dataTransfer: DataTransfer | null,
 ): File[] {
@@ -80,7 +83,7 @@ export function useAttachmentDraft(
   const clearRejectionsAction = useAttachmentStore((s) => s.clearRejections)
 
   const attachments = draft?.items ?? []
-  const rejections = draft?.rejections ?? []
+  const rejections = draft?.rejections ?? NO_REJECTIONS
   const ingestInFlight = draft?.ingestInFlight ?? false
 
   const [isDragging, setIsDragging] = useState(false)

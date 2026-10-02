@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
+import { SessionBadge } from './session-badge.presentational'
 import { isSessionCompacting } from './session-compacting.pure'
 import type { SessionSummary } from './session.types'
 
@@ -20,8 +20,8 @@ interface SessionStateBadgeProps {
  * and is the only way a surface draws a session's state glyph (MAR-3288 lap 2
  * item B).
  *
- * `SessionBadge` lives in `shared` and cannot know what compacting looks like
- * on a session record, so it takes a `compacting` prop. Eight sites once
+ * `SessionBadge` draws a glyph from an attention and cannot know what
+ * compacting looks like on a session record, so it takes a `compacting` prop. Eight sites once
  * each had to remember that prop; forgetting it type-checked, rendered a
  * green "finished" check on a busy conversation, and left every test green.
  * Here the prop is answered once, from `isSessionCompacting`, and the sites no

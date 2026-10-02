@@ -40,24 +40,14 @@ type Story = StoryObj<typeof meta>
 
 /** An image in a sent message: the picture and its name, opening the preview. */
 export const Default: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the picture's alt repeats the file name written under
-          // it, inside the same button — fixed by the sweep (DS4)
-          { id: 'image-redundant-alt', enabled: false },
-        ],
-      },
-    },
-  },
   play: async ({ args, canvas, userEvent }) => {
     const preview = canvas.getByRole('button', {
       name: 'Preview sidebar-overflow.png',
     })
-    await expect(
-      canvas.getByRole('img', { name: 'sidebar-overflow.png' }),
-    ).toBeInTheDocument()
+    // The picture is decoration inside the button: the button's name and the
+    // line under it say the file, so a screen reader hears it once.
+    await expect(preview.querySelector('img')).toHaveAttribute('alt', '')
+    await expect(preview).toHaveTextContent('sidebar-overflow.png')
     await userEvent.click(preview)
     await expect(args.onOpen).toHaveBeenCalledWith(screenshot)
   },
@@ -86,17 +76,6 @@ export const Empty: Story = {
 
 /** A long name is cut short under the picture. */
 export const Long: Story = {
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the picture's alt repeats the file name written under
-          // it, inside the same button — fixed by the sweep (DS4)
-          { id: 'image-redundant-alt', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     attachment: {
       ...screenshot,

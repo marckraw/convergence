@@ -14,7 +14,7 @@ describe('SessionStateBadge (MAR-3288 lap 2 B)', () => {
       />,
     )
     expect(screen.getByLabelText('Compacting context…')).toBeInTheDocument()
-    expect(container.querySelector('.text-emerald-500')).toBeNull()
+    expect(container.querySelector('[data-tone="success"]')).toBeNull()
   })
 
   it('draws the finished check once the compaction is over', () => {
@@ -24,7 +24,7 @@ describe('SessionStateBadge (MAR-3288 lap 2 B)', () => {
       />,
     )
     expect(screen.queryByLabelText('Compacting context…')).toBeNull()
-    expect(container.querySelector('.text-emerald-500')).not.toBeNull()
+    expect(container.querySelector('[data-tone="success"]')).not.toBeNull()
   })
 
   it('draws a quiet glyph for a row with no record', () => {
