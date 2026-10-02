@@ -3548,7 +3548,7 @@ describe('ComposerContainer', () => {
         expect(useSessionStore.getState().error).toBeNull()
         if (stage === 'layout' || stage === 'missing-thread') {
           fireEvent.click(
-            screen.getByRole('button', { name: 'Manage accounts' }),
+            screen.getByRole('button', { name: 'Manage accounts…' }),
           )
           expect(useDialogStore.getState().payload).toEqual({
             appSettingsSection: 'provider-accounts',

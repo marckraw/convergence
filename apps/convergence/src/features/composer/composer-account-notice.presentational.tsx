@@ -31,7 +31,7 @@ export function ComposerAccountNotice({
           onManageAccounts &&
           (refusal.stage === 'layout' || refusal.stage === 'missing-thread') ? (
             <Button type="button" variant="link" onClick={onManageAccounts}>
-              Manage accounts
+              Manage accounts…
             </Button>
           ) : undefined
         }

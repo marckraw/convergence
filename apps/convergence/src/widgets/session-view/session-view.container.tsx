@@ -17,6 +17,7 @@ import type { FC } from 'react'
 import { flushSync } from 'react-dom'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
+  FORK_ACTION_LABEL,
   useAnswerInput,
   useSessionStore,
   type SessionContextWindow,
@@ -873,7 +874,7 @@ export const SessionView: FC = () => {
                   }
                 >
                   <GitFork className="h-3.5 w-3.5" />
-                  Fork session…
+                  {FORK_ACTION_LABEL}
                 </MenuItem>
               )}
               {session.providerId !== 'shell' && (

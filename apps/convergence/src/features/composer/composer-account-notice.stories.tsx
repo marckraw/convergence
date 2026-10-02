@@ -61,7 +61,7 @@ export const Failed: Story = {
     const alert = canvas.getByRole('alert')
     await expect(alert).toHaveTextContent(/^Not sent · /)
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Manage accounts' }),
+      canvas.getByRole('button', { name: 'Manage accounts…' }),
     )
     await expect(args.onManageAccounts).toHaveBeenCalledOnce()
   },

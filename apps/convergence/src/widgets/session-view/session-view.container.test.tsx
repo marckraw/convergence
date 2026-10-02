@@ -1323,7 +1323,7 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Session actions' }))
-    await screen.findByText('Fork session…')
+    await screen.findByText('Fork…')
     expect(
       window.electronAPI.pullRequest.refreshForSession,
     ).not.toHaveBeenCalled()
@@ -2890,7 +2890,8 @@ describe('SessionView', () => {
       ['Pull request', 'Project', reach('button')(/^Pull request/)],
       ['Terminal', 'Project', reach('button')('Open terminal')],
       ['Pin', 'Session actions', reach('menuitemcheckbox')('Pin conversation')],
-      ['Fork', 'Session actions', reach('menuitem')('Fork session…')],
+      // One name for the fork, the Actions fan's (CONV-11).
+      ['Fork', 'Session actions', reach('menuitem')('Fork…')],
       ['Link to Space', 'Session actions', reach('menuitem')('Link to Space…')],
       ['debug log', 'Session actions', reach('menuitem')('Open debug log…')],
       [

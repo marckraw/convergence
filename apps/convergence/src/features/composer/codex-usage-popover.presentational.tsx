@@ -206,7 +206,7 @@ export function CodexUsagePopover({
               onOpenSettings()
             }}
           >
-            Settings
+            Settings…
           </Button>
         </div>
       </PopoverContent>
