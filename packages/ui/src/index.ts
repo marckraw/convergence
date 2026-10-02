@@ -372,6 +372,7 @@ export {
 export { TONES, type Tone } from './lib/tone.styles'
 export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'
+export { chartTokens } from './styles/chart.tokens'
 export { layoutPx } from './styles/layout.tokens'
 export { terminalTokens } from './styles/terminal.tokens'
 export {

@@ -343,7 +343,7 @@
   --provider-cursor: light-dark(#a5b3c7, #a5b3c7);
   --provider-google: light-dark(#83a4e2, #83a4e2);
 
-  /* Chart series, in order (analytics-insights.pure.ts CHART_PALETTE) */
+  /* Chart series, in order; chart.tokens.ts mirrors them for ChartGPU, which can't read CSS */
   --chart-1: light-dark(#2563eb, #2563eb);
   --chart-2: light-dark(#14b8a6, #14b8a6);
   --chart-3: light-dark(#f59e0b, #f59e0b);
