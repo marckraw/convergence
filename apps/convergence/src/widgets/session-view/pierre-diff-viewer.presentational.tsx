@@ -257,63 +257,48 @@ function renderDiffContextControls(input: {
       <IconButton
         label="Show more context above changes"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={!input.canExpandBefore || !input.onExpandBefore}
         onClick={input.onExpandBefore}
-        className={diffContextButtonClassName(input.canExpandBefore)}
       >
         <ChevronUp className="h-3.5 w-3.5" />
       </IconButton>
       <IconButton
         label="Show more context above and below changes"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={
           (!input.canExpandBefore && !input.canExpandAfter) ||
           !input.onExpandBoth
         }
         onClick={input.onExpandBoth}
-        className={diffContextButtonClassName(
-          input.canExpandBefore || input.canExpandAfter,
-        )}
       >
         <ChevronsUpDown className="h-3.5 w-3.5" />
       </IconButton>
       <IconButton
         label="Show more context below changes"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={!input.canExpandAfter || !input.onExpandAfter}
         onClick={input.onExpandAfter}
-        className={diffContextButtonClassName(input.canExpandAfter)}
       >
         <ChevronDown className="h-3.5 w-3.5" />
       </IconButton>
       <IconButton
         label="Reset visible diff context"
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="xs"
         disabled={!input.expandedFromDefault || !input.onReset}
         onClick={input.onReset}
-        className={diffContextButtonClassName(input.expandedFromDefault)}
       >
         <RotateCcw className="h-3.5 w-3.5" />
       </IconButton>
     </div>
   )
-}
-
-function diffContextButtonClassName(enabled: boolean): string {
-  return [
-    'rounded border border-border text-muted-foreground',
-    enabled
-      ? 'hover:bg-muted hover:text-foreground'
-      : 'cursor-not-allowed opacity-40',
-  ].join(' ')
 }
 
 function renderPierreDiffPerformanceShell({
