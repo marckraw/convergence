@@ -4,16 +4,16 @@
       {
         "id": "no-magic-values",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:w|h|size|p[xytrbl]?|m[xytrbl]?|gap|text|bg|border|rounded|shadow|leading|tracking|duration|z|inset|top|right|bottom|left|basis|grid-cols|grid-rows|outline|ring|opacity|delay|ease|animate|transition)-\\[",
-        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f]): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)]. A warning until DS4 has swept the app (MAR-3617; docs/checks/design-system-drift.md)."
+        "message": "An arbitrary Tailwind value (w-[37px], text-[11px], bg-[#0b0b0f]): use a token's utility, or add the token to packages/ui/src/styles/tokens.css and theme.css. A custom property is written w-(--name), never w-[var(--name)] (MAR-3617; docs/checks/design-system-drift.md)."
       },
       {
         "id": "no-raw-colors",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx,css}",
         "exclude": [
           "**/*.test.{ts,tsx}",
@@ -22,119 +22,119 @@
           "apps/convergence/src/entities/attachment/attachment-preview.stories.tsx"
         ],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:(?<![\\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|(?=[0-9a-fA-F]{0,3}[a-fA-F])[0-9a-fA-F]{3,4}|(\\d)\\1{2,3})\\b|\\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\\(\\s*(?:[\\d.]|\\$\\{))",
-        "message": "A colour value outside the tokens: every colour is a token in packages/ui/src/styles/tokens.css (light-dark() for both themes), worn as a utility (bg-surface, text-danger-ink) or var(--name). Code that can't read CSS takes a mirror from @convergence/ui, as xterm takes terminalTokens. A warning until DS4 has swept the app (MAR-3617; DS-26)."
+        "message": "A colour value outside the tokens: every colour is a token in packages/ui/src/styles/tokens.css (light-dark() for both themes), worn as a utility (bg-surface, text-danger-ink) or var(--name). Code that can't read CSS takes a mirror from @convergence/ui, as xterm takes terminalTokens (MAR-3617; DS-26)."
       },
       {
         "id": "no-palette-colors",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:text|bg|border(?:-[xytrbse])?|ring|fill|stroke|from|to|via|outline|decoration|divide|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d{2,3}\\b",
-        "message": "A Tailwind palette colour (text-red-500, bg-emerald-500/10): a colour is a role, not a shade (R1). A status is one of five tones, neutral, info, success, warning and danger: text-<tone>-ink, bg-<tone>-soft, border-<tone>-line, bg-<tone>-solid, or the tone prop of Badge, StatusPill, StatusDot and Notice. A named category is a hue token (merged, crew-*, provider-*, tag-*). A warning until DS4 has swept the app (MAR-3617; DS-1)."
+        "message": "A Tailwind palette colour (text-red-500, bg-emerald-500/10): a colour is a role, not a shade (R1). A status is one of five tones, neutral, info, success, warning and danger: text-<tone>-ink, bg-<tone>-soft, border-<tone>-line, bg-<tone>-solid, or the tone prop of Badge, StatusPill, StatusDot and Notice. A named category is a hue token: merged, crew-*, provider-*, tag-* (MAR-3617; DS-1)."
       },
       {
         "id": "no-dark-variant",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<![\\w-])dark:(?=[\\w\\[!-])",
-        "message": "A dark: class in app code: fix the colour in its token instead. Each token is light-dark(LIGHT, DARK) in packages/ui/src/styles/tokens.css, so a utility is right in both themes by itself; dark: belongs inside @convergence/ui only (packages/ui/AGENTS.md). A warning until DS4 has swept the app (MAR-3617)."
+        "message": "A dark: class in app code: fix the colour in its token instead. Each token is light-dark(LIGHT, DARK) in packages/ui/src/styles/tokens.css, so a utility is right in both themes by itself; dark: belongs inside @convergence/ui only (packages/ui/AGENTS.md; MAR-3617)."
       },
       {
         "id": "no-white-overlays",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<![\\w-])(?:border(?:-[xytrbse])?|bg|ring|divide)-(?:white|black)/",
-        "message": "A white or black overlay (border-white/10, bg-black/20) assumes a dark surface and vanishes on a light one: use the theme-safe tokens, border-line-soft for a hairline, bg-fill-hover and bg-fill-selected for the hover and chosen fills, bg-fill-quiet for a faint panel, bg-chip for a chip. A warning until DS4 has swept the app (MAR-3617; DS-2)."
+        "message": "A white or black overlay (border-white/10, bg-black/20) assumes a dark surface and vanishes on a light one: use the theme-safe tokens, border-line-soft for a hairline, bg-fill-hover and bg-fill-selected for the hover and chosen fills, bg-fill-quiet for a faint panel, bg-chip for a chip (MAR-3617; DS-2)."
       },
       {
         "id": "motion-from-tokens",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}", "packages/ui/src/styles/**"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?:\\b(?:duration|delay)-\\d+\\b|\\btransition-all\\b)",
-        "message": "Motion by hand (duration-150, delay-75, transition-all): durations are the motion tokens, duration-exit, duration-fast, duration-panel and duration-slow (a bare transition is already duration-fast), and a transition names what moves (transition-colors, transition-opacity, transition-transform), never all. A warning until DS4 has swept the app (MAR-3617)."
+        "message": "Motion by hand (duration-150, delay-75, transition-all): durations are the motion tokens, duration-exit, duration-fast, duration-panel and duration-slow (a bare transition is already duration-fast), and a transition names what moves (transition-colors, transition-opacity, transition-transform), never all (MAR-3617)."
       },
       {
         "id": "use-focus-ring",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:focus(?:-visible|-within)?|has-focus-visible):(?:(?:outline|ring)-ring\\b|outline(?![\\w-]))",
-        "message": "A focus ring typed by hand: use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588). A warning until DS4 has swept the app (MAR-3617; DS-7)."
+        "message": "A focus ring typed by hand: use focusRing, focusRingInset, focusRingField or focusRingWithin from @convergence/ui, which pick the ring by where the element sits (Button, IconButton, Input and TextLink have theirs). Copies drift, and in Tailwind 4 most typed outline rings draw nothing (MAR-3588; MAR-3617; DS-7)."
       },
       {
         "id": "no-invisible-focus-ring",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "{apps/convergence/src,packages/ui/src}/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)([\"'\\`])(?=(?:(?!\\1)[^\\n])*?(?<![\\w:-])outline-none\\b)(?=(?:(?!\\1)[^\\n])*?\\bfocus-visible:outline-)(?!(?:(?!\\1)[^\\n])*?\\bfocus-visible:outline-(?:solid|dashed|dotted|double)\\b)(?:(?!\\1)[^\\n])*\\1",
-        "message": "A focus ring that draws nothing: in Tailwind 4, outline-none sets the outline's style to none, and focus-visible:outline-2 draws in that style. Use focusRing (or a sibling) from @convergence/ui; if you must type it, add focus-visible:outline-solid (MAR-3588). A warning until DS4 has swept the app (MAR-3617)."
+        "message": "A focus ring that draws nothing: in Tailwind 4, outline-none sets the outline's style to none, and focus-visible:outline-2 draws in that style. Use focusRing (or a sibling) from @convergence/ui; if you must type it, add focus-visible:outline-solid (MAR-3588; MAR-3617)."
       },
       {
         "id": "use-spinner",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\banimate-spin\\b",
-        "message": "A spinner built by hand: give the Button pending (with pendingLabel), or use Spinner from @convergence/ui. Both run on the motion tokens and stand still under reduced motion, and a pending Button keeps its width and sets aria-busy. A warning until DS4 has swept the app (MAR-3617; DS-12)."
+        "message": "A spinner built by hand: give the Button pending (with pendingLabel), or use Spinner from @convergence/ui. Both run on the motion tokens and stand still under reduced motion, and a pending Button keeps its width and sets aria-busy (MAR-3617; DS-12)."
       },
       {
         "id": "use-form-error",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<p\\b(?:[^>]|=>)*?\\srole=\\{?[\"']alert[\"']",
-        "message": "An error line built by hand: use FormError from @convergence/ui (FieldError inside a Field, DS3c), so every error reads, sits and is announced the same way. A warning until DS4 has swept the app (MAR-3617; DS-5, DS-13)."
+        "message": "An error line built by hand: use FormError from @convergence/ui (FieldError inside a Field, DS3c), so every error reads, sits and is announced the same way (MAR-3617; DS-5, DS-13)."
       },
       {
         "id": "no-title-on-buttons",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:button|Button|IconButton)\\b(?:[^>]|=>)*?\\stitle=",
-        "message": "A native title on a button (R2): an icon-only button is an IconButton, whose label is its aria-label and its tooltip; anything else wears <Tooltip label>. The browser's title is slow, unstyled and never shows on focus. A warning until DS4 has swept the app (MAR-3617; DS-3)."
+        "message": "A native title on a button (R2): an icon-only button is an IconButton, whose label is its aria-label and its tooltip; anything else wears <Tooltip label>. The browser's title is slow, unstyled and never shows on focus (MAR-3617; DS-3)."
       },
       {
         "id": "use-button-sizes",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)<(?:Button|IconButton)\\b(?:[^>]|=>)*?\\bclassName=(?:[^>]|=>)*?(?<![\\w:\\]-])(?:size|h|w)-(?:\\d+(?:\\.5)?|px)\\b",
-        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). A height typed on top drifts from every other control. A warning until DS4 has swept the app (MAR-3617; DS-4)."
+        "message": "A Button or IconButton resized in className: pick one of its sizes (R3), size=\"xs\", \"sm\", \"md\" or \"lg\" (24, 28, 32 and 36 px). A height typed on top drifts from every other control (MAR-3617; DS-4)."
       },
       {
         "id": "no-native-confirm",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.{ts,tsx}",
         "exclude": ["**/*.test.{ts,tsx}"],
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)\\b(?:window|globalThis)\\.confirm\\(",
-        "message": "The operating system's confirm box: ask in the app with ConfirmDialog (or useConfirm) from @convergence/ui (DS3b), variant=\"danger\" when the action destroys something, so the question looks like Convergence and the focus starts on Cancel (R5). A warning until DS4 has swept the app (MAR-3617; DS-6)."
+        "message": "The operating system's confirm box: ask in the app with ConfirmDialog (or useConfirm) from @convergence/ui (DS3b), variant=\"danger\" when the action destroys something, so the question looks like Convergence and the focus starts on Cancel (R5; MAR-3617; DS-6)."
       },
       {
         "id": "raw-elements-need-a-reason",
         "type": "regex",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.presentational.tsx",
         "pattern": "(?<!^[ \\t]*(?:\\*|//|/\\*|\\{/\\*)[^\\n]*)(?<!(?://|/\\*)[ \\t]*raw-element:[ \\t]*(?!\\*/)\\S[^\\n]*\\n(?:[ \\t]*(?://|\\{?/\\*)[ \\t]*eslint-disable-next-line[^\\n]*\\n)?[^\\n]*)(?<!\\brender=\\{\\s*)<(?:button|a|input|textarea|select)\\b(?!(?:[^>]|=>)*?\\bbuttonVariants\\()",
-        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705). A warning until DS4 has swept the app (MAR-3617; DS-27)."
+        "message": "A raw <button>, <a>, <input>, <textarea> or <select>: use the design system's part (Button, IconButton, buttonVariants on a link, TextLink, ListRow, Input, Textarea, Select…), or say why not on the line above: // raw-element: <reason>, or {/* raw-element: <reason> */} in JSX. Scoped to apps/convergence: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705; MAR-3617; DS-27)."
       },
       {
         "id": "ui-components-have-stories",
         "type": "file-pairing",
-        "severity": "warning",
+        "severity": "error",
         "files": "packages/ui/src/{components,motion}/*/*.tsx",
         "exclude": ["**/*.stories.tsx", "**/*.test.tsx"],
         "pair": {
@@ -148,7 +148,7 @@
       {
         "id": "app-parts-have-stories",
         "type": "file-pairing",
-        "severity": "warning",
+        "severity": "error",
         "files": "apps/convergence/src/**/*.presentational.tsx",
         "exclude": [
           "apps/convergence/src/features/analytics-insights/{range-picker,usage-tab,work-style-tab}.presentational.tsx",
@@ -172,12 +172,12 @@
           "to": ".stories.tsx"
         },
         "mustExist": true,
-        "message": "Every presentational part has <name>.stories.tsx beside it. A sub-part drawn only inside a bigger part's stories is listed in this rule's exclude instead, one line per folder (docs/checks/design-system-drift.md). A warning until DS4 has given the rest their stories (MAR-3617)."
+        "message": "Every presentational part has <name>.stories.tsx beside it. A sub-part drawn only inside a bigger part's stories is listed in this rule's exclude instead, one line per folder (docs/checks/design-system-drift.md; MAR-3617)."
       },
       {
         "id": "stories-titled-by-group",
         "type": "file-contract",
-        "severity": "warning",
+        "severity": "error",
         "files": "{apps,packages}/*/src/**/*.stories.tsx",
         "requiredPatterns": [
           "(?:^|\\n)[ \\t]*title:\\s*[\"'\\`](?:Foundations|Primitives|Components|Motion|Entities|Features|Widgets)/"
@@ -187,7 +187,7 @@
       {
         "id": "stories-fail-on-axe",
         "type": "file-contract",
-        "severity": "warning",
+        "severity": "error",
         "files": "packages/ui/.storybook/preview.tsx",
         "requiredPatterns": ["a11y:\\s*\\{\\s*test:\\s*[\"']error[\"']"],
         "message": "Every story runs as a test with an axe check that fails it (a11y: { test: 'error' }); 'todo' or 'off' switches the accessibility gate off for the whole design system."
