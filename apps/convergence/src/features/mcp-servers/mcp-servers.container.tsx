@@ -54,7 +54,7 @@ export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
         setError(
           nextError instanceof Error
             ? nextError.message
-            : 'Failed to load MCP servers',
+            : 'Couldn’t load the MCP servers.',
         )
       } finally {
         setIsLoading(false)
@@ -72,7 +72,7 @@ export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
       setError(
         nextError instanceof Error
           ? nextError.message
-          : 'Failed to load MCP servers',
+          : 'Couldn’t load the MCP servers.',
       )
     } finally {
       setIsLoading(false)

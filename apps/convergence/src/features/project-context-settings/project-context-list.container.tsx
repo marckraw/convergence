@@ -88,7 +88,7 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
         if (created === null) {
           setFormError(
             useProjectContextStore.getState().error ??
-              'Failed to create context item',
+              'Couldn’t create the context item.',
           )
           return
         }
@@ -101,7 +101,7 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
         if (updated === null) {
           setFormError(
             useProjectContextStore.getState().error ??
-              'Failed to update context item',
+              'Couldn’t update the context item.',
           )
           return
         }

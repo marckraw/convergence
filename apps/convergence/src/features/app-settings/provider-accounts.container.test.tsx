@@ -1403,7 +1403,7 @@ describe('MAR-3458 ChatGPT apps', () => {
       'Copy link',
     )
     expect(await within(group).findByRole('alert')).toHaveTextContent(
-      'Could not copy the ChatGPT link. Try Refresh, then Copy link again.',
+      'Couldn’t copy the ChatGPT link. Try Refresh, then Copy link again.',
     )
     expect(within(group).queryByText(/Link copied/)).toBeNull()
   })
@@ -1540,7 +1540,7 @@ describe('MAR-3458 ChatGPT apps', () => {
     providerAccounts.listChatGptApps.mockRejectedValue(new Error('fixture'))
     const group = await open()
     expect(await within(group).findByRole('alert')).toHaveTextContent(
-      'Could not read ChatGPT apps',
+      'Couldn’t read ChatGPT apps',
     )
     expect(screen.getByText('Configured on this Mac')).toBeInTheDocument()
     expect(screen.getByText('linear')).toBeInTheDocument()

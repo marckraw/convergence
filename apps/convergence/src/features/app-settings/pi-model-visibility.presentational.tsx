@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ProviderModelOption } from '@/entities/session'
-import { Button, Checkbox, Input } from '@convergence/ui'
+import { Button, Checkbox, EmptyState, SearchField } from '@convergence/ui'
 
 interface PiModelVisibilityFieldsProps {
   providerExists: boolean
@@ -24,13 +24,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
   onToggleModel,
 }) => {
   if (!providerExists) {
-    return (
-      <div className="rounded-xl border border-dashed border-border bg-card/35 px-4 py-5">
-        <p className="text-sm text-muted-foreground">
-          Pi is not available in this app runtime.
-        </p>
-      </div>
-    )
+    return <EmptyState detail="Pi is not available in this app runtime." />
   }
 
   return (
@@ -39,27 +33,25 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h4 className="text-sm font-medium">models.json</h4>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-ink-muted">
               These models are always visible in Pi model pickers.
             </p>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-ink-muted">
             {modelsJsonModels.length}
           </span>
         </div>
-        <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-card/35">
+        <div className="max-h-48 overflow-y-auto rounded-md border border-line bg-surface/35">
           {modelsJsonModels.length === 0 ? (
-            <p className="px-3 py-3 text-sm text-muted-foreground">
+            <p className="px-3 py-3 text-sm text-ink-muted">
               No Pi models were found in models.json.
             </p>
           ) : (
-            <ul className="divide-y divide-border/70">
+            <ul className="divide-y divide-line-soft">
               {modelsJsonModels.map((model) => (
                 <li key={model.id} className="px-3 py-2">
                   <p className="truncate text-sm font-medium">{model.label}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {model.id}
-                  </p>
+                  <p className="truncate text-xs text-ink-muted">{model.id}</p>
                 </li>
               ))}
             </ul>
@@ -71,21 +63,24 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h4 className="text-sm font-medium">Additional Pi models</h4>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-ink-muted">
               Selected models are added alongside models.json entries.
             </p>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-ink-muted">
             {selectedModelIdsSet.size} selected
           </span>
         </div>
 
         <div className="flex gap-2">
-          <Input
+          <SearchField
             size="lg"
+            className="flex-1"
+            aria-label="Search available Pi models"
+            placeholder="Search available Pi models…"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search available Pi models..."
+            onClear={() => onQueryChange('')}
           />
           {selectedModelIdsSet.size > 0 && (
             <Button
@@ -97,18 +92,18 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
                 )
               }}
             >
-              Clear
+              Clear selection
             </Button>
           )}
         </div>
 
-        <div className="max-h-80 overflow-y-auto rounded-md border border-border bg-card/35">
+        <div className="max-h-80 overflow-y-auto rounded-md border border-line bg-surface/35">
           {optionalModels.length === 0 ? (
-            <p className="px-3 py-3 text-sm text-muted-foreground">
+            <p className="px-3 py-3 text-sm text-ink-muted">
               No matching Pi models.
             </p>
           ) : (
-            <ul className="divide-y divide-border/70">
+            <ul className="divide-y divide-line-soft">
               {optionalModels.map((model) => {
                 const checked = selectedModelIdsSet.has(model.id)
                 return (
@@ -124,7 +119,7 @@ export const PiModelVisibilityFields: FC<PiModelVisibilityFieldsProps> = ({
                         <span className="block truncate text-sm font-medium">
                           {model.label}
                         </span>
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="block truncate text-xs text-ink-muted">
                           {model.id}
                         </span>
                       </span>

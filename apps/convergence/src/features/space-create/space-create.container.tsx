@@ -53,7 +53,7 @@ export const SpaceCreateDialogContainer: FC<
       })
       const storeError = useSpaceStore.getState().error
       if (storeError || !created) {
-        setError(storeError ?? 'Failed to create Space')
+        setError(storeError ?? 'Couldn’t create the Space.')
         return
       }
 
@@ -64,7 +64,7 @@ export const SpaceCreateDialogContainer: FC<
       setError(
         nextError instanceof Error
           ? nextError.message
-          : 'Failed to create Space',
+          : 'Couldn’t create the Space.',
       )
     } finally {
       setIsSubmitting(false)

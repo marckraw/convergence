@@ -93,7 +93,7 @@ export const ProjectCreateDialogContainer: FC = () => {
       closeDialog()
       return
     }
-    setError(useProjectStore.getState().error ?? 'Failed to clone project')
+    setError(useProjectStore.getState().error ?? 'Couldn’t clone the project.')
   }, [cloneProject, closeDialog, directoryName, parentDirectory, remoteUrl])
 
   return (

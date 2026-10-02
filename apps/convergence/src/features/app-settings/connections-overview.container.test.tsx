@@ -224,7 +224,7 @@ describe('MAR-3518 Check all accounts', () => {
     // In flight forever would stop the account's own panel from checking.
     expect(useChatGptSignInsStore.getState().inFlight['openai-ef']).toBeNull()
     const openai = rowOf('marcin@ef.design')
-    expect(openai).toHaveTextContent('Could not check sign-ins. Try Refresh.')
+    expect(openai).toHaveTextContent('Couldn’t check sign-ins. Try Refresh.')
     const cells = within(openai).getAllByRole('cell')
     expect(cells[0]).toHaveTextContent('Sign-in not checked · ChatGPT app')
     expect(cells[1]).toHaveTextContent(
