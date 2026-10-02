@@ -21,14 +21,15 @@ import { Spinner } from '../../motion/spinner/spinner'
  *   never a className (R5).
  */
 const VARIANTS = {
-  primary: 'bg-strong text-on-strong shadow hover:bg-strong/90',
+  primary: 'bg-strong text-on-strong shadow-control hover:bg-strong/90',
   secondary:
-    'border border-control-line bg-canvas shadow-sm hover:bg-highlight hover:text-on-highlight',
-  tonal: 'bg-surface-muted text-ink shadow-sm hover:bg-surface-muted/80',
+    'border border-control-line bg-canvas shadow-control hover:bg-highlight hover:text-on-highlight',
+  tonal: 'bg-surface-muted text-ink shadow-control hover:bg-surface-muted/80',
   ghost: 'hover:bg-highlight hover:text-on-highlight',
   quiet: 'text-ink-muted hover:bg-highlight hover:text-ink',
   link: 'text-strong underline-offset-4 hover:underline',
-  danger: 'bg-danger-solid text-on-danger shadow-sm hover:bg-danger-solid/90',
+  danger:
+    'bg-danger-solid text-on-danger shadow-control hover:bg-danger-solid/90',
   'danger-quiet': 'text-danger-ink hover:bg-danger-soft hover:text-danger-ink',
 } as const
 

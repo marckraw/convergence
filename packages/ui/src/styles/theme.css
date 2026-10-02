@@ -1,15 +1,17 @@
 /*
- * The Tailwind v4 theme of @convergence/ui (MAR-3615 DS2): maps tokens.css onto utilities.
+ * The Tailwind v4 theme of @convergence/ui (MAR-3615 DS2, locked by DS5 MAR-3618): maps
+ * tokens.css onto utilities. Tailwind's own palette, fonts, type scale, radii, shadows, easings and
+ * animations are switched off (each `--…-*: initial` below) and refilled from the tokens alone, so
+ * a class names a token or generates nothing: bg-canvas, text-ink-muted, border-line-soft,
+ * shadow-raised, rounded-md, text-2xs, ease-enter. Tailwind's other scales (spacing, breakpoints,
+ * container widths, line heights, tracking, blur) stay on.
  *
  * global.css imports it after Tailwind and points an @source at packages/ui/src (MAR-3610):
  *   @import 'tailwindcss';
  *   @import '@convergence/ui/theme.css';
  *
- * The app and the design system write the token names (bg-canvas, text-ink-muted, border-line …);
- * DS5 swept the last shadcn names away and deleted the legacy bridge (MAR-3618). Until the reset,
- * Tailwind's own palette, type scale, radii, shadows, easings and animations stay on: each line
- * marked "DS5:" switches one off. The vendor bridge at the end serves the shadcn and palette names
- * Streamdown's bundle writes, and only those.
+ * The vendor bridge at the end serves the shadcn and palette names Streamdown's bundle writes,
+ * and only those; the app and the design system write the tokens.
  */
 @import './tokens.css';
 
@@ -64,7 +66,7 @@
 }
 
 @theme inline {
-  /* DS5: --color-*: initial; */
+  --color-*: initial;
 
   /* Surfaces */
   --color-canvas: var(--canvas);
@@ -190,10 +192,10 @@
   --color-terminal-tab-ink-muted: var(--terminal-tab-ink-muted);
 
   /* Type. font-sans also becomes <html>'s face, which <body> already wears */
-  /* DS5: --font-*: initial; */
+  --font-*: initial;
   --font-sans: var(--type-family-sans);
   --font-mono: var(--type-family-mono);
-  /* DS5: --font-weight-*: initial; */
+  --font-weight-*: initial;
   --font-weight-normal: var(--type-weight-regular);
   --font-weight-medium: var(--type-weight-medium);
   --font-weight-semibold: var(--type-weight-semibold);
@@ -203,7 +205,7 @@
    * do today, so the sweep moves nothing. Their line heights are leading-3xs and leading-2xs
    * until the redesign wires them in (uncomment the two --line-height lines then).
    */
-  /* DS5: --text-*: initial; */
+  --text-*: initial;
   --text-3xs: var(--type-size-3xs);
   /* Redesign: --text-3xs--line-height: var(--type-leading-3xs); */
   --text-2xs: var(--type-size-2xs);
@@ -226,8 +228,8 @@
   --leading-2xs: var(--type-leading-2xs);
   --tracking-eyebrow: var(--type-tracking-eyebrow);
 
-  /* Corners: Tailwind's names, today's values. Bare rounded reads --radius (10 px) */
-  /* DS5: --radius-*: initial; */
+  /* Corners: Tailwind's names on the corner tokens. Bare rounded reads --radius (10 px) */
+  --radius-*: initial;
   --radius: var(--corner-row);
   --radius-sm: var(--corner-xs);
   --radius-md: var(--corner-control);
@@ -236,9 +238,9 @@
   --radius-2xl: var(--corner-sheet);
 
   /* Elevation: shadow-control, shadow-raised, shadow-floating, shadow-overlay, shadow-sheet(-open) */
-  /* DS5: --shadow-*: initial; */
-  /* DS5: --inset-shadow-*: initial; */
-  /* DS5: --drop-shadow-*: initial; */
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
   --shadow-control: var(--elevation-control);
   --shadow-raised: var(--elevation-raised);
   --shadow-floating: var(--elevation-floating);
@@ -278,9 +280,9 @@
   /*
    * Motion. Every value is a name: duration-exit|fast|panel|slow, ease-out|in|in-out|enter|exit|
    * guide, animate-pop-in|pop-out|slide-in-*|spin|pulse. A bare transition is --motion-fast on
-   * --motion-ease-move, exactly Tailwind's default today.
+   * --motion-ease-move, Tailwind's own default.
    */
-  /* DS5: --ease-*: initial; */
+  --ease-*: initial;
   --ease-out: var(--motion-ease);
   --ease-in: var(--motion-ease-in);
   --ease-in-out: var(--motion-ease-move);
@@ -310,7 +312,7 @@
    * under reduced motion they don't run at all; unguarded, they keep the fade and lose the travel
    * and the scale, which go to zero in tokens.css.
    */
-  /* DS5: --animate-*: initial; */
+  --animate-*: initial;
   --animate-pop-in: pop-in var(--motion-fast) var(--motion-ease-enter) both;
   --animate-pop-out: pop-out var(--motion-exit) var(--motion-ease-exit) both;
   --animate-slide-in-top:

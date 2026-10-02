@@ -95,7 +95,7 @@ export const AnnotationSelectionPopover: FC<
           </div>
         </form>
       ) : (
-        <div className="flex items-center gap-0.5 rounded-full border border-line bg-raised p-1 shadow-lg">
+        <div className="flex items-center gap-0.5 rounded-full border border-line bg-raised p-1 shadow-raised">
           <Button
             type="button"
             variant="ghost"

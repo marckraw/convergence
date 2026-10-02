@@ -812,7 +812,7 @@ describe('ComposerContainer', () => {
     expect(stripTokens).toContain('bg-surface-sunken')
     expect(spacingScale(strip, TUCK_CLASS)).toBeGreaterThan(0)
     expect(spacingScale(strip, INSET_CLASS)).toBeGreaterThan(0)
-    expect(classTokens(card)).toContain('shadow-md')
+    expect(classTokens(card)).toContain('shadow-raised')
 
     // The row separator is gone for good: it said "one surface, divided". The
     // whole family is forbidden, not the single class that was deleted — a top

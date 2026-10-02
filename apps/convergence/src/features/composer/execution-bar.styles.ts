@@ -69,7 +69,7 @@ export const stripClass = [
  * onto it. The shadow is what makes the card read as *resting on* the strip
  * rather than merely overlapping it, so dial it with the inset, not alone.
  */
-const composerCardDepthClass = 'relative z-10 shadow-md'
+const composerCardDepthClass = 'relative z-10 shadow-raised'
 
 /**
  * The card's depth, one entry per strip state.
