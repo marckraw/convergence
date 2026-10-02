@@ -1,3 +1,5 @@
+import { durationsMs } from '../../motion/tokens'
+
 /** Where a tooltip shows, beside what it explains. */
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
 
@@ -6,12 +8,16 @@ export type TooltipInstant = 'focus' | 'delay' | undefined
 
 /**
  * How long a pointer rests on something before its tooltip shows, in ms: the
- * delay the app's root provider has always used (R0, MAR-3616).
+ * delay the app's root provider has always used (R0, MAR-3616), the
+ * `--motion-tooltip-delay` token (DS-33).
  */
-export const TOOLTIP_DELAY_MS = 200
+export const TOOLTIP_DELAY_MS = durationsMs.tooltipDelay
 
-/** After a tooltip closes, how long the next one still shows at once, in ms. */
-export const TOOLTIP_WARM_MS = 300
+/**
+ * After a tooltip closes, how long the next one still shows at once, in ms:
+ * the `--motion-tooltip-warm` token (DS-33).
+ */
+export const TOOLTIP_WARM_MS = durationsMs.tooltipWarm
 
 /** Between a tooltip and what it explains, in px: today's `sideOffset`. */
 export const TOOLTIP_OFFSET = 4

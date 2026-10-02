@@ -655,6 +655,8 @@
   --motion-breath: 2.8s;
   /* How long the pointer rests before a tooltip shows (the root TooltipProvider) */
   --motion-tooltip-delay: 200ms;
+  /* After a tooltip closes, how long the next one still shows at once, as the pointer moves along a toolbar */
+  --motion-tooltip-warm: 300ms;
   /* Tailwind's ease-out: things settling */
   --motion-ease: cubic-bezier(0, 0, 0.2, 1);
   /* Tailwind's ease-in */

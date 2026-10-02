@@ -139,7 +139,8 @@ never `duration-150`, `ease-[…]` or `transition-all`. A new kind of motion is 
 - **Tokens.** `--motion-exit` 100 ms, `--motion-fast` 150 ms, `--motion-panel` 200 ms,
   `--motion-slow` 350 ms (rare, guided moments), `--motion-pulse` 600 ms, `--motion-loop` 1 s,
   `--motion-blink` 2 s, `--motion-wire` 1.8 s and `--motion-breath` 2.8 s (Mission Control's lit
-  wire and working card), `--motion-tooltip-delay` 200 ms; the easings `--motion-ease`, `-in`,
+  wire and working card), `--motion-tooltip-delay` 200 ms and `--motion-tooltip-warm` 300 ms
+  (the next tooltip shows at once within it); the easings `--motion-ease`, `-in`,
   `-move`, `-enter`, `-exit`, `-guide`, `-blink`; `--motion-shift` 8 px, `--motion-scale-from`
   0.95, `--motion-loops` infinite. In classes: `duration-exit|fast|panel|slow`,
   `ease-out|in|in-out|enter|exit|guide`, `transition-motion|size|fill|layout`,

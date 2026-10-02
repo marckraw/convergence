@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   act,
@@ -875,7 +877,12 @@ describe('MAR-3203 R5: the quick reference folds to one column', () => {
     // Electron's View -> Zoom In shrinks the CSS viewport.
     // Mutation: `md:grid-cols-2` (768) instead -> red. 768 is narrower than
     // where these cards actually stop being readable.
-    expect(classesOf(grid)).toContain('min-[860px]:grid-cols-2')
+    expect(classesOf(grid)).toContain('learn-loom:grid-cols-2')
+    // The app's own breakpoint, at 860 px (53.75rem), not an arbitrary
+    // `min-[860px]` (R11). Mutation: move it to 48rem -> red.
+    expect(
+      readFileSync(resolve(__dirname, '../../app/global.css'), 'utf8'),
+    ).toMatch(/--breakpoint-learn-loom:\s*53\.75rem;/)
     // Mutation: drop `grid-cols-1` and rely on the default -> red. The
     // single column is the stated rule, not an accident of the grid.
     expect(classesOf(grid)).toContain('grid-cols-1')
