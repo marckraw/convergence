@@ -16,7 +16,7 @@ export { popupSurface } from './popup-surface.styles'
 
 /** The fade and the grow, on Base UI's first and last frames. */
 const grow = [
-  'transition-[opacity,scale,translate] duration-fast ease-enter',
+  'transition-motion duration-fast ease-enter',
   'data-starting-style:opacity-0 data-starting-style:scale-(--motion-scale-from)',
   'data-ending-style:opacity-0 data-ending-style:scale-(--motion-scale-from) data-ending-style:duration-exit data-ending-style:ease-exit',
 ].join(' ')

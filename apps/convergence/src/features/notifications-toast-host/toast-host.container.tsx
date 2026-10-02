@@ -21,6 +21,15 @@ function severityFor(kind: NotificationEventKind): NotificationSeverity {
     : 'critical'
 }
 
+/**
+ * The toast for an event, in R1's tones: an agent that waits on you is a
+ * warning, never red; only a failure is an error.
+ */
+function showToastFor(kind: NotificationEventKind) {
+  if (severityFor(kind) === 'info') return toast
+  return kind === 'agent.errored' ? toast.error : toast.warning
+}
+
 // Cross-project focus: a system notification or toast click can target a
 // session that lives in a different project than the one currently
 // active. Hop projects first (mirroring command-center's switchToSession)
@@ -111,9 +120,7 @@ export function NotificationsToastHostContainer({
         }
         if (payload.channel !== 'toast') return
 
-        const severity = severityFor(payload.event.kind)
-        const showFn = severity === 'critical' ? toast.error : toast
-        showFn(payload.formatted.title, {
+        showToastFor(payload.event.kind)(payload.formatted.title, {
           description: payload.formatted.body,
           onDismiss: () => clearUnread(),
           onAutoClose: () => clearUnread(),

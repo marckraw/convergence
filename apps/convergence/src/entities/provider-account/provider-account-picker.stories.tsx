@@ -100,6 +100,23 @@ export const AmbientDefault: Story = {
   },
 }
 
+/** What the picker is for, in our tooltip on the trigger (R2), never a native title. */
+export const Help: Story = {
+  args: {
+    help: 'Accounts belong to organisations: a swap can change what answers.',
+  },
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('combobox', {
+      name: 'marcin@work.example',
+    })
+    await expect(trigger.closest('[title]')).toBeNull()
+    await userEvent.hover(trigger)
+    await expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 }),
+    ).toHaveTextContent('a swap can change what answers')
+  },
+}
+
 /** Locked while a turn is in flight: the swap applies to the next one. */
 export const Disabled: Story = {
   args: { disabled: true },

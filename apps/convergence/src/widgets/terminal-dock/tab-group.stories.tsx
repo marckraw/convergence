@@ -24,20 +24,6 @@ const tabs: TerminalTab[] = [
   tab('build', 'npm run build', { status: 'exited', exitCode: 0, pid: null }),
 ]
 
-/*
- * Known gaps, switched off on these stories alone. The tab list's structure
- * gaps (buttons among the tabs, aria-controls naming a panel never drawn)
- * closed when the strip moved to the kit's Tabs (MAR-3616 DS3c).
- */
-// a11y-known: an exited tab is drawn at 60% opacity, 2.9:1 on the dock —
-// fixed by the sweep (DS4)
-const exitedTabContrast = { id: 'color-contrast', enabled: false }
-
-/** For stories that draw an exited tab. */
-const knownTabGaps = {
-  a11y: { config: { rules: [exitedTabContrast] } },
-}
-
 const meta = {
   title: 'Widgets/Terminal dock/Tab group',
   component: TabGroup,
@@ -53,7 +39,7 @@ const meta = {
     (Story) => (
       // The dock forces dark in both themes the app's way, with a subtree
       // data-theme (R12), not a `.dark` class, which no longer themes (DS2).
-      <div data-theme="dark" className="bg-[#0b0b0f] text-zinc-100">
+      <div data-theme="dark" className="bg-terminal-bg text-terminal-ink">
         <Story />
       </div>
     ),
@@ -69,7 +55,6 @@ type Story = StoryObj<typeof meta>
  * arrow keys move between them, and a button opens another.
  */
 export const Default: Story = {
-  parameters: knownTabGaps,
   play: async ({ args, canvas, userEvent }) => {
     await expect(
       canvas.getByRole('tablist', { name: 'Terminal tabs' }),
@@ -108,7 +93,6 @@ export const Dark: Story = {
 
 /** The arrow keys move between tabs, and moving selects. */
 export const Keyboard: Story = {
-  parameters: knownTabGaps,
   play: async ({ args, canvas, userEvent }) => {
     const active = canvas.getByRole('tab', { name: 'npm run test:stories' })
     active.focus()

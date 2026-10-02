@@ -375,6 +375,7 @@ export {
   toneLine,
   toneSoft,
   toneSolid,
+  toneStroke,
 } from './lib/tone.styles'
 export { useAppliedTheme } from './lib/use-applied-theme'
 export { durationsMs, easings } from './motion/tokens'

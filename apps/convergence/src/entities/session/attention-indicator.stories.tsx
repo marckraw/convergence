@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { ComponentProps } from 'react'
 import { expect } from 'storybook/test'
+import { DescriptionItem, DescriptionList } from '@convergence/ui'
 import { AttentionIndicator } from './attention-indicator.presentational'
 
 type IndicatorProps = ComponentProps<typeof AttentionIndicator>
@@ -43,21 +44,24 @@ const STATES: Array<{ label: string; props: IndicatorProps }> = [
   },
 ]
 
-/** The pills side by side, each named for the case it shows. */
+/** The pills in a list, each named for the case it shows. */
 function AllStates() {
   return (
-    <dl className="grid grid-cols-[auto_auto] items-center gap-x-4 gap-y-2 text-xs text-foreground">
+    <DescriptionList layout="inline" className="w-96 gap-2">
       {STATES.map(({ label, props }) => (
-        <div key={label} className="contents">
-          <dt className="text-muted-foreground">{label}</dt>
-          <dd>
-            <AttentionIndicator {...props} />
-          </dd>
-        </div>
+        <DescriptionItem key={label} term={label}>
+          <AttentionIndicator {...props} />
+        </DescriptionItem>
       ))}
-    </dl>
+    </DescriptionList>
   )
 }
+
+/** The tone each pill wears, in order. */
+const canvasTones = (values: HTMLElement[]) =>
+  values.map((value) =>
+    value.querySelector('[data-slot="status-pill"]')?.getAttribute('data-tone'),
+  )
 
 const meta = {
   title: 'Entities/Session/Attention indicator',
@@ -93,6 +97,18 @@ export const States: Story = {
     ]) {
       await expect(canvas.getByText(text)).toBeVisible()
     }
+    // R1: each settled attention wears the session's tone for it.
+    const tones = canvasTones(canvas.getAllByRole('definition'))
+    await expect(tones).toEqual([
+      'warning',
+      'warning',
+      'neutral',
+      'neutral',
+      'neutral',
+      'success',
+      'danger',
+      'warning',
+    ])
   },
 }
 

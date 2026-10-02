@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  EmptyState,
 } from '@convergence/ui'
 import type { Attachment } from './attachment.types'
 
@@ -16,6 +17,12 @@ interface AttachmentPreviewProps {
   onClose: () => void
 }
 
+/**
+ * A file attached to a message, whole, in the widest dialog (up to 1280 px)
+ * as tall as the window allows: a picture letterboxed on the viewer's black,
+ * a PDF, or the text. While it is read it says so; a file that can't be read
+ * says why, as an alert.
+ */
 export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
   attachment,
   objectUrl,
@@ -31,7 +38,7 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
       open={open}
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
-      <DialogContent className="w-[min(96vw,72rem)] max-h-[calc(100vh-2rem)] max-w-none">
+      <DialogContent size="2xl" className="max-h-full">
         <DialogHeader className="border-b border-border px-4 py-3 pr-10">
           <DialogTitle className="truncate">
             {attachment?.filename ?? 'Preview'}
@@ -40,14 +47,25 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
 
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {isLoading && (
-            <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-              Loading…
+            <div className="flex h-64">
+              <EmptyState
+                state="loading"
+                variant="plain"
+                layout="centred"
+                title="Loading…"
+              />
             </div>
           )}
 
           {!isLoading && error && (
-            <div className="flex h-64 items-center justify-center text-sm text-destructive">
-              {error}
+            <div className="flex h-64">
+              <EmptyState
+                state="failed"
+                variant="plain"
+                layout="centred"
+                title="Couldn't open the preview"
+                detail={error}
+              />
             </div>
           )}
 
@@ -55,11 +73,11 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
             !error &&
             attachment?.kind === 'image' &&
             objectUrl && (
-              <div className="flex min-h-64 items-center justify-center rounded-md bg-black">
+              <div className="flex min-h-64 items-center justify-center rounded-md bg-viewer">
                 <img
                   src={objectUrl}
                   alt={attachment.filename}
-                  className="block h-auto w-auto max-h-[calc(100vh-8rem)] max-w-full object-contain"
+                  className="block h-auto max-h-(--layout-preview-height) w-auto max-w-full object-contain"
                 />
               </div>
             )}
@@ -68,12 +86,12 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
             <embed
               src={objectUrl}
               type="application/pdf"
-              className="h-[calc(100vh-8rem)] min-h-64 w-full"
+              className="h-(--layout-preview-height) min-h-64 w-full"
             />
           )}
 
           {!isLoading && !error && attachment?.kind === 'text' && (
-            <pre className="max-h-[calc(100vh-8rem)] overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-foreground">
+            <pre className="max-h-(--layout-preview-height) overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-foreground">
               {textContent ?? ''}
             </pre>
           )}

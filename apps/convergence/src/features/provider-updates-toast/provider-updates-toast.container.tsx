@@ -45,12 +45,12 @@ export function ProviderUpdatesToastContainer() {
     toast.info(
       multiple
         ? `${outdatedProviders.length} provider updates available`
-        : `Provider update available - ${first.name} ${first.update.latestVersion}`,
+        : `Provider update available — ${first.name} ${first.update.latestVersion}`,
       {
         id: AVAILABLE_TOAST_ID,
         description: multiple
           ? 'Update local provider CLIs when you are ready.'
-          : `${first.update.currentVersion ?? 'Installed'} -> ${
+          : `${first.update.currentVersion ?? 'Installed'} → ${
               first.update.latestVersion
             }`,
         action: {
@@ -76,7 +76,7 @@ export function ProviderUpdatesToastContainer() {
     }
 
     const provider = statuses.find((item) => item.id === updatingProviderId)
-    toast.loading(`Updating ${provider?.name ?? updatingProviderId}...`, {
+    toast.loading(`Updating ${provider?.name ?? updatingProviderId}…`, {
       id: UPDATING_TOAST_ID,
       duration: Infinity,
     })

@@ -9,17 +9,49 @@ import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
  *
  * A native `title=` hint waits a second, ignores the theme, and cannot be
  * styled — so a control wearing both whispers twice. The pin is the absence
- * of those hints (except a clamped truncation line, or the literal empty
- * `title=""` ProviderIcon prop that is not a hint). A tooltip that floats
- * over the title strip must be `no-drag` (MAR-3284); since MAR-3616 the one
- * tooltip host is, so the pin is that no sidebar file builds a tooltip of its
- * own again.
+ * of those hints on the page's own elements (except a clamped truncation
+ * line, or the literal empty `title=""` ProviderIcon prop that is not a
+ * hint). A part's `title` prop is its words, not a hint: ListRow's and
+ * EmptyState's are what the row or the box says (MAR-3617), so only a
+ * lowercase element's `title=` counts. A tooltip that floats over the title
+ * strip must be `no-drag` (MAR-3284); since MAR-3616 the one tooltip host is,
+ * so the pin is that no sidebar file builds a tooltip of its own again.
  */
 const SIDEBAR_ROOT = resolve(dirname(fileURLToPath(import.meta.url)))
 
-const NATIVE_HINT = /\btitle=/
+const NATIVE_HINT = /\btitle=/g
 const EMPTY_TITLE = /\btitle=""/
 const TRUNCATION_COMMENT = '// truncation hint (MAR-3314)'
+
+/**
+ * The JSX tag a `title=` at `index` belongs to: the nearest `<Name` before it
+ * at the same brace depth, so an element handed to a prop on the way
+ * (`render={<button />}`) is stepped over.
+ */
+function tagBefore(source: string, index: number): string | null {
+  let depth = 0
+  for (let at = index - 1; at >= 0; at--) {
+    const char = source[at]
+    if (char === '}') depth++
+    else if (char === '{') depth--
+    else if (char === '<' && depth === 0) {
+      const tag = /^<([A-Za-z][\w.]*)/.exec(source.slice(at))
+      if (tag) return tag[1]
+    }
+  }
+  return null
+}
+
+/** Each `title=` on a page element (a lowercase tag), by line. */
+function nativeHints(source: string) {
+  const lines = source.split('\n')
+  return [...source.matchAll(NATIVE_HINT)]
+    .filter((match) => /^[a-z]/.test(tagBefore(source, match.index) ?? ''))
+    .map((match) => {
+      const index = source.slice(0, match.index).split('\n').length
+      return { line: lines[index - 1], index }
+    })
+}
 
 const OWN_TOOLTIP = /<TooltipContent\b/
 
@@ -51,10 +83,7 @@ describe('MAR-3314 R2: the sidebar cannot grow an OS hint again', () => {
     { timeout: WALK_TEST_TIMEOUT_MS },
     (_name, path) => {
       const source = readFileSync(path, 'utf8')
-      const offenders = source
-        .split('\n')
-        .map((line, index) => ({ line, index: index + 1 }))
-        .filter(({ line }) => NATIVE_HINT.test(line))
+      const offenders = nativeHints(source)
         .filter(({ line }) => !line.includes(TRUNCATION_COMMENT))
         .filter(({ line }) => !EMPTY_TITLE.test(line))
       // Mutation: add a title= hint to any sidebar file -> red.

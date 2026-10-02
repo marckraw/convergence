@@ -18,11 +18,11 @@ function Sheet(props: SheetProps) {
   return <DialogPrimitive.Root {...props} />
 }
 
-/** Widths: 420, 560 and 720 px, at most the space it slides over. */
+/** Widths: 420, 560 and 720 px (the dialogs' scale), at most the space it slides over. */
 const SHEET_SIZES = {
-  sm: 'w-[min(420px,100%)]',
-  md: 'w-[min(560px,100%)]',
-  lg: 'w-[min(720px,100%)]',
+  sm: 'w-full max-w-dialog-sm',
+  md: 'w-full max-w-dialog-md',
+  lg: 'w-full max-w-dialog',
 } as const
 
 /**
@@ -94,7 +94,7 @@ function SheetContent({
         className={cn(
           'inset-y-0 z-50 flex h-full flex-col overflow-hidden border-line-soft bg-sheet text-ink shadow-overlay outline-none app-no-drag',
           contained ? 'absolute' : 'fixed',
-          'transition-[translate,opacity] duration-panel ease-out',
+          'transition-motion duration-panel ease-out',
           'data-ending-style:duration-fast data-ending-style:ease-exit',
           'motion-reduce:data-starting-style:opacity-0 motion-reduce:data-ending-style:opacity-0',
           SHEET_SIZES[size],

@@ -221,6 +221,8 @@
   --text-xl--line-height: var(--type-leading-xl);
   --text-2xl: var(--type-size-2xl);
   --text-2xl--line-height: var(--type-leading-2xl);
+  /* text-code: inline code, relative to the words around it; it keeps their line height */
+  --text-code: var(--type-size-code);
   --leading-3xs: var(--type-leading-3xs);
   --leading-2xs: var(--type-leading-2xs);
   --tracking-eyebrow: var(--type-tracking-eyebrow);
@@ -251,12 +253,22 @@
   --spacing-control-md: var(--control-md);
   --spacing-control-lg: var(--control-lg);
 
-  /* Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog, max-h-dialog */
+  /*
+   * Layout: max-w-conversation, w-side-panel, w-work-panel, max-w-dialog(-sm|-md|-xl|-2xl),
+   * max-w-picker, max-h-picker. max-h-dialog is a dialog's greatest height: 720 px, or 80% of
+   * the window when that is less.
+   */
   --container-conversation: var(--layout-conversation);
   --container-dialog: var(--layout-dialog);
+  --container-dialog-sm: var(--layout-dialog-sm);
+  --container-dialog-md: var(--layout-dialog-md);
+  --container-dialog-xl: var(--layout-dialog-xl);
+  --container-dialog-2xl: var(--layout-dialog-2xl);
+  --container-picker: var(--layout-picker);
   --width-side-panel: var(--layout-side-panel);
   --width-work-panel: var(--layout-work-panel);
-  --max-height-dialog: var(--layout-dialog-height);
+  --max-height-dialog: min(80vh, var(--layout-dialog-height));
+  --max-height-picker: var(--layout-picker);
 
   /* Blur: backdrop-blur-glass (tooltips, R8), backdrop-blur-scrim (behind dialogs) */
   --blur-glass: var(--glass-blur);
@@ -280,6 +292,14 @@
   --transition-duration-fast: var(--motion-fast);
   --transition-duration-panel: var(--motion-panel);
   --transition-duration-slow: var(--motion-slow);
+  /*
+   * What moves, named (never transition-all): transition-motion, a popup, dialog or sheet coming
+   * and going (its fade, grow and travel); transition-size, a panel that grows open and fades
+   * (Collapsible); transition-fill, a meter's reading (a bar's width, a ring's dash).
+   */
+  --transition-property-motion: opacity, scale, translate;
+  --transition-property-size: height, width, opacity;
+  --transition-property-fill: width, stroke-dasharray;
 
   /*
    * Surface motion (MAR-3319), on the tokens: the same 150 ms ease-out pop from 95% and 8 px

@@ -12,7 +12,7 @@ import { extendTailwindMerge } from 'tailwind-merge'
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ['3xs', '2xs'],
+      text: ['3xs', '2xs', 'code'],
       leading: ['3xs', '2xs'],
       tracking: ['eyebrow'],
       shadow: [
@@ -25,18 +25,26 @@ const twMerge = extendTailwindMerge({
         'halo',
       ],
       spacing: ['control-xs', 'control-sm', 'control-md', 'control-lg'],
-      container: ['conversation', 'dialog'],
+      container: [
+        'conversation',
+        'dialog',
+        'dialog-sm',
+        'dialog-md',
+        'dialog-xl',
+        'dialog-2xl',
+        'picker',
+      ],
       ease: ['enter', 'exit', 'guide'],
       blur: ['glass', 'scrim'],
     },
     classGroups: {
       duration: [{ duration: ['exit', 'fast', 'panel', 'slow'] }],
-      transition: [{ transition: ['layout'] }],
+      transition: [{ transition: ['layout', 'motion', 'size', 'fill'] }],
       'grid-cols': [
         { 'grid-cols': [(value: string) => /^(?:fill|fit)-\d+$/.test(value)] },
       ],
       w: [{ w: ['side-panel', 'work-panel'] }],
-      'max-h': [{ 'max-h': ['dialog'] }],
+      'max-h': [{ 'max-h': ['dialog', 'picker'] }],
     },
   },
 })

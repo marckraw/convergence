@@ -41,7 +41,7 @@ const VARIANTS = {
  * and `lg` its default.
  */
 const TEXT_SIZES = {
-  xs: 'h-6 gap-1 px-2 text-[11px]',
+  xs: 'h-6 gap-1 px-2 text-2xs',
   sm: 'h-7 gap-1.5 px-2 text-xs',
   md: 'h-8 gap-2 px-3 text-xs',
   lg: 'h-9 gap-2 px-4 py-2 text-sm',
@@ -220,7 +220,14 @@ const hintOf = (
 
 /** Both looks in one grid cell, the one not shown hidden, so the wider sets the width. */
 const busyLayer =
-  'col-start-1 row-start-1 inline-flex items-center justify-center gap-[inherit]'
+  'col-start-1 row-start-1 inline-flex items-center justify-center'
+
+/**
+ * The button's own gap, handed down through the label's grid to each look,
+ * so an icon sits from its words as the size says: CSS's inherit keyword,
+ * which has no utility of its own.
+ */
+const inheritGap = { gap: 'inherit' } as const
 
 type BusyLabelProps = {
   pending: boolean
@@ -242,15 +249,17 @@ function BusyLabel({
   children,
 }: BusyLabelProps) {
   return (
-    <span data-slot="button-label" className="grid gap-[inherit]">
+    <span data-slot="button-label" className="grid" style={inheritGap}>
       <span
         className={cn(busyLayer, pending && 'invisible')}
+        style={inheritGap}
         aria-hidden={pending || undefined}
       >
         {children}
       </span>
       <span
         className={cn(busyLayer, !pending && 'invisible')}
+        style={inheritGap}
         aria-hidden={!pending || undefined}
       >
         <Spinner className={pending ? undefined : 'animate-none'} />

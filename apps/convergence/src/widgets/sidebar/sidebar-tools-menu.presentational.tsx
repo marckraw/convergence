@@ -1,14 +1,13 @@
 import type { FC } from 'react'
 import type { DialogKind, DialogPayload } from '@/entities/dialog'
 import {
-  Button,
   Menu,
   MenuContent,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
   IconButton,
-  Tooltip,
+  type TooltipSide,
 } from '@convergence/ui'
 import {
   BookOpenText,
@@ -26,14 +25,16 @@ const OPEN_SIDEBAR_TOOLS = 'Open sidebar tools'
 interface SidebarToolsMenuProps {
   activeSurface: 'code' | 'chat'
   hasActiveProject: boolean
-  iconOnly?: boolean
+  /** Where the trigger's tooltip shows: below in the header, right on the rail (NAV-17). */
+  tooltipSide?: TooltipSide
   onOpenDialog: (kind: DialogKind, payload?: DialogPayload) => void
 }
 
+/** The sidebar's Tools: a ⋯ button whose menu opens every dialog the sidebar hosts. */
 export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
   activeSurface,
   hasActiveProject,
-  iconOnly = false,
+  tooltipSide = 'bottom',
   onOpenDialog,
 }) => {
   const openDialog = (kind: DialogKind, payload?: DialogPayload) => {
@@ -42,37 +43,19 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
 
   return (
     <Menu>
-      <Tooltip label={OPEN_SIDEBAR_TOOLS} side="bottom">
-        <MenuTrigger
-          render={
-            iconOnly ? (
-              <IconButton
-                label={OPEN_SIDEBAR_TOOLS}
-                type="button"
-                variant="ghost"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </IconButton>
-            ) : (
-              <Button
-                type="button"
-                variant="quiet"
-                className="w-full justify-between px-2"
-                aria-label={OPEN_SIDEBAR_TOOLS}
-              >
-                <span className="flex items-center gap-2">
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                  Tools
-                </span>
-                <span className="text-[11px] text-muted-foreground/80">
-                  Dialogs
-                </span>
-              </Button>
-            )
-          }
-        />
-      </Tooltip>
-      <MenuContent align={iconOnly ? 'start' : 'end'} side="bottom">
+      <MenuTrigger
+        render={
+          <IconButton
+            label={OPEN_SIDEBAR_TOOLS}
+            tooltipSide={tooltipSide}
+            type="button"
+            variant="ghost"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </IconButton>
+        }
+      />
+      <MenuContent align="start" side="bottom">
         <MenuItem onClick={() => openDialog('space-workboard')}>
           <GitBranch className="h-3.5 w-3.5" />
           <span>Spaces</span>

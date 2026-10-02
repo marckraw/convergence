@@ -1,4 +1,4 @@
-import { cn } from '@convergence/ui'
+import { cn, Tooltip } from '@convergence/ui'
 import { resolveProviderIcon, type ProviderBrand } from './provider-icon.pure'
 import anthropic from './provider-logos/anthropic.svg'
 import openai from './provider-logos/openai.svg'
@@ -21,7 +21,10 @@ interface ProviderIconProps {
   vendorLabel?: string | null
   name?: string | null
   className?: string
-  /** Empty when an enclosing control already supplies a tooltip. */
+  /**
+   * What its tooltip says: the provider's name unless told otherwise; empty
+   * when an enclosing control already supplies a tooltip.
+   */
   title?: string
 }
 
@@ -38,29 +41,30 @@ export function ProviderIcon({
     name,
   )
   return (
-    <span
-      aria-hidden="true"
-      title={title ?? label}
-      className={cn(
-        'inline-flex size-4 shrink-0 items-center justify-center text-foreground',
-        className,
-      )}
-    >
-      {brand ? (
-        <span
-          className="size-full bg-current"
-          style={{
-            maskImage: `url("${LOGOS[brand]}")`,
-            maskSize: brand === 'pi' ? '170%' : 'contain',
-            maskPosition: 'center',
-            maskRepeat: 'no-repeat',
-          }}
-        />
-      ) : (
-        <span className="text-[10px] font-semibold leading-none">
-          {initials}
-        </span>
-      )}
-    </span>
+    <Tooltip label={title ?? label}>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'inline-flex size-4 shrink-0 items-center justify-center text-foreground',
+          className,
+        )}
+      >
+        {brand ? (
+          <span
+            className="size-full bg-current"
+            style={{
+              maskImage: `url("${LOGOS[brand]}")`,
+              maskSize: brand === 'pi' ? '170%' : 'contain',
+              maskPosition: 'center',
+              maskRepeat: 'no-repeat',
+            }}
+          />
+        ) : (
+          <span className="text-3xs font-semibold leading-none">
+            {initials}
+          </span>
+        )}
+      </span>
+    </Tooltip>
   )
 }

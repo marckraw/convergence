@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { Check, TerminalSquare } from 'lucide-react'
 import type { TerminalIdleNotice } from '@/entities/terminal'
-import { Button, IconButton, Tooltip } from '@convergence/ui'
+import { IconButton, ListRow, SectionHeader, Tooltip } from '@convergence/ui'
 
 interface TerminalIdleSectionProps {
   notices: readonly TerminalIdleNotice[]
@@ -9,6 +9,11 @@ interface TerminalIdleSectionProps {
   onDismiss: (terminalId: string) => void
 }
 
+/**
+ * Terminals whose command finished: a section of the sidebar (SectionHeader,
+ * NAV-12) whose rows open their session (ListRow, NAV-5), each with an
+ * acknowledge that shows with its row and for the keyboard.
+ */
 export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
   notices,
   onSelect,
@@ -18,63 +23,48 @@ export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
 
   return (
     <div className="px-3 pb-2">
-      <p className="mb-1 flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-        <span className="truncate">Terminals Idle</span>
-        <span className="shrink-0 text-muted-foreground/60">
-          {notices.length}
-        </span>
-      </p>
+      <SectionHeader
+        label="Terminals Idle"
+        count={notices.length}
+        className="mb-1"
+      />
       <div className="space-y-0.5">
         {notices.map((notice) => (
-          <div
+          <Tooltip
             key={notice.id}
-            className="group flex min-w-0 items-center gap-1 rounded-md transition-colors hover:bg-accent"
+            side="right"
+            label={notice.sessionName}
+            detail={`${notice.processName} finished - ${notice.projectName}`}
           >
-            <Tooltip
-              side="right"
-              label={notice.sessionName}
-              detail={`${notice.processName} finished - ${notice.projectName}`}
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => void onSelect(notice)}
-                aria-label={`${notice.sessionName}, terminal idle after ${notice.processName}, ${notice.projectName}`}
-                size="lg"
-                className="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 px-1.5 py-0.5 text-left text-xs leading-tight"
-              >
-                <TerminalSquare className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                  <span className="min-w-0 shrink truncate font-medium">
-                    {notice.sessionName}
-                  </span>
-                  <span className="min-w-0 shrink truncate text-[10px] leading-tight text-muted-foreground/60">
-                    {notice.projectName}
-                  </span>
-                </span>
-                <span className="max-w-[5rem] shrink truncate text-muted-foreground">
-                  {notice.processName}
-                </span>
-              </Button>
-            </Tooltip>
-
-            <div className="mr-0.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-              <IconButton
-                label={`Dismiss idle terminal ${notice.sessionName}`}
-                tooltipSide="left"
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="shrink-0"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDismiss(notice.terminalId)
-                }}
-              >
-                <Check className="h-2.5 w-2.5" />
-              </IconButton>
-            </div>
-          </div>
+            <ListRow
+              density="compact"
+              render={<button type="button" />}
+              onClick={() => void onSelect(notice)}
+              aria-label={`${notice.sessionName}, terminal idle after ${notice.processName}, ${notice.projectName}`}
+              leading={<TerminalSquare aria-hidden className="size-3" />}
+              title={notice.sessionName}
+              aside={notice.projectName}
+              trailing={
+                <span className="max-w-20 truncate">{notice.processName}</span>
+              }
+              actions={
+                <IconButton
+                  label={`Dismiss idle terminal ${notice.sessionName}`}
+                  tooltipSide="left"
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="shrink-0"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onDismiss(notice.terminalId)
+                  }}
+                >
+                  <Check className="h-2.5 w-2.5" />
+                </IconButton>
+              }
+            />
+          </Tooltip>
         ))}
       </div>
     </div>

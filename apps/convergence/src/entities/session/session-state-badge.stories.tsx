@@ -97,6 +97,22 @@ export const States: Story = {
     await expect(
       canvas.getByLabelText('finished · 1 tasks running'),
     ).toBeInTheDocument()
+    // R1: the settled states wear their tones; waiting on you is warning,
+    // for an answer as for an approval.
+    const tones = canvas
+      .getAllByRole('listitem')
+      .map((item) =>
+        item.querySelector('[data-tone]')?.getAttribute('data-tone'),
+      )
+    await expect(tones).toEqual([
+      'warning',
+      'warning',
+      undefined,
+      undefined,
+      undefined,
+      'success',
+      'danger',
+    ])
   },
 }
 

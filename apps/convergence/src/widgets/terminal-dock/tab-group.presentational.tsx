@@ -56,7 +56,9 @@ export const TabGroup: FC<TabGroupProps> = ({
               <Tooltip key={tab.id} label={label} detail={tab.cwd}>
                 <TabsTab
                   value={tab.id}
-                  className={tab.status === 'exited' ? 'opacity-60' : undefined}
+                  // An exited tab says so in words and leans; fading it lost
+                  // its contrast (2.9:1).
+                  className={tab.status === 'exited' ? 'italic' : undefined}
                   onClose={() => onCloseTab(tab.id)}
                   closeLabel={`Close tab ${tab.title}`}
                 >

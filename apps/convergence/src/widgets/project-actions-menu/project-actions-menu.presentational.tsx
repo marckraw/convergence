@@ -9,7 +9,9 @@ import {
   Button,
   cn,
   IconButton,
+  Notice,
   PopoverContent,
+  Tooltip,
   type PopupFinalFocus,
   type PopupOpenChangeDetails,
 } from '@convergence/ui'
@@ -26,6 +28,13 @@ import {
 } from 'lucide-react'
 import { ProjectActionRunLog } from './project-action-run-log.presentational'
 import { formatProjectActionRunMeta } from './project-actions-menu.pure'
+import {
+  actionButtonRow,
+  actionDetail,
+  actionIconBox,
+  actionIconColumn,
+  actionRow,
+} from './project-actions-menu.styles'
 import type { ProjectActionItem } from './project-actions-menu.types'
 
 /**
@@ -82,21 +91,20 @@ export const ProjectActionsMenuPresentational: FC<
   <PopoverContent
     aria-label="Project actions"
     align="end"
-    className="w-[28rem] p-1.5"
+    // As tall as it needs, up to 34rem, and never past the window's edge.
+    className="flex max-h-(--available-height) w-md flex-col p-1.5"
     finalFocus={contentFocus?.finalFocus}
   >
-    <div className="flex items-center justify-between border-b border-border/70 px-2 py-1.5 text-[11px] text-muted-foreground">
+    <div className="flex items-center justify-between border-b border-border/70 px-2 py-1.5 text-2xs text-muted-foreground">
       <span>Project actions</span>
       <span className="max-w-32 truncate">{projectName}</span>
     </div>
 
     {error && (
-      <div className="border-b border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
-        {error}
-      </div>
+      <Notice tone="danger" title={error} className="m-1.5 py-1.5 text-xs" />
     )}
 
-    <div className="app-scrollbar max-h-[min(34rem,calc(100vh-7rem))] overflow-y-auto py-1">
+    <div className="max-h-136 min-h-0 overflow-y-auto py-1">
       {items.length > 0 && (
         <div className="overflow-hidden rounded-md border border-border bg-card">
           {items.map((item) => {
@@ -107,56 +115,61 @@ export const ProjectActionsMenuPresentational: FC<
                 key={script.id}
                 className="border-b border-border/70 last:border-b-0"
               >
-                <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5">
-                  {running && run ? (
-                    <IconButton
-                      label={`Stop ${script.name}`}
-                      type="button"
-                      variant="ghost"
-                      onClick={() => onStop(run)}
-                      className="rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15 hover:text-emerald-200"
-                    >
-                      <Square className="h-4 w-4" />
-                    </IconButton>
-                  ) : (
-                    <IconButton
-                      label={`${run ? 'Run again' : 'Run'} ${script.name}`}
-                      type="button"
-                      variant="quiet"
-                      onClick={() => onRun(item)}
-                      className="rounded-md border border-border bg-background hover:bg-accent"
-                    >
-                      {run ? (
-                        <RotateCcw className="h-4 w-4" />
-                      ) : (
-                        <ProjectScriptIcon
-                          icon={script.icon}
-                          className="h-4 w-4"
-                        />
-                      )}
-                    </IconButton>
-                  )}
+                <div className={cn(actionRow, 'px-3 py-2.5')}>
+                  <span className={actionIconColumn}>
+                    {running && run ? (
+                      // Running is working: R1's info.
+                      <IconButton
+                        label={`Stop ${script.name}`}
+                        type="button"
+                        variant="ghost"
+                        onClick={() => onStop(run)}
+                        className="rounded-md border border-info-line bg-info-soft text-info-ink hover:bg-info-soft hover:text-info-ink"
+                      >
+                        <Square className="h-4 w-4" />
+                      </IconButton>
+                    ) : (
+                      <IconButton
+                        label={`${run ? 'Run again' : 'Run'} ${script.name}`}
+                        type="button"
+                        variant="quiet"
+                        onClick={() => onRun(item)}
+                        className="rounded-md border border-border bg-background hover:bg-accent"
+                      >
+                        {run ? (
+                          <RotateCcw className="h-4 w-4" />
+                        ) : (
+                          <ProjectScriptIcon
+                            icon={script.icon}
+                            className="h-4 w-4"
+                          />
+                        )}
+                      </IconButton>
+                    )}
+                  </span>
 
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">
                       {script.name}
                     </div>
-                    <div className="truncate font-mono text-[11px] text-muted-foreground">
-                      {script.command}
-                    </div>
+                    <div className={actionDetail}>{script.command}</div>
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <span
-                      className={cn(
-                        'w-16 truncate text-right text-[11px] text-muted-foreground',
-                        run?.status === 'failed' && 'text-destructive',
-                        running && 'text-emerald-300',
-                      )}
-                      title={formatProjectActionRunMeta(run)}
+                    <Tooltip
+                      label={formatProjectActionRunMeta(run)}
+                      when="truncated"
                     >
-                      {formatProjectActionRunMeta(run)}
-                    </span>
+                      <span
+                        className={cn(
+                          'w-16 truncate text-right text-2xs text-muted-foreground',
+                          run?.status === 'failed' && 'text-danger-ink',
+                          running && 'text-info-ink',
+                        )}
+                      >
+                        {formatProjectActionRunMeta(run)}
+                      </span>
+                    </Tooltip>
                     {run && (
                       <IconButton
                         label={expanded ? 'Hide output' : 'Show output'}
@@ -210,36 +223,39 @@ export const ProjectActionsMenuPresentational: FC<
         onClick={onAdd}
         size="lg"
         className={cn(
-          'grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center rounded-md border border-dashed border-border px-3 py-3 text-left',
+          actionButtonRow,
+          'border border-dashed border-border py-3',
           items.length > 0 && 'mt-2',
         )}
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
-          <Plus className="h-4 w-4" />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-medium">Add action</span>
-          <span className="block truncate font-mono text-[11px] text-muted-foreground">
-            Create a project command
+        <span className={actionIconColumn}>
+          <span className={actionIconBox}>
+            <Plus className="h-4 w-4" />
           </span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">Add action</span>
+          <span className={actionDetail}>Create a project command</span>
         </span>
       </Button>
 
       <div className="mt-2 border-t border-border/70 pt-2">
-        <div className="px-2 pb-1 text-[11px] text-muted-foreground">Lanes</div>
+        <div className="px-2 pb-1 text-2xs text-muted-foreground">Lanes</div>
         <Button
           type="button"
           variant="ghost"
           onClick={onCreateLane}
           size="lg"
-          className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center rounded-md px-3 text-left"
+          className={actionButtonRow}
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
-            <GitFork className="h-4 w-4" />
+          <span className={actionIconColumn}>
+            <span className={actionIconBox}>
+              <GitFork className="h-4 w-4" />
+            </span>
           </span>
-          <span className="min-w-0">
+          <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium">Create lane…</span>
-            <span className="block truncate font-mono text-[11px] text-muted-foreground">
+            <span className={actionDetail}>
               {isLane
                 ? 'A sibling lane, made from the root project'
                 : 'A copy with its own git and sessions'}
@@ -252,18 +268,18 @@ export const ProjectActionsMenuPresentational: FC<
             variant="ghost"
             onClick={onRevealLane}
             size="lg"
-            className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center rounded-md px-3 text-left"
+            className={actionButtonRow}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
-              <FolderOpen className="h-4 w-4" />
+            <span className={actionIconColumn}>
+              <span className={actionIconBox}>
+                <FolderOpen className="h-4 w-4" />
+              </span>
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium">
                 Reveal lane in Finder
               </span>
-              <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                This project is a lane
-              </span>
+              <span className={actionDetail}>This project is a lane</span>
             </span>
           </Button>
         ) : null}

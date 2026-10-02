@@ -1,6 +1,6 @@
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
-import { useState, useCallback, useRef } from 'react'
-import type { FC } from 'react'
+import { useState, useCallback } from 'react'
+import type { FC, KeyboardEvent } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
 import { ChatSurface } from '@/widgets/chat-surface'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
@@ -10,7 +10,7 @@ import { NotificationsOnboardingContainer } from '@/features/notifications-onboa
 import { WavePanel } from '@/features/waves'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { SessionSummary } from '@/entities/session'
-import { cn } from '@convergence/ui'
+import { cn, DragRegion, ResizeHandle } from '@convergence/ui'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
 import { RouteFallbackView } from './route-fallback.presentational'
 import type { MainViewRouteFallback } from './routes/main-view-route-resolution.pure'
@@ -90,8 +90,9 @@ export const AppShell: FC<AppShellProps> = ({
    * not rendered.
    */
   const [loomExpanded, setLoomExpanded] = useState(false)
-  const [mainPanelElement, setMainPanelElement] =
-    useState<HTMLDivElement | null>(null)
+  const [mainPanelElement, setMainPanelElement] = useState<HTMLElement | null>(
+    null,
+  )
   const [fallbackSelectedChatSpaceId, setFallbackSelectedChatSpaceId] =
     useState<string | null>(null)
   const [fallbackDraftChatSpaceId, setFallbackDraftChatSpaceId] = useState<
@@ -99,7 +100,6 @@ export const AppShell: FC<AppShellProps> = ({
   >(null)
   const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
   const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
-  const dragging = useRef(false)
   const setCompatibilitySurface = useCallback(
     (surface: 'code' | 'chat') => {
       if (!routeDrivenNavigation) {
@@ -188,31 +188,6 @@ export const AppShell: FC<AppShellProps> = ({
     [onShowChat, onShowCode, setCompatibilitySurface],
   )
 
-  const handleMouseDown = useCallback(() => {
-    if (sidebarCollapsed) return
-
-    dragging.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!dragging.current) return
-      const newWidth = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, e.clientX))
-      setSidebarWidth(newWidth)
-    }
-
-    const handleMouseUp = () => {
-      dragging.current = false
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-  }, [sidebarCollapsed])
-
   const handleCollapseSidebar = useCallback(() => {
     setSidebarCollapsed(true)
     setSidebarPeekOpen(false)
@@ -240,11 +215,30 @@ export const AppShell: FC<AppShellProps> = ({
     }
   }, [sidebarCollapsed])
 
+  /**
+   * Escape puts a peeked sidebar away, so the keyboard that opened it can
+   * close it (NAV-27). Only from inside the panel itself: a menu or dialog
+   * it opened is portalled out of it and handles its own Escape.
+   */
+  const handleSidebarKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
+      if (event.key !== 'Escape' || !sidebarCollapsed || !sidebarPeekOpen)
+        return
+      if (!event.currentTarget.contains(event.target as Node)) return
+      setSidebarPeekOpen(false)
+    },
+    [sidebarCollapsed, sidebarPeekOpen],
+  )
+
   if (loading) {
     return (
-      <div className="app-chrome flex h-screen items-center justify-center text-foreground">
+      <div className="app-chrome flex h-screen flex-col text-foreground">
+        {/* The window moves from its top while the app loads (NAV-4). */}
+        <DragRegion />
         {showDevelopmentRibbon ? <DevBuildRibbon /> : null}
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="flex flex-1 items-center justify-center pb-12 text-muted-foreground">
+          Loading...
+        </p>
       </div>
     )
   }
@@ -259,11 +253,13 @@ export const AppShell: FC<AppShellProps> = ({
             width: sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth,
           }}
         >
-          <div
+          {/* The shell's landmarks (NAV-26): the sidebar, the main panel, the status bar. */}
+          <aside
+            aria-label="Sidebar"
             className={cn(
-              'app-sidebar-panel h-full border-r border-white/10 transition-[width] duration-150',
+              'app-sidebar-panel h-full border-r border-hairline',
               sidebarCollapsed && sidebarPeekOpen
-                ? 'absolute top-0 left-0 z-30 shadow-2xl'
+                ? 'absolute top-0 left-0 z-30 shadow-overlay'
                 : 'relative',
             )}
             style={{
@@ -275,6 +271,7 @@ export const AppShell: FC<AppShellProps> = ({
                     : sidebarWidth,
             }}
             onMouseLeave={handleSidebarMouseLeave}
+            onKeyDown={handleSidebarKeyDown}
           >
             <Sidebar
               activeSurface={activeSurface}
@@ -297,16 +294,19 @@ export const AppShell: FC<AppShellProps> = ({
               onPeek={handlePeekSidebar}
               onPinPeek={handlePinSidebarPeek}
             />
-          </div>
+          </aside>
         </div>
 
         {sidebarCollapsed ? null : (
-          <div
-            onMouseDown={handleMouseDown}
-            onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR)}
-            className={cn(
-              'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
-            )}
+          // The keyboard resizes it too, and says its width (NAV-16).
+          <ResizeHandle
+            label="Resize the sidebar"
+            value={sidebarWidth}
+            min={MIN_SIDEBAR}
+            max={MAX_SIDEBAR}
+            onChange={setSidebarWidth}
+            onReset={() => setSidebarWidth(DEFAULT_SIDEBAR)}
+            className="app-resize-handle"
           />
         )}
 
@@ -322,7 +322,7 @@ export const AppShell: FC<AppShellProps> = ({
           />
         </PerfProfiler>
 
-        <div
+        <main
           ref={setMainPanelElement}
           className="app-main-panel relative flex min-w-0 flex-1 flex-col"
         >
@@ -389,17 +389,21 @@ export const AppShell: FC<AppShellProps> = ({
                 </div>
               </>
             ) : (
-              <div className="flex h-full flex-col items-center justify-center">
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Welcome to Convergence
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create a project to get started.
-                </p>
+              <div className="flex h-full flex-col">
+                {/* No header here, and the window still moves from its top (NAV-4). */}
+                <DragRegion />
+                <div className="flex flex-1 flex-col items-center justify-center pb-12">
+                  <h1 className="text-2xl font-bold tracking-tight">
+                    Welcome to Convergence
+                  </h1>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Open a project to get started.
+                  </p>
+                </div>
               </div>
             )}
           </div>
-        </div>
+        </main>
       </div>
 
       <GlobalStatusBar onSelectProject={onSelectProjectRoot} />

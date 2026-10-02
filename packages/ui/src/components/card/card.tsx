@@ -99,7 +99,7 @@ function Card({
 const stretchedFocusRing = [
   'outline-none',
   'focus-visible:after:outline-solid',
-  'focus-visible:after:outline-[length:var(--focus-width,1px)]',
+  'focus-visible:after:outline-(length:--focus-width)',
   'focus-visible:after:outline-focus',
 ].join(' ')
 

@@ -20,10 +20,10 @@ export const AggregateSummary: FC<AggregateSummaryProps> = ({
     <div className="space-y-1.5">
       {byProject.map((project) => (
         <div key={project.projectId} className="min-w-0">
-          <p className="truncate text-[11px] font-medium text-foreground">
+          <p className="truncate text-2xs font-medium text-foreground">
             {project.projectName}
           </p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {project.running.length} running ·{' '}
             {project.needsAttention.length > 0
               ? summarizeAttentionRequests(project.needsAttention)
