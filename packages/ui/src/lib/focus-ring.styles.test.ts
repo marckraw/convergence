@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { cn } from './cn.pure'
 import {
   focusRing,
+  focusRingAroundField,
   focusRingField,
   focusRingInset,
   focusRingWithin,
@@ -22,6 +23,12 @@ describe('the focus rings', () => {
       focusRingWithin,
       'has-focus-visible:',
       'outline-offset-0',
+    ],
+    [
+      'focusRingAroundField',
+      focusRingAroundField,
+      'has-[[data-variant=bare]:focus-visible]:',
+      '-outline-offset-1',
     ],
   ])(
     '%s draws a solid ring-colored line only on keyboard focus',
@@ -50,6 +57,7 @@ describe('the focus rings', () => {
       focusRingInset,
       focusRingField,
       focusRingWithin,
+      focusRingAroundField,
     ]) {
       expect(cn(ring)).toBe(ring)
     }

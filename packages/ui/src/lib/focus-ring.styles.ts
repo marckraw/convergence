@@ -56,3 +56,16 @@ export const focusRingWithin = [
   'has-focus-visible:outline-focus',
   'has-focus-visible:outline-offset-0',
 ].join(' ')
+
+/**
+ * Around a card that is a field, such as ComposerCard: over the card's edge,
+ * as focusRingField is over a field's border, while the bare field inside it
+ * (`variant="bare"`) has the keyboard's focus. A button in the card rings for
+ * itself, never the card, which is why this isn't focusRingWithin.
+ */
+export const focusRingAroundField = [
+  'has-[[data-variant=bare]:focus-visible]:outline-solid',
+  'has-[[data-variant=bare]:focus-visible]:outline-(length:--focus-width)',
+  'has-[[data-variant=bare]:focus-visible]:outline-focus',
+  'has-[[data-variant=bare]:focus-visible]:-outline-offset-1',
+].join(' ')

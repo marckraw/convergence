@@ -709,7 +709,6 @@ export const Composer: FC<ComposerProps> = ({
               highlightedIndex={rootInjectionHighlightedIndex}
               onSelect={(item) => onRootInjectionSelect?.(item)}
               onHover={(index) => onRootInjectionHover?.(index)}
-              onDismiss={() => onRootInjectionDismiss?.()}
             />
             <ComposerContextMentionPicker
               listId={pickerLists.mention}
@@ -718,7 +717,6 @@ export const Composer: FC<ComposerProps> = ({
               highlightedIndex={mentionHighlightedIndex}
               onSelect={(item) => onMentionSelect?.(item)}
               onHover={(index) => onMentionHover?.(index)}
-              onDismiss={() => onMentionDismiss?.()}
             />
             <ComposerSkillInjectionPicker
               listId={pickerLists.skill}
@@ -733,7 +731,6 @@ export const Composer: FC<ComposerProps> = ({
               notice={remoteSkillsNotice}
               onSelect={(skill) => onSkillInjectionSelect?.(skill)}
               onHover={(index) => onSkillInjectionHover?.(index)}
-              onDismiss={() => onSkillInjectionDismiss?.()}
             />
             <ComposerPromptInjectionPicker
               listId={pickerLists.prompt}
@@ -744,7 +741,6 @@ export const Composer: FC<ComposerProps> = ({
               error={promptInjectionError}
               onSelect={(prompt) => onPromptInjectionSelect?.(prompt)}
               onHover={(index) => onPromptInjectionHover?.(index)}
-              onDismiss={() => onPromptInjectionDismiss?.()}
             />
             <Textarea
               ref={textareaRef}

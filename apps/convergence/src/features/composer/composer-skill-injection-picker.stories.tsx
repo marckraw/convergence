@@ -65,7 +65,6 @@ const meta = {
     notice: null,
     onSelect: fn(),
     onHover: fn(),
-    onDismiss: fn(),
   },
   parameters: { layout: 'padded' },
   decorators: [
