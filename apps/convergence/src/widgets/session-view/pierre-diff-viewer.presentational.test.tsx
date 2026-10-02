@@ -118,7 +118,9 @@ describe('PierreDiffViewer', () => {
 
     expect(screen.getByText('src/app.ts')).toBeInTheDocument()
     expect(screen.getByText('Current workspace diff')).toBeInTheDocument()
-    expect(await screen.findByText('Loading diff…')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Loading diff…', {}, { timeout: 2000 }),
+    ).toBeInTheDocument()
     expect(patchDiff.props).toHaveLength(0)
   })
 

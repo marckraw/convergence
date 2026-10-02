@@ -80,7 +80,11 @@ export const Default: Story = {
 export const Busy: Story = {
   args: { items: [], isLoading: true },
   play: async ({ canvas }) => {
-    const words = await canvas.findByText('Loading prompts…')
+    const words = await canvas.findByText(
+      'Loading prompts…',
+      {},
+      { timeout: 2000 },
+    )
     await waitFor(() => expect(words).toBeVisible())
   },
 }

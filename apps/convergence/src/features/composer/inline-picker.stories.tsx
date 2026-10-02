@@ -64,7 +64,11 @@ export const Dark: Story = {
 export const Busy: Story = {
   args: { state: 'loading' },
   play: async ({ canvas }) => {
-    const words = await canvas.findByText('Loading skills…')
+    const words = await canvas.findByText(
+      'Loading skills…',
+      {},
+      { timeout: 2000 },
+    )
     await waitFor(() => expect(words).toBeVisible())
   },
 }

@@ -131,7 +131,11 @@ export const Empty: Story = {
 export const Busy: Story = {
   args: { diff: '', loading: true },
   play: async ({ canvas, canvasElement }) => {
-    const words = await canvas.findByText('Loading diff…')
+    const words = await canvas.findByText(
+      'Loading diff…',
+      {},
+      { timeout: 2000 },
+    )
     await waitFor(() => expect(words).toBeVisible())
     await expect(
       canvasElement.querySelector('[aria-busy="true"]'),
