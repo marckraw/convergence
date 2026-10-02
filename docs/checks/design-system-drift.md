@@ -105,6 +105,7 @@ mapping in its message is the DS5 codemod's table
 | `no-title-on-buttons`     | `title=` on a `<button>`, `<Button>` or `<IconButton>`                                                                                                                                                                                     | IconButton's `label`, which is its accessible name and its tooltip, or `<Tooltip label>` (R2)                                                                                                | DS-3        |
 | `use-button-sizes`        | `h-…`, `w-…` or `size-…` with a number in a `<Button>`'s or `<IconButton>`'s `className`                                                                                                                                                   | a `size`: `xs`, `sm`, `md` or `lg`, 24, 28, 32 and 36 px (R3)                                                                                                                                | DS-4        |
 | `no-native-confirm`       | `window.confirm(` or `globalThis.confirm(`                                                                                                                                                                                                 | `ConfirmDialog` or `useConfirm` (DS3b), `variant="danger"` when the action destroys something: the focus starts on Cancel (R5)                                                               | DS-6        |
+| `use-notify`              | an import of `sonner` (its `toast`, its `Toaster`, or a type) in the app, tests left out                                                                                                                                                   | `notify` from `@convergence/ui`: `notify.failure("update Codex", error)` reads "Couldn’t update Codex." with the reason under it (R10); `toast` for the rest                                 | DS-8        |
 
 A regex reads text, not code, so it sees only what's written where it looks: a size override kept
 in a `*.styles.ts` constant passes `use-button-sizes`, and `repeated-classes` is what catches that
@@ -113,6 +114,13 @@ the tag, past arrow functions"), so attribute order and line breaks don't matter
 a variant (`[&_svg]:size-4`, the size of the icon inside) is not the button's size, and doesn't
 count. Every regex rule skips a line that starts with a comment (`//`, `*`, `/*` or `{/*`), so a doc
 comment may name the recipe it replaced.
+
+`use-notify` is the one rule here that reads imports rather than text: a `forbidden-import` rule
+(the type Chaperone's import rules use), so a comment or a string that names `sonner` is not an
+import, and a type import counts too (`includeTypeImports`). Ruling 2 (2 Oct 2026) moved the
+toasts onto the design system: `Toaster` draws each one on the popup surface with its kind in R1's
+tones, and `notify` words a failure as R10 does, so a toast raised from `sonner` itself would skip
+both. Tests are left out: one may still mock `sonner` underneath `notify`.
 
 ## 3. A raw element needs a reason
 
@@ -259,6 +267,7 @@ Streamdown name.
 | `app-parts-have-stories`     | `design-system-drift.json`      | error    |
 | `stories-titled-by-group`    | `design-system-drift.json`      | error    |
 | `stories-fail-on-axe`        | `design-system-drift.json`      | error    |
+| `use-notify`                 | `design-system-drift.json`      | error    |
 | `repeated-classes-guard`     | `.chaperone.json` (a `command`) | error    |
 | `copied-code-guard`          | `.chaperone.json` (a `command`) | error    |
 
