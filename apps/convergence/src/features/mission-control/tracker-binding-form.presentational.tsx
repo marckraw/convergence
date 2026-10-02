@@ -3,7 +3,15 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
-import { Button, FormError, Input, SectionLabel, Switch } from '@convergence/ui'
+import {
+  Button,
+  DescriptionItem,
+  DescriptionList,
+  FormError,
+  Input,
+  SectionLabel,
+  Switch,
+} from '@convergence/ui'
 import {
   probeAsksForKey,
   probeTimeLabel,
@@ -99,10 +107,10 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       </section>
       <SectionLabel as="h4">Tracker</SectionLabel>
 
-      <div className="flex items-center gap-2">
-        <span className={`flex-1 ${LABEL}`}>Kind</span>
-        <span className="text-xs">Linear</span>
-      </div>
+      {/* Facts nobody edits here are a DescriptionList, as a seat's are (MC-30). */}
+      <DescriptionList layout="inline" density="compact">
+        <DescriptionItem term="Kind">Linear</DescriptionItem>
+      </DescriptionList>
       <label className="flex flex-col gap-1">
         {/* What a person HAS is the URL in their address bar or the project's
             name; the id is the one thing Linear shows nowhere (MAR-3156). */}
@@ -176,16 +184,17 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className={`flex-1 ${LABEL}`}>API key</span>
-        <span className="text-xs" data-tracker-credential>
-          {credential === null
-            ? 'Checking…'
-            : credential === 'present'
-              ? 'Stored in Keychain'
-              : 'Not stored'}
-        </span>
-      </div>
+      <DescriptionList layout="inline" density="compact">
+        <DescriptionItem term="API key">
+          <span data-tracker-credential>
+            {credential === null
+              ? 'Checking…'
+              : credential === 'present'
+                ? 'Stored in Keychain'
+                : 'Not stored'}
+          </span>
+        </DescriptionItem>
+      </DescriptionList>
       {credential !== 'present' || asksForKey ? (
         <div className="flex items-center gap-1.5">
           <Input
