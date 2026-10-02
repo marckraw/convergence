@@ -1,12 +1,11 @@
 import type { FC } from 'react'
-import { Maximize2, PanelLeftClose } from 'lucide-react'
-import { Button, cn, IconButton } from '@convergence/ui'
+import { Maximize2 } from 'lucide-react'
+import { Button, cn } from '@convergence/ui'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
-  LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_COMPACT_CLASS,
   LOOM_SEARCH_COMPACT_ROW_CLASS,
   LOOM_SEARCH_SUBLINE_ROW_CLASS,
@@ -14,14 +13,11 @@ import {
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 import { LoomSearchFieldView } from './loom-search.presentational'
 import { LoomSearchToggleView } from './loom-search-toggle.presentational'
-import { isLoomSearchShortcut } from './loom-search.pure'
+import { LoomCollapseButton } from './loom-collapse-button.presentational'
+import { answerLoomKey } from './loom-keys.pure'
 
-/**
- * One string per control (MAR-3311 R1): Expand's name, and Collapse's name and
- * tooltip.
- */
+/** One string per control (MAR-3311 R1): Expand's name. */
 const EXPAND_LOOM = 'Expand Loom'
-const COLLAPSE_LOOM = 'Collapse Loom'
 
 export const LoomCompactView: FC<
   LoomStackProps & {
@@ -40,17 +36,15 @@ export const LoomCompactView: FC<
     data-loom="compact"
     className={cn(LOOM_COMPACT_CLASS, className)}
     style={{ width }}
-    onKeyDown={(event) => {
-      if (isLoomSearchShortcut(event)) {
-        event.preventDefault()
-        props.field.onShortcut()
-        return
-      }
-      if (event.key === 'Escape' && props.onEscape) {
-        event.stopPropagation()
-        props.onEscape()
-      }
-    }}
+    // The keys are one rule in both shapes (MC-35). Compact has no Escape of
+    // its own: only the container's (a search to clear, a detail to close),
+    // and with neither, Escape is not Loom's to answer.
+    onKeyDown={(event) =>
+      answerLoomKey(event, {
+        onShortcut: props.field.onShortcut,
+        onEscape: props.onEscape,
+      })
+    }
   >
     <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3">
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
@@ -65,25 +59,11 @@ export const LoomCompactView: FC<
         >
           Expand <Maximize2 className="size-3.5" />
         </Button>
-        {/* Icon-only, and named apart from the two controls that were
-            already here (MAR-3292 R4): "Expand Loom" goes wider, "Fold
-            Loom" in the expanded header comes back to this column, and
-            "Collapse Loom" takes the column away altogether. `no-drag`
-            because a control inside a drag strip is not a control -- the
-            column declares no region of its own, so this says it for
-            itself rather than inheriting whatever is above it. */}
-
-        <IconButton
-          label={COLLAPSE_LOOM}
-          type="button"
-          variant="ghost"
-          onClick={onCollapse}
-          tooltipSide="bottom"
-          size="sm"
-          className={LOOM_COLLAPSE_BUTTON_CLASS}
-        >
-          <PanelLeftClose className="size-3.5" />
-        </IconButton>
+        {/* Past Expand, and named apart from it (MAR-3292 R4). Its own
+            `no-drag`: the column declares no region of its own, so the
+            control says it for itself rather than inheriting whatever is
+            above it. */}
+        <LoomCollapseButton onCollapse={onCollapse} />
       </div>
     </div>
     <div className="shrink-0 px-3 pb-4 text-xs text-ink-muted">
