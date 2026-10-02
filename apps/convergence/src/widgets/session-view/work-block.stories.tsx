@@ -85,7 +85,7 @@ export const Long: Story = {
   play: async ({ args, canvas }) => {
     const sentence = canvas.getByText(args.sentence ?? '')
     await expect(sentence.scrollWidth).toBeGreaterThan(sentence.clientWidth)
-    await expect(sentence).toHaveAttribute('title', args.sentence)
+    await expect(sentence).toHaveAttribute('data-tooltip', args.sentence)
   },
 }
 

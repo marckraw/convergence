@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { MenuRadioGroup, MenuRadioItem } from '@convergence/ui'
+import { MenuRadioGroup, MenuRadioItem, Tooltip } from '@convergence/ui'
 import type { TranscriptViewMode } from './transcript-view-mode.api'
 
 interface TranscriptViewMenuItemsProps {
@@ -37,14 +37,11 @@ export const TranscriptViewMenuItems: FC<TranscriptViewMenuItemsProps> = ({
     onValueChange={(next: TranscriptViewMode) => onChange(next)}
   >
     {OPTIONS.map((option) => (
-      <MenuRadioItem
-        key={option.mode}
-        value={option.mode}
-        title={option.title}
-        closeOnClick
-      >
-        {option.label}
-      </MenuRadioItem>
+      <Tooltip key={option.mode} label={option.title} side="right">
+        <MenuRadioItem value={option.mode} closeOnClick>
+          {option.label}
+        </MenuRadioItem>
+      </Tooltip>
     ))}
   </MenuRadioGroup>
 )

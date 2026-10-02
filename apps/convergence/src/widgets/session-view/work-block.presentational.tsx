@@ -58,13 +58,15 @@ export const WorkBlockRow: FC<WorkBlockRowProps> = ({
       </Button>
     </Tooltip>
     {sentence ? (
-      <p
-        data-testid="work-block-sentence"
-        className={WORK_BLOCK_SENTENCE_CLASS}
-        title={sentence}
-      >
-        {sentence}
-      </p>
+      // The whole sentence is our Tooltip when the line cuts it short (R2).
+      <Tooltip label={sentence} when="truncated">
+        <p
+          data-testid="work-block-sentence"
+          className={WORK_BLOCK_SENTENCE_CLASS}
+        >
+          {sentence}
+        </p>
+      </Tooltip>
     ) : null}
   </div>
 )
