@@ -109,6 +109,16 @@ const config: StorybookConfig = {
           'chartgpu-react',
           'streamdown',
           'zustand',
+          // The terminal dock's stories (leaf pane, split node) reach xterm and
+          // the split panes; discovered mid-run, they reload the page and fail
+          // every story in their files on a cold cache.
+          '@xterm/xterm',
+          '@xterm/addon-clipboard',
+          '@xterm/addon-fit',
+          '@xterm/addon-unicode11',
+          '@xterm/addon-web-links',
+          '@xterm/addon-webgl',
+          'react-resizable-panels',
         ],
       },
     })
