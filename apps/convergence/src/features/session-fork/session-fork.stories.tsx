@@ -165,11 +165,11 @@ export const Default: Story = {
       'Composer focus (fork)',
     )
     await userEvent.click(
-      within(dialog).getByRole('button', { name: /Structured summary/ }),
+      within(dialog).getByRole('radio', { name: /Structured summary/ }),
     )
     await expect(args.onStrategyChange).toHaveBeenCalledWith('summary')
     await userEvent.click(
-      within(dialog).getByRole('button', { name: /New workspace/ }),
+      within(dialog).getByRole('radio', { name: /New workspace/ }),
     )
     await expect(args.onWorkspaceModeChange).toHaveBeenCalledWith('fork')
     await userEvent.click(
@@ -240,16 +240,6 @@ export const Busy: Story = {
 /** The summary is ready to read and edit before forking. */
 export const SummaryReady: Story = {
   name: 'Summary ready',
-  parameters: {
-    a11y: {
-      config: {
-        rules: [
-          // a11y-known: the editable summary seed is a textarea with no label — fixed by the sweep (DS4)
-          { id: 'label', enabled: false },
-        ],
-      },
-    },
-  },
   args: {
     strategy: 'summary',
     seedMarkdown: summarySeed,
@@ -339,8 +329,8 @@ export const Disabled: Story = {
       within(dialog).getByRole('button', { name: 'Forking…' }),
     ).toBeDisabled()
     await expect(
-      within(dialog).getByRole('button', { name: /Structured summary/ }),
-    ).toBeDisabled()
+      within(dialog).getByRole('radio', { name: /Structured summary/ }),
+    ).toHaveAttribute('aria-disabled', 'true')
     await expect(
       within(dialog).getByText('Needs at least 4 transcript entries.'),
     ).toBeVisible()

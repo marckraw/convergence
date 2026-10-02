@@ -341,7 +341,7 @@ describe('SessionForkDialogContainer', () => {
 
     expect(await screen.findByText('Fork session')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Structured summary/i }))
+    fireEvent.click(screen.getByRole('radio', { name: /Structured summary/i }))
 
     expect(
       await screen.findByRole('button', { name: /Generate summary/i }),
@@ -357,7 +357,7 @@ describe('SessionForkDialogContainer', () => {
 
     expect(await screen.findByText('Fork session')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Structured summary/i }))
+    fireEvent.click(screen.getByRole('radio', { name: /Structured summary/i }))
     fireEvent.click(
       await screen.findByRole('button', { name: /Generate summary/i }),
     )
@@ -388,7 +388,7 @@ describe('SessionForkDialogContainer', () => {
     render(<SessionForkDialogContainer />)
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /Structured summary/i }),
+      await screen.findByRole('radio', { name: /Structured summary/i }),
     )
     fireEvent.click(
       await screen.findByRole('button', { name: /Generate summary/i }),
@@ -423,7 +423,7 @@ describe('SessionForkDialogContainer', () => {
     render(<SessionForkDialogContainer />)
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /Structured summary/i }),
+      await screen.findByRole('radio', { name: /Structured summary/i }),
     )
     fireEvent.click(
       await screen.findByRole('button', { name: /Generate summary/i }),
@@ -431,7 +431,7 @@ describe('SessionForkDialogContainer', () => {
 
     await screen.findByDisplayValue(/Shipping the fork dialog/)
 
-    fireEvent.click(screen.getByRole('button', { name: /Full transcript/i }))
+    fireEvent.click(screen.getByRole('radio', { name: /Full transcript/i }))
 
     await waitFor(() => {
       expect(
@@ -450,7 +450,7 @@ describe('SessionForkDialogContainer', () => {
     render(<SessionForkDialogContainer />)
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /Structured summary/i }),
+      await screen.findByRole('radio', { name: /Structured summary/i }),
     )
     fireEvent.click(
       await screen.findByRole('button', { name: /Generate summary/i }),
@@ -474,7 +474,7 @@ describe('SessionForkDialogContainer', () => {
 
     expect(await screen.findByText('Fork session')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /New workspace/i }))
+    fireEvent.click(screen.getByRole('radio', { name: /New workspace/i }))
 
     const confirm = screen.getByRole('button', { name: /^Create fork$/i })
     expect(confirm).toBeDisabled()
@@ -596,7 +596,7 @@ describe('SessionForkDialogContainer', () => {
 
       render(<SessionForkDialogContainer />)
 
-      const summaryButton = await screen.findByRole('button', {
+      const summaryButton = await screen.findByRole('radio', {
         name: /Structured summary/i,
       })
       await waitFor(() => {
@@ -660,7 +660,7 @@ describe('SessionForkDialogContainer', () => {
 
       render(<SessionForkDialogContainer />)
 
-      const summaryButton = await screen.findByRole('button', {
+      const summaryButton = await screen.findByRole('radio', {
         name: /Structured summary/i,
       })
       await waitFor(() => {
@@ -706,7 +706,7 @@ describe('SessionForkDialogContainer', () => {
     render(<SessionForkDialogContainer />)
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /Structured summary/i }),
+      await screen.findByRole('radio', { name: /Structured summary/i }),
     )
     fireEvent.click(
       await screen.findByRole('button', { name: /Generate summary/i }),

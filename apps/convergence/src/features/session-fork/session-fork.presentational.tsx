@@ -2,14 +2,18 @@ import type { FC } from 'react'
 import { GitFork, RefreshCw, Sparkles } from 'lucide-react'
 import {
   Button,
-  cn,
+  ChoiceCard,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogError,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   Input,
+  Notice,
+  RadioGroup,
   Textarea,
 } from '@convergence/ui'
 import type {
@@ -126,10 +130,11 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(open) => onOpenChange(open)}>
-      <DialogContent className="max-w-2xl">
+      {/* R11: today's 672 px is the nearest size, lg (720). */}
+      <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <GitFork className="h-4 w-4" />
+            <GitFork aria-hidden className="size-4" />
             Fork session
           </DialogTitle>
           <DialogDescription>
@@ -137,7 +142,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 overflow-y-auto px-6 py-5">
+        <DialogBody className="space-y-5">
           <section className="space-y-2">
             <label htmlFor="fork-name" className="text-sm font-medium">
               Name
@@ -153,70 +158,48 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           </section>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-medium">Strategy</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                variant={strategy === 'full' ? 'tonal' : 'secondary'}
-                onClick={() => onStrategyChange('full')}
-                size="lg"
-                className={cn(
-                  'h-auto items-start justify-start px-3 py-3 text-left',
-                  strategy === 'full' && 'ring-1 ring-ring',
-                )}
-              >
-                <span className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">Full transcript</span>
-                  <span className="text-xs text-muted-foreground">
-                    Paste the entire conversation verbatim.
-                  </span>
-                </span>
-              </Button>
-              <Button
-                type="button"
-                variant={strategy === 'summary' ? 'tonal' : 'secondary'}
+            <h3 id="fork-strategy" className="text-sm font-medium">
+              Strategy
+            </h3>
+            <RadioGroup
+              aria-labelledby="fork-strategy"
+              value={strategy}
+              onValueChange={(value) => onStrategyChange(value as ForkStrategy)}
+              className="grid gap-2 sm:grid-cols-2"
+            >
+              <ChoiceCard
+                value="full"
+                title="Full transcript"
+                description="Paste the entire conversation verbatim."
+              />
+              <ChoiceCard
+                value="summary"
                 disabled={!summaryAllowed}
-                onClick={() => onStrategyChange('summary')}
-                size="lg"
-                className={cn(
-                  'h-auto items-start justify-start px-3 py-3 text-left',
-                  strategy === 'summary' && 'ring-1 ring-ring',
-                )}
-              >
-                <span className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">
-                    Structured summary
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {summaryDisabledReason ??
-                      'LLM extracts decisions, facts, and next steps.'}
-                  </span>
-                </span>
-              </Button>
-            </div>
+                title="Structured summary"
+                description={
+                  summaryDisabledReason ??
+                  'LLM extracts decisions, facts, and next steps.'
+                }
+              />
+            </RadioGroup>
             {strategy === 'full' && sizeWarning && (
-              <div
-                role="alert"
+              <Notice
+                tone="warning"
                 data-testid="fork-size-warning"
-                className="space-y-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground"
+                title={`Full transcript is approximately ${sizeWarning.percentage}% of the parent provider's context window (${sizeWarning.estimatedTokens.toLocaleString()} / ${sizeWarning.windowTokens.toLocaleString()} tokens).`}
+                actions={
+                  summaryAllowed ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => onStrategyChange('summary')}
+                    >
+                      Switch to summary
+                    </Button>
+                  ) : undefined
+                }
               >
-                <p>
-                  Full transcript is approximately {sizeWarning.percentage}% of
-                  the parent provider&apos;s context window (
-                  {sizeWarning.estimatedTokens.toLocaleString()} /{' '}
-                  {sizeWarning.windowTokens.toLocaleString()} tokens). The child
-                  session may run out of room quickly.
-                </p>
-                {summaryAllowed && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => onStrategyChange('summary')}
-                  >
-                    Switch to summary
-                  </Button>
-                )}
-              </div>
+                The child session may run out of room quickly.
+              </Notice>
             )}
           </section>
 
@@ -241,43 +224,28 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           </section>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-medium">Workspace</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                variant={workspaceMode === 'reuse' ? 'tonal' : 'secondary'}
-                onClick={() => onWorkspaceModeChange('reuse')}
-                size="lg"
-                className={cn(
-                  'h-auto items-start justify-start px-3 py-3 text-left',
-                  workspaceMode === 'reuse' && 'ring-1 ring-ring',
-                )}
-              >
-                <span className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">Reuse workspace</span>
-                  <span className="text-xs text-muted-foreground">
-                    Share the parent&apos;s files and branch.
-                  </span>
-                </span>
-              </Button>
-              <Button
-                type="button"
-                variant={workspaceMode === 'fork' ? 'tonal' : 'secondary'}
-                onClick={() => onWorkspaceModeChange('fork')}
-                size="lg"
-                className={cn(
-                  'h-auto items-start justify-start px-3 py-3 text-left',
-                  workspaceMode === 'fork' && 'ring-1 ring-ring',
-                )}
-              >
-                <span className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">New workspace</span>
-                  <span className="text-xs text-muted-foreground">
-                    Create a fresh worktree on its own branch.
-                  </span>
-                </span>
-              </Button>
-            </div>
+            <h3 id="fork-workspace" className="text-sm font-medium">
+              Workspace
+            </h3>
+            <RadioGroup
+              aria-labelledby="fork-workspace"
+              value={workspaceMode}
+              onValueChange={(value) =>
+                onWorkspaceModeChange(value as WorkspaceMode)
+              }
+              className="grid gap-2 sm:grid-cols-2"
+            >
+              <ChoiceCard
+                value="reuse"
+                title="Reuse workspace"
+                description="Share the parent's files and branch."
+              />
+              <ChoiceCard
+                value="fork"
+                title="New workspace"
+                description="Create a fresh worktree on its own branch."
+              />
+            </RadioGroup>
             {workspaceMode === 'fork' && (
               <Input
                 size="lg"
@@ -286,6 +254,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                   onWorkspaceBranchNameChange(event.target.value)
                 }
                 placeholder="fork/branch-name"
+                aria-label="New workspace branch"
                 disabled={isSubmitting}
               />
             )}
@@ -302,13 +271,13 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                     onClick={onGenerateSummary}
                     disabled={isSubmitting}
                   >
-                    <RefreshCw className="h-3.5 w-3.5" />
+                    <RefreshCw aria-hidden />
                     {preview.status === 'error' ? 'Retry' : 'Regenerate'}
                   </Button>
                 )}
               </div>
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Summarize with</p>
+                <p className="text-xs text-ink-muted">Summarize with</p>
                 <div className="flex flex-wrap items-center gap-1">
                   <ModelSelectorRow
                     providers={providers}
@@ -331,7 +300,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                     onClick={onGenerateSummary}
                     disabled={isSubmitting}
                   >
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Sparkles aria-hidden />
                     Generate summary
                   </Button>
                 </div>
@@ -348,48 +317,47 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                     </p>
                   )}
                   {progressLabel?.stale && (
-                    <p
+                    <Notice
+                      tone="warning"
                       data-testid="fork-preview-stale"
-                      className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning-foreground"
-                    >
-                      No output in the last 30s. The provider may be stuck.
-                    </p>
+                      className="text-xs"
+                      title="No output in the last 30s. The provider may be stuck."
+                    />
                   )}
                 </div>
               )}
               {preview.status === 'error' && (
-                <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  <p>{preview.message}</p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => onStrategyChange('full')}
-                  >
-                    Switch to full transcript
-                  </Button>
-                </div>
+                <Notice
+                  tone="danger"
+                  title="Couldn't summarise the transcript"
+                  actions={
+                    <Button
+                      variant="secondary"
+                      onClick={() => onStrategyChange('full')}
+                    >
+                      Switch to full transcript
+                    </Button>
+                  }
+                >
+                  {preview.message}
+                </Notice>
               )}
               {preview.status === 'ready' && (
                 <Textarea
+                  aria-label="Summary seed"
                   value={seedMarkdown}
                   onChange={(event) => onSeedMarkdownChange(event.target.value)}
-                  className="min-h-[220px] font-mono text-xs"
+                  className="min-h-55 font-mono text-xs"
                   disabled={isSubmitting}
                 />
               )}
             </section>
           )}
+        </DialogBody>
 
-          {submitError && (
-            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {submitError}
-            </p>
-          )}
-        </div>
-
+        <DialogError className="pt-3">{submitError}</DialogError>
         <DialogFooter>
           <Button
-            type="button"
             variant="secondary"
             onClick={onCancel}
             disabled={isSubmitting}
@@ -398,12 +366,13 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
             Cancel
           </Button>
           <Button
-            type="button"
             onClick={onConfirm}
             disabled={!canConfirm}
+            pending={isSubmitting}
+            pendingLabel="Forking…"
             size="lg"
           >
-            {isSubmitting ? 'Forking…' : 'Create fork'}
+            Create fork
           </Button>
         </DialogFooter>
         <AttachmentPreviewContainer
