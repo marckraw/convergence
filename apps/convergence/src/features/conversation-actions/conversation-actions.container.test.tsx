@@ -1,6 +1,13 @@
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useComposerIntentStore } from '@/entities/composer-intent'
 import {
@@ -514,6 +521,10 @@ describe('ConversationActionsContainer', () => {
           ],
         })
       })
+      // The shared skill-list status (CONV-10): its words wait 300 ms.
+      expect(
+        await within(list).findByText('Loading skills…', {}, { timeout: 2000 }),
+      ).toBeInTheDocument()
       expect(within(list).getByRole('status')).toHaveTextContent(
         'Loading skills…',
       )
@@ -735,8 +746,11 @@ describe('ConversationActionsContainer', () => {
       })
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
-      expect(within(list).getByRole('status')).toHaveTextContent(
-        'Loading skills…',
+      // The shared skill-list status (CONV-10): its words wait 300 ms.
+      await waitFor(() =>
+        expect(within(list).getByRole('status')).toHaveTextContent(
+          'Loading skills…',
+        ),
       )
     })
 
@@ -747,9 +761,10 @@ describe('ConversationActionsContainer', () => {
       })
       render(<Harness session={SETTLED} />)
       const list = await openGroup('Skills')
-      expect(within(list).getByRole('alert')).toHaveTextContent(
-        "Couldn't load this agent's skills: EACCES: ~/.claude/skills",
-      )
+      // Every skill list's failure (CONV-10): what failed, then why.
+      const alert = within(list).getByRole('alert')
+      expect(alert).toHaveTextContent("Couldn't load skills")
+      expect(alert).toHaveTextContent('EACCES: ~/.claude/skills')
       expect(
         within(list).queryByText('No skills available for this agent'),
       ).toBeNull()

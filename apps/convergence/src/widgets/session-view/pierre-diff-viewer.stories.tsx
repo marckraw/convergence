@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, waitFor } from 'storybook/test'
+import { pierreDiffPatchView } from './pierre-diff-patch.pure'
 import { PierreDiffViewerView } from './pierre-diff-viewer.presentational'
 
 /** A hunk as git stores it, with more context than the viewer shows at first. */
@@ -42,12 +43,26 @@ const knownDiffIssues = {
   },
 }
 
+const FILE =
+  'apps/convergence/src/features/composer/skill-picker.presentational.tsx'
+
+/** What the container derives from a diff: the patch folded to its context. */
+const viewOf = (file: string | null, diff: string, context = 3) =>
+  pierreDiffPatchView({
+    file,
+    diff,
+    contextBefore: context,
+    contextAfter: context,
+  })
+
 const meta = {
   title: 'Widgets/SessionView/PierreDiffViewer',
   component: PierreDiffViewerView,
   args: {
-    file: 'apps/convergence/src/features/composer/skill-picker.presentational.tsx',
+    file: FILE,
     diff: hunk,
+    view: viewOf(FILE, hunk),
+    workerPool: null,
     status: 'M',
     subtitle: 'Turn 4',
     onExpandContextBefore: fn(),
@@ -101,7 +116,7 @@ export const Default: Story = {
 /** Context widened: Reset brings it back to three lines. */
 export const Expanded: Story = {
   parameters: knownDiffIssues,
-  args: { contextBefore: 23, contextAfter: 23 },
+  args: { view: viewOf(FILE, hunk, 23) },
   play: async ({ args, canvas, userEvent }) => {
     const reset = canvas.getByRole('button', {
       name: 'Reset visible diff context',
@@ -117,7 +132,7 @@ export const Expanded: Story = {
 
 /** No file chosen yet. */
 export const Empty: Story = {
-  args: { file: null },
+  args: { file: null, view: viewOf(null, hunk) },
   play: async ({ canvas }) => {
     await expect(
       canvas.getByText(
@@ -129,7 +144,7 @@ export const Empty: Story = {
 
 /** Loading the diff. */
 export const Busy: Story = {
-  args: { diff: '', loading: true },
+  args: { diff: '', loading: true, view: viewOf(FILE, '') },
   play: async ({ canvas, canvasElement }) => {
     const words = await canvas.findByText(
       'Loading diff…',
@@ -148,6 +163,10 @@ export const Failed: Story = {
   args: {
     file: 'apps/convergence/build/icon.icns',
     diff: 'Binary files a/apps/convergence/build/icon.icns and b/apps/convergence/build/icon.icns differ',
+    view: viewOf(
+      'apps/convergence/build/icon.icns',
+      'Binary files a/apps/convergence/build/icon.icns and b/apps/convergence/build/icon.icns differ',
+    ),
     status: 'M',
   },
   play: async ({ canvas }) => {

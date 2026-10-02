@@ -133,11 +133,21 @@ export const Failed: Story = {
   },
 }
 
-/** Nothing matches. */
+/** Nothing matches the search. */
 export const Empty: Story = {
-  args: { items: [] },
+  args: { items: [], query: 'lint' },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No matching skills')).toBeVisible()
+  },
+}
+
+/** No search yet, and the agent has no skills. */
+export const NoSkills: Story = {
+  args: { items: [] },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText('No skills available for this agent'),
+    ).toBeVisible()
   },
 }
 

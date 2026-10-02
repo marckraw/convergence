@@ -4,17 +4,6 @@ import type {
   SessionContextWindow,
   SessionSummary,
 } from '@/entities/session'
-import {
-  Button,
-  cn,
-  DescriptionItem,
-  DescriptionList,
-  IconButton,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  StatusDot,
-} from '@convergence/ui'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import {
   resolveContextDrillAction,
@@ -25,16 +14,7 @@ import {
   describeContextAlert,
   getContextTone,
 } from './context-window-tone.pure'
-import {
-  renderUsageHeading,
-  renderUsageNote,
-  UsageMeterRow,
-} from './usage-popover.presentational'
-import {
-  contextDotHalo,
-  usagePillTone,
-  usageSection,
-} from './usage-pill.styles'
+import { ContextWindowPopover } from './context-window-popover.presentational'
 import { useHoverPopover } from './use-hover-popover'
 
 interface ContextWindowDotProps {
@@ -43,23 +23,6 @@ interface ContextWindowDotProps {
   provider: ProviderInfo | null | undefined
   onCompact: () => Promise<void>
   hasPendingQueuedInput?: boolean
-}
-
-/** A quiet line under an action: why it waits, how it went. */
-const usageFootnote = 'text-2xs leading-relaxed text-ink-muted'
-
-function formatFullTokens(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value)
-}
-
-function getAriaLabel(
-  contextWindow: SessionContextWindow | null | undefined,
-): string {
-  if (!contextWindow) return 'Context window unavailable'
-  if (contextWindow.availability === 'unavailable') {
-    return 'Context window unavailable'
-  }
-  return `Context window ${contextWindow.remainingPercentage}% remaining`
 }
 
 export function ContextWindowDot({
@@ -178,172 +141,26 @@ export function ContextWindowDot({
   }, [clearCloseTimer, session.id])
 
   return (
-    <Popover
+    <ContextWindowPopover
+      contextWindow={contextWindow}
+      tone={tone}
+      alertLine={alertLine}
+      compaction={compaction}
+      compactionCheckedAtRun={
+        provider?.contextManagement?.compact.availability === 'runtime-check'
+      }
+      compacting={isCompacting || session.activity === 'compacting'}
+      drillRunning={drillBeat !== null}
+      actionMessage={actionMessage}
+      drill={drill}
+      cancelRefusal={cancelRefusal}
+      onCompact={() => void compact()}
+      onRunDrill={runDrill}
+      onCancelDrill={cancelDrill}
       open={open}
-      onOpenChange={(next, details) => {
-        // A press on the pill opens the panel, never closes it: the pointer
-        // that rested on it has opened it already (MAR-3616).
-        if (!next && details.reason === 'trigger-press') return
-        setOpen(next)
-      }}
-    >
-      <span onPointerEnter={openPanel} onPointerLeave={closePanelSoon}>
-        <PopoverTrigger
-          render={
-            <IconButton
-              label={getAriaLabel(contextWindow)}
-              type="button"
-              variant="ghost"
-              onClick={(event) => {
-                event.stopPropagation()
-                openPanel()
-              }}
-              size="sm"
-              className={cn('shrink-0', usagePillTone[tone])}
-            />
-          }
-        >
-          <StatusDot tone={tone} size="lg" className={contextDotHalo[tone]} />
-        </PopoverTrigger>
-      </span>
-      <PopoverContent
-        aria-label="Context window"
-        side="top"
-        className="w-80 space-y-3 p-3"
-        onPointerEnter={openPanel}
-        onPointerLeave={closePanelSoon}
-        initialFocus={false}
-      >
-        {renderUsageHeading({
-          title: 'Context window',
-          detail:
-            'Current conversation capacity, separate from provider usage limits.',
-        })}
-
-        {!contextWindow ? (
-          renderUsageNote(
-            'Context usage has not been reported for this session yet.',
-          )
-        ) : contextWindow.availability === 'unavailable' ? (
-          renderUsageNote(contextWindow.reason)
-        ) : (
-          <div className="space-y-2">
-            <UsageMeterRow
-              label="Remaining"
-              value={contextWindow.remainingPercentage}
-              valueLabel={`${contextWindow.remainingPercentage}%`}
-              tone={tone}
-              meterLabel="Context window remaining"
-            />
-            <div className={usageSection}>
-              <DescriptionList layout="inline" className="gap-1.5">
-                <DescriptionItem term="Used">
-                  {contextWindow.usedPercentage}% ·{' '}
-                  {formatFullTokens(contextWindow.usedTokens)} tokens
-                </DescriptionItem>
-                <DescriptionItem term="Window">
-                  {formatFullTokens(contextWindow.windowTokens)} tokens
-                </DescriptionItem>
-                <DescriptionItem term="Source">
-                  {contextWindow.source === 'provider'
-                    ? 'Provider-reported'
-                    : 'Estimated'}
-                </DescriptionItem>
-              </DescriptionList>
-            </div>
-            {alertLine ? (
-              <p className="text-2xs leading-relaxed text-warning-ink">
-                {alertLine}
-              </p>
-            ) : null}
-          </div>
-        )}
-
-        {compaction.visible ? (
-          <div className={cn(usageSection, 'space-y-2 pt-3')}>
-            <Button
-              type="button"
-              disabled={
-                !compaction.enabled || isCompacting || drillBeat !== null
-              }
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                void compact()
-              }}
-              className="w-full"
-            >
-              {isCompacting || session.activity === 'compacting'
-                ? 'Compacting context…'
-                : 'Compact context'}
-            </Button>
-            {!compaction.enabled && compaction.reason ? (
-              <p className={usageFootnote}>{compaction.reason}</p>
-            ) : provider?.contextManagement?.compact.availability ===
-              'runtime-check' ? (
-              <p className={usageFootnote}>
-                Availability is verified against the installed provider when you
-                run it.
-              </p>
-            ) : null}
-            {actionMessage ? (
-              <p
-                className={cn(
-                  usageFootnote,
-                  actionMessage.tone === 'success'
-                    ? 'text-success-ink'
-                    : 'text-danger-ink',
-                )}
-              >
-                {actionMessage.text}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {drill.visible ? (
-          <div className={cn(usageSection, 'space-y-2 pt-3')}>
-            <Button
-              type="button"
-              variant="tonal"
-              disabled={!drill.enabled}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                runDrill()
-              }}
-              className="w-full"
-            >
-              {drill.label}
-            </Button>
-            {drill.cancel.visible ? (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={!drill.cancel.enabled}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  cancelDrill()
-                }}
-                className="w-full"
-              >
-                Cancel
-              </Button>
-            ) : null}
-            {drill.cancel.visible && drill.cancel.reason ? (
-              <p className={usageFootnote}>{drill.cancel.reason}</p>
-            ) : !drill.enabled && drill.reason ? (
-              <p className={usageFootnote}>{drill.reason}</p>
-            ) : null}
-            {cancelRefusal ? (
-              <p className={cn(usageFootnote, 'text-danger-ink')}>
-                {cancelRefusal}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </PopoverContent>
-    </Popover>
+      onOpenChange={setOpen}
+      onOpenPanel={openPanel}
+      onClosePanelSoon={closePanelSoon}
+    />
   )
 }

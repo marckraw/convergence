@@ -1,23 +1,20 @@
 import { useId, type FC } from 'react'
+import { SkillListStatus } from '@/entities/skill'
 import {
   Button,
-  Input,
   Kbd,
   Listbox,
   ListboxOption,
   listboxOptionId,
-  FormError,
+  SearchField,
 } from '@convergence/ui'
-import {
-  SKILLS_EMPTY_LABEL,
-  SKILLS_LOADING_LABEL,
-  skillsFailedLabel,
-} from './conversation-actions-menu.pure'
 import { conversationActionsStyles as styles } from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
 
 /**
- * The Skills list (frames 03 and 08), with loading and failure told apart.
+ * The Skills list (frames 03 and 08), with loading and failure told apart,
+ * in the words and looks every skill list shares (CONV-10): the search is a
+ * SearchField, and loading, failed and empty are SkillListStatus.
  *
  * The search drives the list (MAR-3616 DS3e): it keeps the focus, Up and
  * Down move the active row (aria-activedescendant) and Enter adds it; a click
@@ -45,10 +42,9 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
       ) : null}
       {state.kind === 'listed' ? (
         <>
-          <Input
+          <SearchField
             size="md"
             ref={searchRef}
-            type="text"
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={hasRows}
@@ -94,20 +90,9 @@ export const ConversationActionsSkills: FC<ConversationActionsViewProps> = ({
           <p className={styles.hint}>Add a skill chip · nothing sends yet</p>
         </>
       ) : null}
-      {state.kind === 'loading' ? (
-        <p className={styles.status} role="status">
-          {SKILLS_LOADING_LABEL}
-        </p>
-      ) : null}
-      {state.kind === 'failed' ? (
-        // A failure reads as one (CONV-7): the danger ink, as in the Add popover.
-        <FormError className="px-2 py-1.5">
-          {skillsFailedLabel(state.message)}
-        </FormError>
-      ) : null}
+      {state.kind === 'listed' ? null : <SkillListStatus state={state} />}
       {state.kind === 'empty' ? (
         <>
-          <p className={styles.emptyTitle}>{SKILLS_EMPTY_LABEL}</p>
           <p className={styles.reason}>Routines are still available below.</p>
           <Button
             size="md"

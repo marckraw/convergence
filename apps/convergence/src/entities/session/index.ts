@@ -107,6 +107,14 @@ export {
   scopeModelCatalogToProvider,
 } from './provider-selection.pure'
 export {
+  effortSelectItems,
+  providerSelectItems,
+} from './provider-select-items.pure'
+export type {
+  EffortSelectItem,
+  ProviderSelectItem,
+} from './provider-select-items.pure'
+export {
   ASK_PERMISSION_CONFIG,
   CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
   CODEX_APPROVAL_POLICY_OPTIONS,

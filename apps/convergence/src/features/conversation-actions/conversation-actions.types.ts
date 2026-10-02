@@ -4,8 +4,8 @@ import type {
   ActionsMenuLevel,
   ActionsPanelPlacement,
   RoutineRowView,
-  SkillListState,
 } from './conversation-actions-menu.pure'
+import type { SkillListState } from '@/entities/skill'
 
 export interface ActionRowView {
   id: string

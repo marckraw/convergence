@@ -10,7 +10,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
-import { Badge, Button, cn, Textarea } from '@convergence/ui'
+import { Badge, Button, ComposerCard, Textarea } from '@convergence/ui'
 import { ModelSelectorRow } from './model-selector-row.presentational'
 
 interface ForkComposerProps {
@@ -60,11 +60,9 @@ export const ForkComposer: FC<ForkComposerProps> = ({
   } = attachmentDraft
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border bg-surface p-3 transition-colors',
-        isDragging ? 'border-strong border-dashed' : 'border-line',
-      )}
+    // The composer's own card (CONV-17), trimmed to what a fork's seed needs.
+    <ComposerCard
+      dragging={isDragging}
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
       onDragOver={dragHandlers.onDragOver}
@@ -114,6 +112,6 @@ export const ForkComposer: FC<ForkComposerProps> = ({
           onEffortChange={onEffortChange}
         />
       </div>
-    </div>
+    </ComposerCard>
   )
 }

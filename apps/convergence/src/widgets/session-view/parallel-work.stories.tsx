@@ -3,7 +3,7 @@ import { metaText } from '@/shared/testing/meta-line'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { expect, fn, within } from 'storybook/test'
-import { ParallelWorkPanel } from './parallel-work.presentational'
+import { ParallelWorkPanel } from './parallel-work-panel.container'
 
 const NOW = Date.parse('2026-10-01T14:10:00.000Z')
 

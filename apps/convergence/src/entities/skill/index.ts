@@ -5,6 +5,16 @@ export {
   skillSelectionFromCatalogEntry,
 } from './skill-selection.pure'
 export { remoteSkillsNotice } from './remote-skills-notice.pure'
+export {
+  composerSkillListState,
+  resolveSkillListState,
+  SKILL_LIST_COPY,
+  skillRowDescription,
+} from './skill-list.pure'
+export type { SkillListState } from './skill-list.pure'
+export { SkillListStatus } from './skill-list-status.presentational'
+export { SkillRow } from './skill-row.presentational'
+export type { SkillRowForm } from './skill-row.presentational'
 export type { SkillStore } from './skill.model'
 export type {
   ProjectSkillCatalog,

@@ -35,13 +35,6 @@ export const ROUTINE_LABELS: Record<ConversationRoutineAction['id'], string> = {
   'hand-off': 'Hand off to another account',
 }
 
-export const SKILLS_LOADING_LABEL = 'Loading skills…'
-export const SKILLS_EMPTY_LABEL = 'No skills available for this agent'
-
-export function skillsFailedLabel(message: string): string {
-  return `Couldn't load this agent's skills: ${message}`
-}
-
 /**
  * Whether the Actions button belongs on this conversation surface (R1): only
  * where the composer renders for this very session.
@@ -133,54 +126,6 @@ export function projectSkillsNeedLoad(input: {
   projectId: string
 }): boolean {
   return input.catalogProjectId !== input.projectId
-}
-
-export type SkillListState =
-  | { kind: 'loading' }
-  | { kind: 'failed'; message: string }
-  | { kind: 'empty' }
-  | { kind: 'listed' }
-
-/**
- * Loading, failure and empty told apart for THIS agent's provider (R3).
- *
- * Failure outranks everything, because a failed scan must never read as
- * "no skills". A catalog read for another project or chat is not this one's
- * answer, and reads as still loading.
- */
-export function resolveSkillListState(input: {
-  catalog: ProjectSkillCatalog | null
-  catalogId: string
-  isCatalogLoading: boolean
-  loadingProviderIds: readonly string[]
-  catalogError: string | null
-  failedProviders: Readonly<Record<string, string>>
-  providerId: string
-}): SkillListState {
-  const failed = input.failedProviders[input.providerId]
-  if (failed !== undefined) return { kind: 'failed', message: failed }
-  if (input.catalogError !== null) {
-    return { kind: 'failed', message: input.catalogError }
-  }
-  const catalog =
-    input.catalog && input.catalog.projectId === input.catalogId
-      ? input.catalog
-      : null
-  const provider = catalog?.providers.find(
-    (candidate) => candidate.providerId === input.providerId,
-  )
-  if (provider?.error && provider.skills.length === 0) {
-    return { kind: 'failed', message: provider.error }
-  }
-  if (provider && provider.skills.length > 0) return { kind: 'listed' }
-  if (
-    !catalog ||
-    input.loadingProviderIds.includes(input.providerId) ||
-    (input.isCatalogLoading && input.loadingProviderIds.length === 0)
-  ) {
-    return { kind: 'loading' }
-  }
-  return { kind: 'empty' }
 }
 
 export type SkillAction = Extract<ConversationAction, { kind: 'skill' }>

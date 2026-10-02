@@ -463,3 +463,8 @@ export {
   type SectionLabelSize,
   sectionLabelVariants,
 } from './components/section-label/section-label'
+// DS7 lane composer (MAR-3608): appended, so the parallel lanes' additions merge as unions.
+export {
+  ComposerCard,
+  type ComposerCardProps,
+} from './components/composer-card/composer-card'

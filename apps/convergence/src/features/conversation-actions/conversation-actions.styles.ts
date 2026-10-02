@@ -57,7 +57,8 @@ export const conversationActionsStyles = {
    * which its title's line and 2 px above and below fill exactly.
    */
   back: `-ml-1 mb-1 gap-1 px-1 text-base font-medium text-ink ${FOCUS_RING}`,
-  search: `mb-1 border-0 px-2 py-1.5 shadow-none ${FOCUS_RING}`,
+  /** The Skills search is a SearchField, every skill list's one search (CONV-10): placed, not restyled. */
+  search: 'mb-1',
   notice: 'mb-1 px-2 text-xs leading-relaxed text-ink-muted',
   list: 'flex flex-col',
   /**
@@ -79,7 +80,6 @@ export const conversationActionsStyles = {
   // A routine's beat is working: the info ink (R1), readable in light too (CONV-2).
   progress: 'px-2 py-1 text-base text-info-ink',
   status: 'px-2 py-1.5 text-sm text-ink-muted',
-  emptyTitle: 'px-2 py-1.5 text-sm font-medium text-ink',
   hint: 'mt-1 px-2 text-xs text-ink-muted',
   refusal: 'px-2 pb-1.5 leading-relaxed',
 } as const
