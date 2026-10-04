@@ -149,6 +149,71 @@ it('serializes controls and forwards child text — mutations drop permission co
   }
 })
 
+it("MAR-3686 starts Claude Code on its own system prompt — dropping the claude_code preset (the SDK then initializes with an empty custom prompt, [''], in place of Claude Code's), appending to it or trimming it turns red", async () => {
+  const child = Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    killed: false,
+    exitCode: null,
+    signalCode: null,
+    kill: vi.fn(() => true),
+  })
+  const requests: Array<Record<string, unknown>> = []
+  child.stdin.on('data', (chunk) => {
+    for (const line of String(chunk).trim().split('\n')) {
+      const e = JSON.parse(line)
+      if (e.type !== 'control_request') continue
+      requests.push(e.request)
+      child.stdout.write(
+        JSON.stringify({
+          type: 'control_response',
+          response: { subtype: 'success', request_id: e.request_id },
+        }) + '\n',
+      )
+    }
+  })
+  spawnMock.mockReset().mockReturnValue(child)
+  const transport = createClaudeTransport({
+    onPermissionRequest: async (request) => ({
+      behavior: 'deny',
+      message: 'fixture denies',
+      toolUseID: request.toolUseID,
+      decisionClassification: 'user_reject',
+    }),
+    binaryPath: '/chosen/claude',
+    args: [],
+    cwd: '/tmp',
+    env: {},
+    onMessage: () => {},
+    onExit: () => {},
+    onStderr: () => {},
+  })
+  try {
+    await vi.waitFor(() =>
+      expect(requests.some((r) => r.subtype === 'initialize')).toBe(true),
+    )
+    const init = requests.find((r) => r.subtype === 'initialize')!
+    // The bare preset leaves every prompt field off the wire, so Claude Code
+    // renders its own system prompt (tool guidance, git conventions, env).
+    expect(
+      Object.fromEntries(
+        Object.entries(init).filter(([key]) =>
+          [
+            'systemPrompt',
+            'appendSystemPrompt',
+            'excludeDynamicSections',
+          ].includes(key),
+        ),
+      ),
+    ).toEqual({})
+  } finally {
+    child.emit('exit', 0, null)
+    child.stdout.end()
+    await transport.close()
+  }
+})
+
 it('MAR-3206 reads MCP status and reconnects one server over the running query — mutations drop either control or send the wrong server name turn red', async () => {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
