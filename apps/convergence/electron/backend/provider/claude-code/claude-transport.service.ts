@@ -72,6 +72,9 @@ export function createClaudeTransport(input: {
       cwd: input.cwd,
       env: input.env,
       pathToClaudeCodeExecutable: input.binaryPath,
+      // Without it the SDK initializes with an empty custom prompt ([''])
+      // that replaces Claude Code's own (MAR-3686).
+      systemPrompt: { type: 'preset', preset: 'claude_code' },
       model: value('--model'),
       resume: value('--resume'),
       includePartialMessages: true,
