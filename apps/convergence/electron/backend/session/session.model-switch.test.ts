@@ -348,11 +348,12 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
       windowTokens: 1_000_000,
     })
 
-    // `haiku`, not `sonnet`: the switch must cross tiers for the meter to
-    // show it followed, and the `sonnet` alias is 1M since Sonnet 5 (MAR-3539).
+    // The pinned `claude-haiku-4-5`, not an alias: the switch must cross tiers
+    // for the meter to show it followed, and every alias is 1M now (`sonnet`
+    // since MAR-3539, `haiku` since MAR-3540).
     await service.setModelSelection(session.id, {
       providerId: 'claude-code',
-      model: 'haiku',
+      model: 'claude-haiku-4-5',
       effort: 'medium',
     })
 

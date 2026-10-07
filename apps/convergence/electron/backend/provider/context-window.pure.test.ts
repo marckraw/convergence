@@ -278,6 +278,43 @@ describe('context-window.pure', () => {
     ).toMatchObject({ windowTokens: 200_000 })
   })
 
+  it('reads claude-haiku-5-5 and the bare haiku alias as 1M, and keeps pinned Haiku 4.5 on 200k (MAR-3540)', () => {
+    const usage = {
+      usage: {
+        input_tokens: 1200,
+        cache_creation_input_tokens: 300,
+        cache_read_input_tokens: 8500,
+      },
+    }
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        { message: { model: 'claude-haiku-5-5', ...usage } },
+        'haiku',
+      ),
+    ).toEqual({
+      availability: 'available',
+      source: 'estimated',
+      usedTokens: 10000,
+      windowTokens: 1_000_000,
+      usedPercentage: 1,
+      remainingPercentage: 99,
+    })
+    expect(deriveClaudeEstimatedContextWindow(usage, 'haiku')).toMatchObject({
+      windowTokens: 1_000_000,
+    })
+    // What an older Claude Code answers when asked for `haiku`: the model the
+    // turn really ran on decides, not the alias that asked for it.
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        { message: { model: 'claude-haiku-4-5-20251001', ...usage } },
+        'haiku',
+      ),
+    ).toMatchObject({ windowTokens: 200_000 })
+    expect(
+      deriveClaudeEstimatedContextWindow(usage, 'claude-haiku-4-5'),
+    ).toMatchObject({ windowTokens: 200_000 })
+  })
+
   it('estimates current 1M-capable claude model context windows', () => {
     expect(
       deriveClaudeEstimatedContextWindow(
