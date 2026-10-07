@@ -375,8 +375,16 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       {
         id: 'haiku',
         label: 'Claude Haiku',
+        description: 'Alias for the latest Haiku (currently Haiku 5.5).',
+        contextWindowTokens: 1_000_000,
         defaultEffort: 'medium',
-        effortOptions: buildEffortOptions(['low', 'medium', 'high']),
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ]),
       },
       {
         id: 'claude-fable-5-1',
@@ -449,6 +457,22 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         contextWindowTokens: 1_000_000,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions(['low', 'medium', 'high', 'max']),
+      },
+      {
+        // The first Haiku with an effort setting and a native 1M window
+        // (Claude Code 2.1.293's catalog, MAR-3540). `claude-haiku-4-5` below
+        // stays as it was: 200k, and the CLI gives it no effort setting.
+        id: 'claude-haiku-5-5',
+        label: 'Claude Haiku 5.5',
+        contextWindowTokens: 1_000_000,
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ]),
       },
       {
         id: 'claude-opus-4-8',

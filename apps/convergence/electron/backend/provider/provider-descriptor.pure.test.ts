@@ -123,6 +123,7 @@ describe('provider-descriptor', () => {
       'claude-opus-5',
       'claude-sonnet-5-5',
       'claude-sonnet-5',
+      'claude-haiku-5-5',
       'claude-opus-4-8',
       'claude-sonnet-4-6',
       'claude-opus-4-7',
@@ -250,6 +251,54 @@ describe('provider-descriptor', () => {
       defaultEffort: 'medium',
       effortOptions: fullLadder,
     })
+  })
+
+  it('offers Claude Haiku 5.5 pinned and as what the haiku alias means (MAR-3540)', () => {
+    const descriptor = buildClaudeDescriptor()
+    // Claude Code 2.1.293's own catalog: native 1M, effort low through max,
+    // default medium; `latest_per_family.haiku` is claude-haiku-5-5.
+    const fullLadder = [
+      { id: 'low', label: 'Low' },
+      { id: 'medium', label: 'Medium' },
+      { id: 'high', label: 'High' },
+      { id: 'xhigh', label: 'Very High' },
+      { id: 'max', label: 'Max' },
+    ]
+    expect(
+      descriptor.modelOptions.find(
+        (option) => option.id === 'claude-haiku-5-5',
+      ),
+    ).toEqual({
+      id: 'claude-haiku-5-5',
+      label: 'Claude Haiku 5.5',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'medium',
+      effortOptions: fullLadder,
+    })
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'haiku'),
+    ).toEqual({
+      id: 'haiku',
+      label: 'Claude Haiku',
+      description: 'Alias for the latest Haiku (currently Haiku 5.5).',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'medium',
+      effortOptions: fullLadder,
+    })
+    // Haiku 4.5 keeps what the CLI gives it: no window claim (it resolves to
+    // 200k) and the short ladder it always had.
+    expect(
+      descriptor.modelOptions.find(
+        (option) => option.id === 'claude-haiku-4-5',
+      ),
+    ).toEqual({
+      id: 'claude-haiku-4-5',
+      label: 'Claude Haiku 4.5',
+      defaultEffort: 'medium',
+      effortOptions: fullLadder.slice(0, 3),
+    })
+    // The fast model stays the alias, so it follows the newest Haiku.
+    expect(descriptor.fastModelId).toBe('haiku')
   })
 
   it('builds a conservative Cursor fallback descriptor from P0 ACP decisions', () => {

@@ -53,19 +53,22 @@ function deriveClaudeModelContextWindow(
     normalized.includes('[1m]') ||
     normalized.includes('fable') ||
     normalized.includes('mythos') ||
-    // `opus` and `sonnet` are unversioned aliases, like `fable`: the CLI
-    // resolves each to the current generation (Opus 5.5, Sonnet 5.5 as of
-    // Claude Code 2.1.284), which is 1M. They have to match exactly rather
-    // than by substring, because the versioned ids carry their own pinned tier
-    // and `claude-opus-4-5` / `claude-sonnet-4-5` are still 200k.
+    // `opus`, `sonnet` and `haiku` are unversioned aliases, like `fable`: the
+    // CLI resolves each to the current generation (Opus 5.5 and Sonnet 5.5 as
+    // of Claude Code 2.1.284, Haiku 5.5 as of 2.1.293), which is 1M. They have
+    // to match exactly rather than by substring, because the versioned ids
+    // carry their own pinned tier and `claude-opus-4-5` / `claude-sonnet-4-5` /
+    // `claude-haiku-4-5` are still 200k.
     normalized === 'opus' ||
     normalized === 'sonnet' ||
+    normalized === 'haiku' ||
     normalized.includes('claude-opus-5') ||
     normalized.includes('claude-opus-4-8') ||
     normalized.includes('claude-opus-4-7') ||
     normalized.includes('claude-opus-4-6') ||
     normalized.includes('claude-sonnet-5') ||
-    normalized.includes('claude-sonnet-4-6')
+    normalized.includes('claude-sonnet-4-6') ||
+    normalized.includes('claude-haiku-5')
   ) {
     return 1_000_000
   }
