@@ -18,6 +18,7 @@ import {
   remoteExecutionHostReconnectDelayMs,
   remoteProviderIdForLocalProvider,
   unavailableProviderError,
+  readSnapshotRunningTasks,
 } from './remote-execution-host.pure'
 
 /**
@@ -459,5 +460,28 @@ describe('remote conversation reset capability', () => {
       claude: descriptorForRemoteProvider(claude!).supportsConversationReset,
       codex: descriptorForRemoteProvider(codex!).supportsConversationReset,
     }).toEqual({ claude: true, codex: false })
+  })
+})
+
+describe('readSnapshotRunningTasks (MAR-3987)', () => {
+  it('reads the count a snapshot of this session carries, zero included', () => {
+    expect(
+      readSnapshotRunningTasks({ sessionId: 's-1', runningTasks: 2 }, 's-1'),
+    ).toBe(2)
+    expect(
+      readSnapshotRunningTasks({ sessionId: 's-1', runningTasks: 0 }, 's-1'),
+    ).toBe(0)
+  })
+
+  it('reads nothing from another session, or a count that is not one', () => {
+    expect(
+      readSnapshotRunningTasks({ sessionId: 's-2', runningTasks: 2 }, 's-1'),
+    ).toBeNull()
+    expect(readSnapshotRunningTasks({ sessionId: 's-1' }, 's-1')).toBeNull()
+    for (const runningTasks of [-1, 1.5, '2', null, Number.MAX_VALUE])
+      expect(
+        readSnapshotRunningTasks({ sessionId: 's-1', runningTasks }, 's-1'),
+      ).toBeNull()
+    expect(readSnapshotRunningTasks(null, 's-1')).toBeNull()
   })
 })

@@ -975,4 +975,92 @@ describe('a remote stream that skips a sequence', () => {
 
     handle.stop()
   })
+
+  /**
+   * An event of a kind this build does not know is a frame the host sent, not
+   * a hole (protocol 0.15, MAR-3987). Mutation: drop it with the cursor left
+   * below it, and 3 reads as a gap -- the resume asks for 2 again, and the
+   * stream never gets past it.
+   */
+  it('steps over an envelope of a kind this build does not know', async () => {
+    const host = hostWith(2)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'telepathy' } as never))
+    stub.emit(envelope(3, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => kept.length === 3, 'the stream to pass the frame')
+    expect(kept).toEqual([1, 2, 3])
+    expect(statuses).toEqual(['running', 'completed'])
+    expect(stub.eventStreamLastEventIds).toEqual([null])
+    expect(entries.map((entry) => entry.note)).toContain(
+      'skipped: a kind this build does not know; cursor moved over it',
+    )
+
+    handle.stop()
+  })
+
+  /**
+   * An unknown kind above a hole is the hole: the stream is left and the
+   * resume brings back what was lost, as for a known kind. Here it is the last
+   * frame, so nothing after it could notice the hole instead. Mutation: drop
+   * it without setting the gap, and 2 never comes back -- red.
+   */
+  it('resumes from below a hole an unknown kind sits above', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.loseFrame(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    stub.emit(envelope(3, { kind: 'telepathy' } as never))
+
+    await waitUntil(() => kept.length === 3, 'the resume to fill the hole')
+    expect(kept).toEqual([1, 2, 3])
+    expect(stub.eventStreamLastEventIds).toEqual([null, '1'])
+
+    handle.stop()
+  })
+
+  /**
+   * A replay can re-deliver an unknown kind the cursor already passed. It is a
+   * duplicate like any other, not a hole: read as a gap, every resume would
+   * bring it back and leave again, for ever. Mutation: treat a duplicate
+   * skipped frame as a gap -- red on the headers.
+   */
+  it('drops a re-delivered unknown kind without reconnecting', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'telepathy' } as never))
+    stub.emit(envelope(2, { kind: 'telepathy' } as never))
+    stub.emit(envelope(3, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => kept.length === 3, 'the frame after the duplicate')
+    expect(kept).toEqual([1, 2, 3])
+    expect(stub.eventStreamLastEventIds).toEqual([null])
+    expect(entries.map((entry) => entry.note)).toContain(
+      'dropped: already-seen sequence',
+    )
+
+    handle.stop()
+  })
 })

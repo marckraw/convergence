@@ -24,6 +24,7 @@ import {
   toLocalSessionDelta,
   toWireSessionDelta,
   withSettledAttention,
+  withTurnOpenedBy,
   EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS,
   EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS,
   EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS,
@@ -131,13 +132,19 @@ describe('execution host event envelope codec', () => {
     })
   })
 
-  it('rejects unknown event kinds', () => {
+  it('rejects unknown event kinds, saying where they sat (protocol 0.15)', () => {
     const raw = JSON.stringify(
       eventEnvelope({ kind: 'telepathy' } as unknown as ExecutionHostEvent),
     )
     expect(decodeExecutionEventEnvelope(raw)).toEqual({
       ok: false,
       reason: 'unknown-kind',
+      skipped: {
+        sessionId: 'session-1',
+        seq: 7,
+        path: 'event.kind',
+        kind: 'telepathy',
+      },
     })
   })
 
@@ -495,6 +502,9 @@ describe('toLocalSessionDelta', () => {
         updatedAt: '2026-08-22T10:00:00.000Z',
         prUrl: 'https://github.com/example/repo/pull/1',
         roomId: 'room-1',
+        model: 'opus',
+        effort: 'high',
+        runningTasks: 2,
       },
     }
 
@@ -507,10 +517,13 @@ describe('toLocalSessionDelta', () => {
         continuationToken: 'tok-1',
         updatedAt: '2026-08-22T10:00:00.000Z',
         prUrl: 'https://github.com/example/repo/pull/1',
+        runningTasks: 2,
       },
     })
     expect(EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS).toEqual([
       'roomId',
+      'model',
+      'effort',
     ])
   })
 
@@ -631,7 +644,55 @@ describe('toLocalSessionDelta', () => {
       'attachments',
       'delivery',
       'textAppend',
+      'author',
+      'clientMessageId',
+      'agentRunId',
+      'taskId',
+      'attachmentOmissions',
     ])
+  })
+
+  it('accepts the item fields protocols 0.15 to 0.23 added, and keeps none of them', () => {
+    const raw = JSON.stringify(
+      eventEnvelope({
+        kind: 'delta',
+        delta: {
+          kind: 'conversation.item.add',
+          item: wireItem({
+            kind: 'tool-result',
+            toolName: 'Read',
+            relatedItemId: 'call-1',
+            outputText: 'read a screenshot',
+            agentRunId: 'agent-1',
+            taskId: 'task-1',
+            attachments: [
+              {
+                id: 'img-1',
+                name: 'screenshot.png',
+                mimeType: 'image/png',
+                sizeBytes: 10,
+                width: 2,
+                height: 2,
+              },
+            ],
+            attachmentOmissions: { 'image-too-large': 1 },
+          }),
+        },
+      } as never),
+    )
+    const decoded = decodeExecutionEventEnvelope(raw)
+    expect(decoded).toMatchObject({ ok: true })
+    expect(decoded.ok && decoded.warnings).toBeFalsy()
+    if (!decoded.ok || decoded.value.event.kind !== 'delta') return
+    const local = toLocalSessionDelta(decoded.value.event.delta)
+    expect(local?.kind).toBe('conversation.item.add')
+    if (local?.kind !== 'conversation.item.add') return
+    expect(local.item).toMatchObject({
+      kind: 'tool-result',
+      outputText: 'read a screenshot',
+    })
+    for (const field of EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS)
+      expect(local.item).not.toHaveProperty(field)
   })
 
   it('narrows an item patch to the fields the local item models', () => {
@@ -664,6 +725,7 @@ describe('toLocalSessionDelta', () => {
         endedAt: null,
         status: 'running',
         summary: null,
+        origin: 'user',
       },
     })
 
@@ -772,7 +834,10 @@ describe('toLocalSessionDelta', () => {
   })
 
   it('drops the wire delta kinds that have no local counterpart', () => {
-    expect(EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS).toEqual(['turn.patch'])
+    expect(EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS).toEqual([
+      'turn.patch',
+      'evidence',
+    ])
     expect(
       toLocalSessionDelta({
         kind: 'turn.patch',
@@ -780,6 +845,35 @@ describe('toLocalSessionDelta', () => {
         patch: { status: 'completed' },
       }),
     ).toBeNull()
+  })
+
+  /**
+   * Evidence is read so a host sending it is never refused, and left for
+   * phase B of R7 (MAR-3684) to apply. Mutation: map it onto the local
+   * `harness.evidence` delta and this turns red.
+   */
+  it('reads an evidence delta and applies none of it yet', () => {
+    const raw = JSON.stringify(
+      eventEnvelope({
+        kind: 'delta',
+        delta: {
+          kind: 'evidence',
+          turnId: 'turn-1',
+          evidence: {
+            kind: 'task.changed',
+            taskId: 'task-1',
+            at: '2026-10-13T10:00:00.000Z',
+            patch: { status: 'running' },
+          },
+        },
+      }),
+    )
+    const decoded = decodeExecutionEventEnvelope(raw)
+    expect(decoded).toMatchObject({ ok: true })
+    expect(decoded.ok && decoded.warnings).toBeFalsy()
+    if (!decoded.ok || decoded.value.event.kind !== 'delta') return
+    expect(decoded.value.event.delta.kind).toBe('evidence')
+    expect(toLocalSessionDelta(decoded.value.event.delta)).toBeNull()
   })
 
   /**
@@ -874,6 +968,48 @@ describe('the attention a settle carries', () => {
 
     const tokenOnly = { continuationToken: 'resume-1' }
     expect(withSettledAttention(tokenOnly)).toBe(tokenOnly)
+  })
+
+  /**
+   * agents-daemon #187 settles an answered session `completed` with no
+   * attention while a request is open (a plan waiting for review), and the
+   * local provider keeps a pending request through its settle too (MAR-3987).
+   * Mutation: fill `finished` regardless -- red.
+   */
+  it('keeps an open request through a completed settle that names no attention', () => {
+    expect(
+      withSettledAttention(
+        { status: 'completed', runningTasks: 0 },
+        'needs-input',
+      ),
+    ).toEqual({
+      status: 'completed',
+      runningTasks: 0,
+      attention: 'needs-input',
+    })
+    expect(
+      withSettledAttention({ status: 'completed' }, 'needs-approval'),
+    ).toEqual({ status: 'completed', attention: 'needs-approval' })
+  })
+
+  it('still settles finished or failed when no request is open', () => {
+    for (const open of [null, 'none', 'finished'] as const)
+      expect(withSettledAttention({ status: 'completed' }, open)).toEqual({
+        status: 'completed',
+        attention: 'finished',
+      })
+    // A failed run keeps no request: failed is the answer.
+    expect(withSettledAttention({ status: 'failed' }, 'needs-input')).toEqual({
+      status: 'failed',
+      attention: 'failed',
+    })
+    // A settle that states its own attention is the host's word, as before.
+    expect(
+      withSettledAttention(
+        { status: 'completed', attention: 'finished' },
+        'needs-input',
+      ),
+    ).toEqual({ status: 'completed', attention: 'finished' })
   })
 })
 
@@ -1077,15 +1213,15 @@ it('names every local harness family remote cannot show — mutation remove an i
   ])
 })
 
-it('RUN77 maps answered outbound to running — mutation send answered on four-state wire turns red', () => {
+it('sends answered as itself now the wire has it (protocol 0.19) — mutation map it to running turns red', () => {
   expect(
     toWireSessionDelta({
       kind: 'session.patch',
-      patch: { status: 'answered', attention: 'none' },
+      patch: { status: 'answered', attention: 'none', runningTasks: 2 },
     }),
   ).toEqual({
     kind: 'session.patch',
-    patch: { status: 'running', attention: 'none' },
+    patch: { status: 'answered', attention: 'none', runningTasks: 2 },
   })
 })
 
@@ -1095,13 +1231,217 @@ it.each([
     kind: 'delta',
     delta: { kind: 'session.patch', patch: { status: 'answered' } },
   },
-])(
-  'RUN77 lap4 inbound wire refuses answered %j — mutation extend protocol status enum turns red',
-  (event) => {
-    expect(
-      decodeExecutionEventEnvelope(
-        JSON.stringify(eventEnvelope(event as ExecutionHostEvent)),
-      ),
-    ).toEqual({ ok: false, reason: 'invalid-payload' })
-  },
-)
+])('reads answered %j on the wire, never refusing it (MAR-3987)', (event) => {
+  const decoded = decodeExecutionEventEnvelope(
+    JSON.stringify(eventEnvelope(event as ExecutionHostEvent)),
+  )
+  expect(decoded).toMatchObject({ ok: true })
+  expect(decoded.ok && decoded.warnings).toBeFalsy()
+})
+
+describe('who opened a turn (MAR-3987)', () => {
+  function turnAddRaw(turn: Record<string, unknown>): string {
+    return JSON.stringify(
+      eventEnvelope({
+        kind: 'delta',
+        delta: {
+          kind: 'turn.add',
+          turn: {
+            id: 'turn-1',
+            sessionId: 'session-1',
+            sequence: 1,
+            startedAt: '2026-10-13T10:00:00.000Z',
+            endedAt: null,
+            status: 'running',
+            summary: null,
+            ...turn,
+          },
+        },
+      } as never),
+    )
+  }
+
+  function originOf(raw: string): unknown {
+    const decoded = decodeExecutionEventEnvelope(raw)
+    if (
+      !decoded.ok ||
+      decoded.value.event.kind !== 'delta' ||
+      decoded.value.event.delta.kind !== 'turn.add'
+    )
+      return decoded
+    return decoded.value.event.delta.turn.origin
+  }
+
+  it('reads a harness turn as harness', () => {
+    expect(originOf(turnAddRaw({ origin: 'harness' }))).toBe('harness')
+  })
+
+  it('reads a turn with no origin as a user turn (protocol 0.22)', () => {
+    expect(originOf(turnAddRaw({}))).toBe('user')
+  })
+
+  it('stamps a running patch with the origin of the turn it starts', () => {
+    expect(withTurnOpenedBy({ status: 'running' }, 'harness')).toEqual({
+      status: 'running',
+      turnOpenedBy: 'harness',
+    })
+    expect(withTurnOpenedBy({ status: 'running' }, 'user')).toEqual({
+      status: 'running',
+      turnOpenedBy: 'user',
+    })
+  })
+
+  it('leaves a patch that starts no turn, or has no turn to go by, untouched', () => {
+    const answered = { status: 'answered' as const }
+    expect(withTurnOpenedBy(answered, 'harness')).toBe(answered)
+    const running = { status: 'running' as const }
+    expect(withTurnOpenedBy(running, null)).toBe(running)
+    const said = { status: 'running' as const, turnOpenedBy: 'user' as const }
+    expect(withTurnOpenedBy(said, 'harness')).toBe(said)
+  })
+})
+
+/**
+ * agents-daemon #187's envelope timeline for a resident Claude session whose
+ * answer leaves a background task running (MAR-3979), read the way
+ * Convergence reads it: decoded by protocol 0.23's own reader, then mapped.
+ *
+ * `tasks:1 -> session.patch{answered, none, 1} -> turn completed -> tasks:0 ->
+ * turn.add(harness) -> running -> completed -> attention finished`.
+ */
+describe("agents-daemon #187's timeline through protocol 0.23 (MAR-3987)", () => {
+  const timeline: ExecutionHostEvent[] = [
+    {
+      kind: 'delta',
+      delta: {
+        kind: 'turn.add',
+        turn: {
+          id: 'turn-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          startedAt: '2026-10-13T10:00:00.000Z',
+          endedAt: null,
+          status: 'running',
+          summary: null,
+          origin: 'user',
+        },
+      },
+    },
+    { kind: 'status', status: 'running' },
+    {
+      kind: 'delta',
+      delta: { kind: 'session.patch', patch: { runningTasks: 1 } },
+    },
+    {
+      kind: 'delta',
+      delta: {
+        kind: 'session.patch',
+        patch: { status: 'answered', attention: 'none', runningTasks: 1 },
+      },
+    },
+    {
+      kind: 'delta',
+      delta: {
+        kind: 'turn.patch',
+        turnId: 'turn-1',
+        patch: { status: 'completed', endedAt: '2026-10-13T10:01:00.000Z' },
+      },
+    },
+    {
+      kind: 'delta',
+      delta: { kind: 'session.patch', patch: { runningTasks: 0 } },
+    },
+    {
+      kind: 'delta',
+      delta: {
+        kind: 'turn.add',
+        turn: {
+          id: 'turn-2',
+          sessionId: 'session-1',
+          sequence: 2,
+          startedAt: '2026-10-13T10:02:00.000Z',
+          endedAt: null,
+          status: 'running',
+          summary: null,
+          origin: 'harness',
+        },
+      },
+    },
+    { kind: 'status', status: 'running' },
+    { kind: 'status', status: 'completed' },
+    {
+      kind: 'delta',
+      delta: {
+        kind: 'turn.patch',
+        turnId: 'turn-2',
+        patch: { status: 'completed', endedAt: '2026-10-13T10:03:00.000Z' },
+      },
+    },
+    { kind: 'attention', attention: 'finished' },
+  ]
+
+  /** One envelope, as the daemon writes it and Convergence reads it. */
+  function read(event: ExecutionHostEvent, seq: number) {
+    return decodeExecutionEventEnvelope(
+      encodeExecutionEventEnvelope({
+        protocolVersion: EXECUTION_PROTOCOL_VERSION,
+        sessionId: 'session-1',
+        seq,
+        event,
+      }),
+    )
+  }
+
+  it('decodes every envelope, with no warning', () => {
+    for (const [index, event] of timeline.entries()) {
+      const decoded = read(event, index + 1)
+      expect(decoded).toMatchObject({ ok: true })
+      expect(decoded.ok && decoded.warnings).toBeFalsy()
+    }
+  })
+
+  /**
+   * The status each envelope leaves the session at, and the task count it
+   * says, as the remote handle reads them: a `status` event or a session
+   * patch's status, with the attention its settle means.
+   */
+  it('shows running, answered and completed, each in its turn', () => {
+    const states: string[] = []
+    let origin: 'user' | 'harness' | null = null
+    for (const [index, event] of timeline.entries()) {
+      const decoded = read(event, index + 1)
+      if (!decoded.ok) throw new Error(decoded.reason)
+      const wire = decoded.value.event
+      if (wire.kind === 'delta' && wire.delta.kind === 'turn.add')
+        origin = wire.delta.turn.origin
+      const patch =
+        wire.kind === 'status'
+          ? { status: wire.status }
+          : wire.kind === 'delta'
+            ? (() => {
+                const local = toLocalSessionDelta(wire.delta)
+                return local?.kind === 'session.patch' ? local.patch : null
+              })()
+            : null
+      if (!patch) continue
+      const stamped = withTurnOpenedBy(withSettledAttention(patch), origin)
+      if (stamped !== withSettledAttention(patch)) origin = null
+      states.push(
+        [
+          stamped.status ?? '-',
+          stamped.attention ?? '-',
+          stamped.runningTasks ?? '-',
+          stamped.turnOpenedBy ?? '-',
+        ].join(' '),
+      )
+    }
+    expect(states).toEqual([
+      'running - - user',
+      '- - 1 -',
+      'answered none 1 -',
+      '- - 0 -',
+      'running - - harness',
+      'completed finished - -',
+    ])
+  })
+})

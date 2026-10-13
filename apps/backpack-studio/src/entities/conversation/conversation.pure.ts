@@ -21,8 +21,8 @@ export interface StatusBadge {
 }
 
 /**
- * The three states the list shows, and only those (constitution law 5 — the
- * Inbox's seed).
+ * The four states the list shows, and only those (constitution law 5 — the
+ * Inbox's seed). `answered` is an answer whose work still runs (MAR-3987).
  *
  * `failed` never borrows another state's word or colour: a conversation that
  * broke and one that is waiting for you look completely different at a glance,
@@ -32,6 +32,11 @@ export function statusBadge(status: ConversationStatus): StatusBadge {
   switch (status) {
     case 'running':
       return { label: 'Working', tone: 'var(--studio-explore-accent)' }
+    case 'answered':
+      return {
+        label: 'Answered, still working',
+        tone: 'var(--studio-explore-muted)',
+      }
     case 'idle':
       return { label: 'Ready for you', tone: 'var(--studio-explore-connected)' }
     case 'failed':
@@ -136,6 +141,13 @@ export function composerState(snapshot: ConversationSnapshot | null): {
       canSend: false,
       hint: 'The Entity is working. Studio does not queue messages yet — this one would have nowhere to wait.',
       placeholder: 'Waiting for the current answer…',
+    }
+  }
+  if (snapshot.status === 'answered') {
+    return {
+      canSend: true,
+      hint: 'The Entity answered and is still working in the background. A message now starts a new turn.',
+      placeholder: 'Say what to change…',
     }
   }
   return {

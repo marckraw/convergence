@@ -234,9 +234,14 @@ describe('describeWireDeltaShape', () => {
           endedAt: null,
           status: 'running',
           summary: 'summarised private work',
+          origin: 'harness',
         },
       }),
-    ).toEqual({ kind: 'turn.add', turnStatus: 'running' })
+    ).toEqual({
+      kind: 'turn.add',
+      turnStatus: 'running',
+      turnOrigin: 'harness',
+    })
 
     const patchShape = describeWireDeltaShape({
       kind: 'turn.patch',
@@ -282,5 +287,35 @@ describe('describeWireDeltaShape', () => {
     })
     expect(JSON.stringify(shape)).not.toContain('sk-live')
     expect(JSON.stringify(shape)).not.toContain('secret.ts')
+  })
+
+  it('carries the running-task count a resident session reports', () => {
+    expect(
+      describeWireDeltaShape({
+        kind: 'session.patch',
+        patch: { status: 'answered', attention: 'none', runningTasks: 2 },
+      }),
+    ).toEqual({
+      kind: 'session.patch',
+      patchFields: ['status', 'attention', 'runningTasks'],
+      status: 'answered',
+      attention: 'none',
+      runningTasks: 2,
+    })
+  })
+
+  it('names an evidence fact by kind and quotes none of it', () => {
+    const shape = describeWireDeltaShape({
+      kind: 'evidence',
+      turnId: 't1',
+      evidence: {
+        kind: 'task.changed',
+        taskId: 'task-1',
+        at: '2026-10-13T10:00:00.000Z',
+        patch: { status: 'running', description: 'rm -rf private-dir' },
+      },
+    } as never)
+    expect(shape).toEqual({ kind: 'evidence', evidenceKind: 'task.changed' })
+    expect(JSON.stringify(shape)).not.toContain('private-dir')
   })
 })

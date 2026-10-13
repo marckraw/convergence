@@ -18,7 +18,7 @@
     "test:pure": "vitest run --config vitest.pure.config.ts"
   },
   "dependencies": {
-    "@mrck-labs/execution-host-protocol": "^0.14.0"
+    "@mrck-labs/execution-host-protocol": "^0.23.0"
   },
   "devDependencies": {
     "typescript": "^6.0.2",

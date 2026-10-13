@@ -567,6 +567,55 @@ describe('DaemonClient.followSession, when the stream skips a sequence', () => {
   }, 5_000)
 
   /**
+   * An envelope of a kind this build does not know is a frame the daemon sent
+   * at its sequence (protocol 0.15, MAR-3987): stepped over, the stream stays
+   * open and the next frame lands. Mutation: drop it below the cursor as
+   * unreadable, and 3 reads as a gap -- red on the headers.
+   */
+  it('steps over a kind this build does not know without reconnecting', async () => {
+    const daemon = createStubDaemon()
+    const record: number[] = []
+    const dropped: string[] = []
+    const abort = new AbortController()
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'tok-secret',
+      fetchFn: daemon.fetchFn,
+      wait: () => Promise.resolve(),
+      maxStreamAttempts: 5,
+    })
+
+    const following = client.followSession(
+      'c-1',
+      0,
+      {
+        onEnvelope: (received) => {
+          record.push(received.seq)
+          return Promise.resolve()
+        },
+        onDroppedFrame: (reason) => dropped.push(reason),
+      },
+      abort.signal,
+    )
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    daemon.emit(envelope(1, { kind: 'status', status: 'running' }, 'c-1'))
+    daemon.emit(envelope(2, { kind: 'telepathy' } as never, 'c-1'))
+    daemon.emit(envelope(3, { kind: 'status', status: 'completed' }, 'c-1'))
+
+    await waitUntil(() => record.length === 2, 'the frame after the unknown')
+    expect(record).toEqual([1, 3])
+    expect(daemon.eventStreamLastEventIds).toEqual([null])
+    expect(dropped).toEqual([])
+
+    abort.abort()
+    await following
+  }, 5_000)
+
+  /**
    * A gap the budget cannot cover ends the follow with the sentence the caller
    * records on the conversation. Loud, because the alternative is a transcript
    * that silently skipped an event.

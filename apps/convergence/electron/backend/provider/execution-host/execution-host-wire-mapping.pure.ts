@@ -9,6 +9,7 @@ import {
   type ExecutionStartConfig,
   type ExecutionStartRequest,
   type ExecutionTurnFileChange,
+  type ExecutionTurnOrigin,
   type ExecutionWorkspaceSource,
 } from '@mrck-labs/execution-host-protocol'
 import type {
@@ -122,10 +123,20 @@ export const EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS = [
  * either — on a residency that is "the Project's default", on an errand "the
  * base set alone" — so the field stays off the wire entirely and the daemon
  * keeps deciding, which is what it does for a client that predates the field.
+ *
+ * Protocol 0.15 and 0.20 add three more, pinned for the same reason
+ * (MAR-3987). `requires` (0.20/0.21) asks a host to check traits before it
+ * starts; a client that sends it must first read `/health` for
+ * `start.requires.v1` and check the echo, which Convergence does not do.
+ * `actor` and `commandId` (0.15) say who started a session and match the start
+ * to its echo; Convergence matches its sends by its own record.
  */
 export const EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS = [
   'automation',
   'environment',
+  'requires',
+  'actor',
+  'commandId',
 ] as const satisfies readonly (keyof ExecutionStartRequest)[]
 
 /**
@@ -136,9 +147,15 @@ export const EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS = [
  * remote runs — local turns are written by the turn-capture service, never
  * from the wire. Dropping it matches what the session service already did with
  * it: `applyDelta` has no branch for the kind.
+ *
+ * `evidence` (protocol 0.19) is read and decoded, so a host that sends it is
+ * never refused, and then left here: applying a remote session's agent runs
+ * and tasks is phase B of R7 (MAR-3684). Until then a remote session's count
+ * of running work is the host's `runningTasks`, not its evidence (MAR-3987).
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS = [
   'turn.patch',
+  'evidence',
 ] as const satisfies readonly ExecutionSessionDelta['kind'][]
 
 /**
@@ -154,11 +171,25 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS = [
  * - `textAppend` — incremental text, sent only to a subscriber that negotiates
  *   `?deltas=append`. Convergence does not, so the daemon strips it before the
  *   envelope is written and full `text` always arrives instead.
+ * - `author`, `clientMessageId` — who wrote a user message and which send
+ *   made it (protocol 0.15). Convergence matches its sends by its own record,
+ *   and a remote session has one writer here.
+ * - `agentRunId`, `taskId` — which agent run or task produced an item
+ *   (protocol 0.19). They mean something only beside the evidence that names
+ *   those runs, which is dropped with them until phase B of R7 (MAR-3684).
+ * - `attachmentOmissions` — counts of tool-result images a host left out
+ *   (protocol 0.23). A tool result's image references arrive as `attachments`
+ *   above, and are dropped for the same reason.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS = [
   'attachments',
   'delivery',
   'textAppend',
+  'author',
+  'clientMessageId',
+  'agentRunId',
+  'taskId',
+  'attachmentOmissions',
 ] as const
 
 /**
@@ -219,9 +250,18 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
 export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
   [] as const satisfies readonly (keyof ExecutionTurnFileChange)[]
 
-/** Rooms have no local counterpart. PR URLs travel only as refresh hints. */
+/**
+ * Rooms have no local counterpart. PR URLs travel only as refresh hints, and
+ * `runningTasks` as the count a remote session's answer still waits on.
+ *
+ * `model` and `effort` (protocol 0.17) are the selection a host's next turn
+ * runs on. Convergence sends none (`sessions.modelSelection.v1`), so a remote
+ * session's selection is the one it started with.
+ */
 export const EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS = [
   'roomId',
+  'model',
+  'effort',
 ] as const
 
 /**
@@ -237,10 +277,11 @@ const LOCAL_SESSION_PATCH_FIELDS = [
   'continuationToken',
   'updatedAt',
   'prUrl',
+  'runningTasks',
 ] as const
 
 /** The patch a local `session.patch` delta carries. */
-type LocalSessionPatch = Extract<
+export type LocalSessionPatch = Extract<
   SessionDelta,
   { kind: 'session.patch' }
 >['patch']
@@ -285,7 +326,8 @@ export function settledAttentionForStatus(
 
 /**
  * A session patch with the attention its terminal status means, when it does
- * not already say one.
+ * not already say one. `openRequest` is the attention of a request the host
+ * raised and has not resolved, which a `completed` keeps.
  *
  * An explicit attention always wins, and the patch is returned untouched:
  * the wire models `status` and `attention` on the same patch precisely so a
@@ -295,10 +337,42 @@ export function settledAttentionForStatus(
  */
 export function withSettledAttention(
   patch: LocalSessionPatch,
+  openRequest: AttentionState | null = null,
 ): LocalSessionPatch {
   if (patch.attention !== undefined || !patch.status) return patch
+  // A request still open outlasts the answer that raised it: a plan waiting
+  // for review is still waiting once the turn is over. The local Claude
+  // provider keeps it (`finishAnswer`: `permissions.pendingAttention ??
+  // 'finished'`), and agents-daemon #187 settles such a session `completed`
+  // with no attention for exactly that reason. Filling `finished` there
+  // cleared the request a person still owed an answer (MAR-3987).
+  if (
+    patch.status === 'completed' &&
+    (openRequest === 'needs-input' || openRequest === 'needs-approval')
+  )
+    return { ...patch, attention: openRequest }
   const attention = settledAttentionForStatus(patch.status)
   return attention ? { ...patch, attention } : patch
+}
+
+/**
+ * A `running` patch with who opened the turn it starts (MAR-3987).
+ *
+ * The wire says it on the turn (`origin`, protocol 0.19), and the local record
+ * reads it on the status: a `running` patch saying `turnOpenedBy: 'user'`
+ * opens a new answer window, and one from a harness turn keeps the window of
+ * the answer it reports back on. That is what the local Claude provider sends
+ * (`claude-code-provider.ts`, `setStatus`), so a remote session reads the
+ * same. The host adds the turn before it reports it running, so the origin is
+ * the last `turn.add`'s. A patch that already says, a status that is not
+ * `running`, or no turn to go by, travels unchanged.
+ */
+export function withTurnOpenedBy(
+  patch: LocalSessionPatch,
+  origin: ExecutionTurnOrigin | null,
+): LocalSessionPatch {
+  if (patch.status !== 'running' || !origin || patch.turnOpenedBy) return patch
+  return { ...patch, turnOpenedBy: origin }
 }
 
 /** Local conversation-item fields a wire item patch is allowed to carry. */
@@ -529,6 +603,7 @@ export function toLocalSessionDelta(
         })),
       }
     case 'turn.patch':
+    case 'evidence':
       return null
   }
 }
@@ -541,7 +616,8 @@ export function toLocalSessionDelta(
  * deltas today — it only consumes them — but keeping the translation
  * symmetric is what makes the mapping provable: a delta that survives
  * local -> wire -> local unchanged is one the layer demonstrably does not
- * corrupt.
+ * corrupt. `answered` travels as itself: the wire has had it since protocol
+ * 0.19, so the `running` it was sent as on the four-state wire is gone.
  */
 export function toWireSessionDelta(
   delta: SessionDelta,
@@ -550,12 +626,7 @@ export function toWireSessionDelta(
     case 'session.patch':
       return {
         kind: 'session.patch',
-        patch: {
-          ...pickDefined(delta.patch, LOCAL_SESSION_PATCH_FIELDS),
-          ...(delta.patch.status === 'answered'
-            ? { status: 'running' as const }
-            : {}),
-        },
+        patch: pickDefined(delta.patch, LOCAL_SESSION_PATCH_FIELDS),
       }
     case 'conversation.item.add':
       return {

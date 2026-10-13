@@ -41,13 +41,16 @@ describe('statusBadge', () => {
    * label and the tone.
    */
   it('gives every state a word and a colour of its own', () => {
-    const badges = (['running', 'idle', 'failed'] as const).map(statusBadge)
+    const badges = (['running', 'answered', 'idle', 'failed'] as const).map(
+      statusBadge,
+    )
     expect(badges.map((badge) => badge.label)).toEqual([
       'Working',
+      'Answered, still working',
       'Ready for you',
       'Failed',
     ])
-    expect(new Set(badges.map((badge) => badge.tone)).size).toBe(3)
+    expect(new Set(badges.map((badge) => badge.tone)).size).toBe(4)
   })
 })
 
@@ -141,6 +144,16 @@ describe('composerState', () => {
     const state = composerState(snapshot({ status: 'running' }))
     expect(state.canSend).toBe(false)
     expect(state.hint).toContain('does not queue')
+  })
+
+  /**
+   * The daemon takes a message while an answer's work still runs, for up to
+   * an hour (MAR-3987). Mutation: refuse `answered` as `running` -- red.
+   */
+  it('lets an answered conversation take a message, and says its work runs on', () => {
+    const state = composerState(snapshot({ status: 'answered' }))
+    expect(state.canSend).toBe(true)
+    expect(state.hint).toContain('still working')
   })
 
   it('lets a failed conversation be talked to again', () => {

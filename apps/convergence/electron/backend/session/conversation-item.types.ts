@@ -213,6 +213,12 @@ export type SessionDelta =
         prUrl?: string | null
         /** Who opened this local provider turn; a user send begins a new answer window. */
         turnOpenedBy?: 'user' | 'harness'
+        /**
+         * Tasks a remote session's agent started that still run, as its host
+         * counts them (MAR-3987). Ephemeral like `prUrl`: the summary's
+         * parallel-work count reads it, and no column stores it.
+         */
+        runningTasks?: number
       }
       /**
        * The execution-host event sequence this patch came from, when it came

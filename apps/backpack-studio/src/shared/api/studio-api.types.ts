@@ -16,8 +16,13 @@ import type { UpdatesBridge } from '../../../shared/updates.types'
  * 6, and the run's own boundary). What crosses is what the window has to draw.
  */
 
-/** Conversation states the list is allowed to show (kickoff: the Inbox's seed). */
-export type ConversationStatus = 'running' | 'idle' | 'failed'
+/**
+ * Conversation states the list is allowed to show (kickoff: the Inbox's seed).
+ *
+ * `answered` (protocol 0.19, MAR-3987): the agent has answered, and work it
+ * started still runs. It takes a message, unlike `running`.
+ */
+export type ConversationStatus = 'running' | 'answered' | 'idle' | 'failed'
 
 /**
  * Studio's state at launch: either it knows where to work, or it says exactly

@@ -16,6 +16,7 @@ import {
   conversationTitleFrom,
   emptyFold,
   foldEntries,
+  isFollowedStatus,
   type ConversationFold,
 } from '../record/conversation-fold.pure'
 import type {
@@ -159,7 +160,7 @@ export class ConversationService {
         sending: false,
       }
       this.conversations.set(record.id, live)
-      if (live.fold.status === 'running') this.follow(live)
+      if (isFollowedStatus(live.fold.status)) this.follow(live)
     }
   }
 
@@ -263,7 +264,8 @@ export class ConversationService {
    * the protocol has a queue and the daemon honours it, but Studio has no
    * surface that shows a queued message, no way to cancel one, and nothing that
    * says where it went. Half a queue is worse than none, so this beat says
-   * `busy` and the composer says so too.
+   * `busy` and the composer says so too. An answered one is not running: its
+   * turn is over, and the daemon takes the message as a new one (MAR-3987).
    *
    * The busy answer is decided and taken in ONE turn. Reading the fold and then
    * awaiting the write that moves it is check-then-act: a second send arriving
@@ -472,7 +474,7 @@ export class ConversationService {
           abort.signal.aborted &&
           !this.disposing &&
           live.abort === null &&
-          live.fold.status === 'running'
+          isFollowedStatus(live.fold.status)
         ) {
           this.follow(live)
         }
@@ -535,7 +537,8 @@ export class ConversationService {
     // A conversation that has stopped running has nothing left to stream. The
     // follow is ended here rather than left open for the app's lifetime — one
     // idle SSE per conversation is a connection the daemon holds for nobody.
-    if (live.fold.status !== 'running') this.stopFollowing(live)
+    // An answered one still has: its work may report back (MAR-3987).
+    if (!isFollowedStatus(live.fold.status)) this.stopFollowing(live)
     this.publish(live)
   }
 

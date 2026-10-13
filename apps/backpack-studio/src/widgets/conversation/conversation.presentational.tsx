@@ -28,9 +28,11 @@ export function ConversationView({
               <p role="status">
                 {snapshot.status === 'running'
                   ? 'Working…'
-                  : snapshot.status === 'failed'
-                    ? 'This request was refused.'
-                    : 'Ready for your next message.'}
+                  : snapshot.status === 'answered'
+                    ? 'Answered. Still working in the background.'
+                    : snapshot.status === 'failed'
+                      ? 'This request was refused.'
+                      : 'Ready for your next message.'}
               </p>
               {transcriptWarnings(snapshot).map((warning) => (
                 <p role="alert" key={warning}>

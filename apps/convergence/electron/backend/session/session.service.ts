@@ -111,9 +111,11 @@ import {
   hasNoTurnSinceLastBoundary,
   isAttentionRequestSummary,
   isTerminalSessionStatus,
+  nextHostRunningTasks,
   previousAssistantMessageTexts,
   resolveAttentionRequestKind,
   RecordingError,
+  withHostRunningTasks,
   type AttentionRequestRowLike,
 } from './session.pure'
 import {
@@ -338,6 +340,8 @@ export class SessionService {
     }
   }
   private parallelWorkCounts = new Map<string, ParallelWorkCounts>()
+  /** What each remote session's host says still runs (MAR-3987). */
+  private hostRunningTasks = new Map<string, number>()
   private evidenceUpdateTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -1781,7 +1785,10 @@ export class SessionService {
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
       canReconnectMcpServers:
         this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
-      parallelWork: this.cachedParallelWork([row.id]).get(row.id)!,
+      parallelWork: withHostRunningTasks(
+        this.cachedParallelWork([row.id]).get(row.id)!,
+        this.hostRunningTasks.get(row.id),
+      ),
     }
     // Read the request row only when the answer can use it, the same rule the
     // batched path applies (MAR-3396): a settled or idle conversation's row is
@@ -1808,7 +1815,10 @@ export class SessionService {
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
       canReconnectMcpServers:
         this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
-      parallelWork: counts.get(row.id)!,
+      parallelWork: withHostRunningTasks(
+        counts.get(row.id)!,
+        this.hostRunningTasks.get(row.id),
+      ),
     }))
     const attentionRowsBySessionId =
       this.readLatestAttentionRequestRows(summaries)
@@ -2413,6 +2423,7 @@ export class SessionService {
     if (evidenceTimer) clearTimeout(evidenceTimer)
     this.evidenceUpdateTimers.delete(id)
     this.parallelWorkCounts.delete(id)
+    this.hostRunningTasks.delete(id)
     // Committed. Only now is ownership consumed and the ending told: the
     // turn's settle is never coming, and its receipts end here with the
     // queued ones.
@@ -4214,10 +4225,10 @@ export class SessionService {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
-    if (
-      session.status === 'answered' &&
-      isLocalExecutionHost(session.executionHost)
-    ) {
+    // An answer with no handle left to follow it is over, local or remote: it
+    // settles as the answer it was, never failed and never left answered
+    // (MAR-3987).
+    if (session.status === 'answered') {
       this.completeOrphanAnswer(session)
       return
     }
@@ -4255,10 +4266,8 @@ export class SessionService {
     const handle = this.activeHandles.get(id)
     if (!handle) {
       const session = this.getById(id)
-      if (
-        session?.status === 'answered' &&
-        isLocalExecutionHost(session.executionHost)
-      ) {
+      // Remote included, as in handleInactiveApprovalAction (MAR-3987).
+      if (session?.status === 'answered') {
         this.completeOrphanAnswer(session)
         return
       }
@@ -4292,9 +4301,18 @@ export class SessionService {
         .then(() => {
           if (this.activeHandles.get(id) !== handle) return
           // Conversation Stop is itself a witness if a task never confirms.
-          if (!isTerminalSessionStatus(this.getById(id)?.status ?? 'idle'))
+          if (!isTerminalSessionStatus(this.getById(id)?.status ?? 'idle')) {
             this.stopAndRelease(id, handle)
-          else this.releaseHandle(id)
+            // A remote run's stop aborts the stream its settle would arrive
+            // on, so the settle is written here, as a local orphan's is
+            // (MAR-3987). A local provider settles on its own way out.
+            const after = this.getById(id)
+            if (
+              after?.status === 'answered' &&
+              isRemoteExecutionHost(after.executionHost)
+            )
+              this.completeOrphanAnswer(after)
+          } else this.releaseHandle(id)
         })
         .catch((error) => {
           console.error('[session] Could not finish conversation Stop', error)
@@ -4463,6 +4481,7 @@ export class SessionService {
           this.flushPendingConversationPatchesForSession(sessionId)
         }
         this.applySessionPatch(sessionId, delta.patch, delta.executionHostSeq)
+        this.noteHostRunningTasks(sessionId, delta.patch)
         this.noteRunOwnership(source, delta.patch.status)
         this.handleLifecycle(
           sessionId,
@@ -5564,6 +5583,18 @@ export class SessionService {
     }
   }
 
+  private noteHostRunningTasks(
+    sessionId: string,
+    patch: Extract<SessionDelta, { kind: 'session.patch' }>['patch'],
+  ): void {
+    const next = nextHostRunningTasks(
+      this.hostRunningTasks.get(sessionId),
+      patch,
+    )
+    if (next === undefined) this.hostRunningTasks.delete(sessionId)
+    else this.hostRunningTasks.set(sessionId, next)
+  }
+
   private releaseHandle(
     sessionId: string,
     reason: 'quit' | 'stop' = 'stop',
@@ -5572,6 +5603,8 @@ export class SessionService {
     if (!handle) return Promise.resolve()
 
     this.activeHandles.delete(sessionId)
+    // Only a followed run's host can say what still runs (MAR-3987).
+    this.hostRunningTasks.delete(sessionId)
     this.agentMeterListener?.(sessionId)
     this.notifySummaryUpdated(sessionId)
     let disposal: void | Promise<void> = undefined
@@ -5907,6 +5940,7 @@ export class SessionService {
         permissionConfig: session.permissionConfig,
       },
       this.sessionRepository.getExecutionHostLastSeq(session.id),
+      session.attention,
     )
     this.activeHandles.set(session.id, handle)
     this.agentMeterListener?.(session.id, handle)

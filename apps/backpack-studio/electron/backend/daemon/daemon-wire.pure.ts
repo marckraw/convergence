@@ -72,7 +72,15 @@ export function buildSendMessageEnvelope(
 
 export type EnvelopeReading =
   | { ok: true; envelope: ExecutionHostEventEnvelope }
-  | { ok: false; reason: string }
+  | {
+      ok: false
+      reason: string
+      /**
+       * The sequence of this session's envelope whose kind this build does not
+       * know (protocol 0.15): a frame to step over, not a broken one (MAR-3987).
+       */
+      skippedSeq?: number
+    }
 
 /**
  * Reads one SSE frame's data as an event envelope, and refuses out loud.
@@ -92,6 +100,9 @@ export function readEnvelopeFrame(
     return {
       ok: false,
       reason: `daemon sent a frame this build cannot read (${decoded.reason})`,
+      ...(decoded.skipped?.sessionId === expectedSessionId
+        ? { skippedSeq: decoded.skipped.seq }
+        : {}),
     }
   }
   if (decoded.value.sessionId !== expectedSessionId) {

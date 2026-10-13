@@ -1,5 +1,6 @@
 import type { RemoteSessionWorkspaceInfo } from '@convergence/execution-host-client'
 import type {
+  AttentionState,
   OneShotInput,
   OneShotResult,
   ProviderDescriptor,
@@ -133,11 +134,16 @@ export interface ProviderExecutionHost {
    * it started; refusing here would strand a turn the daemon is running on a
    * verdict about whether a *new* one could be started. `RemoteExecutionHost
    * .attach` says the same thing at the code.
+   *
+   * `recordedAttention` is the attention the session's record holds, so a
+   * request the run raised before the app closed is still known to be open
+   * after it reopens (MAR-3987).
    */
   attach?(
     providerId: string,
     config: SessionStartConfig,
     afterSeq: number,
+    recordedAttention?: AttentionState,
   ): SessionHandle
 
   /**

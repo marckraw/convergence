@@ -817,6 +817,13 @@ describe('a remote start carries the place the session recorded', () => {
     await service.start(id, { text: 'hello' })
 
     const body = startBody() as unknown as Record<string, unknown>
+    expect(EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS).toEqual([
+      'automation',
+      'environment',
+      'requires',
+      'actor',
+      'commandId',
+    ])
     for (const field of EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS) {
       expect(Object.hasOwn(body, field)).toBe(false)
     }

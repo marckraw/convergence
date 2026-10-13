@@ -41,7 +41,9 @@ export function HomeNav({
         <span>
           {
             conversations.filter(
-              (conversation) => conversation.status !== 'running',
+              (conversation) =>
+                conversation.status === 'idle' ||
+                conversation.status === 'failed',
             ).length
           }
         </span>
@@ -83,9 +85,11 @@ export function HomeNav({
           <span>
             {conversation.status === 'running'
               ? 'Working'
-              : conversation.status === 'idle'
-                ? 'Done'
-                : 'Refused'}
+              : conversation.status === 'answered'
+                ? 'Answered'
+                : conversation.status === 'idle'
+                  ? 'Done'
+                  : 'Refused'}
           </span>
         </button>
       ))}

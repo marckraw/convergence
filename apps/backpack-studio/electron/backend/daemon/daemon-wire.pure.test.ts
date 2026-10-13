@@ -132,6 +132,20 @@ describe('readEnvelopeFrame', () => {
    * Mutation: return `{ ok: true }` for an undecodable frame and this goes red
    * — a frame that is not JSON would otherwise reach the log as an envelope.
    */
+  it('names the sequence of a kind it does not know, for this session only', () => {
+    const unknown = (sessionId: string) =>
+      JSON.stringify({
+        protocolVersion: 1,
+        sessionId,
+        seq: 4,
+        event: { kind: 'telepathy' },
+      })
+    const ours = readEnvelopeFrame(unknown('c-1'), 'c-1')
+    expect(ours.ok ? null : ours.skippedSeq).toBe(4)
+    const theirs = readEnvelopeFrame(unknown('someone-else'), 'c-1')
+    expect(theirs.ok ? null : theirs.skippedSeq).toBeUndefined()
+  })
+
   it('refuses a frame it cannot decode', () => {
     const reading = readEnvelopeFrame('not json at all', 'c-1')
     expect(reading.ok).toBe(false)

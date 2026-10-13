@@ -46,6 +46,25 @@ export interface ConversationFold {
    * never infer remote existence from this fact (RUN50 R6).
    */
   lastFact: LocalConversationFact | null
+  /**
+   * Whether a turn Studio sent into an `answered` conversation has yet to be
+   * reported `running` (MAR-3987).
+   *
+   * Such a message goes out on the stream the conversation already has, and
+   * the previous answer's settle can be on the wire ahead of the new turn.
+   * Read as this turn's end, that `completed` folded `idle` and closed the
+   * stream before the daemon's `running` for the message arrived: the window
+   * said "Ready" while the daemon worked, and the reply never reached the
+   * record. So until the turn is reported running, a `completed` or
+   * `answered` is the turn before it, and the conversation stays `running`.
+   * A `failed` still lands: a broken conversation never looks busy.
+   *
+   * Only after `answered`: a message sent into an idle or failed conversation
+   * has no settle ahead of it, and a `completed` there is its own end, as it
+   * always was. Derived from the log like everything here, so a restart folds
+   * the same wait.
+   */
+  awaitingTurn: boolean
 }
 
 /**
@@ -68,6 +87,7 @@ export function emptyFold(createdAt: string): ConversationFold {
     updatedAt: createdAt,
     orphanPatches: 0,
     lastFact: null,
+    awaitingTurn: false,
   }
 }
 
@@ -133,10 +153,22 @@ function applyLocalFact(
         ],
       }
     case 'sent':
-      return { ...fold, status: 'running', updatedAt: at, lastFact: fact }
+      return {
+        ...fold,
+        status: 'running',
+        updatedAt: at,
+        lastFact: fact,
+        awaitingTurn: fold.status === 'answered',
+      }
     case 'refused':
     case 'stream-exhausted':
-      return { ...fold, status: 'failed', updatedAt: at, lastFact: fact }
+      return {
+        ...fold,
+        status: 'failed',
+        updatedAt: at,
+        lastFact: fact,
+        awaitingTurn: false,
+      }
   }
 }
 
@@ -166,8 +198,7 @@ export function applyEnvelope(
       // own, so the log line's own is used; a line written before entries had
       // one leaves the time where it was rather than inventing a new one.
       return {
-        ...next,
-        status: conversationStatusFrom(event.status),
+        ...withWireStatus(next, event.status),
         updatedAt: recordedAt ?? next.updatedAt,
       }
     case 'delta':
@@ -191,13 +222,12 @@ function applyDelta(
 ): ConversationFold {
   switch (delta.kind) {
     case 'session.patch': {
-      const status =
+      const patched =
         delta.patch.status === undefined
-          ? fold.status
-          : conversationStatusFrom(delta.patch.status)
+          ? fold
+          : withWireStatus(fold, delta.patch.status)
       return {
-        ...fold,
-        status,
+        ...patched,
         updatedAt: delta.patch.updatedAt ?? fold.updatedAt,
       }
     }
@@ -282,17 +312,49 @@ const FULL_TEXT_FIELD: Record<TranscriptItem['kind'], string> = {
   'input-request': 'prompt',
 }
 
+/**
+ * A status the daemon reported, onto the fold: through `awaitingTurn`, which
+ * holds a sent turn `running` until the daemon says it runs (MAR-3987).
+ */
+function withWireStatus(
+  fold: ConversationFold,
+  status: ExecutionSessionStatus,
+): ConversationFold {
+  if (status === 'running')
+    return { ...fold, status: 'running', awaitingTurn: false }
+  if (fold.awaitingTurn && status !== 'failed') return fold
+  return {
+    ...fold,
+    status: conversationStatusFrom(status),
+    awaitingTurn: false,
+  }
+}
+
+/**
+ * Whether a conversation has a stream worth holding open: a turn running, or
+ * an answer whose work still runs and may report back (MAR-3987).
+ */
+export function isFollowedStatus(status: ConversationStatus): boolean {
+  return status === 'running' || status === 'answered'
+}
+
 function isItemState(value: unknown): value is TranscriptItem['state'] {
   return value === 'streaming' || value === 'complete' || value === 'error'
 }
 
 /**
- * The daemon's four session statuses in the three the list can show.
+ * The daemon's five session statuses in the four the list can show.
  *
  * `completed` becomes `idle` deliberately: a conversation whose turn has
  * finished is one a person can talk to again, and that is the only thing the
  * status dot is for. `failed` stays its own answer — a conversation that broke
  * must never look like one that is merely waiting.
+ *
+ * `answered` (protocol 0.19) stays itself: the agent has answered, but work it
+ * started still runs and may open a turn of its own, for up to an hour (a dev
+ * server it started). The daemon takes a message then, and so does Studio;
+ * it keeps following, because that turn and the settle after it arrive on the
+ * stream (MAR-3987).
  */
 export function conversationStatusFrom(
   status: ExecutionSessionStatus,
@@ -300,6 +362,8 @@ export function conversationStatusFrom(
   switch (status) {
     case 'running':
       return 'running'
+    case 'answered':
+      return 'answered'
     case 'failed':
       return 'failed'
     case 'idle':
