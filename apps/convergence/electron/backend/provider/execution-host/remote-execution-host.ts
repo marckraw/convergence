@@ -48,6 +48,7 @@ import {
   capabilitiesForRemoteProvider,
   catalogEntryForRemoteProvider,
   describeRemoteProviderBlock,
+  readSnapshotRunningTasks,
   remoteExecutionHostReconnectDelayMs,
   unavailableProviderError,
 } from './remote-execution-host.pure'
@@ -1482,10 +1483,12 @@ class RemoteSessionRun {
   /**
    * Who opened the turn the daemon added last, until the `running` that starts
    * it carries it as `turnOpenedBy` (MAR-3987). Spent there, once, so a turn
-   * that goes `running` again after an approval does not open a second answer
-   * window.
+   * the host reports `running` a second time -- a continuation recovery --
+   * does not open a second answer window past the reply it already gave.
    */
   private addedTurnOrigin: ExecutionTurnOrigin | null = null
+  /** Whether the stream has said `runningTasks` since this run began. */
+  private streamSaidRunningTasks = false
   /**
    * Whether the read in progress tried to KEEP an envelope -- one it had read
    * as the next to dispatch. A read that tried and kept nothing is not a host
@@ -1611,11 +1614,51 @@ class RemoteSessionRun {
     if (echoed) this.consumeStartEcho(echoed)
     this.started = true
     await this.flushPendingCommands()
+    if (this.params.resume) void this.readResumedRunningTasks()
     await this.consumeEventStream()
     this.recordDebug('lifecycle', {
       direction: 'in',
       note: `event stream loop ended at seq ${this.lastSeq}`,
     })
+  }
+
+  /**
+   * What the host says still runs, read once when this run reattaches
+   * (MAR-3987).
+   *
+   * The resume replays only what came after the cursor, so a count the daemon
+   * sent before the app closed never comes back, and an answered session read
+   * "answered · finishing" while its task ran. The snapshot says the count
+   * now. Read beside the stream, never before it: the request has no timeout,
+   * and a hung one must not hold the stream shut. A count the stream has
+   * already given is newer than or as new as this one, so it wins. Best
+   * effort: a failed read is traced and the count waits for the next patch.
+   */
+  private async readResumedRunningTasks(): Promise<void> {
+    const connection = this.connection
+    if (!connection) return
+    const sessionId = this.params.config.sessionId
+    try {
+      const snapshot = await this.params.host.requestJson(
+        connection,
+        `/v0/execution/sessions/${encodeURIComponent(sessionId)}`,
+        { method: 'GET' },
+      )
+      const runningTasks = readSnapshotRunningTasks(snapshot, sessionId)
+      if (
+        runningTasks === null ||
+        this.streamSaidRunningTasks ||
+        this.stopped ||
+        this.dead
+      )
+        return
+      this.notifyDelta({ kind: 'session.patch', patch: { runningTasks } })
+    } catch (error) {
+      this.recordDebug('lifecycle', {
+        direction: 'in',
+        note: `running tasks not read on reattach: ${describeRemoteExecutionHostFailure(error)}`,
+      })
+    }
   }
 
   /**
@@ -1971,8 +2014,10 @@ class RemoteSessionRun {
       return false
     }
     const decoded = decodeExecutionEventEnvelope(raw)
-    if (!decoded.ok && decoded.skipped && this.stepOverSkipped(decoded.skipped))
-      return true
+    if (!decoded.ok && decoded.skipped) {
+      const stepped = this.stepOverSkipped(raw, decoded.skipped)
+      if (stepped !== null) return stepped
+    }
     if (!decoded.ok) {
       this.recordDebug('event', {
         direction: 'in',
@@ -2099,14 +2144,40 @@ class RemoteSessionRun {
    * A newer host's event has nothing here to apply it to, but it is a frame
    * the host sent at its sequence, not a broken one. Dropped with the cursor
    * left below it, the next envelope read as a gap and the resume asked for
-   * the same frame again, for as long as the budget lasted. Only the next
-   * envelope of this session is stepped over: a duplicate, a hole or another
-   * session's frame is dropped as any undecodable one is.
+   * the same frame again, for as long as the budget lasted.
+   *
+   * Its sequence is read by the same rule as any envelope's: a duplicate is
+   * dropped, and one above a hole is the hole -- the stream is left and the
+   * resume asks for what was lost, as for a known kind (MAR-2779). Null for
+   * another session's frame, which is dropped as any undecodable one is.
    */
-  private stepOverSkipped(skipped: ExecutionSkippedEnvelope): boolean {
-    if (skipped.sessionId !== this.params.config.sessionId) return false
+  private stepOverSkipped(
+    raw: string,
+    skipped: ExecutionSkippedEnvelope,
+  ): boolean | null {
+    if (skipped.sessionId !== this.params.config.sessionId) return null
     const reading = readEnvelopeSeq(this.lastSeq, skipped.seq, this.streamPhase)
-    if (reading !== 'accept') return false
+    if (reading === 'duplicate') {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: skipped.kind,
+        payload: { seq: skipped.seq, lastSeq: this.lastSeq },
+        note: 'dropped: already-seen sequence',
+      })
+      return false
+    }
+    if (reading === 'gap') {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: skipped.kind,
+        payload: { seq: skipped.seq, lastSeq: this.lastSeq },
+        note: describeSeqGap(this.lastSeq, skipped.seq),
+      })
+      this.streamGap = describeSeqHole(this.lastSeq, skipped.seq)
+      return false
+    }
     this.streamPhase = nextEnvelopeSeqPhase(this.streamPhase, reading)
     this.recordDebug('event', {
       direction: 'in',
@@ -2164,10 +2235,17 @@ class RemoteSessionRun {
         // in. The heartbeat keeps that signal without inventing a local delta.
         if (event.delta.kind === 'turn.add')
           this.addedTurnOrigin = event.delta.turn.origin
+        if (
+          event.delta.kind === 'session.patch' &&
+          event.delta.patch.runningTasks !== undefined
+        )
+          this.streamSaidRunningTasks = true
         const delta = toLocalSessionDelta(event.delta)
         const patch =
           delta?.kind === 'session.patch'
-            ? this.withAddedTurnOrigin(withSettledAttention(delta.patch))
+            ? this.withAddedTurnOrigin(
+                withSettledAttention(delta.patch, this.daemonAttention),
+              )
             : null
         if (patch?.attention) this.daemonAttention = patch.attention
         // A session patch that arrives as a wire *delta* settles the session
@@ -2216,7 +2294,7 @@ class RemoteSessionRun {
         // The pairing itself is `withSettledAttention`, shared with the delta
         // encoding above so the two ways a settle can arrive cannot drift.
         const settled = this.withAddedTurnOrigin(
-          withSettledAttention({ status: event.status }),
+          withSettledAttention({ status: event.status }, this.daemonAttention),
         )
         if (settled.attention) this.daemonAttention = settled.attention
         for (const listener of this.statusListeners) listener(event.status)

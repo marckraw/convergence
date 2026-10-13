@@ -344,3 +344,23 @@ export function remoteExecutionHostReconnectDelayMs(attempt: number): number {
     RECONNECT_MAX_DELAY_MS,
   )
 }
+
+/**
+ * The `runningTasks` a session snapshot carries (protocol 0.19, MAR-3987), or
+ * null for a snapshot naming another session, or saying nothing readable.
+ *
+ * Read on its own, not through the snapshot decoder: a reattach wants this one
+ * count, and a snapshot whose transcript this build cannot read still says it.
+ */
+export function readSnapshotRunningTasks(
+  value: unknown,
+  sessionId: string,
+): number | null {
+  if (typeof value !== 'object' || value === null) return null
+  const snapshot = value as Record<string, unknown>
+  if (snapshot.sessionId !== sessionId) return null
+  const count = snapshot.runningTasks
+  return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0
+    ? count
+    : null
+}

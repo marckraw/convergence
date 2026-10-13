@@ -123,10 +123,20 @@ export const EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS = [
  * either — on a residency that is "the Project's default", on an errand "the
  * base set alone" — so the field stays off the wire entirely and the daemon
  * keeps deciding, which is what it does for a client that predates the field.
+ *
+ * Protocol 0.15 and 0.20 add three more, pinned for the same reason
+ * (MAR-3987). `requires` (0.20/0.21) asks a host to check traits before it
+ * starts; a client that sends it must first read `/health` for
+ * `start.requires.v1` and check the echo, which Convergence does not do.
+ * `actor` and `commandId` (0.15) say who started a session and match the start
+ * to its echo; Convergence matches its sends by its own record.
  */
 export const EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS = [
   'automation',
   'environment',
+  'requires',
+  'actor',
+  'commandId',
 ] as const satisfies readonly (keyof ExecutionStartRequest)[]
 
 /**
@@ -316,7 +326,8 @@ export function settledAttentionForStatus(
 
 /**
  * A session patch with the attention its terminal status means, when it does
- * not already say one.
+ * not already say one. `openRequest` is the attention of a request the host
+ * raised and has not resolved, which a `completed` keeps.
  *
  * An explicit attention always wins, and the patch is returned untouched:
  * the wire models `status` and `attention` on the same patch precisely so a
@@ -326,8 +337,20 @@ export function settledAttentionForStatus(
  */
 export function withSettledAttention(
   patch: LocalSessionPatch,
+  openRequest: AttentionState | null = null,
 ): LocalSessionPatch {
   if (patch.attention !== undefined || !patch.status) return patch
+  // A request still open outlasts the answer that raised it: a plan waiting
+  // for review is still waiting once the turn is over. The local Claude
+  // provider keeps it (`finishAnswer`: `permissions.pendingAttention ??
+  // 'finished'`), and agents-daemon #187 settles such a session `completed`
+  // with no attention for exactly that reason. Filling `finished` there
+  // cleared the request a person still owed an answer (MAR-3987).
+  if (
+    patch.status === 'completed' &&
+    (openRequest === 'needs-input' || openRequest === 'needs-approval')
+  )
+    return { ...patch, attention: openRequest }
   const attention = settledAttentionForStatus(patch.status)
   return attention ? { ...patch, attention } : patch
 }

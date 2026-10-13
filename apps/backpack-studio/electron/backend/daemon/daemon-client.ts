@@ -347,19 +347,17 @@ export class DaemonClient {
             continue
           }
           const reading = readEnvelopeFrame(frame.data, sessionId)
-          if (!reading.ok) {
-            handlers.onDroppedFrame(reading.reason, { kind: 'unreadable' })
+          const seq = reading.ok ? reading.envelope.seq : reading.skippedSeq
+          if (seq === undefined) {
+            if (!reading.ok)
+              handlers.onDroppedFrame(reading.reason, { kind: 'unreadable' })
             continue
           }
           // What this envelope's sequence means is the package's rule, not this
           // file's: Convergence reads the daemon's numbers through the same
           // organ, and two apps disagreeing about one daemon's stream is how
           // the gap case came to be missing from both (MAR-2779).
-          const seqReading = readEnvelopeSeq(
-            lastSeq,
-            reading.envelope.seq,
-            phase,
-          )
+          const seqReading = readEnvelopeSeq(lastSeq, seq, phase)
           // A replay can re-deliver what this conversation already holds; the
           // record is append-only, so anything at or below the high-water mark
           // is dropped here rather than written twice. A replay is not progress
@@ -370,15 +368,22 @@ export class DaemonClient {
             // point of an append-only record is that its order is the
             // conversation — and the reconnect above resumes from `lastSeq`,
             // which the daemon answers by replaying what was lost.
-            handlers.onDroppedFrame(
-              describeSeqGap(lastSeq, reading.envelope.seq),
-              {
-                kind: 'gap',
-                hole: describeSeqHole(lastSeq, reading.envelope.seq),
-              },
-            )
+            handlers.onDroppedFrame(describeSeqGap(lastSeq, seq), {
+              kind: 'gap',
+              hole: describeSeqHole(lastSeq, seq),
+            })
             gap = true
             return { lastSeq, envelopes }
+          }
+          if (!reading.ok) {
+            // A kind this build does not know, at the next sequence: the
+            // daemon sent it, there is nothing here to record, and the cursor
+            // moves over it. Left below it, the next frame read as a gap and
+            // the resume asked for the same frame again (protocol 0.15,
+            // MAR-3987).
+            lastSeq = seq
+            phase = nextEnvelopeSeqPhase(phase, seqReading)
+            continue
           }
           await handlers.onEnvelope(reading.envelope)
           envelopes += 1

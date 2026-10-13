@@ -282,30 +282,40 @@ const FULL_TEXT_FIELD: Record<TranscriptItem['kind'], string> = {
   'input-request': 'prompt',
 }
 
+/**
+ * Whether a conversation has a stream worth holding open: a turn running, or
+ * an answer whose work still runs and may report back (MAR-3987).
+ */
+export function isFollowedStatus(status: ConversationStatus): boolean {
+  return status === 'running' || status === 'answered'
+}
+
 function isItemState(value: unknown): value is TranscriptItem['state'] {
   return value === 'streaming' || value === 'complete' || value === 'error'
 }
 
 /**
- * The daemon's five session statuses in the three the list can show.
+ * The daemon's five session statuses in the four the list can show.
  *
  * `completed` becomes `idle` deliberately: a conversation whose turn has
  * finished is one a person can talk to again, and that is the only thing the
  * status dot is for. `failed` stays its own answer — a conversation that broke
  * must never look like one that is merely waiting.
  *
- * `answered` (protocol 0.19) stays `running`: the agent has answered, but work
- * it started still runs and may open a turn of its own. Studio follows a
- * conversation only while it is `running`, so an `idle` here would close the
- * stream that turn and the settle after it arrive on (MAR-3987).
+ * `answered` (protocol 0.19) stays itself: the agent has answered, but work it
+ * started still runs and may open a turn of its own, for up to an hour (a dev
+ * server it started). The daemon takes a message then, and so does Studio;
+ * it keeps following, because that turn and the settle after it arrive on the
+ * stream (MAR-3987).
  */
 export function conversationStatusFrom(
   status: ExecutionSessionStatus,
 ): ConversationStatus {
   switch (status) {
     case 'running':
-    case 'answered':
       return 'running'
+    case 'answered':
+      return 'answered'
     case 'failed':
       return 'failed'
     case 'idle':

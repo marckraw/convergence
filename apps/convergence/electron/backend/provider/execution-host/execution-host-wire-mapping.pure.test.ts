@@ -969,6 +969,48 @@ describe('the attention a settle carries', () => {
     const tokenOnly = { continuationToken: 'resume-1' }
     expect(withSettledAttention(tokenOnly)).toBe(tokenOnly)
   })
+
+  /**
+   * agents-daemon #187 settles an answered session `completed` with no
+   * attention while a request is open (a plan waiting for review), and the
+   * local provider keeps a pending request through its settle too (MAR-3987).
+   * Mutation: fill `finished` regardless -- red.
+   */
+  it('keeps an open request through a completed settle that names no attention', () => {
+    expect(
+      withSettledAttention(
+        { status: 'completed', runningTasks: 0 },
+        'needs-input',
+      ),
+    ).toEqual({
+      status: 'completed',
+      runningTasks: 0,
+      attention: 'needs-input',
+    })
+    expect(
+      withSettledAttention({ status: 'completed' }, 'needs-approval'),
+    ).toEqual({ status: 'completed', attention: 'needs-approval' })
+  })
+
+  it('still settles finished or failed when no request is open', () => {
+    for (const open of [null, 'none', 'finished'] as const)
+      expect(withSettledAttention({ status: 'completed' }, open)).toEqual({
+        status: 'completed',
+        attention: 'finished',
+      })
+    // A failed run keeps no request: failed is the answer.
+    expect(withSettledAttention({ status: 'failed' }, 'needs-input')).toEqual({
+      status: 'failed',
+      attention: 'failed',
+    })
+    // A settle that states its own attention is the host's word, as before.
+    expect(
+      withSettledAttention(
+        { status: 'completed', attention: 'finished' },
+        'needs-input',
+      ),
+    ).toEqual({ status: 'completed', attention: 'finished' })
+  })
 })
 
 /**

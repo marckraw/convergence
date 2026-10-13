@@ -12,6 +12,7 @@ import {
   conversationTitleFrom,
   emptyFold,
   foldEntries,
+  isFollowedStatus,
   projectItem,
   type ConversationFold,
 } from './conversation-fold.pure'
@@ -528,10 +529,15 @@ describe('conversationStatusFrom', () => {
 
   /**
    * Mutation: map `answered` to `idle` and the follow ends before the
-   * harness's own turn and the settle after it arrive -> red.
+   * harness's own turn and the settle after it arrive; map it to `running`
+   * and a message the daemon would take is refused as busy -> red.
    */
-  it('keeps an answered conversation followed while its work runs', () => {
-    expect(conversationStatusFrom('answered')).toBe('running')
+  it('keeps an answered conversation its own state, followed while its work runs', () => {
+    expect(conversationStatusFrom('answered')).toBe('answered')
+    expect(isFollowedStatus('answered')).toBe(true)
+    expect(isFollowedStatus('running')).toBe(true)
+    expect(isFollowedStatus('idle')).toBe(false)
+    expect(isFollowedStatus('failed')).toBe(false)
   })
 })
 

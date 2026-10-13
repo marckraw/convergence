@@ -106,7 +106,7 @@ const patch = (
 
 const status = (
   seq: number,
-  value: 'running' | 'completed' | 'failed',
+  value: 'running' | 'answered' | 'completed' | 'failed',
 ): ExecutionHostEventEnvelope =>
   envelope(seq, { kind: 'status', status: value }, CONVERSATION_ID)
 
@@ -411,6 +411,46 @@ describe('the walking skeleton, end to end', () => {
       },
     ])
     expect(latest(CONVERSATION_ID)?.status).toBe('running')
+    await service.dispose()
+  })
+
+  /**
+   * An answer whose work still runs (protocol 0.19, MAR-3987) takes a message,
+   * as the daemon and accent. do -- for up to an hour after a dev server
+   * starts -- and stays followed, because the harness's own turn and the
+   * settle after it arrive on the stream it already has.
+   *
+   * Mutation: answer `busy` for `answered`, or stop following it, -> red.
+   */
+  it('takes a message into an answered conversation, and keeps following it', async () => {
+    const { service } = buildService()
+    await service.start('first')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'answered'))
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'answered',
+      'the conversation to read answered',
+    )
+
+    expect(await service.send(CONVERSATION_ID, 'and blue')).toEqual({
+      kind: 'sent',
+    })
+    expect(daemon.commandRequests).toHaveLength(1)
+
+    daemon.emit(add(2, item({ id: 'a-1', text: 'done', state: 'complete' })))
+    daemon.emit(status(3, 'completed'))
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the settle to arrive on the stream it kept',
+    )
+    expect(latest(CONVERSATION_ID)?.items.map((row) => row.text)).toContain(
+      'done',
+    )
+    // One stream throughout: the answered conversation was never let go.
+    expect(daemon.eventStreamLastEventIds).toEqual([null])
     await service.dispose()
   })
 

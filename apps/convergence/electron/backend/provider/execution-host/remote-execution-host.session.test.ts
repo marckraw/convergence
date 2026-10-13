@@ -1348,7 +1348,7 @@ describe('remote wire events reaching the session record', () => {
     function sessionPatch(
       seq: number,
       patch: {
-        status?: 'answered'
+        status?: 'answered' | 'completed'
         attention?: 'none'
         runningTasks?: number
       },
@@ -1486,27 +1486,195 @@ describe('remote wire events reaching the session record', () => {
       expect(parallelWorkStatus(summary())).toBeNull()
     })
 
-    it('stops an answered remote session whose handle is gone instead of refusing it', async () => {
+    /**
+     * Stop aborts the stream #187's settle would arrive on, so the record
+     * settles here, as a local orphaned answer does: completed and finished,
+     * never left answered and never failed. A crew seat on a remote host is
+     * handed the answer it was waiting for. Mutation: drop the remote settle
+     * after `stopAndRelease`, and the session sits at "answered · 1 tasks
+     * running" with no handle -- red.
+     */
+    it('settles an answered remote session it stops as completed, its answer delivered', async () => {
       await answerWithATaskRunning()
 
-      // The first Stop sends the wire stop and lets the run go.
       service.stop(sessionId)
       await waitUntil(() => releases.length === 1, 'the handle to be released')
-      expect(service.getById(sessionId)?.status).toBe('answered')
+      await waitUntil(
+        () =>
+          stub.commandEnvelopes.some(
+            (sent) =>
+              (sent as { command?: { kind?: string } }).command?.kind ===
+              'stop',
+          ),
+        'the wire stop to post',
+      )
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'completed',
+        'the stopped answer to settle',
+      )
+      expect(summary()).toMatchObject({
+        status: 'completed',
+        attention: 'finished',
+        parallelWork: { running: 0 },
+      })
+      expect(parallelWorkStatus(summary())).toBeNull()
+      expect(assistantTexts()).toEqual(['The build runs in the background.'])
+    })
 
-      // With nothing left to follow it, a second Stop must not leave it
-      // answered: it ends the way a remote `running` does.
+    /**
+     * The resume replays only what came after the cursor, so the count the
+     * daemon sent before the restart never comes back on the stream. The
+     * snapshot says it. Mutation: skip the reattach read, and the revived
+     * session reads "answered · finishing" while its task runs -- red.
+     */
+    it('reads the running tasks back from the snapshot when it reattaches mid-task', async () => {
+      await answerWithATaskRunning()
+      stub.setSessionSnapshot(sessionId, {
+        status: 'answered',
+        attention: 'none',
+        runningTasks: 1,
+      })
+
+      const revived = new SessionService(
+        db,
+        new LocalExecutionHost(new ProviderRegistry()),
+        join(tempDir, 'global-sessions'),
+      )
+      revived.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      revived.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 2,
+        'the reattached stream to open',
+      )
+      expect(stub.eventStreamLastEventIds[1]).toBe('5')
+
+      await waitUntil(
+        () => revived.getSummaryById(sessionId)?.parallelWork?.running === 1,
+        'the count to be read back',
+      )
+      const revivedSummary = revived.getSummaryById(sessionId)!
+      expect(revivedSummary.status).toBe('answered')
+      expect(parallelWorkStatus(revivedSummary)).toBe(
+        'answered · 1 tasks running',
+      )
+    })
+
+    /**
+     * #187's `settleAnswered` with a plan still waiting for review: `completed`,
+     * `runningTasks: 0`, and no attention, on purpose. The request stays the
+     * person's to answer. Mutation: let the settle fill `finished` -- red.
+     */
+    it('keeps a request still open when the answer it came with settles', async () => {
+      await answerWithATaskRunning()
+      stub.emit(
+        envelope(6, { kind: 'attention', attention: 'needs-input' }, sessionId),
+      )
+      stub.emit(sessionPatch(7, { status: 'completed', runningTasks: 0 }))
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'completed',
+        'the settle',
+      )
+      expect(service.getById(sessionId)?.attention).toBe('needs-input')
+      expect(summary().parallelWork?.running).toBe(0)
+    })
+
+    /**
+     * The other side of keeping an open request: one the daemon resolved
+     * before the settle is gone, and the settle is finished. Keeping a stale
+     * request would leave a done session asking for input nobody owes.
+     * Mutation: remember any request ever raised, not the last word -- red.
+     */
+    it('settles finished once a request the answer raised is resolved', async () => {
+      await answerWithATaskRunning()
+      stub.emit(
+        envelope(6, { kind: 'attention', attention: 'needs-input' }, sessionId),
+      )
+      stub.emit(
+        envelope(7, { kind: 'attention', attention: 'none' }, sessionId),
+      )
+      stub.emit(sessionPatch(8, { status: 'completed', runningTasks: 0 }))
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'completed',
+        'the settle',
+      )
+      expect(service.getById(sessionId)?.attention).toBe('finished')
+    })
+
+    /** A row left answered with no handle: after a crash, or a failed reattach. */
+    function leaveHandleless(status: 'answered' | 'running'): void {
+      db.prepare(
+        "UPDATE sessions SET status = ?, attention = 'none' WHERE id = ?",
+      ).run(status, sessionId)
+    }
+
+    it('settles a handle-less answered remote session on Stop as completed, not failed', () => {
+      leaveHandleless('answered')
+
       expect(() => service.stop(sessionId)).not.toThrow()
+      expect(service.getById(sessionId)).toMatchObject({
+        status: 'completed',
+        attention: 'finished',
+      })
+    })
+
+    it('settles a handle-less answered remote session on an approval as completed, not failed', () => {
+      leaveHandleless('answered')
+
+      expect(() => service.approve(sessionId)).not.toThrow()
+      expect(service.getById(sessionId)).toMatchObject({
+        status: 'completed',
+        attention: 'finished',
+      })
+    })
+
+    /**
+     * The other half of the line: a run Convergence lost mid-turn has no
+     * answer to settle, and still reads failed. Mutation: send `running` to
+     * `completeOrphanAnswer` too -- red.
+     */
+    it('still fails a handle-less running remote session on Stop', () => {
+      leaveHandleless('running')
+
+      service.stop(sessionId)
       expect(service.getById(sessionId)?.status).toBe('failed')
     })
 
-    it('answers an approval on an answered remote session whose handle is gone by ending it', async () => {
-      await answerWithATaskRunning()
-      service.stop(sessionId)
-      await waitUntil(() => releases.length === 1, 'the handle to be released')
+    /**
+     * The origin is spent on the first `running` of its turn. A continuation
+     * recovery reports the same turn `running` a second time; read as the
+     * user's turn again, it would move the answer window past the reply the
+     * turn already gave. Mutation: delete the reset in `withAddedTurnOrigin`
+     * -- red.
+     */
+    it("keeps the answer window through a user turn's second running", async () => {
+      await service.start(sessionId, { text: 'build it' })
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'the event stream to open',
+      )
+      stub.emit(turnAdd(1, 1, 'user'))
+      stub.emit(envelope(2, { kind: 'status', status: 'running' }, sessionId))
+      stub.emit(assistantMessage(3, 'Half of the answer.'))
+      await waitUntil(
+        () => assistantTexts().length === 1,
+        'the first reply to land',
+      )
+      const window = answerWindowStart()
 
-      expect(() => service.approve(sessionId)).not.toThrow()
-      expect(service.getById(sessionId)?.status).toBe('failed')
+      stub.emit(envelope(4, { kind: 'status', status: 'running' }, sessionId))
+      stub.emit(assistantMessage(5, 'The rest of it.'))
+      stub.emit(envelope(6, { kind: 'status', status: 'completed' }, sessionId))
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'completed',
+        'the turn to settle',
+      )
+      expect(answerWindowStart()).toBe(window)
     })
   })
 })
