@@ -69,8 +69,8 @@ function createLingeringHandleHost(inner: RemoteExecutionHost): {
       assertProviderRunnable: (providerId) =>
         inner.assertProviderRunnable(providerId),
       start: (providerId, config) => wrap(inner.start(providerId, config)),
-      attach: (providerId, config, afterSeq) =>
-        wrap(inner.attach(providerId, config, afterSeq)),
+      attach: (providerId, config, afterSeq, recordedAttention) =>
+        wrap(inner.attach(providerId, config, afterSeq, recordedAttention)),
       oneShot: (providerId, input) => inner.oneShot(providerId, input),
     },
     emitFromHandle: (index, delta) => {
@@ -1604,6 +1604,53 @@ describe('remote wire events reaching the session record', () => {
         'the settle',
       )
       expect(service.getById(sessionId)?.attention).toBe('finished')
+    })
+
+    /**
+     * A plan review raised before the app closed sits below the resume's
+     * cursor, so the reattached run never hears it again. Its settle is #187's
+     * `completed` with no attention, which must not clear the request.
+     * Mutation: start the reattached run's attention at null, as before, and
+     * the settle fills `finished` -- red.
+     */
+    it('keeps a request raised before a restart open through the settle after it', async () => {
+      await answerWithATaskRunning()
+      stub.emit(
+        envelope(6, { kind: 'attention', attention: 'needs-input' }, sessionId),
+      )
+      await waitUntil(
+        () => service.getById(sessionId)?.attention === 'needs-input',
+        'the request to reach the record',
+      )
+
+      // The app closes: its run goes with it, and only the reattached one
+      // hears what comes next.
+      await service.disposeAll()
+      const revived = new SessionService(
+        db,
+        new LocalExecutionHost(new ProviderRegistry()),
+        join(tempDir, 'global-sessions'),
+      )
+      revived.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      revived.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 2,
+        'the reattached stream to open',
+      )
+      expect(stub.eventStreamLastEventIds[1]).toBe('6')
+
+      stub.emit(sessionPatch(7, { status: 'completed', runningTasks: 0 }))
+      await waitUntil(
+        () => revived.getById(sessionId)?.status === 'completed',
+        'the settle',
+      )
+      expect(revived.getById(sessionId)?.attention).toBe('needs-input')
     })
 
     /** A row left answered with no handle: after a crash, or a failed reattach. */

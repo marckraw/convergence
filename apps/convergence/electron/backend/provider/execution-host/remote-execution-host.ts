@@ -1204,6 +1204,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     providerId: string,
     config: SessionStartConfig,
     afterSeq: number,
+    recordedAttention?: AttentionState,
   ): SessionHandle {
     // The one way a remote session continues: it is started once and every
     // later turn attaches to the run the daemon already has, at app boot for a
@@ -1222,7 +1223,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       providerId,
       config,
       host: this,
-      resume: { afterSeq },
+      resume: { afterSeq, recordedAttention },
     })
     session.begin()
     return session.handle()
@@ -1310,12 +1311,18 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   async requestJson(
     connection: RemoteExecutionHostConnection,
     path: string,
-    options: { method: 'GET' | 'POST' | 'DELETE'; body?: string },
+    options: {
+      method: 'GET' | 'POST' | 'DELETE'
+      body?: string
+      /** Ends the request with the run that asked, so a hung one is not kept. */
+      signal?: AbortSignal
+    },
   ): Promise<unknown> {
     let response: Response
     try {
       response = await this.fetchFn(buildRemoteUrl(connection.baseUrl, path), {
         method: options.method,
+        ...(options.signal ? { signal: options.signal } : {}),
         headers: {
           Authorization: `Bearer ${connection.token}`,
           ...(options.body !== undefined
@@ -1416,7 +1423,7 @@ interface RemoteSessionRunParams {
   config: SessionStartConfig
   host: RemoteExecutionHost
   /** Present when reattaching to an already-running remote session. */
-  resume?: { afterSeq: number }
+  resume?: { afterSeq: number; recordedAttention?: AttentionState }
 }
 
 /**
@@ -1504,6 +1511,14 @@ class RemoteSessionRun {
 
   constructor(private readonly params: RemoteSessionRunParams) {
     this.lastSeq = params.resume?.afterSeq ?? 0
+    // A request the daemon raised before the app closed was raised below the
+    // cursor, and the resume does not say it again. Without it, a later
+    // `completed` that names no attention (#187's settle with a plan still
+    // waiting for review) would fill `finished` and clear the request a
+    // person still owes an answer (MAR-3987).
+    const recorded = params.resume?.recordedAttention
+    if (recorded === 'needs-input' || recorded === 'needs-approval')
+      this.daemonAttention = recorded
     this.emitter = new ProviderSessionEmitter({
       providerId: params.providerId,
       emitDelta: (delta) => this.notifyDelta(delta),
@@ -1642,7 +1657,9 @@ class RemoteSessionRun {
       const snapshot = await this.params.host.requestJson(
         connection,
         `/v0/execution/sessions/${encodeURIComponent(sessionId)}`,
-        { method: 'GET' },
+        // A released run must not stay in memory behind a read nobody waits
+        // on: its stop aborts this with the stream.
+        { method: 'GET', signal: this.abort.signal },
       )
       const runningTasks = readSnapshotRunningTasks(snapshot, sessionId)
       if (
@@ -1654,6 +1671,7 @@ class RemoteSessionRun {
         return
       this.notifyDelta({ kind: 'session.patch', patch: { runningTasks } })
     } catch (error) {
+      if (this.stopped || this.dead) return
       this.recordDebug('lifecycle', {
         direction: 'in',
         note: `running tasks not read on reattach: ${describeRemoteExecutionHostFailure(error)}`,

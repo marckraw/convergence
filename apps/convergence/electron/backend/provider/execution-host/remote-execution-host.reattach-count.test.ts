@@ -119,4 +119,50 @@ describe('the running tasks a reattach reads back', () => {
 
     handle.stop()
   })
+
+  /**
+   * The read has no timeout of its own, so it ends with the run that asked.
+   * Mutation: drop the signal, and a hung read keeps a released run alive
+   * behind it -- red.
+   */
+  it('ends a hung read when the run stops', async () => {
+    let asked = false
+    let signal: AbortSignal | null | undefined
+    const host = new RemoteExecutionHost({
+      connection: {
+        resolveConnection: async () => ({
+          baseUrl: 'http://daemon.test',
+          token: 'test-token',
+        }),
+      },
+      fetch: async (input, init) => {
+        if (
+          (init?.method ?? 'GET') === 'GET' &&
+          /\/v0\/execution\/sessions\/[^/]+$/.test(String(input))
+        ) {
+          asked = true
+          signal = init?.signal
+          // Hangs until aborted, as a daemon that never answers would.
+          return new Promise<Response>((_resolve, reject) =>
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            ),
+          )
+        }
+        return stub.fetchFn(input, init)
+      },
+      onEventSeq: () => {},
+      reconnect: {
+        maxAttempts: 2,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
+    })
+    await host.refreshProviders()
+    const handle = host.attach('claude', config, 5)
+
+    await waitUntil(() => asked, 'the snapshot to be asked for')
+    expect(signal?.aborted).toBe(false)
+    handle.stop()
+    expect(signal?.aborted).toBe(true)
+  })
 })

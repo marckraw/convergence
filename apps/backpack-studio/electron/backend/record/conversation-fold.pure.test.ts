@@ -81,7 +81,94 @@ describe('emptyFold', () => {
       updatedAt: CREATED,
       orphanPatches: 0,
       lastFact: null,
+      awaitingTurn: false,
     })
+  })
+})
+
+/**
+ * A message sent into an answered conversation goes out on the stream it
+ * already has, and the previous answer's settle can be ahead of the new turn
+ * on that wire (MAR-3987). Until the daemon reports the sent turn running, a
+ * `completed` or `answered` is the turn before it.
+ */
+describe('a sent turn the daemon has not reported yet', () => {
+  const statusEvent = (
+    status: 'running' | 'answered' | 'completed' | 'failed',
+  ) => entry(wire({ kind: 'status', status }))
+
+  /**
+   * Mutation: fold the stale `completed` as before, and the conversation
+   * reads idle while the daemon works on the message -> red.
+   */
+  it("keeps a sent turn running through the previous answer's settle", () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      statusEvent('answered'),
+      local('sent'),
+      statusEvent('completed'),
+    ])
+    expect(fold.status).toBe('running')
+    expect(fold.awaitingTurn).toBe(true)
+  })
+
+  it('settles the turn once the daemon has reported it running', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      statusEvent('answered'),
+      local('sent'),
+      statusEvent('completed'),
+      statusEvent('running'),
+      statusEvent('completed'),
+    ])
+    expect(fold.status).toBe('idle')
+    expect(fold.awaitingTurn).toBe(false)
+  })
+
+  it('reads a settle carried on a session patch the same way', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      statusEvent('answered'),
+      local('sent'),
+      entry(
+        delta({
+          kind: 'session.patch',
+          patch: { status: 'completed', runningTasks: 0 },
+        }),
+      ),
+    ])
+    expect(fold.status).toBe('running')
+  })
+
+  /** A broken conversation never looks busy, waiting or not. */
+  /**
+   * A message sent into an idle conversation has no settle ahead of it: a
+   * `completed` is its own end, as it always was. Mutation: wait after any
+   * send -> red, and a daemon that completes without `running` strands it.
+   */
+  it('does not wait after a send into a conversation that was not answered', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      local('sent'),
+      statusEvent('completed'),
+    ])
+    expect(fold.status).toBe('idle')
+  })
+
+  it('lets a failure land while it waits', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      statusEvent('answered'),
+      local('sent'),
+      statusEvent('failed'),
+    ])
+    expect(fold.status).toBe('failed')
+    expect(fold.awaitingTurn).toBe(false)
+  })
+
+  it('stops waiting on a refusal of its own', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      statusEvent('answered'),
+      local('sent'),
+      local('refused'),
+      statusEvent('completed'),
+    ])
+    expect(fold.status).toBe('idle')
   })
 })
 
@@ -495,6 +582,7 @@ describe('foldEnvelopes', () => {
       updatedAt: CREATED,
       orphanPatches: 3,
       lastFact: null,
+      awaitingTurn: false,
     }
 
     let live = seed

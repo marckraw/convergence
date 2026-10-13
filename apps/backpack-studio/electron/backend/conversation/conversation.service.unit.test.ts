@@ -440,8 +440,9 @@ describe('the walking skeleton, end to end', () => {
     })
     expect(daemon.commandRequests).toHaveLength(1)
 
-    daemon.emit(add(2, item({ id: 'a-1', text: 'done', state: 'complete' })))
-    daemon.emit(status(3, 'completed'))
+    daemon.emit(status(2, 'running'))
+    daemon.emit(add(3, item({ id: 'a-1', text: 'done', state: 'complete' })))
+    daemon.emit(status(4, 'completed'))
     await waitUntil(
       () => latest(CONVERSATION_ID)?.status === 'idle',
       'the settle to arrive on the stream it kept',
@@ -450,6 +451,55 @@ describe('the walking skeleton, end to end', () => {
       'done',
     )
     // One stream throughout: the answered conversation was never let go.
+    expect(daemon.eventStreamLastEventIds).toEqual([null])
+    await service.dispose()
+  })
+
+  /**
+   * The race the reviewer probed (MAR-3987): the previous answer's settle is
+   * on the wire ahead of the turn the message opens. Read as that turn's end,
+   * the `completed` folded idle and closed the stream before the daemon's
+   * `running` arrived: the dot said "Ready" while the daemon worked, and the
+   * reply never reached the record.
+   *
+   * Mutation: fold the stale `completed` as before -> red: idle, no reply,
+   * the stream closed.
+   */
+  it("keeps following through the previous answer's settle until the sent turn settles", async () => {
+    const { service } = buildService()
+    await service.start('first')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'answered'))
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'answered',
+      'the conversation to read answered',
+    )
+
+    expect(await service.send(CONVERSATION_ID, 'and blue')).toEqual({
+      kind: 'sent',
+    })
+    daemon.emit(status(2, 'completed'))
+    daemon.emit(status(3, 'running'))
+    daemon.emit(
+      add(4, item({ id: 'a-1', text: 'blue it is', state: 'complete' })),
+    )
+    daemon.emit(status(5, 'completed'))
+
+    await waitUntil(
+      () =>
+        latest(CONVERSATION_ID)?.items.some(
+          (row) => row.text === 'blue it is',
+        ) === true,
+      'the reply to the sent message to reach the record',
+    )
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the sent turn to settle',
+    )
+    // One stream throughout, and it stayed open past the stale settle.
     expect(daemon.eventStreamLastEventIds).toEqual([null])
     await service.dispose()
   })

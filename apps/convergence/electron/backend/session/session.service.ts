@@ -5940,6 +5940,7 @@ export class SessionService {
         permissionConfig: session.permissionConfig,
       },
       this.sessionRepository.getExecutionHostLastSeq(session.id),
+      session.attention,
     )
     this.activeHandles.set(session.id, handle)
     this.agentMeterListener?.(session.id, handle)
