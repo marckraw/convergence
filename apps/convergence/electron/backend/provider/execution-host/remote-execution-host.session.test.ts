@@ -28,6 +28,7 @@ import type { SessionHandle } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 import { TEST_REMOTE_WORK_ADDRESS } from '../../session/session-work-address.fixture'
+import { parallelWorkStatus } from '../../../../src/shared/lib/parallel-work.pure'
 
 /**
  * The real remote host, wrapped so a handle the service has released can still
@@ -1296,5 +1297,216 @@ describe('remote wire events reaching the session record', () => {
     ).toEqual([])
     expect(service.getById(sessionId)?.status).not.toBe('failed')
     errors.mockRestore()
+  })
+
+  describe('a resident session on protocol 0.23 (MAR-3987)', () => {
+    function turnAdd(
+      seq: number,
+      sequence: number,
+      origin: 'user' | 'harness',
+    ): ReturnType<typeof envelope> {
+      return envelope(
+        seq,
+        {
+          kind: 'delta',
+          delta: {
+            kind: 'turn.add',
+            turn: {
+              id: `turn-${sequence}`,
+              sessionId,
+              sequence,
+              startedAt: '2026-10-13T10:00:00.000Z',
+              endedAt: null,
+              status: 'running',
+              summary: null,
+              origin,
+            },
+          },
+        },
+        sessionId,
+      )
+    }
+
+    function turnCompleted(
+      seq: number,
+      sequence: number,
+    ): ReturnType<typeof envelope> {
+      return envelope(
+        seq,
+        {
+          kind: 'delta',
+          delta: {
+            kind: 'turn.patch',
+            turnId: `turn-${sequence}`,
+            patch: { status: 'completed', endedAt: '2026-10-13T10:01:00.000Z' },
+          },
+        },
+        sessionId,
+      )
+    }
+
+    function sessionPatch(
+      seq: number,
+      patch: {
+        status?: 'answered'
+        attention?: 'none'
+        runningTasks?: number
+      },
+    ): ReturnType<typeof envelope> {
+      return envelope(
+        seq,
+        { kind: 'delta', delta: { kind: 'session.patch', patch } },
+        sessionId,
+      )
+    }
+
+    function summary() {
+      const found = service.getSummaryById(sessionId)
+      if (!found) throw new Error('the session summary is gone')
+      return found
+    }
+
+    function answerWindowStart(): number {
+      return (
+        db
+          .prepare(
+            'SELECT answer_window_start_sequence AS start FROM sessions WHERE id = ?',
+          )
+          .get(sessionId) as { start: number }
+      ).start
+    }
+
+    /** The user's turn, answered while one task still runs. */
+    async function answerWithATaskRunning(): Promise<void> {
+      await service.start(sessionId, { text: 'build it' })
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'the event stream to open',
+      )
+      stub.emit(turnAdd(1, 1, 'user'))
+      stub.emit(envelope(2, { kind: 'status', status: 'running' }, sessionId))
+      stub.emit(assistantMessage(3, 'The build runs in the background.'))
+      stub.emit(sessionPatch(4, { runningTasks: 1 }))
+      stub.emit(
+        sessionPatch(5, {
+          status: 'answered',
+          attention: 'none',
+          runningTasks: 1,
+        }),
+      )
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'answered',
+        'the session to read answered',
+      )
+    }
+
+    it("reads agents-daemon #187's timeline: running, answered with its task, the harness turn, the real settle", async () => {
+      await answerWithATaskRunning()
+
+      // Answered, as a local resident session is: still working, nothing for
+      // a person to do, and the run's handle kept for the turn to come.
+      expect(summary()).toMatchObject({
+        status: 'answered',
+        attention: 'none',
+        parallelWork: { running: 1 },
+      })
+      expect(parallelWorkStatus(summary())).toBe('answered · 1 tasks running')
+      expect(releases).toEqual([])
+      const window = answerWindowStart()
+
+      stub.emit(turnCompleted(6, 1))
+      stub.emit(sessionPatch(7, { runningTasks: 0 }))
+      await waitUntil(
+        () => summary().parallelWork?.running === 0,
+        'the task count to reach 0',
+      )
+      expect(summary().status).toBe('answered')
+      expect(parallelWorkStatus(summary())).toBe('answered · finishing')
+
+      // Claude Code reports back on its own: a harness turn.
+      stub.emit(turnAdd(8, 2, 'harness'))
+      stub.emit(envelope(9, { kind: 'status', status: 'running' }, sessionId))
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'running',
+        'the harness turn to run',
+      )
+      // It reports on the same answer, so it opens no window of its own.
+      expect(answerWindowStart()).toBe(window)
+
+      stub.emit(assistantMessage(10, 'The build passed.'))
+      stub.emit(
+        envelope(11, { kind: 'status', status: 'completed' }, sessionId),
+      )
+      stub.emit(turnCompleted(12, 2))
+      stub.emit(
+        envelope(13, { kind: 'attention', attention: 'finished' }, sessionId),
+      )
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'completed',
+        'the real settle',
+      )
+      expect(summary()).toMatchObject({
+        status: 'completed',
+        attention: 'finished',
+        parallelWork: { running: 0 },
+      })
+      expect(parallelWorkStatus(summary())).toBeNull()
+      expect(assistantTexts()).toEqual([
+        'The build runs in the background.',
+        'The build passed.',
+      ])
+      // Nothing on the way was refused or dropped as unreadable.
+      expect(
+        debugEntries.filter((entry) => entry.note?.startsWith('dropped')),
+      ).toEqual([])
+    })
+
+    it('opens a new answer window for a user turn sent while answered', async () => {
+      await answerWithATaskRunning()
+      const window = answerWindowStart()
+
+      stub.emit(turnAdd(6, 2, 'user'))
+      stub.emit(envelope(7, { kind: 'status', status: 'running' }, sessionId))
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'running',
+        'the user turn to run',
+      )
+      expect(answerWindowStart()).toBeGreaterThan(window)
+    })
+
+    it('never leaves an answered session at its task count once it settles without one', async () => {
+      await answerWithATaskRunning()
+
+      stub.emit(envelope(6, { kind: 'status', status: 'completed' }, sessionId))
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'completed',
+        'the settle',
+      )
+      expect(summary().parallelWork?.running).toBe(0)
+      expect(parallelWorkStatus(summary())).toBeNull()
+    })
+
+    it('stops an answered remote session whose handle is gone instead of refusing it', async () => {
+      await answerWithATaskRunning()
+
+      // The first Stop sends the wire stop and lets the run go.
+      service.stop(sessionId)
+      await waitUntil(() => releases.length === 1, 'the handle to be released')
+      expect(service.getById(sessionId)?.status).toBe('answered')
+
+      // With nothing left to follow it, a second Stop must not leave it
+      // answered: it ends the way a remote `running` does.
+      expect(() => service.stop(sessionId)).not.toThrow()
+      expect(service.getById(sessionId)?.status).toBe('failed')
+    })
+
+    it('answers an approval on an answered remote session whose handle is gone by ending it', async () => {
+      await answerWithATaskRunning()
+      service.stop(sessionId)
+      await waitUntil(() => releases.length === 1, 'the handle to be released')
+
+      expect(() => service.approve(sessionId)).not.toThrow()
+      expect(service.getById(sessionId)?.status).toBe('failed')
+    })
   })
 })

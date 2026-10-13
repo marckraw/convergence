@@ -42,6 +42,6 @@
     "@ef-global/backpack": "4.8.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "@mrck-labs/execution-host-protocol": "^0.14.0"
+    "@mrck-labs/execution-host-protocol": "^0.23.0"
   }
 }

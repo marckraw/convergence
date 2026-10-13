@@ -525,6 +525,14 @@ describe('conversationStatusFrom', () => {
       ),
     ).toEqual(['running', 'idle', 'idle', 'failed'])
   })
+
+  /**
+   * Mutation: map `answered` to `idle` and the follow ends before the
+   * harness's own turn and the settle after it arrive -> red.
+   */
+  it('keeps an answered conversation followed while its work runs', () => {
+    expect(conversationStatusFrom('answered')).toBe('running')
+  })
 })
 
 describe('projectItem', () => {

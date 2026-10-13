@@ -1,4 +1,8 @@
-import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
+import type {
+  ExecutionSessionWorkspace,
+  ExecutionSkippedEnvelope,
+  ExecutionTurnOrigin,
+} from '@mrck-labs/execution-host-protocol'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import { RecordingError } from '../../session/session.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
@@ -31,6 +35,8 @@ import {
   buildWireStopCommand,
   toLocalSessionDelta,
   withSettledAttention,
+  withTurnOpenedBy,
+  type LocalSessionPatch,
 } from './execution-host-wire-mapping.pure'
 import type {
   ExecutionHostProviderCapabilities,
@@ -1474,6 +1480,13 @@ class RemoteSessionRun {
    */
   private daemonAttention: AttentionState | null = null
   /**
+   * Who opened the turn the daemon added last, until the `running` that starts
+   * it carries it as `turnOpenedBy` (MAR-3987). Spent there, once, so a turn
+   * that goes `running` again after an approval does not open a second answer
+   * window.
+   */
+  private addedTurnOrigin: ExecutionTurnOrigin | null = null
+  /**
    * Whether the read in progress tried to KEEP an envelope -- one it had read
    * as the next to dispatch. A read that tried and kept nothing is not a host
    * that stopped answering: the daemon delivered, and something on this side
@@ -1958,6 +1971,8 @@ class RemoteSessionRun {
       return false
     }
     const decoded = decodeExecutionEventEnvelope(raw)
+    if (!decoded.ok && decoded.skipped && this.stepOverSkipped(decoded.skipped))
+      return true
     if (!decoded.ok) {
       this.recordDebug('event', {
         direction: 'in',
@@ -2078,6 +2093,34 @@ class RemoteSessionRun {
   }
 
   /**
+   * Moves the cursor over an envelope of a kind this build does not know, and
+   * answers whether it did (protocol 0.15, MAR-3987).
+   *
+   * A newer host's event has nothing here to apply it to, but it is a frame
+   * the host sent at its sequence, not a broken one. Dropped with the cursor
+   * left below it, the next envelope read as a gap and the resume asked for
+   * the same frame again, for as long as the budget lasted. Only the next
+   * envelope of this session is stepped over: a duplicate, a hole or another
+   * session's frame is dropped as any undecodable one is.
+   */
+  private stepOverSkipped(skipped: ExecutionSkippedEnvelope): boolean {
+    if (skipped.sessionId !== this.params.config.sessionId) return false
+    const reading = readEnvelopeSeq(this.lastSeq, skipped.seq, this.streamPhase)
+    if (reading !== 'accept') return false
+    this.streamPhase = nextEnvelopeSeqPhase(this.streamPhase, reading)
+    this.recordDebug('event', {
+      direction: 'in',
+      method: skipped.kind,
+      payload: { seq: skipped.seq, path: skipped.path },
+      note: 'skipped: a kind this build does not know; cursor moved over it',
+    })
+    this.clearHostUnreachable()
+    this.lastSeq = skipped.seq
+    this.params.host.notifyEventSeq(this.params.config.sessionId, skipped.seq)
+    return true
+  }
+
+  /**
    * Three of these kinds carry facts the session record must keep, and the
    * listener arrays alone cannot deliver them: nothing in Convergence
    * subscribes to `onStatusChange`, `onAttentionChange` or
@@ -2119,10 +2162,12 @@ class RemoteSessionRun {
         // evidence the daemon is working, though, and before the mapping layer
         // existed every delta reached applyDelta and bumped liveness on the way
         // in. The heartbeat keeps that signal without inventing a local delta.
+        if (event.delta.kind === 'turn.add')
+          this.addedTurnOrigin = event.delta.turn.origin
         const delta = toLocalSessionDelta(event.delta)
         const patch =
           delta?.kind === 'session.patch'
-            ? withSettledAttention(delta.patch)
+            ? this.withAddedTurnOrigin(withSettledAttention(delta.patch))
             : null
         if (patch?.attention) this.daemonAttention = patch.attention
         // A session patch that arrives as a wire *delta* settles the session
@@ -2170,7 +2215,9 @@ class RemoteSessionRun {
         //
         // The pairing itself is `withSettledAttention`, shared with the delta
         // encoding above so the two ways a settle can arrive cannot drift.
-        const settled = withSettledAttention({ status: event.status })
+        const settled = this.withAddedTurnOrigin(
+          withSettledAttention({ status: event.status }),
+        )
         if (settled.attention) this.daemonAttention = settled.attention
         for (const listener of this.statusListeners) listener(event.status)
         if (settled.attention)
@@ -2206,6 +2253,13 @@ class RemoteSessionRun {
         this.notifyHeartbeat()
         break
     }
+  }
+
+  /** The patch with `addedTurnOrigin` spent on it, when it starts the turn. */
+  private withAddedTurnOrigin(patch: LocalSessionPatch): LocalSessionPatch {
+    const stamped = withTurnOpenedBy(patch, this.addedTurnOrigin)
+    if (stamped !== patch) this.addedTurnOrigin = null
+    return stamped
   }
 
   private notifyDelta(delta: SessionDelta): void {

@@ -34,7 +34,7 @@
   "license": "ISC",
   "dependencies": {
     "@chartgpu/chartgpu": "^0.2.9",
-    "@mrck-labs/execution-host-protocol": "^0.14.0",
+    "@mrck-labs/execution-host-protocol": "^0.23.0",
     "@pierre/diffs": "^1.1.20",
     "@pierre/trees": "^1.0.0-beta.3",
     "@streamdown/code": "^1.1.1",

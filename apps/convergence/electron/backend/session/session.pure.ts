@@ -1,3 +1,4 @@
+import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import type { SessionQueuedInputRow } from '../database/database.types'
 import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
 import type { SkillSelection } from '../skills/skills.types'
@@ -25,6 +26,47 @@ export function isTerminalSessionStatus(
   status: SessionStatus,
 ): status is SettledSessionStatus {
   return status === 'completed' || status === 'failed'
+}
+
+/**
+ * What a remote session's host says still runs, after one more patch from it
+ * (MAR-3987).
+ *
+ * A patch naming `runningTasks` says it. A settle without one ends it: the
+ * protocol's settled session has no running task, so a count kept past
+ * `completed` would hold a finished card at "N tasks running". Anything else
+ * leaves it as it was.
+ */
+export function nextHostRunningTasks(
+  previous: number | undefined,
+  patch: { status?: SessionStatus; runningTasks?: number },
+): number | undefined {
+  if (patch.runningTasks !== undefined) return patch.runningTasks
+  if (patch.status && isTerminalSessionStatus(patch.status)) return undefined
+  return previous
+}
+
+/**
+ * A summary's parallel-work counts, with what its remote host says still runs
+ * (MAR-3987).
+ *
+ * A remote session's evidence is not applied yet (phase B of R7, MAR-3684),
+ * so its own counts see nothing running while its host says `runningTasks`.
+ * The larger count is shown, so a remote session reads "answered · 2 tasks
+ * running" as a local one does. The oldest start belongs to evidence, and is
+ * left out of a count evidence did not make.
+ */
+export function withHostRunningTasks(
+  counts: ParallelWorkCounts,
+  hostRunningTasks: number | undefined,
+): ParallelWorkCounts {
+  if (!hostRunningTasks || hostRunningTasks <= counts.running) return counts
+  return {
+    running: hostRunningTasks,
+    unknown: counts.unknown,
+    failed: counts.failed,
+    stopped: counts.stopped,
+  }
 }
 
 export interface AttentionRequestRowLike {

@@ -6,9 +6,11 @@ import {
   describeProviderIdentityRefusal,
   hasNoTurnSinceLastBoundary,
   isAttentionRequestSummary,
+  nextHostRunningTasks,
   parseJsonArray,
   queuedInputFromRow,
   resolveAttentionRequestKind,
+  withHostRunningTasks,
 } from './session.pure'
 
 function item(
@@ -368,5 +370,55 @@ describe('describeProviderIdentityRefusal (MAR-2550)', () => {
     expect(
       describeProviderIdentityRefusal({ providerId: 'pi' }, 'pi'),
     ).toBeNull()
+  })
+})
+
+describe("a remote host's running tasks (MAR-3987)", () => {
+  it('takes the count a patch names, zero included', () => {
+    expect(nextHostRunningTasks(undefined, { runningTasks: 2 })).toBe(2)
+    expect(
+      nextHostRunningTasks(2, { status: 'running', runningTasks: 0 }),
+    ).toBe(0)
+  })
+
+  it('ends the count at a settle that names none, so no card stays answered', () => {
+    expect(nextHostRunningTasks(2, { status: 'completed' })).toBeUndefined()
+    expect(nextHostRunningTasks(2, { status: 'failed' })).toBeUndefined()
+  })
+
+  it('keeps the count through a patch that says nothing of it', () => {
+    expect(nextHostRunningTasks(2, { status: 'running' })).toBe(2)
+    expect(nextHostRunningTasks(2, {})).toBe(2)
+  })
+
+  const none = { running: 0, unknown: 0, failed: 0, stopped: 0 }
+
+  it('shows what the host says runs when evidence sees nothing', () => {
+    expect(withHostRunningTasks(none, 2)).toEqual({ ...none, running: 2 })
+  })
+
+  it('leaves the counts alone when the host says nothing more', () => {
+    const counts = {
+      ...none,
+      running: 3,
+      runningStartedAt: '2026-10-13T10:00:00.000Z',
+    }
+    expect(withHostRunningTasks(counts, undefined)).toBe(counts)
+    expect(withHostRunningTasks(counts, 0)).toBe(counts)
+    expect(withHostRunningTasks(counts, 3)).toBe(counts)
+  })
+
+  it('drops the oldest start from a count evidence did not make', () => {
+    expect(
+      withHostRunningTasks(
+        {
+          ...none,
+          running: 1,
+          failed: 1,
+          runningStartedAt: '2026-10-13T10:00:00.000Z',
+        },
+        4,
+      ),
+    ).toEqual({ ...none, running: 4, failed: 1 })
   })
 })

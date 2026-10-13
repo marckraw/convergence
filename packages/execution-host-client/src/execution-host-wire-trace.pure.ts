@@ -4,6 +4,7 @@ import type {
   ExecutionHostEvent,
   ExecutionSessionDelta,
   ExecutionSessionStatus,
+  ExecutionTurnOrigin,
   ExecutionTurnStatus,
 } from '@mrck-labs/execution-host-protocol'
 
@@ -52,13 +53,17 @@ export interface WireDeltaShape {
   activity?: ExecutionActivitySignal
   /** Null when the patch explicitly cleared the token. */
   continuationToken?: WireTokenShape | null
+  runningTasks?: number
   itemKind?: string
   itemState?: string
   actor?: string
   textChars?: number
   textAppendChars?: number
   turnStatus?: ExecutionTurnStatus
+  turnOrigin?: ExecutionTurnOrigin
   fileChangeCount?: number
+  /** The fact's kind only: an evidence payload carries commands and paths. */
+  evidenceKind?: string
 }
 
 export function describeWireDeltaShape(
@@ -82,6 +87,9 @@ export function describeWireDeltaShape(
                   ? null
                   : describeWireTokenShape(patch.continuationToken),
             }
+          : {}),
+        ...(patch.runningTasks !== undefined
+          ? { runningTasks: patch.runningTasks }
           : {}),
       }
     }
@@ -113,7 +121,11 @@ export function describeWireDeltaShape(
       }
     }
     case 'turn.add':
-      return { kind: delta.kind, turnStatus: delta.turn.status }
+      return {
+        kind: delta.kind,
+        turnStatus: delta.turn.status,
+        turnOrigin: delta.turn.origin,
+      }
     case 'turn.patch':
       return {
         kind: delta.kind,
@@ -124,6 +136,8 @@ export function describeWireDeltaShape(
       }
     case 'turn.fileChanges.add':
       return { kind: delta.kind, fileChangeCount: delta.fileChanges.length }
+    case 'evidence':
+      return { kind: delta.kind, evidenceKind: delta.evidence.kind }
   }
 }
 

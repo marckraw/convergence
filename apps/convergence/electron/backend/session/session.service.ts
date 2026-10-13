@@ -111,9 +111,11 @@ import {
   hasNoTurnSinceLastBoundary,
   isAttentionRequestSummary,
   isTerminalSessionStatus,
+  nextHostRunningTasks,
   previousAssistantMessageTexts,
   resolveAttentionRequestKind,
   RecordingError,
+  withHostRunningTasks,
   type AttentionRequestRowLike,
 } from './session.pure'
 import {
@@ -338,6 +340,8 @@ export class SessionService {
     }
   }
   private parallelWorkCounts = new Map<string, ParallelWorkCounts>()
+  /** What each remote session's host says still runs (MAR-3987). */
+  private hostRunningTasks = new Map<string, number>()
   private evidenceUpdateTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -1781,7 +1785,10 @@ export class SessionService {
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
       canReconnectMcpServers:
         this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
-      parallelWork: this.cachedParallelWork([row.id]).get(row.id)!,
+      parallelWork: withHostRunningTasks(
+        this.cachedParallelWork([row.id]).get(row.id)!,
+        this.hostRunningTasks.get(row.id),
+      ),
     }
     // Read the request row only when the answer can use it, the same rule the
     // batched path applies (MAR-3396): a settled or idle conversation's row is
@@ -1808,7 +1815,10 @@ export class SessionService {
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
       canReconnectMcpServers:
         this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
-      parallelWork: counts.get(row.id)!,
+      parallelWork: withHostRunningTasks(
+        counts.get(row.id)!,
+        this.hostRunningTasks.get(row.id),
+      ),
     }))
     const attentionRowsBySessionId =
       this.readLatestAttentionRequestRows(summaries)
@@ -2413,6 +2423,7 @@ export class SessionService {
     if (evidenceTimer) clearTimeout(evidenceTimer)
     this.evidenceUpdateTimers.delete(id)
     this.parallelWorkCounts.delete(id)
+    this.hostRunningTasks.delete(id)
     // Committed. Only now is ownership consumed and the ending told: the
     // turn's settle is never coming, and its receipts end here with the
     // queued ones.
@@ -4222,7 +4233,10 @@ export class SessionService {
       return
     }
 
-    if (session.status === 'running') {
+    // A remote `answered` with no handle is a run this app no longer follows,
+    // as a remote `running` is: it takes the same way out, never a refusal
+    // that leaves it answered (MAR-3987).
+    if (session.status === 'running' || session.status === 'answered') {
       this.markStaleRunningSessionFailed(
         session,
         'Session marked failed because Convergence no longer has an active provider process for this approval request.',
@@ -4262,7 +4276,8 @@ export class SessionService {
         this.completeOrphanAnswer(session)
         return
       }
-      if (session?.status === 'running') {
+      // Remote `answered` included, as in handleInactiveApprovalAction.
+      if (session?.status === 'running' || session?.status === 'answered') {
         this.markStaleRunningSessionFailed(
           session,
           'Session marked failed because Convergence no longer has an active provider process to stop.',
@@ -4463,6 +4478,7 @@ export class SessionService {
           this.flushPendingConversationPatchesForSession(sessionId)
         }
         this.applySessionPatch(sessionId, delta.patch, delta.executionHostSeq)
+        this.noteHostRunningTasks(sessionId, delta.patch)
         this.noteRunOwnership(source, delta.patch.status)
         this.handleLifecycle(
           sessionId,
@@ -5562,6 +5578,18 @@ export class SessionService {
           console.error('[session] Could not dispatch queued input', error)
         })
     }
+  }
+
+  private noteHostRunningTasks(
+    sessionId: string,
+    patch: Extract<SessionDelta, { kind: 'session.patch' }>['patch'],
+  ): void {
+    const next = nextHostRunningTasks(
+      this.hostRunningTasks.get(sessionId),
+      patch,
+    )
+    if (next === undefined) this.hostRunningTasks.delete(sessionId)
+    else this.hostRunningTasks.set(sessionId, next)
   }
 
   private releaseHandle(
