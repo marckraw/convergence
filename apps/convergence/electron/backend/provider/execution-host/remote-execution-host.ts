@@ -33,6 +33,8 @@ import {
   buildWireSendMessageCommand,
   buildWireStartRequest,
   buildWireStopCommand,
+  buildWireStopTaskCommand,
+  EXECUTION_HOST_STOP_TASK_CAPABILITY,
   toLocalSessionDelta,
   withSettledAttention,
   withTurnOpenedBy,
@@ -1530,6 +1532,7 @@ class RemoteSessionRun {
   }
 
   handle(): SessionHandle {
+    const canStopTasks = () => this.canStopTasks()
     return {
       onDelta: (callback) => this.deltaListeners.push(callback),
       onStatusChange: (callback) => this.statusListeners.push(callback),
@@ -1553,8 +1556,73 @@ class RemoteSessionRun {
         this.enqueueCommand(buildWireApproveCommand(providerApprovalId)),
       deny: (providerApprovalId) =>
         this.enqueueCommand(buildWireDenyCommand(providerApprovalId)),
+      // A getter, read where the panel asks: the run starts, stops and learns
+      // its host's capabilities after the handle is handed out.
+      get canStopTasks() {
+        return canStopTasks()
+      },
+      stopTask: (taskId) => this.stopTask(taskId),
       stop: () => this.stop(),
       dispose: () => this.dispose(),
+    }
+  }
+
+  /**
+   * Whether the panel's Stop can reach one of this run's tasks (MAR-3684):
+   * the run is live and its host said it takes `stop-task`. A host that said
+   * nothing readable is not sent one, since a host without the command
+   * refuses the envelope it cannot decode.
+   */
+  private canStopTasks(): boolean {
+    return (
+      this.started &&
+      !this.stopped &&
+      !this.dead &&
+      (this.params.host
+        .handshake()
+        ?.executionProtocolCapabilities.includes(
+          EXECUTION_HOST_STOP_TASK_CAPABILITY,
+        ) ??
+        false)
+    )
+  }
+
+  /**
+   * Stops one task on the host, as a local Claude run's `stopTask` stops one
+   * in its process. It resolves once the host took the command, and the task
+   * settles when the host's evidence says it did. A refusal is thrown, never
+   * turned into a note: the panel that asked shows it beside the row, as it
+   * does a local refusal.
+   */
+  private async stopTask(taskId: string): Promise<void> {
+    if (!this.canStopTasks())
+      throw new Error('Stop is not available on this remote host')
+    const command = buildWireStopTaskCommand(taskId)
+    this.recordDebug('request', {
+      direction: 'out',
+      method: command.kind,
+      note: 'command posted to the daemon',
+    })
+    try {
+      await this.params.host.requestJson(
+        this.requireConnection(),
+        `/v0/execution/sessions/${encodeURIComponent(
+          this.params.config.sessionId,
+        )}/commands`,
+        {
+          method: 'POST',
+          body: encodeExecutionCommandEnvelope({
+            protocolVersion: EXECUTION_PROTOCOL_VERSION,
+            sessionId: this.params.config.sessionId,
+            command,
+          }),
+        },
+      )
+    } catch (error) {
+      throw new Error(
+        `The remote host did not stop the task: ${describeRemoteExecutionHostFailure(error)}`,
+        { cause: error },
+      )
     }
   }
 

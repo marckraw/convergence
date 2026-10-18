@@ -1,9 +1,9 @@
-import type { HarnessFact } from '../../../../src/shared/types/harness-facts.types'
 import {
   EXECUTION_PROTOCOL_VERSION,
   type ExecutionConversationItem,
   type ExecutionConversationItemPatch,
   type ExecutionHostCommand,
+  type ExecutionInteractionResponse,
   type ExecutionSendMessageOptions,
   type ExecutionSessionDelta,
   type ExecutionStartConfig,
@@ -11,7 +11,11 @@ import {
   type ExecutionTurnFileChange,
   type ExecutionTurnOrigin,
   type ExecutionWorkspaceSource,
+  type ExecutionProvider,
+  type ExecutionProviderModel,
+  type KnownExecutionProtocolCapability,
 } from '@mrck-labs/execution-host-protocol'
+import type { ExecutionSessionSnapshot } from '@mrck-labs/execution-host-protocol/client'
 import type {
   ConversationItem,
   ConversationItemDraft,
@@ -38,6 +42,20 @@ import type {
  * field Convergence cannot transport a named, tested constant instead of a
  * silent omission.
  */
+
+/** Every key any member of a union has. */
+type KeysOfUnion<T> = T extends unknown ? keyof T : never
+
+/** Every field a wire conversation item, of any kind, or an item patch carries. */
+export type WireConversationItemField =
+  | KeysOfUnion<ExecutionConversationItem>
+  | KeysOfUnion<ExecutionConversationItemPatch>
+
+/** Every field a wire `session.patch` carries. */
+export type WireSessionPatchField = keyof Extract<
+  ExecutionSessionDelta,
+  { kind: 'session.patch' }
+>['patch']
 
 /**
  * Local `SessionStartConfig` fields with no home on the wire
@@ -148,23 +166,46 @@ export const EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS = [
  * from the wire. Dropping it matches what the session service already did with
  * it: `applyDelta` has no branch for the kind.
  *
- * `evidence` (protocol 0.19) is read and decoded, so a host that sends it is
- * never refused, and then left here: applying a remote session's agent runs
- * and tasks is phase B of R7 (MAR-3684). Until then a remote session's count
- * of running work is the host's `runningTasks`, not its evidence (MAR-3987).
+ * `evidence` (protocol 0.19) left this list with MAR-3684: it is the local
+ * `harness.evidence` delta, applied through `HarnessEvidenceService` as a
+ * local run's is.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS = [
   'turn.patch',
-  'evidence',
 ] as const satisfies readonly ExecutionSessionDelta['kind'][]
+
+/**
+ * Wire `evidence` delta fields the local `harness.evidence` delta does not
+ * carry (MAR-3684).
+ *
+ * `turnId` names the host's turn, and Convergence keeps no record of a remote
+ * run's turns from the wire (see `turn.patch` above): its turns are the ones
+ * the session service mints when the user message lands. So remote evidence is
+ * attributed as local evidence is, to the session's active turn, which is the
+ * turn the local `session_turns` row exists for. Taking the host's id instead
+ * would write `turn.accounting` against a turn no row has.
+ */
+export const EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS = [
+  'turnId',
+] as const satisfies readonly (keyof Extract<
+  ExecutionSessionDelta,
+  { kind: 'evidence' }
+>)[]
 
 /**
  * Wire fields dropped when a wire conversation item or item patch becomes a
  * local one.
  *
- * - `attachments` — wire attachment descriptors. The local item stores
- *   `attachmentIds` resolved against Convergence's own attachment store, which
- *   a daemon-side id cannot address (MAR-1415).
+ * - `attachments` — wire attachment descriptors, on a message and, since
+ *   protocol 0.23 (`items.toolAttachments.v1`), the images a tool result
+ *   produced. The local item stores `attachmentIds` resolved against
+ *   Convergence's own attachment store, which a daemon-side id cannot address
+ *   (MAR-1415), and a local tool result has no image slot at all: a local
+ *   Claude run's tool images are not kept either. Showing a remote one means
+ *   fetching its bytes with the client's `downloadAttachment` into that store
+ *   (MAR-4274).
+ * - `attachmentOmissions` — counts of tool-result images a host left out
+ *   (protocol 0.23). They describe the images above, and go with them.
  * - `delivery` — the daemon's queued/delivered/undelivered lifecycle for a
  *   user message. The local `deliveryMode` is a different concept (how the
  *   composer sent the text), so this has no local reader.
@@ -174,12 +215,9 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS = [
  * - `author`, `clientMessageId` — who wrote a user message and which send
  *   made it (protocol 0.15). Convergence matches its sends by its own record,
  *   and a remote session has one writer here.
- * - `agentRunId`, `taskId` — which agent run or task produced an item
- *   (protocol 0.19). They mean something only beside the evidence that names
- *   those runs, which is dropped with them until phase B of R7 (MAR-3684).
- * - `attachmentOmissions` — counts of tool-result images a host left out
- *   (protocol 0.23). A tool result's image references arrive as `attachments`
- *   above, and are dropped for the same reason.
+ *
+ * `agentRunId` and `taskId` (protocol 0.19) left this list with MAR-3684: they
+ * are the local item's own columns, which the remote evidence now fills in.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS = [
   'attachments',
@@ -187,10 +225,16 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS = [
   'textAppend',
   'author',
   'clientMessageId',
-  'agentRunId',
-  'taskId',
   'attachmentOmissions',
-] as const
+] as const satisfies readonly WireConversationItemField[]
+
+/**
+ * Which agent run or task produced an item (protocol 0.19). Both ways they
+ * are optional strings on the wire and nullable on the local item, so a local
+ * null travels as an absent key: the wire refuses a null, and absent already
+ * means "the main agent", or "no task".
+ */
+const CONVERSATION_ITEM_ATTRIBUTION_FIELDS = ['agentRunId', 'taskId'] as const
 
 /**
  * Local delta kinds that never travel to a host, so the outbound mapping
@@ -200,23 +244,24 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS = [
  * service against local runs. A host mints its own turns and would have no use
  * for ours, and the local shapes carry fields (`providerAccountId`, `model`,
  * `effort`, a `renamed` file status) the wire does not model at all.
+ *
+ * `harness.evidence` left this list with MAR-3684: the wire's `evidence`
+ * delta carries it unchanged.
  */
 export const EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS = [
   'turn.add',
   'turn.fileChanges.add',
-  'harness.evidence',
 ] as const satisfies readonly SessionDelta['kind'][]
 
 /**
  * Local conversation-item fields that do not survive the trip to the wire.
- * `turnId` is re-derived by whoever persists the item; the rest are
- * Convergence-local concepts (see EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS for
- * the mirror image).
+ * `turnId` is re-derived by whoever persists the item, and `agentAttribution`
+ * is the label the read joins in from the agent run `agentRunId` names; the
+ * rest are Convergence-local concepts (see
+ * EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS for the mirror image).
  */
 export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
   'turnId',
-  'agentRunId',
-  'taskId',
   'agentAttribution',
   'attachmentIds',
   'skillSelections',
@@ -257,12 +302,19 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
  * `model` and `effort` (protocol 0.17) are the selection a host's next turn
  * runs on. Convergence sends none (`sessions.modelSelection.v1`), so a remote
  * session's selection is the one it started with.
+ *
+ * `permissionConfig` (protocol 0.27) is the session's whole permission policy
+ * after a change to a running session (`sessions.permissionModes.v1`), which
+ * only a session PATCH makes. Convergence sends none: a remote session's
+ * policy is the one its start carried, and the record keeps that. A change
+ * another client makes to the same session is not shown here (MAR-4273).
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS = [
   'roomId',
   'model',
   'effort',
-] as const
+  'permissionConfig',
+] as const satisfies readonly WireSessionPatchField[]
 
 /**
  * Local session fields a wire `session.patch` is allowed to carry. Anything
@@ -278,7 +330,7 @@ const LOCAL_SESSION_PATCH_FIELDS = [
   'updatedAt',
   'prUrl',
   'runningTasks',
-] as const
+] as const satisfies readonly WireSessionPatchField[]
 
 /** The patch a local `session.patch` delta carries. */
 export type LocalSessionPatch = Extract<
@@ -514,8 +566,61 @@ function toWireSendMessageOptions(
       ? { expectedProviderTurnId: options.expectedProviderTurnId }
       : {}),
     ...(options.interactionResponse !== undefined
-      ? { interactionResponse: options.interactionResponse }
+      ? {
+          interactionResponse: toWireInteractionResponse(
+            options.interactionResponse,
+          ),
+        }
       : {}),
+  }
+}
+
+/**
+ * Local interaction-response fields with no home on the wire
+ * `ExecutionInteractionResponse`.
+ *
+ * - `providerItemId` — the local provider's id for the request being
+ *   answered, which a local adapter uses to find its pending prompt. A host
+ *   answers the request it has open, and its decoder rebuilds the response
+ *   field by field without this one, so it was sent and thrown away; built by
+ *   allowlist below, it is no longer sent at all.
+ */
+export const EXECUTION_HOST_UNSENT_LOCAL_INTERACTION_RESPONSE_FIELDS = [
+  'providerItemId',
+] as const satisfies readonly KeysOfUnion<
+  NonNullable<LocalSendMessageOptions['interactionResponse']>
+>[]
+
+/**
+ * A structured answer, choice, plan, form or url, built field by field for
+ * the reason the options around it are: a plan answer (`approve` or `reject`,
+ * and its message) is what a host acts on, and nothing else of the local
+ * shape should ride along with it.
+ */
+function toWireInteractionResponse(
+  response: NonNullable<LocalSendMessageOptions['interactionResponse']>,
+): ExecutionInteractionResponse {
+  switch (response.kind) {
+    case 'choice':
+      return {
+        kind: 'choice',
+        answers: response.answers.map((answer) => ({
+          questionId: answer.questionId,
+          values: answer.values,
+        })),
+      }
+    case 'plan':
+      return {
+        kind: 'plan',
+        decision: response.decision,
+        ...(response.message !== undefined
+          ? { message: response.message }
+          : {}),
+      }
+    case 'form':
+      return { kind: 'form', action: response.action, values: response.values }
+    case 'url':
+      return { kind: 'url', action: response.action }
   }
 }
 
@@ -536,6 +641,23 @@ export function buildWireDenyCommand(
 /** Builds the wire stop command. */
 export function buildWireStopCommand(): ExecutionHostCommand {
   return { kind: 'stop' }
+}
+
+/**
+ * The capability a host advertises when it takes `stop-task` (protocol 0.19):
+ * it stops one task its agent started, a background command or a subagent,
+ * without interrupting the session.
+ */
+export const EXECUTION_HOST_STOP_TASK_CAPABILITY =
+  'commands.stopTask.v1' satisfies KnownExecutionProtocolCapability
+
+/**
+ * Builds the wire stop-task command (protocol 0.19). The id is the one the
+ * session's evidence named, a task's `taskId` or an agent run's linked task,
+ * which is what the parallel-work panel's Stop hands the handle.
+ */
+export function buildWireStopTaskCommand(taskId: string): ExecutionHostCommand {
+  return { kind: 'stop-task', taskId }
 }
 
 /**
@@ -602,8 +724,15 @@ export function toLocalSessionDelta(
           createdAt: change.createdAt,
         })),
       }
-    case 'turn.patch':
     case 'evidence':
+      // The wire's evidence is Convergence's own `HarnessEvidence`, copied into
+      // the protocol under the same names (protocol 0.19), so it is handed over
+      // whole: every harness family a local run records, a remote one now
+      // records too. This assignment and its mirror in `toWireSessionDelta`
+      // are the pin on that: when either copy changes without the other, one
+      // of them stops compiling.
+      return { kind: 'harness.evidence', evidence: delta.evidence }
+    case 'turn.patch':
       return null
   }
 }
@@ -631,30 +760,59 @@ export function toWireSessionDelta(
     case 'conversation.item.add':
       return {
         kind: 'conversation.item.add',
-        item: pickDefined<ExecutionConversationItem>(delta.item, [
-          'id',
-          'kind',
-          ...LOCAL_CONVERSATION_ITEM_PATCH_FIELDS,
-          'request',
-        ]),
+        item: {
+          ...pickDefined<ExecutionConversationItem>(delta.item, [
+            'id',
+            'kind',
+            ...LOCAL_CONVERSATION_ITEM_PATCH_FIELDS,
+            'request',
+          ]),
+          ...wireAttribution(delta.item),
+        },
       }
     case 'conversation.item.patch':
       return {
         kind: 'conversation.item.patch',
         itemId: delta.itemId,
-        patch: pickDefined(delta.patch, LOCAL_CONVERSATION_ITEM_PATCH_FIELDS),
+        patch: {
+          ...pickDefined<ExecutionConversationItemPatch>(
+            delta.patch,
+            LOCAL_CONVERSATION_ITEM_PATCH_FIELDS,
+          ),
+          ...wireAttribution(delta.patch),
+        },
       }
+    case 'harness.evidence':
+      // The local delta names no turn: the record attributes it to the active
+      // one on the way in (EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS), so
+      // the wire's "belongs to no turn" is the only honest thing to send.
+      return { kind: 'evidence', turnId: null, evidence: delta.evidence }
     case 'turn.add':
     case 'turn.fileChanges.add':
-    case 'harness.evidence':
       return null
+  }
+}
+
+/**
+ * The attribution fields of a local item or patch that name something, as the
+ * wire spells them (CONVERSATION_ITEM_ATTRIBUTION_FIELDS).
+ */
+function wireAttribution(source: {
+  agentRunId?: string | null
+  taskId?: string | null
+}): { agentRunId?: string; taskId?: string } {
+  return {
+    ...(source.agentRunId ? { agentRunId: source.agentRunId } : {}),
+    ...(source.taskId ? { taskId: source.taskId } : {}),
   }
 }
 
 /**
  * Translates a wire conversation item into the local draft. `turnId` is null
  * because the wire carries no turn attribution; the session service assigns
- * the real one when it persists the item.
+ * the real one when it persists the item. The agent run and task that made
+ * the item do travel, and are kept only when the wire names them, so a main
+ * agent's item reads exactly as it did before protocol 0.19.
  */
 function toLocalConversationItemDraft(
   item: ExecutionConversationItem,
@@ -662,6 +820,10 @@ function toLocalConversationItemDraft(
   const base = {
     id: item.id,
     turnId: null,
+    ...pickDefined<Pick<ConversationItem, 'agentRunId' | 'taskId'>>(
+      item,
+      CONVERSATION_ITEM_ATTRIBUTION_FIELDS,
+    ),
     state: item.state,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -713,10 +875,10 @@ function toLocalConversationItemDraft(
 function toLocalConversationItemPatch(
   patch: ExecutionConversationItemPatch,
 ): Partial<ConversationItem> {
-  return pickDefined(
-    patch,
-    LOCAL_CONVERSATION_ITEM_PATCH_FIELDS,
-  ) as Partial<ConversationItem>
+  return pickDefined(patch, [
+    ...LOCAL_CONVERSATION_ITEM_PATCH_FIELDS,
+    ...CONVERSATION_ITEM_ATTRIBUTION_FIELDS,
+  ]) as Partial<ConversationItem>
 }
 
 /**
@@ -733,13 +895,272 @@ function pickDefined<T>(source: object, fields: readonly string[]): T {
   return picked as T
 }
 
-/** Nested evidence inventory: these local facts have no host-wire encoding. */
-export const EXECUTION_HOST_UNSENT_HARNESS_FACT_KINDS = {
-  'harness.hook': true,
-  'harness.retry': true,
-  'harness.compaction': true,
-  'harness.denial': true,
-  'harness.rateLimit': true,
-  'harness.init': true,
-  'harness.mcpStatus': true,
-} satisfies Record<HarnessFact['kind'], true>
+/**
+ * Whether every field of a wire shape is accounted for: `true` when it is,
+ * and otherwise a type naming the fields nobody placed, so assigning `true`
+ * fails with those names in the message.
+ */
+type Accounted<Unplaced> = [Unplaced] extends [never]
+  ? true
+  : { unplaced: Unplaced }
+
+/**
+ * The exhaustive inventory (MAR-3684). Each line compiles only while every
+ * field of its wire shape is either mapped above or named on its unmapped
+ * list with a reason, so the next protocol release that adds a field is a
+ * type error here until someone decides where it goes. A field is never
+ * dropped by an allowlist that simply did not know it.
+ */
+export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
+  items: Accounted<
+    Exclude<
+      WireConversationItemField,
+      | 'id'
+      | 'kind'
+      | 'request'
+      | (typeof LOCAL_CONVERSATION_ITEM_PATCH_FIELDS)[number]
+      | (typeof CONVERSATION_ITEM_ATTRIBUTION_FIELDS)[number]
+      | (typeof EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS)[number]
+    >
+  >
+  sessionPatch: Accounted<
+    Exclude<
+      WireSessionPatchField,
+      | (typeof LOCAL_SESSION_PATCH_FIELDS)[number]
+      | (typeof EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS)[number]
+    >
+  >
+  evidence: Accounted<
+    Exclude<
+      keyof Extract<ExecutionSessionDelta, { kind: 'evidence' }>,
+      | 'kind'
+      | 'evidence'
+      | (typeof EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS)[number]
+    >
+  >
+  provider: Accounted<
+    Exclude<
+      keyof ExecutionProvider,
+      | (typeof EXECUTION_HOST_READ_PROVIDER_FIELDS)[number]
+      | (typeof EXECUTION_HOST_UNREAD_PROVIDER_FIELDS)[number]
+    >
+  >
+  providerModel: Accounted<
+    Exclude<
+      keyof ExecutionProviderModel,
+      | (typeof EXECUTION_HOST_READ_PROVIDER_MODEL_FIELDS)[number]
+      | (typeof EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS)[number]
+    >
+  >
+  snapshot: Accounted<
+    Exclude<
+      keyof ExecutionSessionSnapshot,
+      | (typeof EXECUTION_HOST_READ_SNAPSHOT_FIELDS)[number]
+      | (typeof EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS)[number]
+    >
+  >
+  capabilities: Accounted<
+    Exclude<
+      KnownExecutionProtocolCapability,
+      | (typeof EXECUTION_HOST_CHECKED_CAPABILITIES)[number]
+      | keyof typeof EXECUTION_HOST_UNCHECKED_CAPABILITIES
+    >
+  >
+} = {
+  items: true,
+  sessionPatch: true,
+  evidence: true,
+  provider: true,
+  providerModel: true,
+  snapshot: true,
+  capabilities: true,
+}
+
+/**
+ * The provider fields Convergence reads, of the ones the protocol's catalogue
+ * (`ExecutionProvider`) names. It reads them from the daemon's `/v0/meta`,
+ * through `parseRemoteExecutionHostMeta`, not from `GET /v0/providers`; the
+ * two listings share these.
+ */
+export const EXECUTION_HOST_READ_PROVIDER_FIELDS = [
+  'id',
+  'label',
+  'available',
+  'authenticated',
+  'models',
+] as const satisfies readonly (keyof ExecutionProvider)[]
+
+/**
+ * Provider catalogue fields Convergence does not read, because it does not
+ * fetch the catalogue that carries them (MAR-4272).
+ *
+ * - `effortLevels` (0.18): the remote descriptor offers no effort choice, so a
+ *   remote session runs on its model's default effort.
+ * - `attachmentKinds` (0.22): the remote descriptor turns every attachment
+ *   off, and Convergence sends no inline attachment yet (MAR-1415).
+ * - `account` (0.22): which account a host's provider signs in as. Shown in
+ *   accent.'s Hosts screen; not here yet.
+ * - `permissions` (0.27, `effectiveSandboxModes` 0.29): a remote start offers
+ *   the local permission choices. The sandbox a container host really runs a
+ *   Codex choice as is not shown before the start.
+ * - `interactions` (0.27): which request kinds (a plan to approve, a choice,
+ *   a form, a url) a provider asks with. Convergence answers whatever
+ *   `input-request` arrives, so it needs no forecast to answer one.
+ * - `usage` (0.30, `credits` 0.31): how much of a host account's limits is
+ *   used. Convergence's usage readouts are its own local accounts'.
+ */
+export const EXECUTION_HOST_UNREAD_PROVIDER_FIELDS = [
+  'effortLevels',
+  'attachmentKinds',
+  'account',
+  'permissions',
+  'interactions',
+  'usage',
+] as const satisfies readonly (keyof ExecutionProvider)[]
+
+/** The model fields Convergence reads, from `/v0/meta`'s model list. */
+export const EXECUTION_HOST_READ_PROVIDER_MODEL_FIELDS = [
+  'slug',
+  'label',
+] as const satisfies readonly (keyof ExecutionProviderModel)[]
+
+/**
+ * Model fields Convergence does not read: a remote model's efforts, for the
+ * reason `effortLevels` is unread above (MAR-4272).
+ */
+export const EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS = [
+  'defaultEffort',
+  'efforts',
+] as const satisfies readonly (keyof ExecutionProviderModel)[]
+
+/**
+ * The session-snapshot fields Convergence reads
+ * (`GET /v0/execution/sessions/:id`): the session it is about, which every
+ * read checks, the tasks still running when a reattach resumes
+ * (`readSnapshotRunningTasks`, MAR-3987), and where the host prepared it
+ * (`parseRemoteSessionWorkspaceInfo`).
+ */
+export const EXECUTION_HOST_READ_SNAPSHOT_FIELDS = [
+  'sessionId',
+  'runningTasks',
+  'workspace',
+] as const satisfies readonly (keyof ExecutionSessionSnapshot)[]
+
+/**
+ * Session-snapshot fields Convergence does not read.
+ *
+ * - `conversation`, `turns`, `lastSeq`, `status`, `attention`, `activity`,
+ *   `continuationToken`, `contextWindow`, `prUrl`: a reattach replays the
+ *   event log from its cursor (`Last-Event-ID`), which says each of these as
+ *   it happened, and the record already holds what came before the cursor.
+ *   Reading the projection beside the log would be a second account of the
+ *   same facts to reconcile.
+ * - `protocolVersion`: checked on every envelope the stream delivers.
+ * - `providerId`: the record's own, the provider the session started with.
+ * - `commandable`: a command the host will not take is answered as such, and
+ *   `postCommand` reports it undelivered.
+ * - `metadata`, `roomId`: Convergence sends no session metadata and has no
+ *   rooms.
+ * - `model`, `effort` (0.17), `permissionConfig` (0.27): Convergence changes
+ *   none of them on a running session, and the record keeps what the start
+ *   carried, as a local session's does. A change another client, or the host
+ *   leaving plan mode after a plan is approved, makes is not shown here
+ *   (MAR-4273).
+ */
+export const EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS = [
+  'conversation',
+  'turns',
+  'lastSeq',
+  'status',
+  'attention',
+  'activity',
+  'continuationToken',
+  'contextWindow',
+  'prUrl',
+  'protocolVersion',
+  'providerId',
+  'commandable',
+  'metadata',
+  'roomId',
+  'model',
+  'effort',
+  'permissionConfig',
+] as const satisfies readonly (keyof ExecutionSessionSnapshot)[]
+
+/**
+ * The capability ids Convergence reads off a host's `/health` and acts on:
+ * `projects.v1` gates the host's Project listing (MAR-2689), and
+ * `commands.stopTask.v1` the panel's Stop on one task (MAR-3684).
+ */
+export const EXECUTION_HOST_CHECKED_CAPABILITIES = [
+  'projects.v1',
+  EXECUTION_HOST_STOP_TASK_CAPABILITY,
+] as const satisfies readonly KnownExecutionProtocolCapability[]
+
+/**
+ * Every other capability id the protocol knows, with why Convergence does not
+ * check it. Most name a route or a command it never uses, so there is nothing
+ * to gate; the ones that change what it reads say how it reads them anyway.
+ */
+export const EXECUTION_HOST_UNCHECKED_CAPABILITIES = {
+  'commands.approval':
+    'Approve and deny are sent as the user answers; a host that refuses one is reported undelivered.',
+  'events.replay':
+    'Assumed: every reattach resumes by Last-Event-ID, and every agents-daemon followed advertises it.',
+  'sessions.metadata': 'Convergence sends no session metadata.',
+  'workspaces.materialize':
+    'Assumed: a remote start carries a workspace, and every agents-daemon followed advertises it.',
+  'callbacks.status':
+    'Convergence registers no status callback; it follows the event stream.',
+  'automation.create-pr':
+    'Never sent (EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS).',
+  'attachments.inline-image':
+    'Convergence sends no inline attachment yet (MAR-1415).',
+  'commands.cancelQueued': 'Convergence sends no cancel-queued command.',
+  'interactions.structured':
+    'Answers are sent unchecked; every agents-daemon followed advertises it (MAR-4276).',
+  'turns.fileChanges':
+    'File changes are read when they arrive; there is nothing to gate.',
+  'turns.fileChanges.combined': 'As turns.fileChanges.',
+  'turns.fileChanges.multiRepo':
+    'repoRoot is read when present; absent is the root repository (MAR-2577).',
+  'rooms.v1': 'Convergence has no rooms.',
+  'research.evidence': 'Convergence sends no research evidence pack.',
+  'projects.v2': 'Convergence reads the projects.v1 listing.',
+  'environments.v1':
+    'Never sent (EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS).',
+  'deltas.append.v1':
+    'Convergence does not negotiate ?deltas=append, so full text always arrives.',
+  'commands.actor.v1':
+    'Never sent (EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS).',
+  'items.author.v1':
+    'author and clientMessageId are unmapped (EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS).',
+  'sessions.modelSelection.v1':
+    'Convergence changes no running session model (EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS).',
+  'sessions.permissionModes.v1':
+    'Convergence sends no session PATCH (MAR-4273).',
+  'oneshot.v1':
+    'A remote one-shot is refused locally (supportsOneShot: false).',
+  'sessions.resident.v1':
+    'answered, runningTasks and harness turns are read from any host that sends them (MAR-3987).',
+  'evidence.v1':
+    'Evidence is applied from any host that sends it; one that sends none leaves the counts to runningTasks.',
+  'host.profile.v1': 'Convergence does not read GET /v0/host.',
+  'devices.iosSimulator.v1': 'Convergence does not read the host profile.',
+  'devices.androidEmulator.v1': 'Convergence does not read the host profile.',
+  'start.requires.v1':
+    'Never sent (EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS).',
+  'attachments.inline-file.v1':
+    'Convergence sends no inline attachment yet (MAR-1415).',
+  'items.toolAttachments.v1':
+    'Tool-result images are unmapped (EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS, MAR-4274).',
+  'tasks.output.v1': 'A remote task output tail is not read yet (MAR-4275).',
+  'providers.usage.v1':
+    'Convergence does not read the provider catalogue (MAR-4272).',
+} as const satisfies Record<
+  Exclude<
+    KnownExecutionProtocolCapability,
+    (typeof EXECUTION_HOST_CHECKED_CAPABILITIES)[number]
+  >,
+  string
+>

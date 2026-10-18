@@ -50,11 +50,16 @@ export function nextHostRunningTasks(
  * A summary's parallel-work counts, with what its remote host says still runs
  * (MAR-3987).
  *
- * A remote session's evidence is not applied yet (phase B of R7, MAR-3684),
- * so its own counts see nothing running while its host says `runningTasks`.
- * The larger count is shown, so a remote session reads "answered · 2 tasks
- * running" as a local one does. The oldest start belongs to evidence, and is
- * left out of a count evidence did not make.
+ * A remote session's evidence is applied as a local one's is (MAR-3684), so
+ * its own counts are the agent runs and tasks the host's evidence named, and
+ * they are persisted: they outlive an app restart, which the host's count, held
+ * in memory, does not. The host's `runningTasks` still says what it counts
+ * from its own process, and can be ahead of the evidence: a host that sends no
+ * evidence at all (no `evidence.v1`), or a task whose `task.changed` has not
+ * arrived yet. So the larger count is shown, never the sum, since the two
+ * count the same work, and a remote session reads "answered · 2 tasks running"
+ * as a local one does either way. The oldest start belongs to evidence, and
+ * is left out of a count evidence did not make.
  */
 export function withHostRunningTasks(
   counts: ParallelWorkCounts,

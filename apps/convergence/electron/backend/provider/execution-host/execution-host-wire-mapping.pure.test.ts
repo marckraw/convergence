@@ -1,4 +1,3 @@
-import { EXECUTION_HOST_UNSENT_HARNESS_FACT_KINDS } from './execution-host-wire-mapping.pure'
 import { describe, expect, it } from 'vitest'
 import {
   decodeExecutionCommandEnvelope,
@@ -8,6 +7,7 @@ import {
   encodeExecutionCommandEnvelope,
   encodeExecutionEventEnvelope,
   encodeExecutionStartRequest,
+  EXECUTION_PROTOCOL_CAPABILITY_IDS,
   EXECUTION_PROTOCOL_VERSION,
   type ExecutionHostCommandEnvelope,
   type ExecutionHostEvent,
@@ -20,16 +20,28 @@ import {
   buildWireSendMessageCommand,
   buildWireStartRequest,
   buildWireStopCommand,
+  buildWireStopTaskCommand,
   settledAttentionForStatus,
   toLocalSessionDelta,
   toWireSessionDelta,
   withSettledAttention,
   withTurnOpenedBy,
   EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS,
+  EXECUTION_HOST_UNSENT_LOCAL_INTERACTION_RESPONSE_FIELDS,
   EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS,
   EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS,
   EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS,
+  EXECUTION_HOST_CHECKED_CAPABILITIES,
+  EXECUTION_HOST_READ_PROVIDER_FIELDS,
+  EXECUTION_HOST_READ_PROVIDER_MODEL_FIELDS,
+  EXECUTION_HOST_READ_SNAPSHOT_FIELDS,
+  EXECUTION_HOST_UNCHECKED_CAPABILITIES,
+  EXECUTION_HOST_UNREAD_PROVIDER_FIELDS,
+  EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS,
+  EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS,
+  EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE,
   EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS,
+  EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS,
@@ -37,6 +49,7 @@ import {
 } from './execution-host-wire-mapping.pure'
 import type { SessionStartConfig } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import type { HarnessEvidence } from '../../session/harness-evidence.types'
 import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   DAEMON_HEALTH_FIXTURE_GIT_SHA,
@@ -305,6 +318,79 @@ describe('execution host command envelope codec', () => {
       },
     })
   })
+
+  /**
+   * A plan answer is what a host acts on to leave plan mode, and the local
+   * shape also names the provider item it answers, which no host reads.
+   * Mutation: pass the response by reference again, or drop a plan's
+   * message, and this turns red.
+   */
+  it.each([
+    [
+      { kind: 'plan', decision: 'approve', providerItemId: 'plan-1' },
+      { kind: 'plan', decision: 'approve' },
+    ],
+    [
+      {
+        kind: 'plan',
+        decision: 'reject',
+        message: 'split it first',
+        providerItemId: 'plan-1',
+      },
+      { kind: 'plan', decision: 'reject', message: 'split it first' },
+    ],
+    [
+      {
+        kind: 'choice',
+        answers: [{ questionId: 'q-1', values: ['Yes'] }],
+        providerItemId: 'ask-1',
+      },
+      { kind: 'choice', answers: [{ questionId: 'q-1', values: ['Yes'] }] },
+    ],
+    [
+      { kind: 'url', action: 'decline', providerItemId: 'url-1' },
+      { kind: 'url', action: 'decline' },
+    ],
+  ] as const)(
+    'sends a %j answer by allowlist, leaving the local provider item id',
+    (local, wire) => {
+      const command = buildWireSendMessageCommand('', undefined, undefined, {
+        deliveryMode: 'normal',
+        interactionResponse: local as never,
+      })
+      expect(command).toEqual({
+        kind: 'send-message',
+        text: '',
+        options: { deliveryMode: 'normal', interactionResponse: wire },
+      })
+      expect(
+        decodeExecutionCommandEnvelope(
+          encodeExecutionCommandEnvelope({
+            protocolVersion: EXECUTION_PROTOCOL_VERSION,
+            sessionId: 'session-1',
+            command,
+          }),
+        ),
+      ).toMatchObject({ ok: true, value: { command } })
+      expect(EXECUTION_HOST_UNSENT_LOCAL_INTERACTION_RESPONSE_FIELDS).toEqual([
+        'providerItemId',
+      ])
+    },
+  )
+
+  it('builds a stop-task command the wire decodes (protocol 0.19)', () => {
+    const command = buildWireStopTaskCommand('bash-task')
+    expect(command).toEqual({ kind: 'stop-task', taskId: 'bash-task' })
+    expect(
+      decodeExecutionCommandEnvelope(
+        encodeExecutionCommandEnvelope({
+          protocolVersion: EXECUTION_PROTOCOL_VERSION,
+          sessionId: 'session-1',
+          command,
+        }),
+      ),
+    ).toMatchObject({ ok: true, value: { command } })
+  })
 })
 
 describe('buildWireStartRequest', () => {
@@ -504,6 +590,7 @@ describe('toLocalSessionDelta', () => {
         roomId: 'room-1',
         model: 'opus',
         effort: 'high',
+        permissionConfig: { preset: 'yolo' },
         runningTasks: 2,
       },
     }
@@ -524,6 +611,7 @@ describe('toLocalSessionDelta', () => {
       'roomId',
       'model',
       'effort',
+      'permissionConfig',
     ])
   })
 
@@ -646,13 +734,15 @@ describe('toLocalSessionDelta', () => {
       'textAppend',
       'author',
       'clientMessageId',
-      'agentRunId',
-      'taskId',
       'attachmentOmissions',
     ])
   })
 
-  it('accepts the item fields protocols 0.15 to 0.23 added, and keeps none of them', () => {
+  /**
+   * Mutation: drop `agentRunId` or `taskId` from the draft, or put either
+   * back on EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS, and this turns red.
+   */
+  it('accepts the item fields protocols 0.15 to 0.23 added, keeping the agent run and task that made the item', () => {
     const raw = JSON.stringify(
       eventEnvelope({
         kind: 'delta',
@@ -690,9 +780,22 @@ describe('toLocalSessionDelta', () => {
     expect(local.item).toMatchObject({
       kind: 'tool-result',
       outputText: 'read a screenshot',
+      agentRunId: 'agent-1',
+      taskId: 'task-1',
     })
     for (const field of EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS)
       expect(local.item).not.toHaveProperty(field)
+  })
+
+  it("leaves a main agent's item without an agent run or task, as before protocol 0.19", () => {
+    const local = toLocalSessionDelta({
+      kind: 'conversation.item.add',
+      item: wireItem({ kind: 'tool-call', toolName: 'Read', inputText: '{}' }),
+    } as never)
+    expect(local?.kind).toBe('conversation.item.add')
+    if (local?.kind !== 'conversation.item.add') return
+    expect(local.item).not.toHaveProperty('agentRunId')
+    expect(local.item).not.toHaveProperty('taskId')
   })
 
   it('narrows an item patch to the fields the local item models', () => {
@@ -711,6 +814,24 @@ describe('toLocalSessionDelta', () => {
       kind: 'conversation.item.patch',
       itemId: 'item-1',
       patch: { state: 'streaming', text: 'streaming text' },
+    })
+  })
+
+  /**
+   * A host learns an item's agent run or task after it added the item, and
+   * patches it in (protocol 0.19), as `agent.identified` renames a run.
+   */
+  it('carries the agent run and task a host patches onto an item', () => {
+    expect(
+      toLocalSessionDelta({
+        kind: 'conversation.item.patch',
+        itemId: 'item-1',
+        patch: { agentRunId: 'agent-1', taskId: 'task-1' },
+      }),
+    ).toEqual({
+      kind: 'conversation.item.patch',
+      itemId: 'item-1',
+      patch: { agentRunId: 'agent-1', taskId: 'task-1' },
     })
   })
 
@@ -834,10 +955,7 @@ describe('toLocalSessionDelta', () => {
   })
 
   it('drops the wire delta kinds that have no local counterpart', () => {
-    expect(EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS).toEqual([
-      'turn.patch',
-      'evidence',
-    ])
+    expect(EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS).toEqual(['turn.patch'])
     expect(
       toLocalSessionDelta({
         kind: 'turn.patch',
@@ -848,11 +966,12 @@ describe('toLocalSessionDelta', () => {
   })
 
   /**
-   * Evidence is read so a host sending it is never refused, and left for
-   * phase B of R7 (MAR-3684) to apply. Mutation: map it onto the local
-   * `harness.evidence` delta and this turns red.
+   * A remote session's evidence is applied as a local one's (MAR-3684): the
+   * fact is handed over whole, and the host's turn id is left behind, since
+   * the record attributes evidence to its own active turn. Mutation: return
+   * null for `evidence` again, or keep the wire `turnId`, and this turns red.
    */
-  it('reads an evidence delta and applies none of it yet', () => {
+  it("maps an evidence delta onto the local harness evidence, leaving the host's turn id", () => {
     const raw = JSON.stringify(
       eventEnvelope({
         kind: 'delta',
@@ -872,8 +991,16 @@ describe('toLocalSessionDelta', () => {
     expect(decoded).toMatchObject({ ok: true })
     expect(decoded.ok && decoded.warnings).toBeFalsy()
     if (!decoded.ok || decoded.value.event.kind !== 'delta') return
-    expect(decoded.value.event.delta.kind).toBe('evidence')
-    expect(toLocalSessionDelta(decoded.value.event.delta)).toBeNull()
+    expect(toLocalSessionDelta(decoded.value.event.delta)).toEqual({
+      kind: 'harness.evidence',
+      evidence: {
+        kind: 'task.changed',
+        taskId: 'task-1',
+        at: '2026-10-13T10:00:00.000Z',
+        patch: { status: 'running' },
+      },
+    })
+    expect(EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS).toEqual(['turnId'])
   })
 
   /**
@@ -1062,6 +1189,56 @@ describe('delta round-trip local -> wire -> local', () => {
         patch: { text: 'hello there', state: 'streaming' },
       },
     ],
+    [
+      'subagent conversation.item.add',
+      {
+        kind: 'conversation.item.add',
+        item: {
+          id: 'item-2',
+          turnId: null,
+          agentRunId: 'agent-1',
+          taskId: 'task-1',
+          kind: 'tool-call',
+          toolName: 'Read',
+          inputText: '{"file_path":"fixture"}',
+          state: 'complete',
+          createdAt: '2026-08-22T10:00:00.000Z',
+          updatedAt: '2026-08-22T10:00:01.000Z',
+          providerMeta: {
+            providerId: 'claude',
+            providerItemId: 'read-tool',
+            providerEventType: 'assistant',
+          },
+        },
+      },
+    ],
+    [
+      'subagent conversation.item.patch',
+      {
+        kind: 'conversation.item.patch',
+        itemId: 'item-2',
+        patch: { agentRunId: 'agent-2', taskId: 'task-2' },
+      },
+    ],
+    [
+      'harness.evidence',
+      {
+        kind: 'harness.evidence',
+        evidence: {
+          kind: 'agent.started',
+          run: {
+            id: 'spawn-tool',
+            spawnedByItemId: 'item-1',
+            agentType: 'Explore',
+            description: 'Read fixture',
+            model: null,
+            depth: 1,
+            startedAt: '2026-08-22T10:00:00.000Z',
+            transcriptPath: null,
+          },
+        },
+      },
+    ],
   ]
 
   it.each(roundTrippable)(
@@ -1098,8 +1275,6 @@ describe('delta round-trip local -> wire -> local', () => {
   it('names the local-only item fields that do not reach the wire', () => {
     expect(EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS).toEqual([
       'turnId',
-      'agentRunId',
-      'taskId',
       'agentAttribution',
       'attachmentIds',
       'skillSelections',
@@ -1136,11 +1311,50 @@ describe('delta round-trip local -> wire -> local', () => {
     }
   })
 
+  /**
+   * The local item spells "the main agent" null, the wire as an absent key,
+   * and a wire null is refused. Mutation: copy a null across and the encoded
+   * envelope stops decoding.
+   */
+  it('sends a main agent item with no agent run or task, never a null one', () => {
+    const wire = toWireSessionDelta({
+      kind: 'conversation.item.add',
+      item: {
+        id: 'item-1',
+        turnId: 'turn-1',
+        agentRunId: null,
+        taskId: null,
+        agentAttribution: { description: null, agentType: null },
+        kind: 'message',
+        actor: 'assistant',
+        text: 'hi',
+        state: 'complete',
+        createdAt: '2026-08-22T10:00:00.000Z',
+        updatedAt: '2026-08-22T10:00:01.000Z',
+        providerMeta: {
+          providerId: 'claude',
+          providerItemId: null,
+          providerEventType: 'assistant',
+        },
+      },
+    })
+    expect(wire).not.toBeNull()
+    if (!wire || wire.kind !== 'conversation.item.add') return
+    expect(wire.item).not.toHaveProperty('agentRunId')
+    expect(wire.item).not.toHaveProperty('taskId')
+    const decoded = decodeExecutionEventEnvelope(
+      encodeExecutionEventEnvelope(
+        eventEnvelope({ kind: 'delta', delta: wire }),
+      ),
+    )
+    expect(decoded).toMatchObject({ ok: true })
+    expect(decoded.ok && decoded.warnings).toBeFalsy()
+  })
+
   it('never sends local turn bookkeeping to a host', () => {
     expect(EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS).toEqual([
       'turn.add',
       'turn.fileChanges.add',
-      'harness.evidence',
     ])
     expect(
       toWireSessionDelta({
@@ -1201,17 +1415,191 @@ describe('execution protocol descriptor from a captured /health', () => {
   })
 })
 
-it('names every local harness family remote cannot show — mutation remove an inventory entry turns red', () => {
-  expect(Object.keys(EXECUTION_HOST_UNSENT_HARNESS_FACT_KINDS)).toEqual([
-    'harness.hook',
-    'harness.retry',
-    'harness.compaction',
-    'harness.denial',
-    'harness.rateLimit',
-    'harness.init',
-    'harness.mcpStatus',
-  ])
-})
+/**
+ * One fact of every kind a local run records, keyed by kind so a new local
+ * kind does not compile until it is sampled here.
+ */
+const EVERY_HARNESS_EVIDENCE_KIND = {
+  'harness.hook': {
+    kind: 'harness.hook',
+    at: '2026-10-18T10:00:00.000Z',
+    hookId: 'hook-1',
+    hookName: 'pre',
+    hookEvent: 'PreToolUse',
+    phase: 'response',
+    status: 'ok',
+    output: { truncated: true, bytes: 9000, preview: 'ok' },
+  },
+  'harness.retry': {
+    kind: 'harness.retry',
+    at: '2026-10-18T10:00:00.000Z',
+    phase: 'attempt',
+    attempt: 1,
+    maxRetries: 3,
+    retryDelayMs: 500,
+    errorStatus: 529,
+    message: 'overloaded',
+    noResponse: false,
+  },
+  'harness.compaction': {
+    kind: 'harness.compaction',
+    at: '2026-10-18T10:00:00.000Z',
+    trigger: 'auto',
+    preTokens: 180000,
+    postTokens: 40000,
+    durationMs: 1200,
+  },
+  'harness.denial': {
+    kind: 'harness.denial',
+    at: '2026-10-18T10:00:00.000Z',
+    toolUseId: 'tool-1',
+    toolName: 'Bash',
+    reasonType: 'rule',
+    reason: 'denied by rule',
+  },
+  'harness.rateLimit': {
+    kind: 'harness.rateLimit',
+    at: '2026-10-18T10:00:00.000Z',
+    status: 'allowed_warning',
+    type: 'five_hour',
+    utilization: 0.8,
+    resetsAt: 1760788800,
+    overageStatus: null,
+    overageResetsAt: null,
+    overageDisabledReason: null,
+    isUsingOverage: false,
+    overageInUse: null,
+    surpassedThreshold: 0.75,
+  },
+  'harness.init': {
+    kind: 'harness.init',
+    at: '2026-10-18T10:00:00.000Z',
+    claudeCodeVersion: '2.1.0',
+    model: 'claude-opus-5-5',
+    permissionMode: 'default',
+    mcpServers: {
+      total: 1,
+      connected: 1,
+      connectedNames: ['figma'],
+      others: [],
+      omitted: 0,
+      omittedAlerts: 0,
+    },
+    plugins: { count: 0, names: [], omitted: 0 },
+    capabilities: { values: [], omitted: 0 },
+    tools: { count: 12 },
+    skills: { count: 3 },
+    slashCommands: { count: 4 },
+  },
+  'harness.mcpStatus': {
+    kind: 'harness.mcpStatus',
+    at: '2026-10-18T10:00:00.000Z',
+    servers: [
+      {
+        name: 'figma',
+        status: 'connected',
+        scope: 'user',
+        origin: 'https://mcp.figma.com',
+      },
+    ],
+    connected: 1,
+    omitted: 0,
+    omittedAlerts: 0,
+    pluginServers: [],
+  },
+  'agent.started': {
+    kind: 'agent.started',
+    run: {
+      id: 'spawn-tool',
+      spawnedByItemId: 'item-1',
+      agentType: 'Explore',
+      description: 'Read fixture',
+      model: null,
+      depth: 1,
+      startedAt: '2026-10-18T10:00:00.000Z',
+      transcriptPath: null,
+    },
+  },
+  'agent.identified': {
+    kind: 'agent.identified',
+    spawnedByItemId: 'item-1',
+    id: 'agent-id',
+    agentType: 'Explore',
+    description: 'Read fixture',
+    depth: 1,
+    transcriptPath: '/host/agent-agent-id.jsonl',
+  },
+  'agent.changed': {
+    kind: 'agent.changed',
+    spawnedByItemId: 'item-1',
+    patch: { model: 'haiku', lastToolName: 'Read' },
+  },
+  'agent.ended': {
+    kind: 'agent.ended',
+    spawnedByItemId: 'item-1',
+    status: 'completed',
+    summary: 'read it',
+    at: '2026-10-18T10:00:05.000Z',
+  },
+  'process.ended': {
+    kind: 'process.ended',
+    at: '2026-10-18T10:00:06.000Z',
+    reason: 'idle',
+  },
+  'task.changed': {
+    kind: 'task.changed',
+    taskId: 'bash-task',
+    at: '2026-10-18T10:00:02.000Z',
+    patch: {
+      toolUseId: 'bash-tool',
+      taskType: 'local_bash',
+      description: 'sleep',
+      status: 'running',
+    },
+  },
+  'turn.accounting': {
+    kind: 'turn.accounting',
+    resultSubtype: 'success',
+    usage: { output_tokens: 7 },
+    costUsd: 0.125,
+    permissionDenials: [],
+    subagentStats: null,
+  },
+  'harness.unknown': {
+    kind: 'harness.unknown',
+    type: 'system',
+    subtype: 'future_signal',
+    payload: { extra: 'kept' },
+    at: '2026-10-18T10:00:00.000Z',
+  },
+} satisfies {
+  [Kind in HarnessEvidence['kind']]: HarnessEvidence & { kind: Kind }
+}
+
+/**
+ * Every harness family a local run records now reaches a remote session's
+ * record too (MAR-3684), so the inventory of the ones it could not show is
+ * gone. Mutation: return null for any kind, or let the codec drop a field of
+ * one, and this turns red.
+ */
+it.each(Object.values(EVERY_HARNESS_EVIDENCE_KIND))(
+  'carries $kind evidence through the encoded envelope unchanged',
+  (evidence) => {
+    const local: SessionDelta = { kind: 'harness.evidence', evidence }
+    const wire = toWireSessionDelta(local)
+    expect(wire).toEqual({ kind: 'evidence', turnId: null, evidence })
+    if (!wire) return
+    const decoded = decodeExecutionEventEnvelope(
+      encodeExecutionEventEnvelope(
+        eventEnvelope({ kind: 'delta', delta: wire }),
+      ),
+    )
+    expect(decoded).toMatchObject({ ok: true })
+    expect(decoded.ok && decoded.warnings).toBeFalsy()
+    if (!decoded.ok || decoded.value.event.kind !== 'delta') return
+    expect(toLocalSessionDelta(decoded.value.event.delta)).toEqual(local)
+  },
+)
 
 it('sends answered as itself now the wire has it (protocol 0.19) — mutation map it to running turns red', () => {
   expect(
@@ -1443,5 +1831,78 @@ describe("agents-daemon #187's timeline through protocol 0.23 (MAR-3987)", () =>
       'running - - harness',
       'completed finished - -',
     ])
+  })
+})
+
+/**
+ * The inventory as a whole (MAR-3684). Its exhaustiveness is a compile-time
+ * fact (`EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE` stops type-checking,
+ * naming the field, when a wire shape gains one nobody placed); these pin
+ * what was decided for the fields protocols 0.24 to 0.31 added, so moving one
+ * between "read" and "unread" is a visible change here too.
+ */
+describe('the exhaustive wire inventory (protocol 0.31)', () => {
+  it('places every field of every wire shape Convergence reads', () => {
+    expect(EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE).toEqual({
+      items: true,
+      sessionPatch: true,
+      evidence: true,
+      provider: true,
+      providerModel: true,
+      snapshot: true,
+      capabilities: true,
+    })
+  })
+
+  it("names the provider catalogue's fields it does not read, usage and its credits among them", () => {
+    expect(EXECUTION_HOST_READ_PROVIDER_FIELDS).toEqual([
+      'id',
+      'label',
+      'available',
+      'authenticated',
+      'models',
+    ])
+    expect(EXECUTION_HOST_UNREAD_PROVIDER_FIELDS).toEqual([
+      'effortLevels',
+      'attachmentKinds',
+      'account',
+      'permissions',
+      'interactions',
+      'usage',
+    ])
+    expect(EXECUTION_HOST_READ_PROVIDER_MODEL_FIELDS).toEqual(['slug', 'label'])
+    expect(EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS).toEqual([
+      'defaultEffort',
+      'efforts',
+    ])
+  })
+
+  it('reads three snapshot fields, and names every other', () => {
+    expect(EXECUTION_HOST_READ_SNAPSHOT_FIELDS).toEqual([
+      'sessionId',
+      'runningTasks',
+      'workspace',
+    ])
+    expect(EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS).toContain('permissionConfig')
+  })
+
+  it('accounts for every capability id the protocol knows, once', () => {
+    const accounted = [
+      ...EXECUTION_HOST_CHECKED_CAPABILITIES,
+      ...Object.keys(EXECUTION_HOST_UNCHECKED_CAPABILITIES),
+    ]
+    expect([...accounted].sort()).toEqual(
+      [...EXECUTION_PROTOCOL_CAPABILITY_IDS].sort(),
+    )
+    expect(EXECUTION_HOST_CHECKED_CAPABILITIES).toEqual([
+      'projects.v1',
+      'commands.stopTask.v1',
+    ])
+    for (const id of [
+      'sessions.permissionModes.v1',
+      'tasks.output.v1',
+      'providers.usage.v1',
+    ] as const)
+      expect(EXECUTION_HOST_UNCHECKED_CAPABILITIES[id]).toMatch(/MAR-\d+/)
   })
 })
