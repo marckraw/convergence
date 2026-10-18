@@ -468,14 +468,14 @@ it("records a remote Explore agent's runs, tasks and attribution exactly as the 
 })
 
 /**
- * agents-daemon 0.45.0 on one recorded Claude Code session: R0's
+ * agents-daemon 0.45.1 on one recorded Claude Code session: R0's
  * `explore-subagent` recording, and the envelopes the daemon's own session
  * manager and Claude provider wrote for it (see the fixture's README).
  */
 const DAEMON_TAPE = join(
   __dirname,
   '__fixtures__',
-  'agents-daemon-0.45.0-explore-subagent',
+  'agents-daemon-0.45.1-explore-subagent',
 )
 const EXPLORE_RUN = 'a604ee3fda52aa6be'
 const AGENT_CALL = 'toolu_011kSWjL2j6baHSasKtGKvnD'
@@ -551,6 +551,18 @@ async function followDaemonTape(
 }
 
 /**
+ * A run's transcript by what both producers can agree on: the file's place in
+ * its session (`subagents/agent-<id>.jsonl`). The head of the path is the
+ * host's own, the account directory of the machine Claude Code ran on, and a
+ * different one for each producer. A path with another tail, and no path, are
+ * kept as they are, so neither passes for the file.
+ */
+function transcriptTail(path: unknown): string | null {
+  if (typeof path !== 'string') return null
+  return path.match(/(?:^|\/)(subagents\/agent-[\w-]+\.jsonl)$/)?.[1] ?? path
+}
+
+/**
  * The columns both producers fill alike, with each run named by the call that
  * spawned it rather than by an item id each side mints for itself.
  */
@@ -568,6 +580,8 @@ function comparable(
       model: run.model,
       status: run.status,
       depth: run.depth,
+      endedAt: run.ended_at,
+      transcript: transcriptTail(run.transcript_path),
       endedSummary: run.ended_summary,
     })),
     tasks: (record.tasks as Row[]).map((task) => ({
@@ -590,7 +604,7 @@ function comparable(
 
 /**
  * MAR-2879's acceptance on the daemon's own wire (MAR-3684 review): the
- * evidence is what agents-daemon 0.45.0 really sends for a recorded Claude
+ * evidence is what agents-daemon 0.45.1 really sends for a recorded Claude
  * Code session, not what Convergence's local pipeline sends, and the record
  * it leaves is held against the one Convergence's local pipeline leaves for
  * the same recording.
@@ -638,11 +652,22 @@ it("records the daemon's own Explore tape as the local pipeline records the same
     (id) => localCalls.get(id) ?? null,
   )
   // The run ends with the subagent's last words, its task's notification's
-  // summary; the task keeps the description it started with, not a progress
-  // step's; and a foreground run gets no background-task notes (MAR-4292).
-  const notification = readTape<Row[]>('sdk-messages.json').find(
+  // summary, at the time its task ended; the task keeps the description it
+  // started with, not a progress step's; and a foreground run gets no
+  // background-task notes (MAR-4292). The run's own end and its task's are
+  // one fact, which each producer wrote once.
+  const sdk = readTape<Row[]>('sdk-messages.json')
+  const notification = sdk.find(
     (message) => message.subtype === 'task_notification',
   )!
+  const taskEnd = sdk.find(
+    (message) =>
+      message.subtype === 'task_updated' &&
+      (message.patch as Row).status === 'completed',
+  )!
+  const expectedEnd = new Date(
+    (taskEnd.patch as { end_time: number }).end_time,
+  ).toISOString()
   expect(expected.agentRuns).toEqual([
     {
       id: EXPLORE_RUN,
@@ -652,11 +677,17 @@ it("records the daemon's own Explore tape as the local pipeline records the same
       model: 'claude-sonnet-5-5',
       status: 'completed',
       depth: 1,
+      endedAt: expectedEnd,
+      transcript: `subagents/agent-${EXPLORE_RUN}.jsonl`,
       endedSummary: notification.summary,
     },
   ])
   expect(expected.tasks).toMatchObject([
-    { taskId: EXPLORE_RUN, description: 'List files in folder' },
+    {
+      taskId: EXPLORE_RUN,
+      description: 'List files in folder',
+      endedAt: expectedEnd,
+    },
   ])
   expect(expected.items.some((item) => item.kind === 'note')).toBe(false)
   expect(
@@ -679,37 +710,11 @@ it("records the daemon's own Explore tape as the local pipeline records the same
       agentType: 'Explore',
     },
   })
-
-  // Where the two producers still disagree on the same recording, pinned so
-  // either side moving is a visible change. Both are the daemon's to move
-  // (MAR-4292): it stamps `agent.ended` with the time it handled it, not the
-  // task's `end_time`, and it reports a run's transcript only when it
-  // identified the run from its metadata file. None of it is the mapping's:
-  // the daemon's evidence reaches the record unchanged.
-  const localRun = local.record.agentRuns[0] as Row
-  const remoteRun = remote.record.agentRuns[0] as Row
-  const localTask = local.record.tasks[0] as Row
-  const remoteTask = remote.record.tasks[0] as Row
-  expect({
-    runEndedAtIsTheTasks: [
-      localRun.ended_at === localTask.ended_at,
-      remoteRun.ended_at === remoteTask.ended_at,
-    ],
-    transcriptPath: [
-      String(localRun.transcript_path).endsWith(
-        `/subagents/agent-${EXPLORE_RUN}.jsonl`,
-      ),
-      remoteRun.transcript_path,
-    ],
-  }).toEqual({
-    runEndedAtIsTheTasks: [true, false],
-    transcriptPath: [true, null],
-  })
 })
 
 /**
  * A host may learn an item's run only after it added the item, and patch it
- * in (protocol 0.19). 0.45.0 does not for this recording, since its
+ * in (protocol 0.19). 0.45.1 does not for this recording, since its
  * `agent.identified` lands before the subagent's first item, so this is the
  * captured tape with each subagent item's `agentRunId` moved off its add and
  * into a patch right after it. Mutation: drop `agentRunId` from the item
