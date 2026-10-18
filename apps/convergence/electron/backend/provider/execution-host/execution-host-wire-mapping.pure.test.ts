@@ -39,6 +39,7 @@ import {
   EXECUTION_HOST_UNCHECKED_CAPABILITIES,
   EXECUTION_HOST_UNREAD_PROVIDER_FIELDS,
   EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS,
+  EXECUTION_HOST_UNREAD_PROVIDER_PERMISSION_FIELDS,
   EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS,
   EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS,
   EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE,
@@ -2029,30 +2030,52 @@ describe('the exhaustive wire inventory (protocol 0.31)', () => {
       evidenceShape: true,
       sessionTask: true,
       sessionAgentRun: true,
+      permissionPreset: true,
+      codexApprovalPolicy: true,
+      codexSandboxMode: true,
+      claudePermissionMode: true,
+      interactionRequestKind: true,
+      providerPermissions: true,
+      providerUsage: true,
+      providerUsageWindow: true,
+      providerUsageCredits: true,
+      providerUsageVocabulary: true,
       capabilities: true,
     })
   })
 
-  it("names the provider catalogue's fields it does not read, usage and its credits among them", () => {
+  /**
+   * MAR-4272 read the catalogue: efforts, permissions, interactions and usage
+   * with its credits. What is left unread is the attachment kinds (no inline
+   * attachment is sent yet) and the account, withheld because it stays with
+   * the super-admin (Marcin, 18 Oct).
+   */
+  it('reads the provider catalogue, and withholds only the account and the attachment kinds', () => {
     expect(EXECUTION_HOST_READ_PROVIDER_FIELDS).toEqual([
       'id',
       'label',
       'available',
       'authenticated',
-      'models',
-    ])
-    expect(EXECUTION_HOST_UNREAD_PROVIDER_FIELDS).toEqual([
       'effortLevels',
-      'attachmentKinds',
-      'account',
+      'models',
       'permissions',
       'interactions',
       'usage',
     ])
-    expect(EXECUTION_HOST_READ_PROVIDER_MODEL_FIELDS).toEqual(['slug', 'label'])
-    expect(EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS).toEqual([
+    expect(EXECUTION_HOST_UNREAD_PROVIDER_FIELDS).toEqual([
+      'attachmentKinds',
+      'account',
+    ])
+    expect(EXECUTION_HOST_READ_PROVIDER_MODEL_FIELDS).toEqual([
+      'slug',
+      'label',
       'defaultEffort',
       'efforts',
+    ])
+    expect(EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS).toEqual([])
+    expect(EXECUTION_HOST_UNREAD_PROVIDER_PERMISSION_FIELDS).toEqual([
+      'approvalsReviewers',
+      'collaborationModes',
     ])
   })
 

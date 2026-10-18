@@ -3,17 +3,19 @@ import type { EndpointHandshakeResult } from './execution-host-handshake.types'
 import {
   createSseParser,
   daemonCapabilitiesFingerprint,
-  parseRemoteExecutionHostMeta,
+  parseRemoteExecutionHostProviders,
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
   UNKNOWN_DAEMON_CAPABILITIES,
 } from './remote-execution-host.pure'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
 
-const DAEMON_META = {
-  name: 'agents-daemon',
-  version: '0.1.0',
-  apiVersion: 'v0',
+/**
+ * A `/v0/providers` body as agents-daemon serves it: the catalogue's own
+ * fields, plus the ones the protocol's decoder does not keep (`details`,
+ * `features.resume`) and the account it must never let through.
+ */
+const DAEMON_PROVIDERS = {
   providers: [
     {
       id: 'claude',
@@ -23,15 +25,47 @@ const DAEMON_META = {
       cliVersion: '2.1.175',
       details: 'ready',
       models: [
-        { slug: 'sonnet', label: 'Claude Sonnet' },
+        {
+          slug: 'sonnet',
+          label: 'Claude Sonnet',
+          defaultEffort: 'medium',
+          effortOptions: [{ id: 'low' }, { id: 'medium' }, { id: 'high' }],
+        },
         { slug: 'opus', label: 'Claude Opus' },
       ],
       features: {
         streaming: true,
         resume: true,
         followup: true,
-        structuredRequests: false,
-        planMode: true,
+        effortLevels: ['low', 'medium', 'high', 'max'],
+        permissions: {
+          presets: ['ask', 'yolo', 'custom'],
+          claudeCode: { permissionModes: ['default', 'acceptEdits', 'plan'] },
+        },
+        interactions: {
+          inputRequests: ['plan', 'choice'],
+          unavailable: ['form', 'url'],
+        },
+      },
+      account: {
+        label: 'owner@example.com',
+        plan: 'max',
+        source: 'sign-in',
+      },
+      usage: {
+        observedAt: '2026-10-18T10:00:00.000Z',
+        source: 'turn',
+        status: 'warning',
+        windows: [
+          {
+            id: 'five_hour',
+            span: 'session',
+            label: 'Session',
+            usedPercent: 82,
+            resetsAt: '2026-10-18T12:00:00.000Z',
+          },
+        ],
+        credits: { hasCredits: true, unlimited: false, balance: '12.50' },
       },
     },
     {
@@ -42,14 +76,30 @@ const DAEMON_META = {
       cliVersion: null,
       details: 'missing binary',
       models: [],
-      features: { streaming: true, resume: false, followup: true },
+      features: {
+        streaming: true,
+        resume: false,
+        followup: true,
+        permissions: {
+          presets: ['ask', 'yolo'],
+          codex: {
+            approvalPolicies: ['untrusted', 'on-request', 'never'],
+            sandboxModes: [
+              'read-only',
+              'workspace-write',
+              'danger-full-access',
+            ],
+            effectiveSandboxModes: { 'workspace-write': 'danger-full-access' },
+          },
+        },
+      },
     },
   ],
 }
 
-describe('parseRemoteExecutionHostMeta', () => {
-  it('maps the daemon provider listing to provider infos', () => {
-    const infos = parseRemoteExecutionHostMeta(DAEMON_META)
+describe('parseRemoteExecutionHostProviders', () => {
+  it('maps the daemon provider catalogue to provider infos', () => {
+    const infos = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     expect(infos).toEqual([
       {
         providerId: 'claude',
@@ -59,9 +109,42 @@ describe('parseRemoteExecutionHostMeta', () => {
         details: 'ready',
         supportsContinuation: true,
         models: [
-          { id: 'sonnet', label: 'Claude Sonnet' },
-          { id: 'opus', label: 'Claude Opus' },
+          {
+            id: 'sonnet',
+            label: 'Claude Sonnet',
+            efforts: ['low', 'medium', 'high'],
+            defaultEffort: 'medium',
+          },
+          {
+            id: 'opus',
+            label: 'Claude Opus',
+            efforts: ['low', 'medium', 'high', 'max'],
+            defaultEffort: null,
+          },
         ],
+        permissions: {
+          presets: ['ask', 'yolo', 'custom'],
+          claudeCode: { permissionModes: ['default', 'acceptEdits', 'plan'] },
+        },
+        interactions: {
+          inputRequests: ['plan', 'choice'],
+          unavailable: ['form', 'url'],
+        },
+        usage: {
+          observedAt: '2026-10-18T10:00:00.000Z',
+          source: 'turn',
+          status: 'warning',
+          windows: [
+            {
+              id: 'five_hour',
+              span: 'session',
+              label: 'Session',
+              usedPercent: 82,
+              resetsAt: '2026-10-18T12:00:00.000Z',
+            },
+          ],
+          credits: { hasCredits: true, unlimited: false, balance: '12.50' },
+        },
       },
       {
         providerId: 'codex',
@@ -71,16 +154,58 @@ describe('parseRemoteExecutionHostMeta', () => {
         details: 'missing binary',
         supportsContinuation: false,
         models: [],
+        permissions: {
+          presets: ['ask', 'yolo'],
+          codex: {
+            approvalPolicies: ['untrusted', 'on-request', 'never'],
+            sandboxModes: [
+              'read-only',
+              'workspace-write',
+              'danger-full-access',
+            ],
+            effectiveSandboxModes: { 'workspace-write': 'danger-full-access' },
+          },
+        },
+        interactions: null,
+        usage: null,
       },
     ])
   })
 
+  /**
+   * The account is personal data, kept to the super-admin (Marcin, 18 Oct),
+   * and a token holder cannot tell whether its reader is one. Mutation: spread
+   * the decoded provider into the info and this goes red.
+   */
+  it('never lets the provider account through', () => {
+    const infos = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
+    expect(JSON.stringify(infos)).not.toContain('owner@example.com')
+    expect(infos[0]).not.toHaveProperty('account')
+  })
+
+  it('reads an unsaid readiness as unknown, never as false', () => {
+    const [info] = parseRemoteExecutionHostProviders({
+      providers: [{ id: 'claude' }],
+    })
+    expect(info).toMatchObject({
+      name: 'claude',
+      available: null,
+      authenticated: null,
+      details: null,
+      supportsContinuation: false,
+      models: [],
+      permissions: null,
+      interactions: null,
+      usage: null,
+    })
+  })
+
   it('throws a malformed error when the provider listing is missing', () => {
-    expect(() => parseRemoteExecutionHostMeta({ name: 'daemon' })).toThrow(
+    expect(() => parseRemoteExecutionHostProviders({ name: 'daemon' })).toThrow(
       RemoteExecutionHostError,
     )
     try {
-      parseRemoteExecutionHostMeta({})
+      parseRemoteExecutionHostProviders({})
     } catch (error) {
       expect((error as RemoteExecutionHostError).kind).toBe('malformed')
     }
@@ -88,24 +213,21 @@ describe('parseRemoteExecutionHostMeta', () => {
 
   it('throws a malformed error for a broken provider entry', () => {
     expect(() =>
-      parseRemoteExecutionHostMeta({ providers: [{ id: 42 }] }),
-    ).toThrow('malformed provider entry')
+      parseRemoteExecutionHostProviders({ providers: [{ id: 42 }] }),
+    ).toThrow('provider catalogue this build cannot read: invalid-payload')
   })
 
-  it('skips malformed model entries instead of failing the listing', () => {
-    const infos = parseRemoteExecutionHostMeta({
-      providers: [
-        {
-          id: 'claude',
-          label: 'Claude',
-          available: true,
-          authenticated: true,
-          models: [{ nope: true }, { slug: 'sonnet' }],
-          features: { resume: true },
-        },
-      ],
-    })
-    expect(infos[0]?.models).toEqual([{ id: 'sonnet', label: 'sonnet' }])
+  /**
+   * The protocol's rule, not this file's: a model needs a `slug`, because a
+   * session's selection names it. The `/v0/meta` reader used to skip such a
+   * model; one decoder for one wire shape means its rule now.
+   */
+  it('refuses a model without a slug, as the protocol does', () => {
+    expect(() =>
+      parseRemoteExecutionHostProviders({
+        providers: [{ id: 'claude', models: [{ nope: true }] }],
+      }),
+    ).toThrow(RemoteExecutionHostError)
   })
 })
 

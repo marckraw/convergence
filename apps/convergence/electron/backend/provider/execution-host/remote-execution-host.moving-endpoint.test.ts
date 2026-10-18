@@ -23,7 +23,7 @@ interface MovingEndpoint {
  * A host whose Endpoint is pointed at a new machine during each of its first
  * `edits` listings, and then left alone.
  *
- * The edit lands inside the `/v0/meta` handler on purpose: that is the middle
+ * The edit lands inside the `/v0/providers` handler on purpose: that is the middle
  * of the round trip, so every listing here starts against the address in force
  * and finishes about one that has been left. `edits` is therefore exactly how
  * many attempts readiness must discard before one of them is an answer.
@@ -110,7 +110,7 @@ describe('an endpoint edited while its providers are being listed', () => {
 
     const settled = MAX_LISTING_ATTEMPTS - 1
     expect(endpoint.metaUrls).toHaveLength(MAX_LISTING_ATTEMPTS)
-    expect(endpoint.metaUrls.at(-1)).toBe(`${machineUrl(settled)}/v0/meta`)
+    expect(endpoint.metaUrls.at(-1)).toBe(`${machineUrl(settled)}/v0/providers`)
     expect(endpoint.listedProviderIds()).toEqual([machineProvider(settled)])
   })
 

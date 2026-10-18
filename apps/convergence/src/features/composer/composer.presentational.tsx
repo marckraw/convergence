@@ -18,14 +18,13 @@ import type {
   ClaudeCodePermissionMode,
   OptionRowCatalog,
   ProviderCatalogEntry,
+  ProviderHostPermissions,
 } from '@/entities/session'
 import {
-  CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
-  CODEX_APPROVAL_POLICY_OPTIONS,
-  CODEX_SANDBOX_OPTIONS,
   effortSelectItems,
   getSimplePermissionPreset,
   providerSelectItems,
+  resolvePermissionChoices,
   scopeModelCatalogToProvider,
   selectableProviderDescriptors,
 } from '@/entities/session'
@@ -45,6 +44,7 @@ import {
   listboxOptionId,
   listboxStep,
   MetaLine,
+  Notice,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -63,6 +63,7 @@ import {
   Paperclip,
   Plus,
   Repeat,
+  ShieldAlert,
   SlidersHorizontal,
   Zap,
 } from 'lucide-react'
@@ -228,6 +229,17 @@ interface ComposerProps {
    * Null on this Mac, including a global draft forced to stay here.
    */
   remoteSkillsNotice: string | null
+  /**
+   * The permission choices the selected provider's host offers (MAR-4272).
+   * Absent or null when the host does not say -- every local catalog -- and
+   * then this app's own choices stand.
+   */
+  hostPermissions?: ProviderHostPermissions | null
+  /**
+   * What the host really runs the asked-for Codex sandbox as, said before the
+   * start when it differs (MAR-4272). Null when there is nothing to say.
+   */
+  permissionHostNotice?: string | null
   onSkillPickerOpenChange: (open: boolean) => void
   onSkillQueryChange: (query: string) => void
   onSkillToggle: (skill: SkillCatalogEntry) => void
@@ -347,6 +359,8 @@ export const Composer: FC<ComposerProps> = ({
   skillCatalogLoading,
   skillCatalogError,
   remoteSkillsNotice,
+  hostPermissions = null,
+  permissionHostNotice = null,
   onSkillPickerOpenChange,
   onSkillQueryChange,
   onSkillToggle,
@@ -577,18 +591,10 @@ export const Composer: FC<ComposerProps> = ({
   // still carries an effort. Showing it, disabled, beats hiding the control and
   // leaving the human to guess what the row says (MAR-2550).
   const effortItems = effortSelectItems(selection)
-  const permissionItems = [
-    {
-      id: 'ask',
-      label: 'Ask',
-      description: 'Ask before risky provider actions.',
-    },
-    {
-      id: 'yolo',
-      label: 'Yolo',
-      description: 'Give the provider full execution freedom.',
-    },
-  ]
+  const permissionChoices = resolvePermissionChoices(
+    selection.providerId,
+    hostPermissions,
+  )
   const simplePermissionPreset = getSimplePermissionPreset(permissionConfig)
   const codexConfig = permissionConfig.codex ?? {
     approvalPolicy: 'on-request' as CodexApprovalPolicy,
@@ -597,8 +603,7 @@ export const Composer: FC<ComposerProps> = ({
   const claudeCodeConfig = permissionConfig.claudeCode ?? {
     permissionMode: 'default' as ClaudeCodePermissionMode,
   }
-  const canCustomizePermissions =
-    selection.providerId === 'codex' || selection.providerId === 'claude-code'
+  const canCustomizePermissions = permissionChoices.canCustomize
   const resourceCount =
     attachments.length + selectedSkills.length + selectedContextItems.length
 
@@ -1004,7 +1009,7 @@ export const Composer: FC<ComposerProps> = ({
                               ? 'Yolo'
                               : 'Ask'
                         }
-                        items={permissionItems}
+                        items={permissionChoices.presetItems}
                         onChange={(id) =>
                           onPermissionPresetChange(
                             id === 'yolo' ? 'yolo' : 'ask',
@@ -1120,11 +1125,11 @@ export const Composer: FC<ComposerProps> = ({
                     size="sm"
                     selectedId={codexConfig.approvalPolicy}
                     value={
-                      CODEX_APPROVAL_POLICY_OPTIONS.find(
+                      permissionChoices.codexApprovalPolicyItems.find(
                         (item) => item.id === codexConfig.approvalPolicy,
                       )?.label ?? 'Approval policy'
                     }
-                    items={CODEX_APPROVAL_POLICY_OPTIONS}
+                    items={permissionChoices.codexApprovalPolicyItems}
                     onChange={(id) =>
                       onCodexApprovalPolicyChange(id as CodexApprovalPolicy)
                     }
@@ -1136,11 +1141,11 @@ export const Composer: FC<ComposerProps> = ({
                     size="sm"
                     selectedId={codexConfig.sandbox}
                     value={
-                      CODEX_SANDBOX_OPTIONS.find(
+                      permissionChoices.codexSandboxItems.find(
                         (item) => item.id === codexConfig.sandbox,
                       )?.label ?? 'Sandbox'
                     }
-                    items={CODEX_SANDBOX_OPTIONS}
+                    items={permissionChoices.codexSandboxItems}
                     onChange={(id) =>
                       onCodexSandboxChange(id as CodexSandboxMode)
                     }
@@ -1154,11 +1159,11 @@ export const Composer: FC<ComposerProps> = ({
                   size="sm"
                   selectedId={claudeCodeConfig.permissionMode}
                   value={
-                    CLAUDE_CODE_PERMISSION_MODE_OPTIONS.find(
+                    permissionChoices.claudeCodePermissionModeItems.find(
                       (item) => item.id === claudeCodeConfig.permissionMode,
                     )?.label ?? 'Permission mode'
                   }
-                  items={CLAUDE_CODE_PERMISSION_MODE_OPTIONS}
+                  items={permissionChoices.claudeCodePermissionModeItems}
                   onChange={(id) =>
                     onClaudeCodePermissionModeChange(
                       id as ClaudeCodePermissionMode,
@@ -1168,6 +1173,26 @@ export const Composer: FC<ComposerProps> = ({
                   className={composerToolbarControl}
                 />
               )}
+            </div>
+          ) : null}
+          {/*
+            Said whether or not the advanced panel is open: Ask on Codex asks
+            for workspace-write too, and a host that runs it with full access
+            must say so before the start, not after (MAR-4272). Held to the
+            panel's rule as well -- no answer from the machine, no claim
+            about it.
+          */}
+          {optionRow.status !== 'notice' &&
+          !selectionDisabled &&
+          permissionHostNotice ? (
+            <div className="mt-3 border-t border-line-soft pt-3">
+              <Notice
+                tone="warning"
+                icon={<ShieldAlert />}
+                size="sm"
+                title={permissionHostNotice}
+                data-testid="permission-host-notice"
+              />
             </div>
           ) : null}
         </ComposerCard>

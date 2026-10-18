@@ -1,4 +1,9 @@
-import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
+import type {
+  ExecutionProviderInteractions,
+  ExecutionProviderPermissions,
+  ExecutionProviderUsage,
+  ExecutionSessionWorkspace,
+} from '@mrck-labs/execution-host-protocol'
 
 /**
  * Types for the daemon client: what a machine running the execution host wire
@@ -49,15 +54,40 @@ export interface RemoteExecutionHostConnectionResolver {
 }
 
 /**
- * The slice of the daemon's /v0/meta provider listing the Remote Execution
- * Host consumes. Provider IDs live in the daemon's namespace (e.g. `claude`,
- * `codex`), not the local registry's.
+ * A model a daemon's provider offers, with the efforts the host says it takes
+ * (`models[].efforts`, `models[].defaultEffort`, MAR-4272).
+ */
+export interface RemoteExecutionHostProviderModel {
+  id: string
+  label: string
+  /** The effort ids it takes; empty when the host names none. */
+  efforts: string[]
+  /** The effort it runs with when none is named; null when the host names none. */
+  defaultEffort: string | null
+}
+
+/**
+ * The slice of the daemon's provider catalogue (`GET /v0/providers`) the
+ * Remote Execution Host consumes. Provider IDs live in the daemon's namespace
+ * (e.g. `claude`, `codex`), not the local registry's.
+ *
+ * The provider's `account` is not here, by decision rather than omission: it
+ * is personal data the protocol says to show owners only, and Marcin's ruling
+ * of 18 Oct keeps it to the super-admin. A client holding a daemon token
+ * cannot tell whether its reader is one, so the account is dropped where the
+ * catalogue is read and never reaches an app. Usage and credits are not
+ * personal and may be shown to anyone, so they are kept (MAR-4272).
  */
 export interface RemoteExecutionHostProviderInfo {
   providerId: string
   name: string
-  available: boolean
-  authenticated: boolean
+  /**
+   * Installed on the host. Null when the host does not say, which the
+   * protocol reads as unknown and never as `false`.
+   */
+  available: boolean | null
+  /** Signed in on the host; null when the host does not say. */
+  authenticated: boolean | null
   /**
    * What the daemon says about this provider's state in its own words --
    * `'ready'`, `'missing binary'` -- or null when it says nothing readable
@@ -69,7 +99,20 @@ export interface RemoteExecutionHostProviderInfo {
    */
   details: string | null
   supportsContinuation: boolean
-  models: { id: string; label: string }[]
+  models: RemoteExecutionHostProviderModel[]
+  /**
+   * The permission choices a session of this provider can ask for, and the
+   * sandbox each Codex choice really runs as here. Null when the host does not
+   * say: unknown, not none.
+   */
+  permissions: ExecutionProviderPermissions | null
+  /** The request kinds the provider asks with, or never does; null when unknown. */
+  interactions: ExecutionProviderInteractions | null
+  /**
+   * How much of the host account's limits is used, credits included, as the
+   * host last heard it. Null when the host does not say: never "0%".
+   */
+  usage: ExecutionProviderUsage | null
 }
 
 /**

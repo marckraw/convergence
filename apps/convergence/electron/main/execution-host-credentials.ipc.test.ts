@@ -157,7 +157,7 @@ describe('the execution host daemon ipc handlers', () => {
 
     ambientDaemon = createStubDaemon()
     namedDaemon = createStubDaemon()
-    namedDaemon.setMeta({ providers: [] })
+    namedDaemon.setProviders({ providers: [] })
 
     delete process.env[EXECUTION_HOST_DAEMON_TOKEN_ENV_KEY]
     endpointCredentials = recordingExecutionHostCredentials()

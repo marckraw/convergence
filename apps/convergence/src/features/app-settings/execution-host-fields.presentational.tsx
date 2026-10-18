@@ -93,7 +93,9 @@ function connectionProvidersText(
   return result.providers
     .map(
       (provider) =>
-        `${provider.name}${provider.available && provider.authenticated ? '' : ' (unavailable)'}`,
+        // Only the host's `false` blocks; null is a host that does not say,
+        // read as the option row reads it (MAR-4272).
+        `${provider.name}${provider.available === false || provider.authenticated === false ? ' (unavailable)' : ''}`,
     )
     .join(', ')
 }

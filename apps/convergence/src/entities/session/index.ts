@@ -45,6 +45,9 @@ export type {
   CodexApprovalPolicy,
   CodexSandboxMode,
   ClaudeCodePermissionMode,
+  ProviderHostPermissions,
+  ProviderHostUsage,
+  ProviderHostUsageWindow,
   StartSessionRequest,
   SendSessionMessageRequest,
   CreateAndStartSessionRequest,
@@ -121,13 +124,22 @@ export {
   CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
   CODEX_APPROVAL_POLICY_OPTIONS,
   CODEX_SANDBOX_OPTIONS,
+  SIMPLE_PERMISSION_PRESET_OPTIONS,
   YOLO_PERMISSION_CONFIG,
+  codexSandboxAskedFor,
   defaultCustomPermissionConfigForProvider,
+  describeHostSandbox,
   getSimplePermissionPreset,
+  offeredDefaultPermissionPreset,
+  resolvePermissionChoices,
   resolveSimplePermissionConfig,
   withClaudeCodePermissionMode,
   withCodexApprovalPolicy,
   withCodexSandbox,
+} from './session-permissions.pure'
+export type {
+  PermissionChoiceItem,
+  PermissionChoices,
 } from './session-permissions.pure'
 export type {
   ComposerSelectionLocks,
