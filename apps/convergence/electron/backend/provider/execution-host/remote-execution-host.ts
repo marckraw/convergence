@@ -3,6 +3,12 @@ import type {
   ExecutionSkippedEnvelope,
   ExecutionTurnOrigin,
 } from '@mrck-labs/execution-host-protocol'
+import {
+  createExecutionHostClient,
+  ExecutionHostError,
+  ExecutionTaskOutputError,
+  type ExecutionHostErrorKind,
+} from '@mrck-labs/execution-host-protocol/client'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type { RemoteTaskOutputReading } from '../../../../src/shared/types/task-output.types'
 import { RecordingError } from '../../session/session.pure'
@@ -38,9 +44,6 @@ import {
   EXECUTION_HOST_STOP_TASK_CAPABILITY,
   EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY,
   EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
-  buildTaskOutputTarget,
-  readTaskOutputAnswer,
-  taskOutputRefusalCode,
   toLocalSessionDelta,
   withSettledAttention,
   withTurnOpenedBy,
@@ -130,6 +133,23 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
  */
 export const HOST_UNREACHABLE_RETRY_MS = 60_000
 
+/** How long a read of a task's output tail may take before the panel is told the host did not answer. */
+const DEFAULT_TASK_OUTPUT_TIMEOUT_MS = 15_000
+
+/**
+ * What a failed task-output read says, by how it failed. Convergence's own
+ * sentences: the client's reason can carry the host's text, which a panel
+ * that shows it to a person is not the place for.
+ */
+const TASK_OUTPUT_FAILURE_REASONS = {
+  network: 'the host could not be reached',
+  timeout: 'the host did not answer in time',
+  auth: 'the host did not accept the token',
+  'not-found': 'the host could not be read',
+  http: 'the host could not be read',
+  malformed: 'the host could not be read',
+} as const satisfies Record<ExecutionHostErrorKind, string>
+
 /**
  * Emergence's number, and its reasoning with it
  * (`packages/client-core/src/endpoint/endpoint-handshake.service.ts:11`):
@@ -187,6 +207,8 @@ export interface RemoteExecutionHostDeps {
   }
   /** Overridable so tests can prove the cap without waiting 15 seconds. */
   healthProbeTimeoutMs?: number
+  /** How long a task-output read may take (MAR-4275); overridable for the same reason. */
+  taskOutputTimeoutMs?: number
   /**
    * Called after each processed event envelope with its sequence number.
    * Callers persist this to resume the stream after an app restart.
@@ -403,6 +425,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number, signal?: AbortSignal) => Promise<void>
   private readonly healthProbeTimeoutMs: number
+  private readonly taskOutputTimeoutMs: number
   private readonly debugSink: ProviderDebugSink
   /**
    * The daemon configuration the resolver last returned, and the yardstick
@@ -506,6 +529,8 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     this.fetchFn = deps.fetch ?? fetch
     this.healthProbeTimeoutMs =
       deps.healthProbeTimeoutMs ?? DEFAULT_HEALTH_PROBE_TIMEOUT_MS
+    this.taskOutputTimeoutMs =
+      deps.taskOutputTimeoutMs ?? DEFAULT_TASK_OUTPUT_TIMEOUT_MS
     this.maxReconnectAttempts =
       deps.reconnect?.maxAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS
     this.reconnectDelayMs =
@@ -1290,10 +1315,14 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * (`tasks.output.v1`, MAR-4275): whole lines, redacted by the host, at most
    * 64 KiB. The request names a session and a task, never a file path.
    *
-   * A host that does not advertise the route is not asked. A refusal the host
-   * gave, by code, is the reading's `refused`; a host that could not be
-   * reached, or did not answer, throws, since there is nothing to say about
-   * the task's output.
+   * Read through the protocol client's `taskOutput`, not `requestJson`: the
+   * client reads an answer to at most 512 KiB and a refusal to 64 KiB, and
+   * gives the read a deadline of its own, so neither a runaway body nor a
+   * host that hangs holds the panel. A host that does not advertise the route
+   * is not asked. A refusal, by code, is the reading's `refused`. A host that
+   * could not be reached or did not answer in time throws a fixed sentence,
+   * never the host's own text, since there is nothing to say about the
+   * task's output.
    */
   async readTaskOutput(
     sessionId: string,
@@ -1301,33 +1330,34 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   ): Promise<RemoteTaskOutputReading> {
     await this.ensureListed()
     if (!this.readsTaskOutput()) return { kind: 'refused', code: 'unsupported' }
-    let target: string
-    try {
-      target = buildTaskOutputTarget(sessionId, taskId)
-    } catch {
-      return { kind: 'refused', code: 'rejected' }
-    }
     const connection = await this.resolveConnection()
     try {
-      const body = await this.requestJson(connection, target, {
-        method: 'GET',
-      })
-      return readTaskOutputAnswer(body, { sessionId, taskId })
+      const output = await createExecutionHostClient({
+        baseUrl: connection.baseUrl,
+        token: connection.token,
+        fetch: this.fetchFn,
+      }).taskOutput(sessionId, taskId, { timeoutMs: this.taskOutputTimeoutMs })
+      return {
+        kind: 'output',
+        text: output.text,
+        status: output.status,
+        truncated: output.truncated,
+        totalBytes: output.totalBytes,
+        readAt: output.readAt,
+      }
     } catch (error) {
-      // A 4xx the host answered is its refusal of this read, coded. A 401 is
-      // the token, a 5xx the host failing, and an unreachable host has no
-      // status at all: those say nothing of the task, so they are thrown.
-      if (
-        error instanceof RemoteExecutionHostError &&
-        error.status !== undefined &&
-        error.status >= 400 &&
-        error.status < 500 &&
-        error.status !== 401
-      )
-        return {
-          kind: 'refused',
-          code: taskOutputRefusalCode(error.status, error.responseBody),
-        }
+      if (error instanceof ExecutionTaskOutputError)
+        return { kind: 'refused', code: error.code }
+      // An id the route cannot name, or a tail out of bounds, is refused
+      // before anything is sent.
+      if (error instanceof TypeError || error instanceof RangeError)
+        return { kind: 'refused', code: 'rejected' }
+      if (error instanceof ExecutionHostError)
+        throw new ExecutionHostError(
+          error.kind,
+          TASK_OUTPUT_FAILURE_REASONS[error.kind],
+          { operation: error.operation, status: error.status },
+        )
       throw error
     }
   }
@@ -1415,8 +1445,6 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
           `Remote execution host request failed with ${response.status}.`,
         response.status === 401 || response.status === 403 ? 'auth' : 'http',
         response.status,
-        undefined,
-        text,
       )
     }
     if (!text.trim()) return {}
@@ -1596,6 +1624,12 @@ class RemoteSessionRun {
   }
 
   begin(): void {
+    // A run reattached at app boot may be answered before anything has listed
+    // its host, and an answer is gated on the handshake that listing brings
+    // (`structuredAnswerRefusal`). Asked for here and not awaited: the stream
+    // must not wait on a listing, and a listing that fails is the next
+    // refresh's to report (MAR-4276).
+    if (this.params.resume) void this.params.host.ensureListed().catch(() => {})
     void this.run()
   }
 

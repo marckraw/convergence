@@ -1,10 +1,5 @@
 import {
-  decodeExecutionTaskOutputRefusal,
-  decodeExecutionTaskOutputResponse,
-  encodeExecutionTaskOutputRequest,
   EXECUTION_PROTOCOL_VERSION,
-  EXECUTION_TASK_OUTPUT_MAX_BYTES,
-  EXECUTION_TASK_OUTPUT_REFUSAL_STATUSES,
   type ExecutionConversationItem,
   type ExecutionConversationItemPatch,
   type ExecutionHostCommand,
@@ -35,10 +30,6 @@ import type {
   SessionTask,
 } from '../../session/harness-evidence.types'
 import type { SkillSelection } from '../../skills/skills.types'
-import type {
-  RemoteTaskOutputReading,
-  RemoteTaskOutputRefusalCode,
-} from '../../../../src/shared/types/task-output.types'
 import type {
   Attachment,
   AttentionState,
@@ -690,86 +681,6 @@ export const EXECUTION_HOST_TASK_OUTPUT_CAPABILITY =
  */
 export function buildWireStopTaskCommand(taskId: string): ExecutionHostCommand {
   return { kind: 'stop-task', taskId }
-}
-
-/**
- * The request target of a task's output tail (protocol 0.24): the path with
- * both ids encoded, asking for the most the route gives. It names a session
- * and a task, never a file. Throws a `TypeError` for an id the route cannot
- * name, which `readRemoteTaskOutput` reports as `rejected`.
- */
-export function buildTaskOutputTarget(
-  sessionId: string,
-  taskId: string,
-): string {
-  return encodeExecutionTaskOutputRequest({
-    sessionId,
-    taskId,
-    tail: EXECUTION_TASK_OUTPUT_MAX_BYTES,
-  })
-}
-
-/**
- * Reads a host's 2xx answer to a task-output request. Anything that is not
- * the output of the task asked about is `malformed`, as the protocol's shared
- * client calls it: an answer that does not decode, one about another session
- * or task, or a window longer than the tail asked for.
- */
-export function readTaskOutputAnswer(
-  body: unknown,
-  asked: { sessionId: string; taskId: string },
-): RemoteTaskOutputReading {
-  const decoded = decodeExecutionTaskOutputResponse(body)
-  if (!decoded.ok) return { kind: 'refused', code: 'malformed' }
-  const output = decoded.value
-  if (
-    output.sessionId !== asked.sessionId ||
-    output.taskId !== asked.taskId ||
-    output.totalBytes - output.startOffset > EXECUTION_TASK_OUTPUT_MAX_BYTES
-  )
-    return { kind: 'refused', code: 'malformed' }
-  return {
-    kind: 'output',
-    text: output.text,
-    status: output.status,
-    truncated: output.truncated,
-    totalBytes: output.totalBytes,
-    readAt: output.readAt,
-  }
-}
-
-function parseJsonOrNull(body: string | undefined): unknown {
-  if (body === undefined) return null
-  try {
-    return JSON.parse(body)
-  } catch {
-    return null
-  }
-}
-
-/**
- * What a host's refusal of a task-output read means: its code where it gave a
- * known one with the status the protocol gives that code, else `unsupported`
- * for a 404 with no code at all (a host without the route, or a proxy), else
- * `rejected`. A 404 coded with a code this build does not know is `rejected`,
- * never `unsupported`: a host with the route codes every 404.
- */
-export function taskOutputRefusalCode(
-  status: number | undefined,
-  body: string | undefined,
-): RemoteTaskOutputRefusalCode {
-  const parsed = parseJsonOrNull(body)
-  const coded = decodeExecutionTaskOutputRefusal(parsed)
-  if (
-    coded.ok &&
-    EXECUTION_TASK_OUTPUT_REFUSAL_STATUSES[coded.value.code] === status
-  )
-    return coded.value.code
-  const hasCode =
-    typeof parsed === 'object' &&
-    parsed !== null &&
-    typeof (parsed as { code?: unknown }).code === 'string'
-  return status === 404 && !hasCode ? 'unsupported' : 'rejected'
 }
 
 /**

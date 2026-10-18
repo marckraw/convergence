@@ -4,6 +4,7 @@ import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   type StubDaemon,
 } from '@convergence/execution-host-client'
+import { ExecutionHostError } from '@mrck-labs/execution-host-protocol/client'
 import { EXECUTION_HOST_TASK_OUTPUT_CAPABILITY } from './execution-host-wire-mapping.pure'
 import { RemoteExecutionHost } from './remote-execution-host'
 
@@ -41,15 +42,17 @@ interface OutputRequest {
  */
 function withOutputRoute(
   stub: StubDaemon,
-  respond: () => Response | Promise<Response>,
+  respond: (init?: RequestInit) => Response | Promise<Response>,
 ): { fetch: typeof fetch; requests: OutputRequest[] } {
   const requests: OutputRequest[] = []
   const wrapped = (async (input: unknown, init?: RequestInit) => {
     const url = String(input)
     if (/\/tasks\/[^/]+\/output(\?|$)/.test(url)) {
-      const headers = init?.headers as Record<string, string> | undefined
-      requests.push({ url, authorization: headers?.Authorization ?? null })
-      return respond()
+      requests.push({
+        url,
+        authorization: new Headers(init?.headers).get('Authorization'),
+      })
+      return respond(init)
     }
     return stub.fetchFn(input as Parameters<typeof fetch>[0], init)
   }) as typeof fetch
@@ -69,14 +72,14 @@ const json = (body: unknown, status = 200): Response =>
  */
 describe('RemoteExecutionHost readTaskOutput', () => {
   let stub: StubDaemon
-  let answer: () => Response | Promise<Response>
+  let answer: (init?: RequestInit) => Response | Promise<Response>
   let requests: OutputRequest[]
   let host: RemoteExecutionHost
 
   beforeEach(() => {
     stub = createStubDaemon()
     answer = () => json(OUTPUT_ANSWER)
-    const route = withOutputRoute(stub, () => answer())
+    const route = withOutputRoute(stub, (init) => answer(init))
     requests = route.requests
     host = new RemoteExecutionHost({
       onEventSeq: () => {},
@@ -87,6 +90,7 @@ describe('RemoteExecutionHost readTaskOutput', () => {
         }),
       },
       fetch: route.fetch,
+      taskOutputTimeoutMs: 50,
     })
   })
 
@@ -158,23 +162,82 @@ describe('RemoteExecutionHost readTaskOutput', () => {
       })
     })
 
-    /** Mutation: turn every failure into a refusal and this is red; a host that cannot be reached says nothing of the task. */
-    it('throws, rather than refusing, when the host cannot be reached or the token is refused', async () => {
+    /** Mutation: let the host's own text reach the thrown message, or turn an unreachable host into a refusal, and this is red. */
+    it('throws a fixed sentence, never the host’s text, when the host cannot be reached', async () => {
       answer = () => {
-        throw new Error('connect ECONNREFUSED')
+        throw new Error('connect ECONNREFUSED 10.0.0.5:7777')
       }
-      await expect(host.readTaskOutput('s-1', 'bash-1')).rejects.toThrow(
-        /unreachable/,
+      const failure = await host.readTaskOutput('s-1', 'bash-1').then(
+        () => null,
+        (error: unknown) => error,
       )
 
-      answer = () => json({ error: 'bad token' }, 401)
-      await expect(host.readTaskOutput('s-1', 'bash-1')).rejects.toThrow(
-        'bad token',
+      expect(failure).toBeInstanceOf(ExecutionHostError)
+      expect((failure as ExecutionHostError).kind).toBe('network')
+      expect((failure as Error).message).toBe(
+        'task output failed: network: the host could not be reached',
       )
-
-      answer = () => json({ error: 'boom' }, 500)
-      await expect(host.readTaskOutput('s-1', 'bash-1')).rejects.toThrow('boom')
     })
+
+    /** Mutation: read the reply with `requestJson` (no deadline) and this is red; a host that hangs would hold "Reading…" for minutes. */
+    it('gives a hung host a deadline of its own', async () => {
+      answer = (init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new Error('aborted')),
+          )
+        })
+      const failure = await host.readTaskOutput('s-1', 'bash-1').then(
+        () => null,
+        (error: unknown) => error,
+      )
+
+      expect(failure).toBeInstanceOf(ExecutionHostError)
+      expect((failure as ExecutionHostError).kind).toBe('timeout')
+      expect((failure as Error).message).toBe(
+        'task output failed: timeout: the host did not answer in time',
+      )
+    })
+
+    /** Mutation: read the body whole (`response.text()`) and this is red: the stream is pulled past the cap and the answer is not refused as malformed. */
+    it('stops reading an oversized reply at the protocol’s cap and calls it malformed', async () => {
+      let pulled = 0
+      const chunk = new TextEncoder().encode('x'.repeat(64 * 1024))
+      answer = () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            pull(controller) {
+              pulled += chunk.length
+              if (pulled > 64 * 1024 * 1024) controller.close()
+              else controller.enqueue(chunk)
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+
+      expect(await host.readTaskOutput('s-1', 'bash-1')).toEqual({
+        kind: 'refused',
+        code: 'malformed',
+      })
+      // 512 KiB is the cap; allow a few chunks of read-ahead, nowhere near 64 MiB.
+      expect(pulled).toBeLessThan(2 * 1024 * 1024)
+    })
+
+    /** Mutation: show the refusal's own text, or its token problem as an exception, and this is red. */
+    it.each([
+      [401, { error: 'bad token abc' }],
+      [500, { error: 'secret host text /home/x/.claude/tasks' }],
+    ])(
+      'answers a %i with a refusal and none of the host’s text',
+      async (status, body) => {
+        answer = () => json(body, status)
+
+        expect(await host.readTaskOutput('s-1', 'bash-1')).toEqual({
+          kind: 'refused',
+          code: 'rejected',
+        })
+      },
+    )
   })
 
   describe('on a host that does not advertise it', () => {

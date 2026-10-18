@@ -178,9 +178,32 @@ describe('RemoteExecutionHost structured answers', () => {
     })
   })
 
+  describe('on a run attached at boot', () => {
+    /** Mutation: drop the `ensureListed()` from `begin()` for a resumed run and this is red; nothing lists the host, so the answer goes unchecked. */
+    it('lists its host in the background, so an answer to a host that cannot read it is refused', async () => {
+      stub.setHealthBody(healthWithoutStructuredInteractions())
+      const handle = host.attach('claude', startConfig('s-boot'), 0)
+      const attentions: AttentionState[] = []
+      handle.onAttentionChange((attention) => attentions.push(attention))
+      await waitUntil(() => host.handshake() !== null, 'the host to be listed')
+
+      handle.sendMessage('', undefined, undefined, CHOICE_ANSWER)
+      await waitUntil(
+        () => attentions.includes('failed'),
+        'the refusal to be reported',
+      )
+
+      expect(stub.commandEnvelopes).toEqual([])
+
+      handle.stop()
+    })
+  })
+
   describe('on a host that said nothing readable', () => {
     /** Mutation: wait for a listing before sending an answer and this is red; a plain message sent right behind it would overtake it. */
     it('sends an answer from a run attached before its host was listed, without waiting to be told', async () => {
+      // The listing the attach asks for fails, so the host stays unread.
+      stub.setMetaStatus(500)
       const handle = host.attach('claude', startConfig('s-unlisted'), 0)
       await waitUntil(
         () => stub.eventStreamLastEventIds.length === 1,
