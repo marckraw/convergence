@@ -11,6 +11,9 @@ import {
   type ExecutionTurnFileChange,
   type ExecutionTurnOrigin,
   type ExecutionWorkspaceSource,
+  type HarnessEvidence as WireHarnessEvidence,
+  type SessionAgentRun as WireSessionAgentRun,
+  type SessionTask as WireSessionTask,
   type ExecutionProvider,
   type ExecutionProviderModel,
   type KnownExecutionProtocolCapability,
@@ -21,6 +24,11 @@ import type {
   ConversationItemDraft,
   SessionDelta,
 } from '../../session/conversation-item.types'
+import type {
+  HarnessEvidence,
+  SessionAgentRun,
+  SessionTask,
+} from '../../session/harness-evidence.types'
 import type { SkillSelection } from '../../skills/skills.types'
 import type {
   Attachment,
@@ -729,8 +737,9 @@ export function toLocalSessionDelta(
       // the protocol under the same names (protocol 0.19), so it is handed over
       // whole: every harness family a local run records, a remote one now
       // records too. This assignment and its mirror in `toWireSessionDelta`
-      // are the pin on that: when either copy changes without the other, one
-      // of them stops compiling.
+      // only prove the two copies assignable each way, which a new optional
+      // field on either side survives; the exact pin is `evidenceShape` in
+      // EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE.
       return { kind: 'harness.evidence', evidence: delta.evidence }
     case 'turn.patch':
       return null
@@ -905,6 +914,19 @@ type Accounted<Unplaced> = [Unplaced] extends [never]
   : { unplaced: Unplaced }
 
 /**
+ * Whether two types are the same type, not merely assignable each way: the
+ * comparison TypeScript makes between two generic signatures is its identity
+ * relation, so an optional field one side has and the other lacks is a
+ * difference here, where mutual assignability lets it through. `true` when
+ * they are the same, otherwise a type naming both, so assigning `true` fails
+ * with the two shapes in the message.
+ */
+type Same<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : { differs: [A, B] }
+
+/**
  * The exhaustive inventory (MAR-3684). Each line compiles only while every
  * field of its wire shape is either mapped above or named on its unmapped
  * list with a reason, so the next protocol release that adds a field is a
@@ -959,6 +981,18 @@ export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
       | (typeof EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS)[number]
     >
   >
+  /**
+   * The evidence the wire carries is Convergence's own, copied into the
+   * protocol (protocol 0.19), and handed to `HarnessEvidenceService.apply`
+   * whole. The two assignments in the delta mappings only prove the copies
+   * assignable each way, which an optional field added to one side survives
+   * (a host's `exitCode?` on a task patch would compile and then be dropped
+   * by the fold). These are exact: the union, and the two rows its facts
+   * patch.
+   */
+  evidenceShape: Same<WireHarnessEvidence, HarnessEvidence>
+  sessionTask: Same<WireSessionTask, SessionTask>
+  sessionAgentRun: Same<WireSessionAgentRun, SessionAgentRun>
   capabilities: Accounted<
     Exclude<
       KnownExecutionProtocolCapability,
@@ -973,6 +1007,9 @@ export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
   provider: true,
   providerModel: true,
   snapshot: true,
+  evidenceShape: true,
+  sessionTask: true,
+  sessionAgentRun: true,
   capabilities: true,
 }
 

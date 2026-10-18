@@ -1850,6 +1850,9 @@ describe('the exhaustive wire inventory (protocol 0.31)', () => {
       provider: true,
       providerModel: true,
       snapshot: true,
+      evidenceShape: true,
+      sessionTask: true,
+      sessionAgentRun: true,
       capabilities: true,
     })
   })

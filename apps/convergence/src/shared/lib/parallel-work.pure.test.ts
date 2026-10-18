@@ -10,6 +10,7 @@ import {
   parallelWorkTime,
   parallelWorkClock,
   parallelWorkAnchor,
+  stopTaskUnavailableReason,
   type ParallelWorkTime,
   formatRelativeTime,
   archiveParallelWork,
@@ -499,4 +500,18 @@ it('RUN77 reads answered from the recorded state even at zero counts — mutatio
       parallelWork: { running: 0, unknown: 0, failed: 1, stopped: 0 },
     }),
   ).toBe('finished · 1 failed')
+})
+
+it('says why Stop cannot reach a task in words that fit where the session runs (MAR-3684) — mutation give a remote session the Claude Code words turns red', () => {
+  expect(
+    [undefined, null, '', 'local', 'endpoint:kuba-vps'].map((executionHost) =>
+      stopTaskUnavailableReason({ executionHost }),
+    ),
+  ).toEqual([
+    'Stop is not available on this Claude Code version',
+    'Stop is not available on this Claude Code version',
+    'Stop is not available on this Claude Code version',
+    'Stop is not available on this Claude Code version',
+    'Stop is not available on this remote host',
+  ])
 })

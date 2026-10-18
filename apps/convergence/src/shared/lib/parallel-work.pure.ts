@@ -2,6 +2,7 @@ import type {
   SessionAgentRun,
   SessionTask,
 } from '../types/harness-evidence.types'
+import { namesThisMachine } from './execution-host-id.pure'
 
 export interface ParallelWorkRow {
   id: string
@@ -80,6 +81,21 @@ export function parallelWorkStatus(session: {
     : session.status === 'answered'
       ? 'answered · finishing'
       : null
+}
+
+/**
+ * Why Stop cannot reach one task of a session, in the panel's tooltip and in
+ * the refusal the main process throws alike (MAR-3684): a remote session's
+ * host does not take `stop-task`, and a local session's provider cannot stop
+ * one task (an older Claude Code). The remote words are the remote handle's
+ * own, so the panel and a refused Stop say the same thing.
+ */
+export function stopTaskUnavailableReason(session: {
+  executionHost?: string | null
+}): string {
+  return namesThisMachine(session.executionHost)
+    ? 'Stop is not available on this Claude Code version'
+    : 'Stop is not available on this remote host'
 }
 
 export function parallelWorkRowState(row: ParallelWorkRow) {

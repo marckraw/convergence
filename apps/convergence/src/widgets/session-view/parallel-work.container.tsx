@@ -10,6 +10,7 @@ import {
 import type { ConversationItem as Item, Session } from '@/entities/session'
 import {
   parallelWorkRowState,
+  stopTaskUnavailableReason,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import { useElementWidth } from '@/shared/hooks/use-element-width'
@@ -398,6 +399,7 @@ export const ParallelWork: FC<Props> = ({
         collapsed={collapsed}
         stopStates={stopStates}
         canStop={session.canStopTasks}
+        stopUnavailableReason={stopTaskUnavailableReason(session)}
         resultItems={resultItems}
         onSelect={select}
         onBack={() => {

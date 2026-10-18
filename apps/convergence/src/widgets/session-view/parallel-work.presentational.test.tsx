@@ -57,6 +57,23 @@ it('R6 renders capability reasons with disabled controls — mutation enable una
   })
 })
 
+it("says the reason it is handed when Stop is unavailable, a remote host's among them (MAR-3684) — mutation drop stopUnavailableReason turns red", () => {
+  render(
+    <ParallelWorkPanel
+      rows={buildParallelWork([{ ...agent, status: 'running' }], [])}
+      now={0}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+      stopUnavailableReason="Stop is not available on this remote host"
+    />,
+  )
+  expect(
+    screen
+      .getByRole('button', { name: 'Stop' })
+      .getAttribute('aria-description'),
+  ).toBe('Stop is not available on this remote host')
+})
+
 it('RUN64 R2 unknown last sighting has a relative age and provisional identity stays out of the title — mutation omit relative age or show provider id turns red', () => {
   const { container } = render(
     <ParallelWorkPanel
