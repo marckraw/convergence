@@ -4469,13 +4469,25 @@ export class SessionService {
         )
           this.flushPendingConversationPatchesForSession(sessionId)
         const evidence = new HarnessEvidenceService(this.db)
+        const seq = delta.executionHostSeq
         let renamed: ReturnType<HarnessEvidenceService['apply']>
         try {
-          renamed = evidence.apply(
-            sessionId,
-            this.activeTurnIds.get(sessionId) ?? null,
-            delta.evidence,
-          )
+          // The evidence and the stream cursor commit together, as a session
+          // patch and its cursor do (MAR-2582). A hook, retry or other harness
+          // event is appended, not folded into a keyed row, so an envelope the
+          // record applied while its cursor stayed behind came back on the
+          // next attach and was appended twice (MAR-4293). The trailing
+          // `recordRemoteEventSeq` for the same envelope is now a no-op.
+          renamed = this.db.transaction(() => {
+            const applied = evidence.apply(
+              sessionId,
+              this.activeTurnIds.get(sessionId) ?? null,
+              delta.evidence,
+            )
+            if (seq !== undefined)
+              this.sessionRepository.setExecutionHostLastSeq(sessionId, seq)
+            return applied
+          })()
         } catch (error) {
           // The evidence write is one transaction in its own service, so it
           // is tagged by the error's origin rather than by statement: only a

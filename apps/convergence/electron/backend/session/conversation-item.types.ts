@@ -235,7 +235,18 @@ export type ConversationItemDraft = ConversationItem extends infer T
   : never
 
 export type SessionDelta =
-  | { kind: 'harness.evidence'; evidence: HarnessEvidence }
+  | {
+      kind: 'harness.evidence'
+      evidence: HarnessEvidence
+      /**
+       * The execution-host event sequence this evidence came from, when it
+       * came from one. As on `session.patch`: it lets the record commit the
+       * evidence and the stream cursor in one transaction, so a crash between
+       * the two cannot leave the envelope applied and still owed (MAR-4293).
+       * Local adapters leave it unset.
+       */
+      executionHostSeq?: number
+    }
   | {
       kind: 'session.patch'
       patch: Partial<
