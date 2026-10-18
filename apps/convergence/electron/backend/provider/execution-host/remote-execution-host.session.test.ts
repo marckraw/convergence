@@ -24,7 +24,10 @@ import {
 } from '@convergence/execution-host-client'
 import { LocalExecutionHost } from './local-execution-host'
 import { RemoteExecutionHost } from './remote-execution-host'
-import { EXECUTION_HOST_STOP_TASK_CAPABILITY } from './execution-host-wire-mapping.pure'
+import {
+  EXECUTION_HOST_STOP_TASK_CAPABILITY,
+  EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
+} from './execution-host-wire-mapping.pure'
 import type { HarnessEvidence } from '../../session/harness-evidence.types'
 import type { ProviderExecutionHost } from './execution-host.types'
 import type { SessionHandle } from '../provider.types'
@@ -1944,6 +1947,109 @@ describe('remote wire events reaching the session record', () => {
         'the turn to settle',
       )
       expect(answerWindowStart()).toBe(window)
+    })
+  })
+
+  /**
+   * A remote task's output tail, through the service (MAR-4275). The summary
+   * says whether the session's host serves it, from the host's own
+   * advertisement; the read goes to the host the session names, by session and
+   * task id. Mutations: report the flag for a host that did not advertise the
+   * route, read a local session's task through the remote path, or ask the
+   * host for a path the row carries, and this turns red.
+   */
+  describe('a remote task output tail (MAR-4275)', () => {
+    let outputRequests: string[]
+
+    async function useHostServingOutput(advertised: boolean): Promise<void> {
+      const health = JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as {
+        executionProtocol: { capabilities: string[] }
+      }
+      if (advertised)
+        health.executionProtocol.capabilities.push(
+          EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
+        )
+      stub.setHealthBody(JSON.stringify(health))
+      outputRequests = []
+      const withOutput = new RemoteExecutionHost({
+        connection: {
+          resolveConnection: async () => ({
+            baseUrl: 'http://daemon.test',
+            token: 'test-token',
+          }),
+        },
+        fetch: (async (input: unknown, init?: RequestInit) => {
+          const url = String(input)
+          if (!/\/tasks\/[^/]+\/output/.test(url))
+            return stub.fetchFn(input as Parameters<typeof fetch>[0], init)
+          outputRequests.push(url)
+          return new Response(
+            JSON.stringify({
+              sessionId,
+              taskId: 'bash-task',
+              status: 'running',
+              text: 'building\n',
+              startOffset: 0,
+              endOffset: 9,
+              totalBytes: 9,
+              truncated: false,
+              readAt: '2026-10-18T10:00:00.000Z',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          )
+        }) as typeof fetch,
+        onEventSeq: () => {},
+      })
+      await withOutput.refreshProviders()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: withOutput,
+        }),
+      )
+    }
+
+    it('offers the read and returns the tail where the host advertises tasks.output.v1', async () => {
+      await useHostServingOutput(true)
+
+      expect(service.getSummaryById(sessionId)?.canReadTaskOutput).toBe(true)
+      expect(await service.readTaskOutput(sessionId, 'bash-task')).toEqual({
+        kind: 'output',
+        text: 'building\n',
+        status: 'running',
+        truncated: false,
+        totalBytes: 9,
+        readAt: '2026-10-18T10:00:00.000Z',
+      })
+      expect(outputRequests).toEqual([
+        `http://daemon.test/v0/execution/sessions/${sessionId}/tasks/bash-task/output?tail=65536`,
+      ])
+    })
+
+    it('does not offer the read, and refuses it as unsupported, where the host does not advertise it', async () => {
+      await useHostServingOutput(false)
+
+      expect(service.getSummaryById(sessionId)?.canReadTaskOutput).toBe(false)
+      expect(await service.readTaskOutput(sessionId, 'bash-task')).toEqual({
+        kind: 'refused',
+        code: 'unsupported',
+      })
+      expect(outputRequests).toEqual([])
+    })
+
+    it('has no read for a session that runs on this machine', async () => {
+      const localId = service.create({
+        projectId: PROJECT_ID,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'local session',
+      }).id
+
+      expect(service.getSummaryById(localId)?.canReadTaskOutput).toBe(false)
+      await expect(
+        service.readTaskOutput(localId, 'bash-task'),
+      ).rejects.toThrow('This session does not run on a remote host')
     })
   })
 })

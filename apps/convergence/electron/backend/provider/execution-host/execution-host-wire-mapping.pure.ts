@@ -714,6 +714,21 @@ export const EXECUTION_HOST_STOP_TASK_CAPABILITY =
   'commands.stopTask.v1' satisfies KnownExecutionProtocolCapability
 
 /**
+ * The capability a host advertises when it reads a structured answer to an
+ * input request (protocol 0.26): a choice, plan, form or url
+ * `interactionResponse` on `send-message`. A host without it cannot read one.
+ */
+export const EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY =
+  'interactions.structured' satisfies KnownExecutionProtocolCapability
+
+/**
+ * The capability a host advertises when it serves a task's output tail
+ * (protocol 0.24): `GET /v0/execution/sessions/:id/tasks/:taskId/output`.
+ */
+export const EXECUTION_HOST_TASK_OUTPUT_CAPABILITY =
+  'tasks.output.v1' satisfies KnownExecutionProtocolCapability
+
+/**
  * Builds the wire stop-task command (protocol 0.19). The id is the one the
  * session's evidence named, a task's `taskId` or an agent run's linked task,
  * which is what the parallel-work panel's Stop hands the handle.
@@ -1313,12 +1328,17 @@ export const EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS = [
 
 /**
  * The capability ids Convergence reads off a host's `/health` and acts on:
- * `projects.v1` gates the host's Project listing (MAR-2689), and
- * `commands.stopTask.v1` the panel's Stop on one task (MAR-3684).
+ * `projects.v1` gates the host's Project listing (MAR-2689),
+ * `commands.stopTask.v1` the panel's Stop on one task (MAR-3684),
+ * `interactions.structured` a structured answer to an input request
+ * (MAR-4276), and `tasks.output.v1` the panel's output tail of a remote task
+ * (MAR-4275).
  */
 export const EXECUTION_HOST_CHECKED_CAPABILITIES = [
   'projects.v1',
   EXECUTION_HOST_STOP_TASK_CAPABILITY,
+  EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY,
+  EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
 ] as const satisfies readonly KnownExecutionProtocolCapability[]
 
 /**
@@ -1341,8 +1361,6 @@ export const EXECUTION_HOST_UNCHECKED_CAPABILITIES = {
   'attachments.inline-image':
     'Convergence sends no inline attachment yet (MAR-1415).',
   'commands.cancelQueued': 'Convergence sends no cancel-queued command.',
-  'interactions.structured':
-    'Answers are sent unchecked; every agents-daemon followed advertises it (MAR-4276).',
   'turns.fileChanges':
     'File changes are read when they arrive; there is nothing to gate.',
   'turns.fileChanges.combined': 'As turns.fileChanges.',
@@ -1378,7 +1396,6 @@ export const EXECUTION_HOST_UNCHECKED_CAPABILITIES = {
     'Convergence sends no inline attachment yet (MAR-1415).',
   'items.toolAttachments.v1':
     'Tool-result images are fetched from any host that sends them (EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS, MAR-4274).',
-  'tasks.output.v1': 'A remote task output tail is not read yet (MAR-4275).',
   'providers.usage.v1':
     'Usage is read wherever the catalogue carries it; a host without the capability sends none, which reads as unknown (MAR-4272).',
 } as const satisfies Record<

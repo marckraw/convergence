@@ -3,7 +3,14 @@ import type {
   ExecutionSkippedEnvelope,
   ExecutionTurnOrigin,
 } from '@mrck-labs/execution-host-protocol'
+import {
+  createExecutionHostClient,
+  ExecutionHostError,
+  ExecutionTaskOutputError,
+  type ExecutionHostErrorKind,
+} from '@mrck-labs/execution-host-protocol/client'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import type { RemoteTaskOutputReading } from '../../../../src/shared/types/task-output.types'
 import { RecordingError } from '../../session/session.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import type {
@@ -35,6 +42,8 @@ import {
   buildWireStopCommand,
   buildWireStopTaskCommand,
   EXECUTION_HOST_STOP_TASK_CAPABILITY,
+  EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY,
+  EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
   toLocalSessionDelta,
   wireToolImageReferences,
   withSettledAttention,
@@ -126,6 +135,23 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
  */
 export const HOST_UNREACHABLE_RETRY_MS = 60_000
 
+/** How long a read of a task's output tail may take before the panel is told the host did not answer. */
+const DEFAULT_TASK_OUTPUT_TIMEOUT_MS = 15_000
+
+/**
+ * What a failed task-output read says, by how it failed. Convergence's own
+ * sentences: the client's reason can carry the host's text, which a panel
+ * that shows it to a person is not the place for.
+ */
+const TASK_OUTPUT_FAILURE_REASONS = {
+  network: 'the host could not be reached',
+  timeout: 'the host did not answer in time',
+  auth: 'the host did not accept the token',
+  'not-found': 'the host could not be read',
+  http: 'the host could not be read',
+  malformed: 'the host could not be read',
+} as const satisfies Record<ExecutionHostErrorKind, string>
+
 /**
  * Emergence's number, and its reasoning with it
  * (`packages/client-core/src/endpoint/endpoint-handshake.service.ts:11`):
@@ -183,6 +209,8 @@ export interface RemoteExecutionHostDeps {
   }
   /** Overridable so tests can prove the cap without waiting 15 seconds. */
   healthProbeTimeoutMs?: number
+  /** How long a task-output read may take (MAR-4275); overridable for the same reason. */
+  taskOutputTimeoutMs?: number
   /**
    * Called after each processed event envelope with its sequence number.
    * Callers persist this to resume the stream after an app restart.
@@ -406,6 +434,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number, signal?: AbortSignal) => Promise<void>
   private readonly healthProbeTimeoutMs: number
+  private readonly taskOutputTimeoutMs: number
   private readonly debugSink: ProviderDebugSink
   /**
    * The daemon configuration the resolver last returned, and the yardstick
@@ -513,6 +542,8 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     })
     this.healthProbeTimeoutMs =
       deps.healthProbeTimeoutMs ?? DEFAULT_HEALTH_PROBE_TIMEOUT_MS
+    this.taskOutputTimeoutMs =
+      deps.taskOutputTimeoutMs ?? DEFAULT_TASK_OUTPUT_TIMEOUT_MS
     this.maxReconnectAttempts =
       deps.reconnect?.maxAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS
     this.reconnectDelayMs =
@@ -1279,6 +1310,71 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     return parseRemoteSessionWorkspaceInfo(snapshot, sessionId)
   }
 
+  /**
+   * Whether this host serves a task's output tail: it said `tasks.output.v1`
+   * in the handshake. A host that said nothing readable is not asked, as
+   * `stop-task` is not sent to one (MAR-4275).
+   */
+  readsTaskOutput(): boolean {
+    return (
+      this.handshake()?.executionProtocolCapabilities.includes(
+        EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
+      ) ?? false
+    )
+  }
+
+  /**
+   * Reads the end of a remote task's output from the host that runs it
+   * (`tasks.output.v1`, MAR-4275): whole lines, redacted by the host, at most
+   * 64 KiB. The request names a session and a task, never a file path.
+   *
+   * Read through the protocol client's `taskOutput`, not `requestJson`: the
+   * client reads an answer to at most 512 KiB and a refusal to 64 KiB, and
+   * gives the read a deadline of its own, so neither a runaway body nor a
+   * host that hangs holds the panel. A host that does not advertise the route
+   * is not asked. A refusal, by code, is the reading's `refused`. A host that
+   * could not be reached or did not answer in time throws a fixed sentence,
+   * never the host's own text, since there is nothing to say about the
+   * task's output.
+   */
+  async readTaskOutput(
+    sessionId: string,
+    taskId: string,
+  ): Promise<RemoteTaskOutputReading> {
+    await this.ensureListed()
+    if (!this.readsTaskOutput()) return { kind: 'refused', code: 'unsupported' }
+    const connection = await this.resolveConnection()
+    try {
+      const output = await createExecutionHostClient({
+        baseUrl: connection.baseUrl,
+        token: connection.token,
+        fetch: this.fetchFn,
+      }).taskOutput(sessionId, taskId, { timeoutMs: this.taskOutputTimeoutMs })
+      return {
+        kind: 'output',
+        text: output.text,
+        status: output.status,
+        truncated: output.truncated,
+        totalBytes: output.totalBytes,
+        readAt: output.readAt,
+      }
+    } catch (error) {
+      if (error instanceof ExecutionTaskOutputError)
+        return { kind: 'refused', code: error.code }
+      // An id the route cannot name, or a tail out of bounds, is refused
+      // before anything is sent.
+      if (error instanceof TypeError || error instanceof RangeError)
+        return { kind: 'refused', code: 'rejected' }
+      if (error instanceof ExecutionHostError)
+        throw new ExecutionHostError(
+          error.kind,
+          TASK_OUTPUT_FAILURE_REASONS[error.kind],
+          { operation: error.operation, status: error.status },
+        )
+      throw error
+    }
+  }
+
   async oneShot(
     providerId: string,
     _input: OneShotInput,
@@ -1553,6 +1649,12 @@ class RemoteSessionRun {
   }
 
   begin(): void {
+    // A run reattached at app boot may be answered before anything has listed
+    // its host, and an answer is gated on the handshake that listing brings
+    // (`structuredAnswerRefusal`). Asked for here and not awaited: the stream
+    // must not wait on a listing, and a listing that fails is the next
+    // refresh's to report (MAR-4276).
+    if (this.params.resume) void this.params.host.ensureListed().catch(() => {})
     void this.run()
   }
 
@@ -2542,6 +2644,13 @@ class RemoteSessionRun {
   }
 
   private async postCommand(command: ExecutionHostCommand): Promise<void> {
+    const refusal = this.structuredAnswerRefusal(command)
+    if (refusal) {
+      this.reportUndeliveredCommand(
+        `Remote session command was not delivered: ${refusal}`,
+      )
+      return
+    }
     this.recordDebug('request', {
       direction: 'out',
       method: command.kind,
@@ -2568,6 +2677,44 @@ class RemoteSessionRun {
         `Remote session command was not delivered: ${describeRemoteExecutionHostFailure(error)}`,
       )
     }
+  }
+
+  /**
+   * Why a structured answer (a choice, plan, form or url `interactionResponse`)
+   * must not be sent to this run's host, or null when it may be (MAR-4276).
+   *
+   * The protocol's shared client (0.26) refuses, unsent, such an answer to a
+   * host whose `/health` does not advertise `interactions.structured`; this
+   * transport is Convergence's own, so the same refusal is made here. A host
+   * that cannot read the answer would take it and do nothing with it, and the
+   * person would be left believing the request was answered.
+   *
+   * A host that said nothing readable is unknown, never unsupported (see
+   * `handshake`): the answer is sent, as it was before the gate, and the host
+   * says what it makes of it. Only a handshake that was read and lacks the id
+   * refuses. Every command but a send carrying an answer passes untouched.
+   *
+   * Synchronous on purpose: waiting for a listing here would let a plain
+   * message sent right after an answer overtake it. A run attached before its
+   * host was ever listed has no handshake yet, which reads as unknown.
+   */
+  private structuredAnswerRefusal(
+    command: ExecutionHostCommand,
+  ): string | null {
+    if (
+      command.kind !== 'send-message' ||
+      !command.options?.interactionResponse
+    )
+      return null
+    const handshake = this.params.host.handshake()
+    if (
+      !handshake ||
+      handshake.executionProtocolCapabilities.includes(
+        EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY,
+      )
+    )
+      return null
+    return `this host does not advertise structured answers (${EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY}), so the answer was not sent. Answer the request in a client the host supports, or update the host.`
   }
 
   /**

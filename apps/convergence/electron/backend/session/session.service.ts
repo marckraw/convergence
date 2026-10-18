@@ -7,6 +7,7 @@ import type { ConversationPrefix } from '../../../src/entities/session/conversat
 import { recordConversationRead } from '../perf/perf-probe.service'
 import { HandoffRefusedError } from '../provider/provider-account-handoff.pure'
 import type { InitialDispatchReceipt } from '../provider/provider.types'
+import type { RemoteTaskOutputReading } from '../../../src/shared/types/task-output.types'
 import { readSessionTurnTimings } from './session-timing.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import {
@@ -1787,14 +1788,16 @@ export class SessionService {
   }
 
   private buildSessionSummary(row: SessionRow): SessionSummary {
+    const base = sessionSummaryFromRow(row)
     const summary = {
-      ...sessionSummaryFromRow(row),
+      ...base,
       turnTiming: this.summaryTurnTiming(
         row,
         readSessionTurnTimings(this.db, [row.id]).get(row.id),
       ),
       hasActiveHandle: this.activeHandles.has(row.id),
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+      canReadTaskOutput: this.canReadTaskOutput(base),
       canReconnectMcpServers:
         this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
       parallelWork: withHostRunningTasks(
@@ -1820,18 +1823,22 @@ export class SessionService {
       this.db,
       rows.map((row) => row.id),
     )
-    const summaries = rows.map((row) => ({
-      ...sessionSummaryFromRow(row),
-      turnTiming: this.summaryTurnTiming(row, timings.get(row.id)),
-      hasActiveHandle: this.activeHandles.has(row.id),
-      canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
-      canReconnectMcpServers:
-        this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
-      parallelWork: withHostRunningTasks(
-        counts.get(row.id)!,
-        this.hostRunningTasks.get(row.id),
-      ),
-    }))
+    const summaries = rows.map((row) => {
+      const base = sessionSummaryFromRow(row)
+      return {
+        ...base,
+        turnTiming: this.summaryTurnTiming(row, timings.get(row.id)),
+        hasActiveHandle: this.activeHandles.has(row.id),
+        canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+        canReadTaskOutput: this.canReadTaskOutput(base),
+        canReconnectMcpServers:
+          this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
+        parallelWork: withHostRunningTasks(
+          counts.get(row.id)!,
+          this.hostRunningTasks.get(row.id),
+        ),
+      }
+    })
     const attentionRowsBySessionId =
       this.readLatestAttentionRequestRows(summaries)
 
@@ -2161,6 +2168,36 @@ export class SessionService {
       .get(sessionId, id, sessionId, id) as { status: string } | undefined
     if (row?.status !== 'running') throw new Error('This task is not running')
     await handle.stopTask(id)
+  }
+
+  /**
+   * The end of a remote task's output, read from the host the session names
+   * (MAR-4275). The row's `outputFile` is a path on that host, so it is never
+   * opened here: the host is asked by session and task id, and only where it
+   * advertises `tasks.output.v1`. A local session has no such read.
+   */
+  async readTaskOutput(
+    sessionId: string,
+    taskId: string,
+  ): Promise<RemoteTaskOutputReading> {
+    const session = this.getSummaryById(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    const host = this.resolveExecution(session).host
+    if (!host.readTaskOutput)
+      throw new Error('This session does not run on a remote host')
+    return host.readTaskOutput(sessionId, taskId)
+  }
+
+  /** Whether this session's host serves a task's output tail; false when it cannot be asked. */
+  private canReadTaskOutput(
+    session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
+  ): boolean {
+    if (isLocalExecutionHost(session.executionHost)) return false
+    try {
+      return this.resolveExecution(session).host.readsTaskOutput?.() === true
+    } catch {
+      return false
+    }
   }
 
   harnessFacts(sessionId: string) {

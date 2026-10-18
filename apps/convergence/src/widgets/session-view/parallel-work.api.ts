@@ -36,4 +36,7 @@ export const parallelWorkApi = {
     window.electronAPI.session.onEvidenceUpdated(listener),
   stop: (sessionId: string, id: string) =>
     window.electronAPI.session.stopTask(sessionId, id),
+  /** The end of a remote task's output, read from its host (MAR-4275). */
+  readTaskOutput: (sessionId: string, taskId: string) =>
+    window.electronAPI.session.readTaskOutput(sessionId, taskId),
 }

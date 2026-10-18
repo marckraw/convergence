@@ -482,6 +482,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getConversation', id),
     stopTask: (sessionId: string, id: string) =>
       ipcRenderer.invoke('session:stopTask', sessionId, id),
+    readTaskOutput: (sessionId: string, taskId: string) =>
+      ipcRenderer.invoke('session:readTaskOutput', sessionId, taskId),
     harnessFacts: (sessionId: string) =>
       ipcRenderer.invoke('session:harnessFacts', sessionId),
     refreshMcpServers: (sessionId: string, reconnect: string | null) =>
