@@ -52,6 +52,8 @@ const TREE_WALKING_TESTS = [
 const TEMP_TREE_WALKS = [
   // `sumRegularFileBytes` walks the temp lane copy the test just built, never the repo.
   'electron/backend/lane/lane.service.test.ts',
+  // `snapshot` hashes only generated seed fixtures to prove refusals leave data untouched.
+  'electron/backend/perf/dev-seed.test.ts',
 ]
 
 /** The configs that run one of the walkers above. */

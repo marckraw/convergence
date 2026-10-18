@@ -14,6 +14,7 @@ import {
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
+import { LSOF_INSTALL_HINT } from './seed-diagnostics.mjs'
 import {
   SECRET_COLUMN,
   createTokenMasker,
@@ -377,7 +378,6 @@ try {
   console.error(
     `perf:seed failed during ${phase}; table=${JSON.stringify(table)}; code=${code}; unpublished copy removed. No source values are reported.`,
   )
-  if (code === 'LSOF_UNAVAILABLE')
-    console.error('Install lsof and ensure it is on PATH to check the target.')
+  if (code === 'LSOF_UNAVAILABLE') console.error(LSOF_INSTALL_HINT)
   process.exitCode = 1
 }
