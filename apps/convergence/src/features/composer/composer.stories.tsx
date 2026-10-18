@@ -7,7 +7,7 @@ import {
   type ProviderCatalogEntry,
   type ProviderInfo,
 } from '@/entities/session'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, screen, within } from 'storybook/test'
 import { Composer } from './composer.presentational'
 import { metaText } from '@/shared/testing/meta-line'
 import { filterComposerInjectionRootItems } from './composer-injection-trigger.pure'
@@ -368,6 +368,62 @@ export const Codex: Story = {
     await expect(args.onPermissionAdvancedOpenChange).toHaveBeenCalledWith(
       false,
     )
+  },
+}
+
+/**
+ * Codex on a container host (MAR-4272): the host runs workspace-write as
+ * danger-full-access, so Ask runs with full access there, and the composer
+ * says so before the start. The sandbox list is the host's own: it offers no
+ * read-only, and marks the raised one.
+ */
+export const RemoteCodexSandboxRaised: Story = {
+  args: {
+    selection: resolveProviderSelection(
+      [claudeCode, codex],
+      'codex',
+      'gpt-5.4',
+      'medium',
+    ),
+    executionBar: {
+      mode: 'choosing',
+      hostId: 'kuba-vps',
+      choices: [
+        { id: 'local', label: 'Local' },
+        { id: 'kuba-vps', label: 'kuba-vps' },
+      ],
+    },
+    permissionConfig: {
+      preset: 'custom',
+      codex: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
+    },
+    permissionAdvancedOpen: true,
+    hostPermissions: {
+      presets: ['ask', 'yolo', 'custom'],
+      codex: {
+        approvalPolicies: ['on-request', 'never'],
+        sandboxModes: ['workspace-write', 'danger-full-access'],
+        effectiveSandboxModes: {
+          'read-only': null,
+          'workspace-write': 'danger-full-access',
+        },
+      },
+      claudeCode: null,
+    },
+    permissionHostNotice:
+      "kuba-vps runs Codex's Workspace write sandbox as Full access.",
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(
+      canvas.getByText(
+        "kuba-vps runs Codex's Workspace write sandbox as Full access.",
+      ),
+    ).toBeVisible()
+    await userEvent.click(canvas.getByRole('combobox', { name: 'Sandbox' }))
+    await expect(
+      await screen.findByRole('option', { name: /Workspace write/ }),
+    ).toHaveTextContent('Runs as Full access on this host.')
+    await expect(screen.queryByRole('option', { name: /Read only/ })).toBeNull()
   },
 }
 

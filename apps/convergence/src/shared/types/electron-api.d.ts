@@ -1255,6 +1255,42 @@ interface ProviderInfo {
 interface ProviderCatalogEntryData {
   descriptor: ProviderInfo
   blockedReason: string | null
+  hostPermissions?: ProviderHostPermissionsData
+  hostUsage?: ProviderHostUsageData
+}
+
+/** A host's permission choices for one provider (MAR-4272). */
+interface ProviderHostPermissionsData {
+  presets: SessionPermissionPresetData[]
+  codex: {
+    approvalPolicies: CodexApprovalPolicyData[]
+    sandboxModes: CodexSandboxModeData[]
+    effectiveSandboxModes: Partial<
+      Record<CodexSandboxModeData, CodexSandboxModeData | null>
+    >
+  } | null
+  claudeCode: { permissionModes: ClaudeCodePermissionModeData[] } | null
+}
+
+/** How much of a host account's limits one provider has used (MAR-4272). */
+interface ProviderHostUsageData {
+  observedAt: string
+  source: 'turn' | 'read'
+  status: 'ok' | 'warning' | 'limited' | null
+  windows: Array<{
+    id: string
+    span: 'session' | 'week' | 'other'
+    label: string
+    usedPercent: number
+    resetsAt: string | null
+    modelFamily: string | null
+  }>
+  credits: {
+    hasCredits: boolean
+    unlimited: boolean
+    balance: string | null
+    observedAt: string
+  } | null
 }
 
 /** Every provider one machine offers, carrying which machine that is. */
@@ -2880,8 +2916,8 @@ interface RemoteExecutionHostConnectionResultData {
   providers: Array<{
     providerId: string
     name: string
-    available: boolean
-    authenticated: boolean
+    available: boolean | null
+    authenticated: boolean | null
     supportsContinuation: boolean
     models: Array<{ id: string; label: string }>
   }> | null

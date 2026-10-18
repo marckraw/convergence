@@ -13,6 +13,8 @@ import {
   type SessionSummary,
   type SessionPermissionConfig,
   defaultCustomPermissionConfigForProvider,
+  describeHostSandbox,
+  offeredDefaultPermissionPreset,
   resolveSimplePermissionConfig,
   withClaudeCodePermissionMode,
   withCodexApprovalPolicy,
@@ -128,6 +130,8 @@ import {
   type LocalRepositoryState,
 } from './execution-bar.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
+import { HostUsagePillContainer } from './host-usage-pill.container'
+import { resolveHostUsagePill } from './host-usage-pill.pure'
 import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
@@ -751,6 +755,41 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     executionHostId: executionBar.hostId,
   })
   /**
+   * What the machine the strip names says about the selected provider beyond
+   * the descriptor (MAR-4272): its own permission choices and its account's
+   * usage. Read from the option row's entries, so it is only ever about the
+   * machine those entries were listed by, and absent on every local catalog.
+   */
+  const selectedCatalogEntry =
+    optionRow.status === 'listed'
+      ? (optionRow.entries.find(
+          (entry) => entry.descriptor.id === selection.providerId,
+        ) ?? null)
+      : null
+  const hostPermissions = selectedCatalogEntry?.hostPermissions ?? null
+  const hostUsage = selectedCatalogEntry?.hostUsage ?? null
+  const hostUsageView = hostUsage
+    ? resolveHostUsagePill({
+        usage: hostUsage,
+        providerName: selection.provider?.name ?? selection.providerLabel,
+        hostLabel,
+        model: selection.model,
+        now: Date.now(),
+      })
+    : null
+  const permissionHostNotice = describeHostSandbox({
+    providerId: selection.providerId,
+    config: permissionConfig,
+    host: hostPermissions,
+    hostLabel,
+  })
+  // A primitive, so a catalogue refresh that hands back an equal answer does
+  // not re-run the default below and close a panel he has open.
+  const hostDefaultPermissionPreset = offeredDefaultPermissionPreset(
+    defaultPermissionPresetForHost(executionBar.hostId),
+    hostPermissions,
+  )
+  /**
    * What the send records, derived beside the strip that shows it.
    *
    * A primitive on purpose. The send closes over this rather than over the
@@ -996,7 +1035,8 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
   }, [needsCloneableRepository, projects, projectId])
 
   /**
-   * The remote default: a session born on a daemon starts `yolo` (MAR-2689).
+   * The remote default: a session born on a daemon starts `yolo` (MAR-2689),
+   * or `ask` when that host offers no Yolo for the provider (MAR-4272).
    *
    * Only while a session is being born, and only while he has not touched the
    * preset. A live session's preset comes from its record — the effect above
@@ -1007,11 +1047,14 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     if (permissionTouched) return
     setPermissionAdvancedOpen(false)
     setPermissionConfig(
-      resolveSimplePermissionConfig(
-        defaultPermissionPresetForHost(executionBar.hostId),
-      ),
+      resolveSimplePermissionConfig(hostDefaultPermissionPreset),
     )
-  }, [activeSession, permissionTouched, executionBar.hostId])
+  }, [
+    activeSession,
+    permissionTouched,
+    executionBar.hostId,
+    hostDefaultPermissionPreset,
+  ])
 
   useEffect(() => {
     setSelectedSkills([])
@@ -2098,6 +2141,8 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
               onRefresh={() => void loadCodexUsage(true)}
               onOpenSettings={handleProviderUsageSettingsOpen}
             />
+          ) : hostUsageView ? (
+            <HostUsagePillContainer view={hostUsageView} />
           ) : null
         }
         contextWindowDot={
@@ -2187,6 +2232,8 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         skillCatalogLoading={skillCatalogLoading}
         skillCatalogError={skillCatalogError}
         remoteSkillsNotice={remoteSkillsNoticeText}
+        hostPermissions={hostPermissions}
+        permissionHostNotice={permissionHostNotice}
         onSkillPickerOpenChange={handleSkillPickerOpenChange}
         onSkillQueryChange={setSkillQuery}
         onSkillToggle={handleSkillToggle}

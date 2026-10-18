@@ -67,6 +67,59 @@ export interface SessionPermissionConfig {
   }
 }
 
+/**
+ * A host's permission choices for one provider, and what each Codex sandbox
+ * really runs as there (MAR-4272). Mirrors
+ * `electron/backend/provider/provider-catalog.types.ts`. A provider's part is
+ * null when the host offers none for it.
+ */
+export interface ProviderHostPermissions {
+  presets: SessionPermissionPreset[]
+  codex: {
+    approvalPolicies: CodexApprovalPolicy[]
+    sandboxModes: CodexSandboxMode[]
+    /**
+     * A sandbox left out is one the host does not speak for: unknown, not "as
+     * asked". Null is a sandbox the host does not offer.
+     */
+    effectiveSandboxModes: Partial<
+      Record<CodexSandboxMode, CodexSandboxMode | null>
+    >
+  } | null
+  claudeCode: { permissionModes: ClaudeCodePermissionMode[] } | null
+}
+
+/** One limit window of a host account: how much of it is used. */
+export interface ProviderHostUsageWindow {
+  id: string
+  span: 'session' | 'week' | 'other'
+  label: string
+  /** 0-100. */
+  usedPercent: number
+  resetsAt: string | null
+  /** The model family it limits, or null for every model. */
+  modelFamily: string | null
+}
+
+/**
+ * How much of a host account's limits one provider has used, as the host last
+ * heard it (MAR-4272). Shown to anyone; the account itself never reaches the
+ * renderer.
+ */
+export interface ProviderHostUsage {
+  observedAt: string
+  source: 'turn' | 'read'
+  status: 'ok' | 'warning' | 'limited' | null
+  windows: ProviderHostUsageWindow[]
+  /** Display only: credits never decide whether a turn is refused. */
+  credits: {
+    hasCredits: boolean
+    unlimited: boolean
+    balance: string | null
+    observedAt: string
+  } | null
+}
+
 export type ActivitySignal =
   | null
   | 'streaming'
