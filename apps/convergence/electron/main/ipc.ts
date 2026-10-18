@@ -1480,9 +1480,9 @@ export function registerIpcHandlers(
       sessionService.listRunItems(sessionId, agentRunIds),
   )
   ipcMain.handle(
-    'session:listTaskResultNotes',
+    'session:listTaskResultItems',
     (_event, sessionId: string, taskIds: string[]) =>
-      sessionService.listTaskResultNotes(sessionId, taskIds),
+      sessionService.listTaskResultItems(sessionId, taskIds),
   )
   ipcMain.handle(
     'session:listTaskItems',

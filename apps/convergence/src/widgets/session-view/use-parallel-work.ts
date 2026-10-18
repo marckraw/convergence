@@ -141,7 +141,7 @@ export function useParallelWorkResults(
   return useParallelWorkItems(
     key,
     revision,
-    parallelWorkApi.readTaskResultNotes,
+    parallelWorkApi.readTaskResultItems,
   )
 }
 
