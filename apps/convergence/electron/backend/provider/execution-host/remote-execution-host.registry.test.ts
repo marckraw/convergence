@@ -207,7 +207,7 @@ describe('remote execution hosts, one per endpoint', () => {
   })
 
   it('gives each endpoint its own provider listing and its own handshake', async () => {
-    daemonB.setMeta({
+    daemonB.setProviders({
       providers: [
         {
           id: 'codex',
@@ -288,7 +288,7 @@ describe('remote execution hosts, one per endpoint', () => {
     // back as a provider that does not exist, about a machine the human never
     // touched. Listed and blocked is not absent, and the refusal is the
     // daemon's sentence (MAR-2682).
-    daemonB.setMeta({
+    daemonB.setProviders({
       providers: [
         {
           id: 'codex',
@@ -335,7 +335,7 @@ describe('remote execution hosts, one per endpoint', () => {
     // bookkeeping before it attaches -- so a quiet send that was then refused
     // left `relays_muted` set on the session and every later turn went out
     // silently, for a turn that never happened (MAR-2682).
-    daemonB.setMeta({
+    daemonB.setProviders({
       providers: [
         {
           id: 'codex',

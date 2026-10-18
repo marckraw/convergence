@@ -4,7 +4,7 @@
  * Everything an app needs to talk to an agents-daemon over the execution host
  * wire protocol, and nothing about the app doing the talking: the `/health`
  * handshake, the Projects listing, the configuration and capability
- * fingerprints an answer is only true under, the parsers for `/v0/meta`, a
+ * fingerprints an answer is only true under, the parsers for `/v0/providers`, a
  * start response and a session snapshot, the SSE reader, and the wire trace.
  *
  * Two ports stand where an app would otherwise have to be imported —
@@ -59,7 +59,7 @@ export {
 
 export {
   createStubDaemon,
-  DAEMON_META,
+  DAEMON_PROVIDERS,
   deferred,
   envelope,
   letEverythingQueuedRun,
@@ -96,7 +96,7 @@ export {
   createSseParser,
   daemonCapabilitiesFingerprint,
   daemonConfigurationFingerprint,
-  parseRemoteExecutionHostMeta,
+  parseRemoteExecutionHostProviders,
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
   UNKNOWN_DAEMON_CAPABILITIES,
@@ -111,6 +111,7 @@ export {
   type RemoteExecutionHostConnectionResolver,
   type RemoteExecutionHostErrorKind,
   type RemoteExecutionHostProviderInfo,
+  type RemoteExecutionHostProviderModel,
   type RemoteSessionWorkspaceInfo,
 } from './remote-execution-host.types'
 

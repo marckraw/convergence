@@ -66,7 +66,7 @@ describe('DaemonClient.handshake', () => {
    * -> red.
    */
   it('calls the daemon a refuser when it rejects the token', async () => {
-    daemon.setMetaStatus(401)
+    daemon.setProvidersStatus(401)
     const handshake = await client().handshake()
     expect(handshake.status).toBe('unauthorized')
   })

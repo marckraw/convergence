@@ -57,7 +57,7 @@ interface RacingDaemon {
   fetchFn: typeof fetch
   /** Answers the nth `/health` request, 0-based in arrival order. */
   releaseHealth: (index: number) => void
-  /** Answers the nth `/v0/meta` request, 0-based in arrival order. */
+  /** Answers the nth `/v0/providers` request, 0-based in arrival order. */
   releaseMeta: (index: number) => void
 }
 
@@ -65,7 +65,7 @@ interface RacingDaemon {
  * A daemon whose answers are held until the test releases them, so two
  * overlapping refreshes can be interleaved deliberately. Each refresh gets its
  * own identity — a different version on `/health` and a different provider on
- * `/v0/meta` — which is what makes a mismatched pair visible.
+ * `/v0/providers` — which is what makes a mismatched pair visible.
  */
 function createRacingDaemon(identities: DaemonIdentity[]): RacingDaemon {
   const gate = () => {
@@ -99,7 +99,7 @@ function createRacingDaemon(identities: DaemonIdentity[]): RacingDaemon {
         version: identity.version,
       })
     }
-    if (url.endsWith('/v0/meta')) {
+    if (url.endsWith('/v0/providers')) {
       const identity = identities[metaCalls]
       await metaGates[metaCalls++].promise
       return jsonResponse({
@@ -182,7 +182,7 @@ describe('RemoteExecutionHost', () => {
   })
 
   it('classifies meta auth failures', async () => {
-    stub.setMetaStatus(401)
+    stub.setProvidersStatus(401)
     await expect(host.refreshProviders()).rejects.toMatchObject({
       name: 'RemoteExecutionHostError',
       kind: 'auth',
@@ -220,7 +220,7 @@ describe('RemoteExecutionHost', () => {
     })
 
     it('blocks a provider the daemon will not run, in the daemon’s own words', async () => {
-      stub.setMeta({
+      stub.setProviders({
         providers: [
           {
             id: 'claude',
@@ -258,7 +258,7 @@ describe('RemoteExecutionHost', () => {
     })
 
     it('says why a daemon could not be asked, rather than reporting no providers', async () => {
-      stub.setMetaStatus(500)
+      stub.setProvidersStatus(500)
       const catalog = await host.describeCatalog()
       // The previous listing survives a blip -- a row correct a second ago must
       // not empty -- and the failure is still reported beside it.
@@ -273,7 +273,7 @@ describe('RemoteExecutionHost', () => {
       // three labels (MAR-2682, "the row names the provider, not the
       // machine"). Naming the machine is the strip's
       // job, one tier below.
-      stub.setMeta({
+      stub.setProviders({
         providers: ['claude', 'codex', 'cursor'].map((id) => ({
           id,
           label: `${id} on the daemon`,
@@ -307,7 +307,7 @@ describe('RemoteExecutionHost', () => {
   })
 
   it('keeps the previous provider cache when describe cannot reach the daemon', async () => {
-    stub.setMetaStatus(500)
+    stub.setProvidersStatus(500)
     const descriptors = await host.describe()
     expect(descriptors.map((d) => d.id)).toEqual(['claude-code', 'codex'])
   })
@@ -471,7 +471,7 @@ describe('RemoteExecutionHost', () => {
       await host.refreshProviders()
       expect(host.handshake()?.daemonVersion).toBe('0.26.1')
 
-      stub.setMetaStatus(500)
+      stub.setProvidersStatus(500)
       await expect(host.refreshProviders()).rejects.toBeInstanceOf(
         RemoteExecutionHostError,
       )
@@ -1011,7 +1011,7 @@ describe('RemoteExecutionHost', () => {
 
   it('names the listing failure when one is why the cache is empty', async () => {
     const unreachable = createStubDaemon()
-    unreachable.setMetaStatus(503)
+    unreachable.setProvidersStatus(503)
     const failing = createHost(unreachable)
     await expect(failing.refreshProviders()).rejects.toThrow()
 
@@ -1030,7 +1030,7 @@ describe('RemoteExecutionHost', () => {
     // never rendered the option row reaches `start()` directly (MAR-2682, "a
     // blocked provider is refused at the host boundary"). Refused here, in
     // the daemon's own words.
-    stub.setMeta({
+    stub.setProviders({
       providers: [
         {
           id: 'cursor',
@@ -1066,7 +1066,7 @@ describe('RemoteExecutionHost', () => {
     // A daemon that has since lost its binary must not strand a live run: the
     // provider was validated when the session started and the daemon owns it
     // now. The documented exemption stays exempt.
-    stub.setMeta({
+    stub.setProviders({
       providers: [
         {
           id: 'cursor',
@@ -1088,11 +1088,11 @@ describe('RemoteExecutionHost', () => {
 
   it('goes back to the canonical refusal once a listing lands', async () => {
     const recovering = createStubDaemon()
-    recovering.setMetaStatus(503)
+    recovering.setProvidersStatus(503)
     const host2 = createHost(recovering)
     await expect(host2.refreshProviders()).rejects.toThrow()
 
-    recovering.setMetaStatus(200)
+    recovering.setProvidersStatus(200)
     await host2.refreshProviders()
 
     // The daemon answered, and its answer is the basis for the claim.

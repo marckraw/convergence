@@ -14,8 +14,17 @@ import {
   type HarnessEvidence as WireHarnessEvidence,
   type SessionAgentRun as WireSessionAgentRun,
   type SessionTask as WireSessionTask,
+  type ExecutionClaudePermissionMode,
+  type ExecutionCodexApprovalPolicy,
+  type ExecutionCodexSandboxMode,
+  type ExecutionInteractionRequestKind,
+  type ExecutionPermissionPreset,
   type ExecutionProvider,
   type ExecutionProviderModel,
+  type ExecutionProviderPermissions,
+  type ExecutionProviderUsage,
+  type ExecutionProviderUsageCredits,
+  type ExecutionProviderUsageWindow,
   type KnownExecutionProtocolCapability,
 } from '@mrck-labs/execution-host-protocol'
 import type { ExecutionSessionSnapshot } from '@mrck-labs/execution-host-protocol/client'
@@ -33,10 +42,21 @@ import type { SkillSelection } from '../../skills/skills.types'
 import type {
   Attachment,
   AttentionState,
+  ClaudeCodePermissionMode,
+  CodexApprovalPolicy,
+  CodexSandboxMode,
+  ProviderInteractionRequestKind,
   SessionHandle,
+  SessionPermissionPreset,
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
+import type {
+  ProviderHostPermissions,
+  ProviderHostUsage,
+  ProviderHostUsageCredits,
+  ProviderHostUsageWindow,
+} from '../provider-catalog.types'
 
 /**
  * Anti-corruption layer between Convergence's local session model and the
@@ -993,6 +1013,57 @@ export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
   evidenceShape: Same<WireHarnessEvidence, HarnessEvidence>
   sessionTask: Same<WireSessionTask, SessionTask>
   sessionAgentRun: Same<WireSessionAgentRun, SessionAgentRun>
+  /**
+   * The provider catalogue's vocabularies (MAR-4272). A host's permission
+   * choices and interaction kinds are copied into the app's own types, not
+   * translated, which is only sound while the sets are the same: a sandbox or
+   * a request kind one side gains is a type error here rather than a choice
+   * the composer offers and the host has never heard of.
+   */
+  permissionPreset: Same<ExecutionPermissionPreset, SessionPermissionPreset>
+  codexApprovalPolicy: Same<ExecutionCodexApprovalPolicy, CodexApprovalPolicy>
+  codexSandboxMode: Same<ExecutionCodexSandboxMode, CodexSandboxMode>
+  claudePermissionMode: Same<
+    ExecutionClaudePermissionMode,
+    ClaudeCodePermissionMode
+  >
+  interactionRequestKind: Same<
+    ExecutionInteractionRequestKind,
+    ProviderInteractionRequestKind
+  >
+  /** Every field of the catalogue's permissions, usage and credits, placed. */
+  providerPermissions: Accounted<
+    Exclude<
+      | keyof ExecutionProviderPermissions
+      | keyof NonNullable<ExecutionProviderPermissions['codex']>
+      | keyof NonNullable<ExecutionProviderPermissions['claudeCode']>,
+      | keyof ProviderHostPermissions
+      | keyof NonNullable<ProviderHostPermissions['codex']>
+      | keyof NonNullable<ProviderHostPermissions['claudeCode']>
+      | (typeof EXECUTION_HOST_UNREAD_PROVIDER_PERMISSION_FIELDS)[number]
+    >
+  >
+  providerUsage: Accounted<
+    Exclude<keyof ExecutionProviderUsage, keyof ProviderHostUsage>
+  >
+  providerUsageWindow: Accounted<
+    Exclude<keyof ExecutionProviderUsageWindow, keyof ProviderHostUsageWindow>
+  >
+  providerUsageCredits: Accounted<
+    Exclude<keyof ExecutionProviderUsageCredits, keyof ProviderHostUsageCredits>
+  >
+  providerUsageVocabulary: Same<
+    [
+      ExecutionProviderUsage['source'],
+      NonNullable<ExecutionProviderUsage['status']>,
+      ExecutionProviderUsageWindow['span'],
+    ],
+    [
+      ProviderHostUsage['source'],
+      NonNullable<ProviderHostUsage['status']>,
+      ProviderHostUsageWindow['span'],
+    ]
+  >
   capabilities: Accounted<
     Exclude<
       KnownExecutionProtocolCapability,
@@ -1010,65 +1081,87 @@ export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
   evidenceShape: true,
   sessionTask: true,
   sessionAgentRun: true,
+  permissionPreset: true,
+  codexApprovalPolicy: true,
+  codexSandboxMode: true,
+  claudePermissionMode: true,
+  interactionRequestKind: true,
+  providerPermissions: true,
+  providerUsage: true,
+  providerUsageWindow: true,
+  providerUsageCredits: true,
+  providerUsageVocabulary: true,
   capabilities: true,
 }
 
 /**
  * The provider fields Convergence reads, of the ones the protocol's catalogue
- * (`ExecutionProvider`) names. It reads them from the daemon's `/v0/meta`,
- * through `parseRemoteExecutionHostMeta`, not from `GET /v0/providers`; the
- * two listings share these.
+ * (`ExecutionProvider`) names, from the daemon's `GET /v0/providers` through
+ * `parseRemoteExecutionHostProviders` (MAR-4272).
+ *
+ * - `effortLevels` (0.18) is read folded into each model's `efforts`, which is
+ *   where the protocol's decoder puts a provider's levels for a model that
+ *   names none of its own. The remote descriptor's effort choice is the
+ *   host's.
+ * - `permissions` (0.27, `effectiveSandboxModes` 0.29) are the remote
+ *   composer's permission choices, and a Codex sandbox a host runs as another
+ *   is said before the start (`describeHostSandbox`).
+ * - `usage` (0.30, `credits` 0.31) is shown beside the provider, to anyone
+ *   (Marcin, 18 Oct).
  */
 export const EXECUTION_HOST_READ_PROVIDER_FIELDS = [
   'id',
   'label',
   'available',
   'authenticated',
-  'models',
-] as const satisfies readonly (keyof ExecutionProvider)[]
-
-/**
- * Provider catalogue fields Convergence does not read, because it does not
- * fetch the catalogue that carries them (MAR-4272).
- *
- * - `effortLevels` (0.18): the remote descriptor offers no effort choice, so a
- *   remote session runs on its model's default effort.
- * - `attachmentKinds` (0.22): the remote descriptor turns every attachment
- *   off, and Convergence sends no inline attachment yet (MAR-1415).
- * - `account` (0.22): which account a host's provider signs in as. Shown in
- *   accent.'s Hosts screen; not here yet.
- * - `permissions` (0.27, `effectiveSandboxModes` 0.29): a remote start offers
- *   the local permission choices. The sandbox a container host really runs a
- *   Codex choice as is not shown before the start.
- * - `interactions` (0.27): which request kinds (a plan to approve, a choice,
- *   a form, a url) a provider asks with. Convergence answers whatever
- *   `input-request` arrives, so it needs no forecast to answer one.
- * - `usage` (0.30, `credits` 0.31): how much of a host account's limits is
- *   used. Convergence's usage readouts are its own local accounts'.
- */
-export const EXECUTION_HOST_UNREAD_PROVIDER_FIELDS = [
   'effortLevels',
-  'attachmentKinds',
-  'account',
+  'models',
   'permissions',
   'interactions',
   'usage',
 ] as const satisfies readonly (keyof ExecutionProvider)[]
 
-/** The model fields Convergence reads, from `/v0/meta`'s model list. */
+/**
+ * Provider catalogue fields Convergence does not read.
+ *
+ * - `attachmentKinds` (0.22): the remote descriptor turns every attachment
+ *   off, and Convergence sends no inline attachment yet (MAR-1415).
+ * - `account` (0.22): withheld, not overlooked. It is personal data, and the
+ *   account stays visible only to the super-admin (Marcin, 18 Oct). A client
+ *   holding a daemon token cannot tell whether the person in front of it is
+ *   one, so `parseRemoteExecutionHostProviders` drops it where the catalogue
+ *   is read, and it never reaches the renderer.
+ */
+export const EXECUTION_HOST_UNREAD_PROVIDER_FIELDS = [
+  'attachmentKinds',
+  'account',
+] as const satisfies readonly (keyof ExecutionProvider)[]
+
+/**
+ * Permission fields of the catalogue Convergence does not read: Codex's
+ * reviewers and collaboration modes (0.27). The composer has no control for
+ * either, and a session it starts names neither, so the host's default
+ * stands (MAR-4272).
+ */
+export const EXECUTION_HOST_UNREAD_PROVIDER_PERMISSION_FIELDS = [
+  'approvalsReviewers',
+  'collaborationModes',
+] as const
+
+/**
+ * The model fields Convergence reads, from the catalogue's model list: every
+ * one, the efforts included (MAR-4272).
+ */
 export const EXECUTION_HOST_READ_PROVIDER_MODEL_FIELDS = [
   'slug',
   'label',
-] as const satisfies readonly (keyof ExecutionProviderModel)[]
-
-/**
- * Model fields Convergence does not read: a remote model's efforts, for the
- * reason `effortLevels` is unread above (MAR-4272).
- */
-export const EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS = [
   'defaultEffort',
   'efforts',
 ] as const satisfies readonly (keyof ExecutionProviderModel)[]
+
+/** Model fields Convergence does not read: none since MAR-4272. */
+export const EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS =
+  [] as const satisfies readonly (keyof ExecutionProviderModel)[]
 
 /**
  * The session-snapshot fields Convergence reads
@@ -1193,7 +1286,7 @@ export const EXECUTION_HOST_UNCHECKED_CAPABILITIES = {
     'Tool-result images are unmapped (EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS, MAR-4274).',
   'tasks.output.v1': 'A remote task output tail is not read yet (MAR-4275).',
   'providers.usage.v1':
-    'Convergence does not read the provider catalogue (MAR-4272).',
+    'Usage is read wherever the catalogue carries it; a host without the capability sends none, which reads as unknown (MAR-4272).',
 } as const satisfies Record<
   Exclude<
     KnownExecutionProtocolCapability,

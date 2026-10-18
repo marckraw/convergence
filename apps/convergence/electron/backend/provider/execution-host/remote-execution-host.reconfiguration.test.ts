@@ -109,11 +109,12 @@ describe('an endpoint whose base url moves under a live host', () => {
       const url = String(input)
       requestUrls.push(url)
       if (url.startsWith(OLD_URL)) {
-        if (url.endsWith('/v0/meta') && oldMetaGate) await oldMetaGate.promise
+        if (url.endsWith('/v0/providers') && oldMetaGate)
+          await oldMetaGate.promise
         return oldMachine.fetchFn(url, init)
       }
       if (url.startsWith(NEW_URL)) {
-        if (url.endsWith('/v0/meta') && metaGate) await metaGate.promise
+        if (url.endsWith('/v0/providers') && metaGate) await metaGate.promise
         return newMachine.fetchFn(url, init)
       }
       throw new Error(`No daemon serves ${url}`)
@@ -122,7 +123,7 @@ describe('an endpoint whose base url moves under a live host', () => {
 
   /** Provider listings asked for, as URLs, in the order they were sent. */
   function metaUrls(): string[] {
-    return requestUrls.filter((url) => url.endsWith('/v0/meta'))
+    return requestUrls.filter((url) => url.endsWith('/v0/providers'))
   }
 
   /** Session-start POSTs, as URLs, in the order they were sent. */
@@ -199,9 +200,9 @@ describe('an endpoint whose base url moves under a live host', () => {
     seedExecutionHostEndpoint(db, ENDPOINT_ID, OLD_URL)
 
     oldMachine = createStubDaemon()
-    oldMachine.setMeta(CODEX_ONLY)
+    oldMachine.setProviders(CODEX_ONLY)
     newMachine = createStubDaemon()
-    newMachine.setMeta(CLAUDE_ONLY)
+    newMachine.setProviders(CLAUDE_ONLY)
     requestUrls = []
     metaGate = null
     oldMetaGate = null
@@ -289,7 +290,7 @@ describe('an endpoint whose base url moves under a live host', () => {
   it('leaves a session already running on the old address alone', async () => {
     // The old machine runs Claude for this one, so there is a live run to
     // disturb. Same address, so the listing is refreshed, not invalidated.
-    oldMachine.setMeta(CLAUDE_ONLY)
+    oldMachine.setProviders(CLAUDE_ONLY)
     await registry.hostFor(ENDPOINT_ID).refreshProviders()
 
     const hostBefore = registry.hostFor(ENDPOINT_ID)
@@ -308,7 +309,7 @@ describe('an endpoint whose base url moves under a live host', () => {
     await pointEndpointAt(NEW_URL)
     await registry.whenReady(ENDPOINT_ID)
     expect(listedProviderIds()).toEqual(['claude'])
-    expect(metaUrls().at(-1)).toBe(`${NEW_URL}/v0/meta`)
+    expect(metaUrls().at(-1)).toBe(`${NEW_URL}/v0/providers`)
 
     // The knowledge went; the object stayed. Swapping in a fresh host would
     // read as a clean fix and would strand every handle this one handed out.
@@ -340,7 +341,7 @@ describe('an endpoint whose base url moves under a live host', () => {
     service.setRemoteExecutionHosts(cold)
     cold.hostFor(ENDPOINT_ID)
     await letEverythingQueuedRun()
-    expect(metaUrls()).toContain(`${OLD_URL}/v0/meta`)
+    expect(metaUrls()).toContain(`${OLD_URL}/v0/providers`)
 
     await pointEndpointAt(NEW_URL)
     const sessionId = createSession('follows the endpoint mid-listing')
@@ -355,7 +356,7 @@ describe('an endpoint whose base url moves under a live host', () => {
     expect(send.error()).toBeNull()
     await waitUntil(() => startUrls().length > 0, 'the session to be posted')
 
-    expect(metaUrls()).toContain(`${NEW_URL}/v0/meta`)
+    expect(metaUrls()).toContain(`${NEW_URL}/v0/providers`)
     expect(listedProviderIds(cold)).toEqual(['claude'])
     expect(startUrls()).toEqual([`${NEW_URL}/v0/execution/sessions`])
     expect(newMachine.startRequests).toHaveLength(1)
@@ -382,7 +383,7 @@ describe('an endpoint whose base url moves under a live host', () => {
     expect(second.error()).toBeNull()
     // Keying the attempt by the machine it is against must not turn into no
     // memo at all: two callers, one round trip.
-    expect(metaUrls().slice(listedBefore)).toEqual([`${NEW_URL}/v0/meta`])
+    expect(metaUrls().slice(listedBefore)).toEqual([`${NEW_URL}/v0/providers`])
     expect(listedProviderIds()).toEqual(['claude'])
   })
 
@@ -401,7 +402,7 @@ describe('an endpoint whose base url moves under a live host', () => {
     // against the address in force and landed about an address that no longer
     // is, so readiness has to go round again rather than accept it.
     await waitUntil(
-      () => metaUrls().includes(`${NEW_URL}/v0/meta`),
+      () => metaUrls().includes(`${NEW_URL}/v0/providers`),
       'the machine now in force to be listed',
     )
 

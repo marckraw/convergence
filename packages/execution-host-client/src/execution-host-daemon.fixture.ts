@@ -1,8 +1,8 @@
 import type { ExecutionHostEventEnvelope } from '@mrck-labs/execution-host-protocol'
 import { DAEMON_HEALTH_FIXTURE_0_26_1 } from './execution-host-health.fixture'
 
-/** The provider listing the stub daemon serves from `/v0/meta`. */
-export const DAEMON_META = {
+/** The provider catalogue the stub daemon serves from `/v0/providers`. */
+export const DAEMON_PROVIDERS = {
   providers: [
     {
       id: 'claude',
@@ -22,6 +22,30 @@ export const DAEMON_META = {
     },
   ],
 }
+/**
+ * `/v0/meta`'s providers: the catalogue's, without the account and the usage,
+ * which agents-daemon keeps to `/v0/providers` alone (MAR-3820, MAR-4199).
+ */
+function withoutAccountAndUsage(body: unknown): unknown {
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !Array.isArray((body as { providers?: unknown }).providers)
+  ) {
+    return body
+  }
+  return {
+    ...body,
+    providers: (body as { providers: unknown[] }).providers.map((entry) => {
+      if (typeof entry !== 'object' || entry === null) return entry
+      const provider = { ...(entry as Record<string, unknown>) }
+      delete provider.account
+      delete provider.usage
+      return provider
+    }),
+  }
+}
+
 export interface StubDaemon {
   fetchFn: typeof fetch
   emit: (envelope: ExecutionHostEventEnvelope) => void
@@ -81,13 +105,18 @@ export interface StubDaemon {
     envelope: Record<string, unknown>
   }>
   eventStreamLastEventIds: Array<string | null>
-  setMetaStatus: (status: number) => void
   /**
-   * Replaces the provider listing. Two stub daemons in one test have to be
-   * tellable apart by what they serve, or "each host holds its own cache" is
-   * unobservable.
+   * The status both authenticated provider listings answer with: a daemon that
+   * refuses the token refuses `/v0/providers` and `/v0/meta` alike.
    */
-  setMeta: (body: unknown) => void
+  setProvidersStatus: (status: number) => void
+  /**
+   * Replaces the provider catalogue (`/v0/providers`). Two stub daemons in one
+   * test have to be tellable apart by what they serve, or "each host holds its
+   * own cache" is unobservable. `/v0/meta` serves the same providers without
+   * their account and usage, as agents-daemon does.
+   */
+  setProviders: (body: unknown) => void
   /** Raw `/health` body; null makes the route 404, as an older daemon does. */
   setHealthBody: (body: string | null) => void
   /** A proxy that swallows `/health` by hanging instead of answering. */
@@ -149,7 +178,7 @@ export interface StubDaemon {
 
 /**
  * A stub agents-daemon speaking the execution host wire protocol over `fetch`:
- * `/health`, `/v0/meta`, session start, posted commands, and an SSE event
+ * `/health`, `/v0/providers` and `/v0/meta`, session start, posted commands, and an SSE event
  * stream that replays by `Last-Event-ID` the way the real daemon does.
  *
  * It lives in a fixture rather than inside one test file because two suites
@@ -185,8 +214,8 @@ export function createStubDaemon(): StubDaemon {
   const current: {
     controller: ReadableStreamDefaultController<Uint8Array> | null
   } = { controller: null }
-  let metaStatus = 200
-  let meta: unknown = DAEMON_META
+  let providersStatus = 200
+  let providers: unknown = DAEMON_PROVIDERS
   let healthBody: string | null = DAEMON_HEALTH_FIXTURE_0_26_1
   let healthHangs = false
   let startStatus = 201
@@ -248,11 +277,18 @@ export function createStubDaemon(): StubDaemon {
       return jsonResponse(projectsBody)
     }
 
-    if (url.endsWith('/v0/meta')) {
-      if (metaStatus !== 200) {
-        return jsonResponse({ error: 'meta unavailable' }, metaStatus)
+    if (url.endsWith('/v0/providers') || url.endsWith('/v0/meta')) {
+      if (providersStatus !== 200) {
+        return jsonResponse(
+          { error: 'provider listing unavailable' },
+          providersStatus,
+        )
       }
-      return jsonResponse(meta)
+      return jsonResponse(
+        url.endsWith('/v0/meta')
+          ? withoutAccountAndUsage(providers)
+          : providers,
+      )
     }
 
     if (method === 'POST' && url.endsWith('/v0/execution/sessions')) {
@@ -401,11 +437,11 @@ export function createStubDaemon(): StubDaemon {
     setSessionSnapshot(sessionId, snapshot) {
       sessionSnapshots.set(sessionId, snapshot)
     },
-    setMetaStatus(status) {
-      metaStatus = status
+    setProvidersStatus(status) {
+      providersStatus = status
     },
-    setMeta(body) {
-      meta = body
+    setProviders(body) {
+      providers = body
     },
     setHealthBody(body) {
       healthBody = body

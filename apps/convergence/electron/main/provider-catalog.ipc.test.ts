@@ -75,7 +75,8 @@ const APP_SETTINGS_ARGUMENT = 12
 const EXECUTION_HOST_REMOTE_ARGUMENT = 24
 const ARGUMENT_COUNT = 25
 
-function metaFor(providers: unknown[]): unknown {
+/** A `GET /v0/providers` body (MAR-4272). */
+function catalogueFor(providers: unknown[]): unknown {
   return { providers }
 }
 
@@ -84,12 +85,12 @@ describe('the per-machine ipc doors', () => {
   let tempDir: string
   let daemonA: StubDaemon
   let daemonB: StubDaemon
-  let metaUrls: string[]
+  let catalogueUrls: string[]
 
   function routedFetch(): typeof fetch {
     return (async (input: unknown, init?: RequestInit) => {
       const url = String(input)
-      if (url.endsWith('/v0/meta')) metaUrls.push(url)
+      if (url.endsWith('/v0/providers')) catalogueUrls.push(url)
       if (url.startsWith(DAEMON_A.baseUrl)) return daemonA.fetchFn(url, init)
       if (url.startsWith(DAEMON_B.baseUrl)) return daemonB.fetchFn(url, init)
       throw new Error(`No daemon serves ${url}`)
@@ -109,10 +110,10 @@ describe('the per-machine ipc doors', () => {
 
     daemonA = createStubDaemon()
     daemonB = createStubDaemon()
-    metaUrls = []
+    catalogueUrls = []
 
-    daemonA.setMeta(
-      metaFor([
+    daemonA.setProviders(
+      catalogueFor([
         {
           id: 'claude',
           label: 'Claude Code',
@@ -123,15 +124,43 @@ describe('the per-machine ipc doors', () => {
         },
       ]),
     )
-    daemonB.setMeta(
-      metaFor([
+    daemonB.setProviders(
+      catalogueFor([
         {
           id: 'codex',
           label: 'Codex',
           available: true,
           authenticated: true,
-          models: [{ slug: 'b-gpt', label: 'B GPT' }],
-          features: { resume: true },
+          models: [{ slug: 'b-gpt', label: 'B GPT', defaultEffort: 'high' }],
+          features: {
+            resume: true,
+            effortLevels: ['low', 'high'],
+            permissions: {
+              presets: ['ask', 'yolo', 'custom'],
+              codex: {
+                approvalPolicies: ['on-request', 'never'],
+                sandboxModes: ['workspace-write', 'danger-full-access'],
+                effectiveSandboxModes: {
+                  'workspace-write': 'danger-full-access',
+                },
+              },
+            },
+          },
+          account: { label: 'host-owner@example.com', source: 'sign-in' },
+          usage: {
+            observedAt: '2026-10-18T10:00:00.000Z',
+            source: 'read',
+            status: 'ok',
+            windows: [
+              {
+                id: 'codex',
+                span: 'session',
+                label: 'Session',
+                usedPercent: 25,
+              },
+            ],
+            credits: { hasCredits: true, unlimited: false, balance: '7.5' },
+          },
         },
         {
           id: 'cursor',
@@ -365,15 +394,17 @@ describe('the per-machine ipc doors', () => {
   })
 
   it('asks the endpoint it was given, at that endpoint’s base URL', async () => {
-    metaUrls = []
+    catalogueUrls = []
     const catalog = await getAll(DAEMON_B.id)
 
     // The URL is the claim. "A request happened" is true of the wrong machine
     // just as easily as the right one.
     // Non-empty first: `every` over nothing is vacuously true, and a handler
     // that asked no daemon at all would sail past the check below.
-    expect(metaUrls.length).toBeGreaterThan(0)
-    expect(metaUrls.every((url) => url.startsWith(DAEMON_B.baseUrl))).toBe(true)
+    expect(catalogueUrls.length).toBeGreaterThan(0)
+    expect(catalogueUrls.every((url) => url.startsWith(DAEMON_B.baseUrl))).toBe(
+      true,
+    )
     expect(catalog.executionHostId).toBe(DAEMON_B.id)
     expect(catalog.providers.map((entry) => entry.descriptor.id)).toEqual([
       'codex',
@@ -403,6 +434,31 @@ describe('the per-machine ipc doors', () => {
     expect(cursor?.blockedReason).toBe(
       'The daemon reports Cursor as unavailable: missing binary.',
     )
+  })
+
+  /**
+   * The provider catalogue read whole, through the real handler (MAR-4272):
+   * the efforts, permission choices and usage a host states reach the
+   * renderer, and the account it states does not.
+   */
+  it("hands the renderer the host's efforts, permissions and usage, and never its account", async () => {
+    const catalog = await getAll(DAEMON_B.id)
+    const codex = catalog.providers.find(
+      (entry) => entry.descriptor.id === 'codex',
+    )
+
+    expect(
+      codex?.descriptor.modelOptions[0]?.effortOptions.map(
+        (effort) => effort.id,
+      ),
+    ).toEqual(['low', 'high'])
+    expect(codex?.descriptor.modelOptions[0]?.defaultEffort).toBe('high')
+    expect(
+      codex?.hostPermissions?.codex?.effectiveSandboxModes['workspace-write'],
+    ).toBe('danger-full-access')
+    expect(codex?.hostUsage?.windows[0]?.usedPercent).toBe(25)
+    expect(codex?.hostUsage?.credits?.balance).toBe('7.5')
+    expect(JSON.stringify(catalog)).not.toContain('host-owner@example.com')
   })
 
   it('names each remote provider after itself, all the way to the renderer', async () => {
@@ -435,7 +491,7 @@ describe('the per-machine ipc doors', () => {
     //
     // Mutation: map a non-string argument to `'local'` (or to `String(...)`)
     // in the `provider:getAll` handler, and both rows go red.
-    metaUrls = []
+    catalogueUrls = []
 
     const numeric = await getAll(42)
     expect(numeric.executionHostId).not.toBe('local')
@@ -450,16 +506,16 @@ describe('the per-machine ipc doors', () => {
     expect(object.unreachableReason).not.toContain(DAEMON_B.id)
     expect(object.providers).toEqual([])
 
-    expect(metaUrls).toEqual([])
+    expect(catalogueUrls).toEqual([])
   })
 
   it('answers about this machine when nothing names another, and asks no daemon', async () => {
-    metaUrls = []
+    catalogueUrls = []
     const catalog = await getAll()
 
     expect(catalog.executionHostId).toBe('local')
     expect(catalog.providers).toEqual([])
     expect(catalog.unreachableReason).toBeNull()
-    expect(metaUrls).toEqual([])
+    expect(catalogueUrls).toEqual([])
   })
 })

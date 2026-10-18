@@ -3,7 +3,7 @@
  * derives about the app around it (MAR-2737).
  *
  * The split this file was born from is the package boundary itself: the halves
- * that read `/health`, `/v0/meta`, a start response, a session snapshot and an
+ * that read `/health`, `/v0/providers`, a start response, a session snapshot and an
  * SSE stream came here, and the halves that turn those readings into
  * Convergence's provider descriptors, catalog rows and refusal sentences stayed
  * in the app as `remote-execution-host.pure.ts` beside the host. Nothing in
@@ -11,6 +11,7 @@
  * signal that a function belongs on the other side of the line.
  */
 import {
+  decodeExecutionProviderListResponse,
   decodeExecutionSessionWorkspace,
   type ExecutionSessionWorkspace,
 } from '@mrck-labs/execution-host-protocol'
@@ -120,53 +121,59 @@ export function daemonCapabilitiesFingerprint(
 }
 
 /**
- * Parses the daemon /v0/meta response into the provider slice the Remote
- * Execution Host consumes. Throws RemoteExecutionHostError('malformed') when
- * the response does not carry a well-formed provider listing.
+ * Parses the daemon's provider catalogue (`GET /v0/providers`) into the slice
+ * the Remote Execution Host consumes (MAR-4272). Throws
+ * RemoteExecutionHostError('malformed') when the catalogue cannot be read.
+ *
+ * The decode is the protocol's own `decodeExecutionProviderListResponse`, as
+ * the workspace's is below: it is the decoder the daemon's catalogue is
+ * contracted against, so the efforts, permissions, interactions and usage it
+ * reads arrive here as the protocol reads them, and a field a later release
+ * adds is a decision for the wire inventory rather than a silent drop. This
+ * listing used to be read by hand from `/v0/meta`, which carries the same
+ * providers without their usage (the daemon keeps that, and the account, on
+ * this one door).
+ *
+ * Two fields the catalogue's decoder does not keep are read from the same
+ * entries: `details`, the daemon's words for why a provider will not run, and
+ * `features.resume`. The decoder maps the entries one to one or fails, so the
+ * nth decoded provider is the nth raw entry.
+ *
+ * The account is dropped here (see `RemoteExecutionHostProviderInfo`).
  */
-export function parseRemoteExecutionHostMeta(
+export function parseRemoteExecutionHostProviders(
   value: unknown,
 ): RemoteExecutionHostProviderInfo[] {
-  if (!isRecord(value) || !Array.isArray(value.providers)) {
+  const decoded = decodeExecutionProviderListResponse(value)
+  if (!decoded.ok) {
     throw new RemoteExecutionHostError(
-      'Remote daemon meta response is missing a provider listing.',
+      `Remote daemon returned a provider catalogue this build cannot read: ${decoded.reason}.`,
       'malformed',
     )
   }
+  const entries =
+    isRecord(value) && Array.isArray(value.providers) ? value.providers : []
 
-  return value.providers.map((entry) => {
-    if (
-      !isRecord(entry) ||
-      typeof entry.id !== 'string' ||
-      typeof entry.label !== 'string' ||
-      typeof entry.available !== 'boolean' ||
-      typeof entry.authenticated !== 'boolean'
-    ) {
-      throw new RemoteExecutionHostError(
-        'Remote daemon meta response carries a malformed provider entry.',
-        'malformed',
-      )
-    }
-
-    const features = isRecord(entry.features) ? entry.features : {}
-    const models = Array.isArray(entry.models) ? entry.models : []
-
+  return decoded.value.providers.map((provider, index) => {
+    const entry: unknown = entries[index]
+    const raw = isRecord(entry) ? entry : {}
+    const features = isRecord(raw.features) ? raw.features : {}
     return {
-      providerId: entry.id,
-      name: entry.label,
-      available: entry.available,
-      authenticated: entry.authenticated,
-      details: typeof entry.details === 'string' ? entry.details : null,
+      providerId: provider.id,
+      name: provider.label,
+      available: provider.available ?? null,
+      authenticated: provider.authenticated ?? null,
+      details: typeof raw.details === 'string' ? raw.details : null,
       supportsContinuation: features.resume === true,
-      models: models.flatMap((model) => {
-        if (!isRecord(model) || typeof model.slug !== 'string') return []
-        return [
-          {
-            id: model.slug,
-            label: typeof model.label === 'string' ? model.label : model.slug,
-          },
-        ]
-      }),
+      models: provider.models.map((model) => ({
+        id: model.slug,
+        label: model.label,
+        efforts: [...model.efforts],
+        defaultEffort: model.defaultEffort,
+      })),
+      permissions: provider.permissions ?? null,
+      interactions: provider.interactions ?? null,
+      usage: provider.usage ?? null,
     }
   })
 }

@@ -55,9 +55,9 @@ The repository is an npm-workspaces monorepo:
 `@convergence/execution-host-client` owns everything that reads an
 agents-daemon's own bytes: the `/health` handshake, the Projects listing, the
 configuration and capability fingerprints an answer is only true under, the
-`/v0/meta`, start-response and session-snapshot parsers, the SSE reader, and
-the wire trace. It depends on `@mrck-labs/execution-host-protocol` and on
-nothing else.
+provider-catalogue (`/v0/providers`), start-response and session-snapshot
+parsers, the SSE reader, and the wire trace. It depends on
+`@mrck-labs/execution-host-protocol` and on nothing else.
 
 It owns none of Convergence's vocabulary. The `ProviderExecutionHost` adapter,
 its registry, `execution-host-wire-mapping.pure.ts` and every

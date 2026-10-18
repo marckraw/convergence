@@ -13,12 +13,25 @@
  * function there may never import from the app, because the package is what a
  * second app (Backpack Studio) consumes with no provider layer at all.
  */
-import type { ProviderDescriptor } from '../provider.types'
-import type { ProviderCatalogEntry } from '../provider-catalog.types'
+import type { ProviderDescriptor, ProviderModelOption } from '../provider.types'
+import {
+  buildEffortOptions,
+  parseReasoningEffort,
+} from '../provider-descriptor.pure'
+import type {
+  ProviderCatalogEntry,
+  ProviderHostPermissions,
+  ProviderHostUsage,
+} from '../provider-catalog.types'
+import type {
+  ExecutionProviderPermissions,
+  ExecutionProviderUsage,
+} from '@mrck-labs/execution-host-protocol'
 import type { ExecutionHostProviderCapabilities } from './execution-host.types'
 import {
   RemoteExecutionHostError,
   type RemoteExecutionHostProviderInfo,
+  type RemoteExecutionHostProviderModel,
 } from '@convergence/execution-host-client'
 
 /**
@@ -38,10 +51,11 @@ export function capabilitiesForRemoteProvider(
 }
 
 /**
- * Synthesizes a ProviderDescriptor from the daemon provider listing. The
- * daemon does not transport full descriptor metadata, so capability fields
- * default to the conservative remote baseline: follow-up mid-run input only
- * and no attachment ingestion (byte transfer lands with MAR-1415).
+ * Synthesizes a ProviderDescriptor from the daemon's provider catalogue. What
+ * the catalogue says is the host's own -- each model's efforts and default,
+ * and how the provider asks (MAR-4272) -- and the rest defaults to the
+ * conservative remote baseline: follow-up mid-run input only and no
+ * attachment ingestion (byte transfer lands with MAR-1415).
  *
  * The id is translated into the local namespace, because this descriptor is
  * what a session is picked from and a session records the local id (MAR-2682).
@@ -70,13 +84,7 @@ export function descriptorForRemoteProvider(
     supportsConversationReset:
       localProviderIdForRemoteProvider(info.providerId) === 'claude-code',
     defaultModelId: info.models[0]?.id ?? '',
-    modelOptions: info.models.map((model) => ({
-      id: model.id,
-      label: model.label,
-      defaultEffort: null,
-      effortOptions: [],
-      source: 'provider' as const,
-    })),
+    modelOptions: info.models.map((model) => remoteModelOption(model)),
     attachments: {
       supportsImage: false,
       supportsPdf: false,
@@ -86,6 +94,18 @@ export function descriptorForRemoteProvider(
       maxTextBytes: 0,
       maxTotalBytes: 0,
     },
+    // The host's forecast of how this provider asks (MAR-4272), in the shape
+    // a local provider declares it. Absent when the host does not say; the
+    // host sends no passive kinds, so it names none.
+    ...(info.interactions
+      ? {
+          interactions: {
+            inputRequests: [...info.interactions.inputRequests],
+            passiveUpdates: [],
+            unavailable: [...info.interactions.unavailable],
+          },
+        }
+      : {}),
     midRunInput: {
       supportsAnswer: false,
       supportsNativeFollowUp: true,
@@ -94,6 +114,32 @@ export function descriptorForRemoteProvider(
       supportsInterrupt: true,
       defaultRunningMode: 'follow-up',
     },
+  }
+}
+
+/**
+ * A remote model as an option row, with the efforts its host says it takes
+ * (MAR-4272).
+ *
+ * The host's own list, not the local provider's: what a machine's CLI accepts
+ * is that machine's fact. An effort id this build has no word for is left out,
+ * since nothing here could ask for it by name, and a default the host names
+ * outside its own list is not offered as one.
+ */
+function remoteModelOption(
+  model: RemoteExecutionHostProviderModel,
+): ProviderModelOption {
+  const efforts = [
+    ...new Set(model.efforts.flatMap((id) => parseReasoningEffort(id) ?? [])),
+  ]
+  const defaultEffort = parseReasoningEffort(model.defaultEffort)
+  return {
+    id: model.id,
+    label: model.label,
+    defaultEffort:
+      defaultEffort && efforts.includes(defaultEffort) ? defaultEffort : null,
+    effortOptions: buildEffortOptions(efforts),
+    source: 'provider',
   }
 }
 
@@ -161,11 +207,15 @@ export function localProviderIdForRemoteProvider(
 export function describeRemoteProviderBlock(
   info: RemoteExecutionHostProviderInfo,
 ): string | null {
-  const state = !info.available
-    ? 'unavailable'
-    : !info.authenticated
-      ? 'not signed in'
-      : null
+  // Only a host's `false` is a block. One that does not say (null) has made
+  // no claim, and the protocol reads that as unknown; its own start refusal
+  // speaks for it if it will not run the provider.
+  const state =
+    info.available === false
+      ? 'unavailable'
+      : info.authenticated === false
+        ? 'not signed in'
+        : null
   if (!state) return null
   const because = info.details ? `: ${info.details}` : ''
   return `The daemon reports ${info.name} as ${state}${because}.`
@@ -192,8 +242,8 @@ export function describeRemoteProviderBlock(
  * is kept: a human who installed five CLIs and is told about three needs to
  * know which two the daemon will not run, and where to go and look.
  *
- * The flags are the daemon's, from `/v0/meta` -- the only listing this function
- * is ever handed. `/health` reports the same two booleans per provider as
+ * The flags are the daemon's, from `/v0/providers` -- the only listing this
+ * function is ever handed. `/health` reports the same two booleans per provider as
  * `providerReadiness` (`installed`/`authenticated`), and the handshake keeps
  * them, but they are never merged into a `RemoteExecutionHostProviderInfo`:
  * merging would change what this app will START on a machine, not just what it
@@ -226,6 +276,70 @@ export function catalogEntryForRemoteProvider(
   return {
     descriptor: descriptorForRemoteProvider(info),
     blockedReason: describeRemoteProviderBlock(info),
+    ...(info.permissions
+      ? { hostPermissions: hostPermissionsForRemoteProvider(info.permissions) }
+      : {}),
+    ...(info.usage
+      ? { hostUsage: hostUsageForRemoteProvider(info.usage) }
+      : {}),
+  }
+}
+
+/**
+ * A host's permission choices in this app's words (MAR-4272). The two
+ * vocabularies are the same sets -- `EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE`
+ * pins them exact -- so this copies rather than translates, and leaves behind
+ * only what the composer has no control for (Codex's reviewers and
+ * collaboration modes, which a session here never names).
+ */
+export function hostPermissionsForRemoteProvider(
+  permissions: ExecutionProviderPermissions,
+): ProviderHostPermissions {
+  return {
+    presets: [...permissions.presets],
+    codex: permissions.codex
+      ? {
+          approvalPolicies: [...permissions.codex.approvalPolicies],
+          sandboxModes: [...permissions.codex.sandboxModes],
+          effectiveSandboxModes: {
+            ...permissions.codex.effectiveSandboxModes,
+          },
+        }
+      : null,
+    claudeCode: permissions.claudeCode
+      ? { permissionModes: [...permissions.claudeCode.permissionModes] }
+      : null,
+  }
+}
+
+/**
+ * A host account's usage in this app's words (MAR-4272): optional fields made
+ * explicit nulls, and the credits' own time filled from the usage's when the
+ * host gives none, as the protocol says to read it.
+ */
+export function hostUsageForRemoteProvider(
+  usage: ExecutionProviderUsage,
+): ProviderHostUsage {
+  return {
+    observedAt: usage.observedAt,
+    source: usage.source,
+    status: usage.status ?? null,
+    windows: usage.windows.map((window) => ({
+      id: window.id,
+      span: window.span,
+      label: window.label,
+      usedPercent: window.usedPercent,
+      resetsAt: window.resetsAt ?? null,
+      modelFamily: window.modelFamily ?? null,
+    })),
+    credits: usage.credits
+      ? {
+          hasCredits: usage.credits.hasCredits,
+          unlimited: usage.credits.unlimited,
+          balance: usage.credits.balance ?? null,
+          observedAt: usage.credits.observedAt ?? usage.observedAt,
+        }
+      : null,
   }
 }
 

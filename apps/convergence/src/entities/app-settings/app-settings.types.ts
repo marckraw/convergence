@@ -190,8 +190,9 @@ export interface RemoteExecutionHostDaemonSummary {
 export interface RemoteExecutionHostProviderSummary {
   providerId: string
   name: string
-  available: boolean
-  authenticated: boolean
+  /** Null when the host does not say: unknown, never `false` (MAR-4272). */
+  available: boolean | null
+  authenticated: boolean | null
   supportsContinuation: boolean
   models: { id: string; label: string }[]
 }

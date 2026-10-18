@@ -67,7 +67,7 @@ describe('a turn on an endpoint whose listing has not landed', () => {
       if (transportFails) {
         throw new TypeError('fetch failed')
       }
-      if (url.endsWith('/v0/meta') && metaGate) {
+      if (url.endsWith('/v0/providers') && metaGate) {
         await metaGate.promise
       }
       return daemon.fetchFn(url, init)
@@ -184,7 +184,7 @@ describe('a turn on an endpoint whose listing has not landed', () => {
   })
 
   it('still says provider not found when the daemon answered and has no such provider', async () => {
-    daemon.setMeta({
+    daemon.setProviders({
       providers: [
         {
           id: 'codex',
