@@ -1711,6 +1711,92 @@ describe('ComposerContainer', () => {
     })
   })
 
+  /**
+   * The host's own permission choices and usage, from its provider catalogue
+   * (MAR-4272). A container host runs Codex's workspace-write as
+   * danger-full-access, and the composer must say so before the start.
+   */
+  describe("a remote host's provider catalogue (MAR-4272)", () => {
+    const CONTAINER_HOST_PERMISSIONS = {
+      presets: ['ask' as const, 'custom' as const],
+      codex: {
+        approvalPolicies: ['on-request' as const, 'never' as const],
+        sandboxModes: ['workspace-write' as const],
+        effectiveSandboxModes: {
+          'workspace-write': 'danger-full-access' as const,
+        },
+      },
+      claudeCode: null,
+    }
+
+    function renderNewSessionOn(endpointLabel: string) {
+      setEndpoints([endpointFixture('daemon-a', endpointLabel, 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('codex', 'Codex', [
+            { id: 'gpt-5.5', label: 'GPT-5.5' },
+          ]),
+          blockedReason: null,
+          hostPermissions: CONTAINER_HOST_PERMISSIONS,
+          hostUsage: {
+            observedAt: '2026-10-18T10:00:00.000Z',
+            source: 'read',
+            status: 'ok',
+            windows: [
+              {
+                id: 'codex',
+                span: 'session',
+                label: 'Session',
+                usedPercent: 25,
+                resetsAt: null,
+                modelFamily: null,
+              },
+            ],
+            credits: null,
+          },
+        },
+      ])
+      seedRemoteProjects('daemon-a', [REMOTE_PROJECT])
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: null,
+          }}
+        />,
+      )
+    }
+
+    it('says before the start that Ask runs with full access there', async () => {
+      renderNewSessionOn('kuba-vps')
+      fireEvent.click(await findPicker('Runs on', /Local/))
+      fireEvent.click(screen.getByText('kuba-vps'))
+
+      // The host offers no Yolo, so the remote default falls back to Ask --
+      // which asks for workspace-write, which this host raises.
+      await waitFor(() =>
+        expect(screen.getByTestId('permission-host-notice')).toHaveTextContent(
+          "kuba-vps runs Codex's Workspace write sandbox as Full access.",
+        ),
+      )
+      expect(queryPicker('Permissions', 'Ask')).not.toBeNull()
+    })
+
+    it("shows the host account's usage beside the provider", async () => {
+      renderNewSessionOn('kuba-vps')
+      fireEvent.click(await findPicker('Runs on', /Local/))
+      fireEvent.click(screen.getByText('kuba-vps'))
+
+      expect(
+        await screen.findByRole('button', {
+          name: 'Codex on kuba-vps: 75% of the tightest usage limit left',
+        }),
+      ).toBeInTheDocument()
+    })
+  })
+
   describe('the quiet type treatment, ruled "lets do quiet until i look" (Marcin, 2026-08-27, MAR-2642)', () => {
     // A deliberate absence of emphasis needs enforcing, not a note. Nothing
     // else in this file touches a type scale or a text tone, so a strip

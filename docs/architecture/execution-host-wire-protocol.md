@@ -15,9 +15,16 @@ daemon error-kind discriminator.
 
 ## Authentication
 
-Bearer token on every request, `/health` for liveness, `/v0/meta` for
-capability discovery (which Providers and Models the host machine has
-installed).
+Bearer token on every request, `/health` for liveness, `/v0/providers` for
+the provider catalogue: which Providers and Models the host machine has
+installed, the efforts each model takes, the permission choices and the
+sandbox each Codex choice really runs as there, how each provider asks, and
+its account's usage and credits (MAR-4272). Convergence reads the catalogue
+through the protocol's `decodeExecutionProviderListResponse` and withholds the
+provider's `account`: it stays visible only to the super-admin (Marcin,
+18 Oct 2026), and a client holding a daemon token cannot tell whether its
+reader is one. `/v0/meta` serves the same providers without their account and
+usage.
 
 ## Endpoints
 

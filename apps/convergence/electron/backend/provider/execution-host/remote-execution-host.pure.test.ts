@@ -3,7 +3,7 @@ import { EXECUTION_PROTOCOL_VERSION } from '@mrck-labs/execution-host-protocol'
 import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   parseDaemonHealth,
-  parseRemoteExecutionHostMeta,
+  parseRemoteExecutionHostProviders,
   RemoteExecutionHostError,
 } from '@convergence/execution-host-client'
 import { buildWireStartRequest } from './execution-host-wire-mapping.pure'
@@ -22,17 +22,17 @@ import {
 } from './remote-execution-host.pure'
 
 /**
- * A `/v0/meta` body, stated here as well as in the package's own parser tests
- * (MAR-2737).
+ * A `/v0/providers` body, stated here as well as in the package's own parser
+ * tests (MAR-2737).
  *
  * The two copies are not one fact split in two. The package's copy pins what
- * `parseRemoteExecutionHostMeta` *returns*; this one is only an input builder,
+ * `parseRemoteExecutionHostProviders` *returns*; this one is only an input builder,
  * a short way to obtain two well-typed `RemoteExecutionHostProviderInfo` values
  * for the functions below. If a daemon ever changes this shape, the package's
  * copy is the one that has to move, and this one going stale can make these
  * rows unrepresentative but never wrong: the parser's return type is checked.
  */
-const DAEMON_META = {
+const DAEMON_PROVIDERS = {
   name: 'agents-daemon',
   version: '0.1.0',
   apiVersion: 'v0',
@@ -96,19 +96,19 @@ describe('the two provider namespaces (MAR-2682)', () => {
 
 describe('describeRemoteProviderBlock', () => {
   it('quotes the daemon, rather than diagnosing on its behalf', () => {
-    const [, codex] = parseRemoteExecutionHostMeta(DAEMON_META)
+    const [, codex] = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     expect(describeRemoteProviderBlock(codex!)).toBe(
       'The daemon reports Codex as unavailable: missing binary.',
     )
   })
 
   it('blocks nothing the daemon says it will run', () => {
-    const [claude] = parseRemoteExecutionHostMeta(DAEMON_META)
+    const [claude] = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     expect(describeRemoteProviderBlock(claude!)).toBeNull()
   })
 
   it('leads with availability, because an absent CLI cannot be signed in', () => {
-    const [info] = parseRemoteExecutionHostMeta({
+    const [info] = parseRemoteExecutionHostProviders({
       providers: [
         {
           id: 'cursor',
@@ -127,7 +127,7 @@ describe('describeRemoteProviderBlock', () => {
   })
 
   it('names the sign-in when the CLI is there and the credential is not', () => {
-    const [info] = parseRemoteExecutionHostMeta({
+    const [info] = parseRemoteExecutionHostProviders({
       providers: [
         {
           id: 'codex',
@@ -155,7 +155,7 @@ describe('describeRemoteProviderListing', () => {
       block?: 'absent' | 'signed-out'
     }>,
   ) {
-    return parseRemoteExecutionHostMeta({
+    return parseRemoteExecutionHostProviders({
       providers: entries.map((entry) => ({
         id: entry.id,
         label: entry.label,
@@ -234,7 +234,7 @@ describe('describeRemoteProviderListing', () => {
     ({ available, authenticated, sentence }) => {
       expect(
         describeRemoteProviderListing(
-          parseRemoteExecutionHostMeta({
+          parseRemoteExecutionHostProviders({
             providers: [
               {
                 id: 'codex',
@@ -254,7 +254,7 @@ describe('describeRemoteProviderListing', () => {
   /**
    * Which source the two flags come from, said out loud (MAR-2580).
    *
-   * `/v0/meta`, because it is the only listing this sentence is ever handed.
+   * `/v0/providers`, because it is the only listing this sentence is ever handed.
    * `/health` reports the same two booleans per provider as `providerReadiness`
    * (`installed`/`authenticated`) and the handshake keeps them, but they are
    * never merged into a `RemoteExecutionHostProviderInfo`: merging would change
@@ -268,7 +268,7 @@ describe('describeRemoteProviderListing', () => {
    * "which source" is answered by the assertion and not only by this comment --
    * and the day a daemon really does disagree, this row is where it shows up.
    */
-  it('counts the /v0/meta flags, not the /health readiness pair', () => {
+  it('counts the /v0/providers flags, not the /health readiness pair', () => {
     const health = parseDaemonHealth(JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1))
     expect(health!.providerReadiness).toMatchObject({
       cursor: { installed: false, authenticated: false },
@@ -290,7 +290,7 @@ describe('describeRemoteProviderListing', () => {
 
 describe('catalogEntryForRemoteProvider', () => {
   it('pairs the local-namespace descriptor with the daemon’s own verdict', () => {
-    const [claude, codex] = parseRemoteExecutionHostMeta(DAEMON_META)
+    const [claude, codex] = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     expect(catalogEntryForRemoteProvider(claude!)).toEqual({
       descriptor: descriptorForRemoteProvider(claude!),
       blockedReason: null,
@@ -303,7 +303,7 @@ describe('catalogEntryForRemoteProvider', () => {
 
 describe('capabilitiesForRemoteProvider', () => {
   it('never advertises one-shot support', () => {
-    const [claude] = parseRemoteExecutionHostMeta(DAEMON_META)
+    const [claude] = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     expect(capabilitiesForRemoteProvider(claude!)).toEqual({
       providerId: 'claude',
       name: 'Claude Code',
@@ -316,7 +316,7 @@ describe('capabilitiesForRemoteProvider', () => {
 
 describe('descriptorForRemoteProvider', () => {
   it('synthesizes a conservative descriptor from the listing', () => {
-    const [claude] = parseRemoteExecutionHostMeta(DAEMON_META)
+    const [claude] = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     const descriptor = descriptorForRemoteProvider(claude!)
     expect(descriptor).toMatchObject({
       id: 'claude-code',
@@ -338,7 +338,7 @@ describe('descriptorForRemoteProvider', () => {
   })
 
   it('defaults the model id to empty when the listing has no models', () => {
-    const [, codex] = parseRemoteExecutionHostMeta(DAEMON_META)
+    const [, codex] = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     expect(descriptorForRemoteProvider(codex!).defaultModelId).toBe('')
   })
 })
@@ -455,7 +455,7 @@ describe('unavailableProviderError', () => {
 
 describe('remote conversation reset capability', () => {
   it('advertises reset only for remote Claude — derive remote Codex reset from the local capability turns red', () => {
-    const [claude, codex] = parseRemoteExecutionHostMeta(DAEMON_META)
+    const [claude, codex] = parseRemoteExecutionHostProviders(DAEMON_PROVIDERS)
     expect({
       claude: descriptorForRemoteProvider(claude!).supportsConversationReset,
       codex: descriptorForRemoteProvider(codex!).supportsConversationReset,
@@ -483,5 +483,180 @@ describe('readSnapshotRunningTasks (MAR-3987)', () => {
         readSnapshotRunningTasks({ sessionId: 's-1', runningTasks }, 's-1'),
       ).toBeNull()
     expect(readSnapshotRunningTasks(null, 's-1')).toBeNull()
+  })
+})
+
+/**
+ * The provider catalogue read whole (MAR-4272): what a host says about its
+ * provider beyond whether it runs -- its efforts, its permission choices, how
+ * it asks, and its account's usage -- reaches the catalog entry in this app's
+ * words, and its account does not.
+ */
+describe('the provider catalogue on a remote catalog entry', () => {
+  const CATALOGUE = {
+    providers: [
+      {
+        id: 'claude',
+        label: 'Claude Code',
+        available: true,
+        authenticated: true,
+        details: 'ready',
+        models: [
+          {
+            slug: 'sonnet',
+            label: 'Claude Sonnet',
+            defaultEffort: 'medium',
+            effortOptions: [{ id: 'low' }, { id: 'medium' }, { id: 'warp' }],
+          },
+          { slug: 'opus', label: 'Claude Opus', defaultEffort: 'warp' },
+        ],
+        features: {
+          resume: true,
+          effortLevels: ['low', 'high'],
+          permissions: {
+            presets: ['ask', 'yolo', 'custom'],
+            claudeCode: { permissionModes: ['default', 'plan'] },
+          },
+          interactions: { inputRequests: ['plan'], unavailable: ['url'] },
+        },
+        account: { label: 'owner@example.com', source: 'sign-in' },
+        usage: {
+          observedAt: '2026-10-18T10:00:00.000Z',
+          source: 'turn',
+          windows: [
+            {
+              id: 'seven_day_opus',
+              span: 'week',
+              label: 'Opus week',
+              usedPercent: 40,
+              modelFamily: 'opus',
+            },
+          ],
+          credits: { hasCredits: false, unlimited: false },
+        },
+      },
+      {
+        id: 'codex',
+        label: 'Codex',
+        models: [{ slug: 'gpt-5.5', label: 'GPT-5.5' }],
+        features: {
+          permissions: {
+            presets: ['ask', 'custom'],
+            codex: {
+              approvalPolicies: ['on-request', 'never'],
+              sandboxModes: ['read-only', 'workspace-write'],
+              effectiveSandboxModes: {
+                'workspace-write': 'danger-full-access',
+                'danger-full-access': null,
+              },
+              collaborationModes: ['default'],
+            },
+          },
+        },
+      },
+    ],
+  }
+
+  it("offers each model the host's own efforts, and only ones this app can name", () => {
+    const [claude] = parseRemoteExecutionHostProviders(CATALOGUE)
+    const { modelOptions } = descriptorForRemoteProvider(claude!)
+    expect(
+      modelOptions.map((model) => ({
+        id: model.id,
+        defaultEffort: model.defaultEffort,
+        efforts: model.effortOptions.map((effort) => effort.id),
+      })),
+    ).toEqual([
+      { id: 'sonnet', defaultEffort: 'medium', efforts: ['low', 'medium'] },
+      // The provider's levels, for a model that names none of its own; a
+      // default outside the list is not offered as one.
+      { id: 'opus', defaultEffort: null, efforts: ['low', 'high'] },
+    ])
+    expect(modelOptions[0]!.effortOptions[1]).toEqual({
+      id: 'medium',
+      label: 'Medium',
+      description: undefined,
+    })
+  })
+
+  it('sends the chosen remote effort on the start', () => {
+    const request = buildWireStartRequest('claude', {
+      sessionId: 's-1',
+      workingDirectory: '/work',
+      initialMessage: 'hello',
+      model: 'sonnet',
+      effort: 'low',
+      continuationToken: null,
+    })
+    expect(request.config).toMatchObject({ model: 'sonnet', effort: 'low' })
+  })
+
+  it("carries how the host's provider asks, as a local provider declares it", () => {
+    const [claude, codex] = parseRemoteExecutionHostProviders(CATALOGUE)
+    expect(descriptorForRemoteProvider(claude!).interactions).toEqual({
+      inputRequests: ['plan'],
+      passiveUpdates: [],
+      unavailable: ['url'],
+    })
+    expect(descriptorForRemoteProvider(codex!)).not.toHaveProperty(
+      'interactions',
+    )
+  })
+
+  it("carries the host's permission choices and what each sandbox runs as", () => {
+    const [, codex] = parseRemoteExecutionHostProviders(CATALOGUE)
+    expect(catalogEntryForRemoteProvider(codex!).hostPermissions).toEqual({
+      presets: ['ask', 'custom'],
+      codex: {
+        approvalPolicies: ['on-request', 'never'],
+        sandboxModes: ['read-only', 'workspace-write'],
+        effectiveSandboxModes: {
+          'workspace-write': 'danger-full-access',
+          'danger-full-access': null,
+        },
+      },
+      claudeCode: null,
+    })
+  })
+
+  it("carries the host account's usage, the credits' time defaulting to the usage's", () => {
+    const [claude, codex] = parseRemoteExecutionHostProviders(CATALOGUE)
+    expect(catalogEntryForRemoteProvider(claude!).hostUsage).toEqual({
+      observedAt: '2026-10-18T10:00:00.000Z',
+      source: 'turn',
+      status: null,
+      windows: [
+        {
+          id: 'seven_day_opus',
+          span: 'week',
+          label: 'Opus week',
+          usedPercent: 40,
+          resetsAt: null,
+          modelFamily: 'opus',
+        },
+      ],
+      credits: {
+        hasCredits: false,
+        unlimited: false,
+        balance: null,
+        observedAt: '2026-10-18T10:00:00.000Z',
+      },
+    })
+    expect(catalogEntryForRemoteProvider(codex!)).not.toHaveProperty(
+      'hostUsage',
+    )
+  })
+
+  it('never puts the account on the entry the renderer is handed', () => {
+    const entries = parseRemoteExecutionHostProviders(CATALOGUE).map(
+      catalogEntryForRemoteProvider,
+    )
+    expect(JSON.stringify(entries)).not.toContain('owner@example.com')
+  })
+
+  it('blocks nothing on a readiness the host does not state', () => {
+    const [, codex] = parseRemoteExecutionHostProviders(CATALOGUE)
+    expect(codex!.available).toBeNull()
+    expect(describeRemoteProviderBlock(codex!)).toBeNull()
   })
 })

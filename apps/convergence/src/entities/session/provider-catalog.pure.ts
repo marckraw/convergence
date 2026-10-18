@@ -5,7 +5,12 @@ import {
 } from '@/entities/execution-host'
 import { namesThisMachine } from '@/shared/lib/execution-host-id.pure'
 import { ownRecordValue } from '@/shared/lib/own-record.pure'
-import { isConversationalProvider, type ProviderInfo } from './session.types'
+import {
+  isConversationalProvider,
+  type ProviderHostPermissions,
+  type ProviderHostUsage,
+  type ProviderInfo,
+} from './session.types'
 
 /**
  * One provider on one machine, and whether that machine will run it
@@ -15,6 +20,13 @@ export interface ProviderCatalogEntry {
   descriptor: ProviderInfo
   /** Why this provider cannot be picked on this host, or null when it can. */
   blockedReason: string | null
+  /**
+   * The host's own permission choices (MAR-4272). Absent when the host does
+   * not say -- every local catalog -- and then the app's own choices stand.
+   */
+  hostPermissions?: ProviderHostPermissions
+  /** The host account's usage (MAR-4272); absent is unknown, never 0%. */
+  hostUsage?: ProviderHostUsage
 }
 
 /** Every provider one machine offers, carrying which machine that is. */

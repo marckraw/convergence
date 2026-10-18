@@ -68,7 +68,7 @@ import {
   describeStreamEndAboveHole,
   evaluateHandshake,
   parseDaemonHealth,
-  parseRemoteExecutionHostMeta,
+  parseRemoteExecutionHostProviders,
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
   describeConfirmedPrune,
@@ -381,7 +381,7 @@ interface LandedListing {
  * over SSE (resumed by sequence number on drops), and accept commands as
  * posted envelopes.
  *
- * Provider capability data comes from the daemon's /v0/meta listing and is
+ * Provider capability data comes from the daemon's /v0/providers listing and is
  * cached so the synchronous capabilities()/start() interface holds. The cache
  * is stored with the daemon configuration it was read from and can only be
  * read back through `inForce`, which hands it over while -- and only while --
@@ -544,14 +544,14 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       // Started before the listing rather than after it: /health is
       // unauthenticated and independent, so it runs concurrently and usually
       // adds no wall-clock at all. When health is the slower half the refresh
-      // costs max(meta, health), which is why the probe is capped: the added
-      // latency is bounded, not zero. It never rejects, so a meta failure
+      // costs max(catalogue, health), which is why the probe is capped: the added
+      // latency is bounded, not zero. It never rejects, so a catalogue failure
       // below leaves nothing dangling.
       const healthProbe = this.probeHealth(connection)
-      const meta = await this.requestJson(connection, '/v0/meta', {
+      const catalogue = await this.requestJson(connection, '/v0/providers', {
         method: 'GET',
       })
-      const providers = parseRemoteExecutionHostMeta(meta)
+      const providers = parseRemoteExecutionHostProviders(catalogue)
       const health = await healthProbe
       // The authenticated half of the handshake is the listing that just
       // succeeded, so 'ok' is a statement of fact at this line and nowhere

@@ -64,7 +64,7 @@ function resolverWith(input: {
   })
 }
 
-/** One entry of a daemon `/v0/meta` listing, runnable unless said otherwise. */
+/** One entry of a daemon `/v0/providers` listing, runnable unless said otherwise. */
 function provider(
   id: string,
   label: string,
@@ -100,7 +100,7 @@ const okFetch = (async () =>
 
 /**
  * A daemon that answers both routes: `/health` with a body of the caller's
- * choosing, `/v0/meta` with the provider listing.
+ * choosing, `/v0/providers` with the provider listing.
  */
 function daemonFetch(healthBody: string | null): typeof fetch {
   return (async (input: unknown) => {

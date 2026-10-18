@@ -1028,7 +1028,7 @@ describe('describeProjectCatalog', () => {
   })
 
   it('reports a machine that could not be reached at all', async () => {
-    stub.setMetaStatus(500)
+    stub.setProvidersStatus(500)
     const catalog = await buildHost().describeProjectCatalog()
 
     expect(catalog.projects).toEqual([])
