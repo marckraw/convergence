@@ -1,6 +1,7 @@
 import { exactDateLabel, formatTimestamp } from '@convergence/ui'
 import type { Attachment } from '@/entities/attachment'
 import type { ConversationItem } from '@/entities/session'
+import { describeOmittedImages } from './tool-result-omissions.pure'
 
 interface ConversationItemTimingOptions {
   locale?: string | string[]
@@ -34,8 +35,15 @@ export interface TranscriptEntryViewModel {
   injectedContextText: string | null
   timing: ConversationItemTiming
   deliveryModeLabel: string | null
+  /** A user message's files, or the images a tool result produced. */
   attachments: Attachment[]
   missingAttachmentIds: string[]
+  /** How many of a tool result's images were left out (MAR-4274). */
+  omittedImageCount: number
+  /** "1 image left out", "N images left out"; null when none were. */
+  omittedImagesLabel: string | null
+  /** Why, one plain-words fact per reason ("too large", "2 over the session limit"). */
+  omittedImageReasons: string[]
   toolPreview: string | null
   toolVisibilityLabel: string | null
   toolVisibilityTitle: string | null
@@ -67,6 +75,9 @@ export function buildTranscriptEntryViewModel({
     resolvedAttachmentsById,
   )
   const displayText = getConversationItemDisplayText(item, injectedContextText)
+  const omittedImages = describeOmittedImages(
+    item.kind === 'tool-result' ? item.attachmentOmissions : undefined,
+  )
 
   return {
     item,
@@ -79,6 +90,9 @@ export function buildTranscriptEntryViewModel({
     deliveryModeLabel: getDeliveryModeLabel(item),
     attachments,
     missingAttachmentIds,
+    omittedImageCount: omittedImages.count,
+    omittedImagesLabel: omittedImages.label,
+    omittedImageReasons: omittedImages.reasons,
     toolPreview: getToolPreviewForItem(item),
     toolVisibilityLabel: getToolVisibilityLabel(item),
     toolVisibilityTitle: getToolVisibilityTitle(item),
@@ -284,18 +298,28 @@ function getToolVisibilityTitle(item: ConversationItem): string | null {
     : null
 }
 
+/**
+ * The attachment ids an item shows: a user message's files, or the images a
+ * tool result produced (MAR-4274). Both live in the same attachment store.
+ */
+function getShownAttachmentIds(item: ConversationItem): string[] {
+  if (item.kind === 'message' && item.actor === 'user') {
+    return item.attachmentIds ?? []
+  }
+  if (item.kind === 'tool-result') {
+    return item.attachmentIds ?? []
+  }
+  return []
+}
+
 function resolveItemAttachments(
   item: ConversationItem,
   resolvedAttachmentsById: Record<string, Attachment>,
 ): Pick<TranscriptEntryViewModel, 'attachments' | 'missingAttachmentIds'> {
-  if (item.kind !== 'message' || item.actor !== 'user' || !item.attachmentIds) {
-    return { attachments: [], missingAttachmentIds: [] }
-  }
-
   const attachments: Attachment[] = []
   const missingAttachmentIds: string[] = []
 
-  for (const id of item.attachmentIds) {
+  for (const id of getShownAttachmentIds(item)) {
     const attachment = resolvedAttachmentsById[id]
     if (attachment) {
       attachments.push(attachment)

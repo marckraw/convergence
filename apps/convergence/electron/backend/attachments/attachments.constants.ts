@@ -3,6 +3,12 @@ export const MAX_PDF_BYTES = 20 * 1024 * 1024
 export const MAX_TEXT_BYTES = 1 * 1024 * 1024
 export const MAX_TOTAL_BYTES = 50 * 1024 * 1024
 
+// A tool result's images (MAR-4274): the execution-host protocol's own limits
+// for them (`EXECUTION_TOOL_ATTACHMENT_MAX_BYTES`, `..._MAX_COUNT`), which a
+// local run is held to as well.
+export const MAX_TOOL_IMAGE_BYTES = 8 * 1024 * 1024
+export const MAX_TOOL_IMAGES_PER_RESULT = 8
+
 // Sentinel session id used by the composer when no real session exists yet
 // (see `src/features/composer/composer.container.tsx` DRAFT_KEY_NEW).
 // Attachments created with this id live under `{rootDir}/__new__/` until the

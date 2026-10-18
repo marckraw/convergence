@@ -15,6 +15,42 @@ export type ConversationItemKind =
 
 export type ConversationItemState = 'streaming' | 'complete' | 'error'
 
+/**
+ * Why a tool result's image is not shown under it (MAR-4274). The first six
+ * are the execution-host protocol's fixed codes (protocol 0.23), which a host
+ * counts for the images it left out; a local Claude run counts its own under
+ * the same names. `download-failed` is Convergence's: the host kept the image,
+ * and fetching it from there did not work.
+ */
+export const TOOL_ATTACHMENT_OMISSION_CODES = [
+  'unsupported-mime-type',
+  'invalid-image',
+  'image-too-large',
+  'turn-limit',
+  'session-limit',
+  'storage-failed',
+  'download-failed',
+] as const
+
+export type ToolAttachmentOmissionCode =
+  (typeof TOOL_ATTACHMENT_OMISSION_CODES)[number]
+
+/** How many of a tool result's images were left out, by reason. */
+export type ToolAttachmentOmissions = Partial<
+  Record<ToolAttachmentOmissionCode, number>
+>
+
+/**
+ * One image a tool result produced, as bytes on their way into the attachment
+ * store. Only the `conversation.item.toolImages` delta carries these; the item
+ * keeps the store's ids.
+ */
+export interface ToolImageBytes {
+  name: string
+  mimeType: string
+  bytes: Uint8Array
+}
+
 export interface InteractionChoiceOption {
   label: string
   description?: string
@@ -147,6 +183,10 @@ export type ConversationItem =
       toolName: string | null
       relatedItemId: string | null
       outputText: string
+      /** The images the tool produced, as attachment-store ids (MAR-4274). */
+      attachmentIds?: string[]
+      /** The images it produced that are not shown, counted by reason. */
+      attachmentOmissions?: ToolAttachmentOmissions
     })
   | (ConversationItemBase & {
       kind: 'approval-request'
@@ -240,6 +280,20 @@ export type SessionDelta =
       kind: 'conversation.item.patch'
       itemId: string
       patch: Partial<ConversationItem>
+    }
+  | {
+      /**
+       * The images a tool result produced, still as bytes (MAR-4274). The
+       * session service writes them to the attachment store and patches the
+       * item with their ids, so an adapter never touches the store: a local
+       * run sends the images it read from the provider, a remote one the
+       * images it fetched from its host. `omissions` counts the images that
+       * did not make it this far, and adds to the item's own.
+       */
+      kind: 'conversation.item.toolImages'
+      itemId: string
+      images: ToolImageBytes[]
+      omissions: ToolAttachmentOmissions
     }
   | {
       kind: 'turn.add'

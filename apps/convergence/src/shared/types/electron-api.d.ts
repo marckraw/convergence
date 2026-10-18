@@ -1023,6 +1023,21 @@ type ConversationItemData =
       toolName: string | null
       relatedItemId: string | null
       outputText: string
+      /** The images the tool produced, as attachment ids (MAR-4274). */
+      attachmentIds?: string[]
+      /** The images it produced that are not shown, counted by reason. */
+      attachmentOmissions?: Partial<
+        Record<
+          | 'unsupported-mime-type'
+          | 'invalid-image'
+          | 'image-too-large'
+          | 'turn-limit'
+          | 'session-limit'
+          | 'storage-failed'
+          | 'download-failed',
+          number
+        >
+      >
     })
   | (ConversationItemDataBase & {
       kind: 'approval-request'

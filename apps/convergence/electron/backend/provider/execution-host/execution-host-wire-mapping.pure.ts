@@ -1,5 +1,6 @@
 import {
   EXECUTION_PROTOCOL_VERSION,
+  EXECUTION_TOOL_ATTACHMENT_OMISSION_CODES,
   type ExecutionConversationItem,
   type ExecutionConversationItemPatch,
   type ExecutionHostCommand,
@@ -8,6 +9,9 @@ import {
   type ExecutionSessionDelta,
   type ExecutionStartConfig,
   type ExecutionStartRequest,
+  type ExecutionToolAttachment,
+  type ExecutionToolAttachmentOmissionCode,
+  type ExecutionToolAttachmentOmissions,
   type ExecutionTurnFileChange,
   type ExecutionTurnOrigin,
   type ExecutionWorkspaceSource,
@@ -23,7 +27,10 @@ import type {
   ConversationItem,
   ConversationItemDraft,
   SessionDelta,
+  ToolAttachmentOmissionCode,
+  ToolAttachmentOmissions,
 } from '../../session/conversation-item.types'
+import { readToolAttachmentOmissions } from '../../session/conversation-item.pure'
 import type {
   HarnessEvidence,
   SessionAgentRun,
@@ -204,16 +211,6 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS = [
  * Wire fields dropped when a wire conversation item or item patch becomes a
  * local one.
  *
- * - `attachments` — wire attachment descriptors, on a message and, since
- *   protocol 0.23 (`items.toolAttachments.v1`), the images a tool result
- *   produced. The local item stores `attachmentIds` resolved against
- *   Convergence's own attachment store, which a daemon-side id cannot address
- *   (MAR-1415), and a local tool result has no image slot at all: a local
- *   Claude run's tool images are not kept either. Showing a remote one means
- *   fetching its bytes with the client's `downloadAttachment` into that store
- *   (MAR-4274).
- * - `attachmentOmissions` — counts of tool-result images a host left out
- *   (protocol 0.23). They describe the images above, and go with them.
  * - `delivery` — the daemon's queued/delivered/undelivered lifecycle for a
  *   user message. The local `deliveryMode` is a different concept (how the
  *   composer sent the text), so this has no local reader.
@@ -226,15 +223,47 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS = [
  *
  * `agentRunId` and `taskId` (protocol 0.19) left this list with MAR-3684: they
  * are the local item's own columns, which the remote evidence now fills in.
+ * `attachments` and `attachmentOmissions` (protocol 0.23) left it with
+ * MAR-4274: see EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS and
+ * ConversationItemAddOnlyField.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS = [
-  'attachments',
   'delivery',
   'textAppend',
   'author',
   'clientMessageId',
-  'attachmentOmissions',
 ] as const satisfies readonly WireConversationItemField[]
+
+/**
+ * Wire item fields that are mapped by fetching, not by copying (MAR-4274).
+ *
+ * `attachments` on a tool result (`items.toolAttachments.v1`) are references
+ * to images the host kept: an id, a name, a type and a size, never the bytes.
+ * A daemon-side id means nothing to Convergence's attachment store, so the
+ * remote run downloads each one (`downloadAttachment`, kind `tool`) and hands
+ * the bytes to the session as a `conversation.item.toolImages` delta, which
+ * stores them and gives the item the store's own ids
+ * (`wireToolImageReferences`, `RemoteToolImageFetcher`).
+ *
+ * The same field on a message names what its sender attached. Convergence
+ * sends none to a host (MAR-1415), so a message with attachments came from
+ * another client of the same session; those are not fetched yet, and the
+ * message shows its text alone (MAR-4314).
+ */
+export const EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS = [
+  'attachments',
+] as const satisfies readonly WireConversationItemField[]
+
+/**
+ * Wire item fields copied when an item is added and never patched: the
+ * protocol fixes them at the add (protocol 0.23), and a patch that carries one
+ * is ignored, so they are read in `toLocalConversationItemDraft` and nowhere
+ * else (MAR-4274).
+ *
+ * `attachmentOmissions` counts the images a host left out of a tool result,
+ * by fixed code. The local item keeps the same counts, under the same names.
+ */
+type ConversationItemAddOnlyField = 'attachmentOmissions'
 
 /**
  * Which agent run or task produced an item (protocol 0.19). Both ways they
@@ -255,10 +284,15 @@ const CONVERSATION_ITEM_ATTRIBUTION_FIELDS = ['agentRunId', 'taskId'] as const
  *
  * `harness.evidence` left this list with MAR-3684: the wire's `evidence`
  * delta carries it unchanged.
+ *
+ * `conversation.item.toolImages` carries image bytes on their way into this
+ * app's attachment store (MAR-4274). A host keeps its own images and names
+ * them by reference on the item it adds; bytes never travel in a delta.
  */
 export const EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS = [
   'turn.add',
   'turn.fileChanges.add',
+  'conversation.item.toolImages',
 ] as const satisfies readonly SessionDelta['kind'][]
 
 /**
@@ -792,7 +826,10 @@ export function toWireSessionDelta(
             'request',
           ]),
           ...wireAttribution(delta.item),
-        },
+          ...(delta.item.kind === 'tool-result'
+            ? wireToolAttachmentOmissions(delta.item.attachmentOmissions)
+            : {}),
+        } as ExecutionConversationItem,
       }
     case 'conversation.item.patch':
       return {
@@ -813,8 +850,50 @@ export function toWireSessionDelta(
       return { kind: 'evidence', turnId: null, evidence: delta.evidence }
     case 'turn.add':
     case 'turn.fileChanges.add':
+    case 'conversation.item.toolImages':
       return null
   }
+}
+
+/**
+ * A local tool result's omission counts as the wire spells them: the codes
+ * the protocol has. `download-failed` is this app's account of its own fetch,
+ * which no host has a word for, so it stays here.
+ */
+function wireToolAttachmentOmissions(
+  omissions: ToolAttachmentOmissions | undefined,
+): { attachmentOmissions?: ExecutionToolAttachmentOmissions } {
+  const wire: ExecutionToolAttachmentOmissions = {}
+  let any = false
+  for (const code of EXECUTION_TOOL_ATTACHMENT_OMISSION_CODES) {
+    const count = omissions?.[code]
+    if (count) {
+      wire[code] = count
+      any = true
+    }
+  }
+  return any ? { attachmentOmissions: wire } : {}
+}
+
+/**
+ * The images a host kept for a tool result it has just added, by reference
+ * (`items.toolAttachments.v1`), with the item they belong to, or null when
+ * the delta adds no tool result with images. What a remote run downloads; see
+ * EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS.
+ *
+ * Only an add: the protocol fixes `attachments` when the item is added, and a
+ * patch never carries them.
+ */
+export function wireToolImageReferences(
+  delta: ExecutionSessionDelta,
+): { itemId: string; attachments: ExecutionToolAttachment[] } | null {
+  if (
+    delta.kind !== 'conversation.item.add' ||
+    delta.item.kind !== 'tool-result' ||
+    !delta.item.attachments?.length
+  )
+    return null
+  return { itemId: delta.item.id, attachments: delta.item.attachments }
 }
 
 /**
@@ -866,14 +945,19 @@ function toLocalConversationItemDraft(
         toolName: item.toolName,
         inputText: item.inputText,
       }
-    case 'tool-result':
+    case 'tool-result': {
+      const attachmentOmissions = readToolAttachmentOmissions(
+        item.attachmentOmissions,
+      )
       return {
         ...base,
         kind: 'tool-result',
         toolName: item.toolName,
         relatedItemId: item.relatedItemId,
         outputText: item.outputText,
+        ...(attachmentOmissions ? { attachmentOmissions } : {}),
       }
+    }
     case 'approval-request':
       return {
         ...base,
@@ -957,6 +1041,8 @@ export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
       | 'request'
       | (typeof LOCAL_CONVERSATION_ITEM_PATCH_FIELDS)[number]
       | (typeof CONVERSATION_ITEM_ATTRIBUTION_FIELDS)[number]
+      | ConversationItemAddOnlyField
+      | (typeof EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS)[number]
       | (typeof EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS)[number]
     >
   >
@@ -997,6 +1083,13 @@ export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
     >
   >
   /**
+   * Every omission code a host may send is one the local item counts under
+   * the same name (MAR-4274); `download-failed` is the local item's own.
+   */
+  toolAttachmentOmissionCodes: Accounted<
+    Exclude<ExecutionToolAttachmentOmissionCode, ToolAttachmentOmissionCode>
+  >
+  /**
    * The evidence the wire carries is Convergence's own, copied into the
    * protocol (protocol 0.19), and handed to `HarnessEvidenceService.apply`
    * whole. The two assignments in the delta mappings only prove the copies
@@ -1022,6 +1115,7 @@ export const EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE: {
   provider: true,
   providerModel: true,
   snapshot: true,
+  toolAttachmentOmissionCodes: true,
   evidenceShape: true,
   sessionTask: true,
   sessionAgentRun: true,
@@ -1208,7 +1302,7 @@ export const EXECUTION_HOST_UNCHECKED_CAPABILITIES = {
   'attachments.inline-file.v1':
     'Convergence sends no inline attachment yet (MAR-1415).',
   'items.toolAttachments.v1':
-    'Tool-result images are unmapped (EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS, MAR-4274).',
+    'Tool-result images are fetched from any host that sends them (EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS, MAR-4274).',
   'providers.usage.v1':
     'Convergence does not read the provider catalogue (MAR-4272).',
 } as const satisfies Record<

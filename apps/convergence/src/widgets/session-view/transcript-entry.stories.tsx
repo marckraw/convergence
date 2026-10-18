@@ -401,6 +401,135 @@ export const Failed: Story = {
   },
 }
 
+/** A screenshot a remote session's tool took, stored like a sent image. */
+const toolImage = (id: string, filename: string): Attachment => ({
+  id,
+  sessionId: 'session-4f2c',
+  kind: 'image',
+  mimeType: 'image/png',
+  filename,
+  sizeBytes: 182_330,
+  storagePath: `/tmp/attachments/${filename}`,
+  thumbnailPath: null,
+  textPreview: null,
+  createdAt: '2026-10-01T14:02:26.000Z',
+})
+
+const shotBefore = toolImage('att-shot-before', 'composer-before.png')
+const shotAfter = toolImage('att-shot-after', 'composer-after.png')
+const toolImages: Attachment[] = [shotBefore, shotAfter]
+
+const screenshotResult: ItemOf<'tool-result'> = {
+  ...base('item-tool-images', '2026-10-01T14:02:25.000Z'),
+  kind: 'tool-result',
+  toolName: 'browser_screenshot',
+  relatedItemId: 'item-tool-call',
+  outputText:
+    'Captured the composer before and after closing the skill picker.',
+}
+
+/**
+ * The images a tool produced show under its result, without opening it, and
+ * open the preview (MAR-4274).
+ */
+export const ToolResultWithImages: Story = {
+  args: {
+    viewModel: viewModelFor(
+      {
+        ...screenshotResult,
+        attachmentIds: toolImages.map((image) => image.id),
+      },
+      { attachments: toolImages },
+    ),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const grid = canvas.getByTestId('history-image-attachments')
+    await expect(grid).toBeVisible()
+    const preview = canvas.getByRole('button', {
+      name: 'Preview composer-after.png',
+    })
+    await expect(preview).toBeVisible()
+    await expect(
+      canvas.queryByTestId('tool-result-omitted-images'),
+    ).not.toBeInTheDocument()
+    await userEvent.click(preview)
+    await expect(args.onAttachmentOpen).toHaveBeenCalledWith(shotAfter)
+  },
+}
+
+export const ToolResultWithImagesDark: Story = {
+  ...ToolResultWithImages,
+  name: 'Tool result with images, dark',
+  globals: { theme: 'dark' },
+}
+
+/** None of its images could be shown: how many, and why, in one quiet line. */
+export const ToolResultImagesLeftOut: Story = {
+  args: {
+    viewModel: viewModelFor({
+      ...screenshotResult,
+      id: 'item-tool-images-left-out',
+      attachmentOmissions: { 'image-too-large': 2, 'session-limit': 1 },
+    }),
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.queryByTestId('history-image-attachments'),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.getByText(
+        metaText('3 images left out · 2 too large · 1 over the session limit'),
+      ),
+    ).toBeVisible()
+  },
+}
+
+/** Some shown, one left out: the images, then the line for the one. */
+export const ToolResultImagesAndOneLeftOut: Story = {
+  args: {
+    viewModel: viewModelFor(
+      {
+        ...screenshotResult,
+        id: 'item-tool-images-some',
+        attachmentIds: [shotBefore.id],
+        attachmentOmissions: { 'turn-limit': 1 },
+      },
+      { attachments: toolImages },
+    ),
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('button', { name: 'Preview composer-before.png' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByText(metaText('1 image left out · over the per-turn limit')),
+    ).toBeVisible()
+  },
+}
+
+/** An image whose file is gone draws as a dashed chip, nothing to open. */
+export const ToolResultMissingImage: Story = {
+  args: {
+    viewModel: viewModelFor(
+      {
+        ...screenshotResult,
+        id: 'item-tool-images-missing',
+        attachmentIds: [shotBefore.id, 'att-shot-gone'],
+      },
+      { attachments: toolImages },
+    ),
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('button', { name: 'Preview composer-before.png' }),
+    ).toBeVisible()
+    await expect(canvas.getByTestId('missing-attachment-chip')).toHaveAttribute(
+      'data-attachment-id',
+      'att-shot-gone',
+    )
+  },
+}
+
 const approvalRequest: ItemOf<'approval-request'> = {
   ...base('item-approval', '2026-10-01T14:02:50.000Z'),
   kind: 'approval-request',

@@ -162,6 +162,25 @@ export type ConversationItemKind =
 
 export type ConversationItemState = 'streaming' | 'complete' | 'error'
 
+/**
+ * Why a tool result's image is not shown under it (MAR-4274); the backend's
+ * `TOOL_ATTACHMENT_OMISSION_CODES`. The first six are the execution-host
+ * protocol's codes, `download-failed` is Convergence's own.
+ */
+export type ToolAttachmentOmissionCode =
+  | 'unsupported-mime-type'
+  | 'invalid-image'
+  | 'image-too-large'
+  | 'turn-limit'
+  | 'session-limit'
+  | 'storage-failed'
+  | 'download-failed'
+
+/** How many of a tool result's images were left out, by reason. */
+export type ToolAttachmentOmissions = Partial<
+  Record<ToolAttachmentOmissionCode, number>
+>
+
 export interface InteractionChoiceOption {
   label: string
   description?: string
@@ -294,6 +313,10 @@ export type ConversationItem =
       toolName: string | null
       relatedItemId: string | null
       outputText: string
+      /** The images the tool produced, as attachment ids (MAR-4274). */
+      attachmentIds?: string[]
+      /** The images it produced that are not shown, counted by reason. */
+      attachmentOmissions?: ToolAttachmentOmissions
     })
   | (ConversationItemBase & {
       kind: 'approval-request'

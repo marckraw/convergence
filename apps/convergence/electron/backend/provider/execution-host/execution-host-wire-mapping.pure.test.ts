@@ -24,6 +24,7 @@ import {
   settledAttentionForStatus,
   toLocalSessionDelta,
   toWireSessionDelta,
+  wireToolImageReferences,
   withSettledAttention,
   withTurnOpenedBy,
   EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS,
@@ -39,6 +40,7 @@ import {
   EXECUTION_HOST_UNREAD_PROVIDER_FIELDS,
   EXECUTION_HOST_UNREAD_PROVIDER_MODEL_FIELDS,
   EXECUTION_HOST_UNREAD_SNAPSHOT_FIELDS,
+  EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS,
   EXECUTION_HOST_WIRE_INVENTORY_IS_EXHAUSTIVE,
   EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS,
   EXECUTION_HOST_UNMAPPED_WIRE_EVIDENCE_FIELDS,
@@ -694,7 +696,9 @@ describe('toLocalSessionDelta', () => {
   /**
    * The wire item carries daemon-side attachment descriptors and a delivery
    * lifecycle; the local item stores attachment ids resolved against
-   * Convergence's own store and has no reader for delivery.
+   * Convergence's own store and has no reader for delivery. A message's
+   * attachments are not fetched (MAR-4314); a tool result's are, beside the
+   * item (see the tool-image tests below).
    */
   it('drops the wire-only message fields the local item cannot store', () => {
     const local = toLocalSessionDelta({
@@ -729,13 +733,25 @@ describe('toLocalSessionDelta', () => {
       },
     })
     expect(EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS).toEqual([
-      'attachments',
       'delivery',
       'textAppend',
       'author',
       'clientMessageId',
-      'attachmentOmissions',
     ])
+    expect(EXECUTION_HOST_FETCHED_WIRE_ITEM_FIELDS).toEqual(['attachments'])
+    expect(
+      wireToolImageReferences({
+        kind: 'conversation.item.add',
+        item: wireItem({
+          kind: 'message',
+          actor: 'user',
+          text: 'hi',
+          attachments: [
+            { id: 'a-1', name: 'x.png', mimeType: 'image/png', sizeBytes: 10 },
+          ],
+        }),
+      } as never),
+    ).toBeNull()
   })
 
   /**
@@ -782,9 +798,74 @@ describe('toLocalSessionDelta', () => {
       outputText: 'read a screenshot',
       agentRunId: 'agent-1',
       taskId: 'task-1',
+      attachmentOmissions: { 'image-too-large': 1 },
     })
     for (const field of EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS)
       expect(local.item).not.toHaveProperty(field)
+    // The references are fetched, never copied onto the item.
+    expect(local.item).not.toHaveProperty('attachments')
+    expect(local.item).not.toHaveProperty('attachmentIds')
+    expect(wireToolImageReferences(decoded.value.event.delta)).toEqual({
+      itemId: 'item-1',
+      attachments: [
+        {
+          id: 'img-1',
+          name: 'screenshot.png',
+          mimeType: 'image/png',
+          sizeBytes: 10,
+          width: 2,
+          height: 2,
+        },
+      ],
+    })
+  })
+
+  /**
+   * MAR-4274. Mutation: map `attachmentOmissions` with a plain copy and the
+   * junk count reaches the item.
+   */
+  it('keeps the counts of the images a host left out, and only those it can name', () => {
+    const local = toLocalSessionDelta({
+      kind: 'conversation.item.add',
+      item: wireItem({
+        kind: 'tool-result',
+        toolName: 'Read',
+        relatedItemId: null,
+        outputText: '',
+        attachmentOmissions: {
+          'turn-limit': 2,
+          'session-limit': 0,
+          'some-later-code': 4,
+        },
+      }),
+    } as never)
+    expect(
+      local?.kind === 'conversation.item.add' &&
+        'attachmentOmissions' in local.item &&
+        local.item.attachmentOmissions,
+    ).toEqual({ 'turn-limit': 2 })
+  })
+
+  it('names no images for a tool result without any, nor for a patch', () => {
+    expect(
+      wireToolImageReferences({
+        kind: 'conversation.item.add',
+        item: wireItem({
+          kind: 'tool-result',
+          toolName: 'Read',
+          relatedItemId: null,
+          outputText: 'text',
+          attachments: [],
+        }),
+      } as never),
+    ).toBeNull()
+    expect(
+      wireToolImageReferences({
+        kind: 'conversation.item.patch',
+        itemId: 'item-1',
+        patch: { state: 'complete' },
+      }),
+    ).toBeNull()
   })
 
   it("leaves a main agent's item without an agent run or task, as before protocol 0.19", () => {
@@ -1148,6 +1229,29 @@ describe('the attention a settle carries', () => {
 describe('delta round-trip local -> wire -> local', () => {
   const roundTrippable: Array<[string, SessionDelta]> = [
     [
+      'tool-result conversation.item.add with images left out',
+      {
+        kind: 'conversation.item.add',
+        item: {
+          id: 'item-9',
+          turnId: null,
+          kind: 'tool-result',
+          toolName: 'Read',
+          relatedItemId: 'call-9',
+          outputText: '',
+          attachmentOmissions: { 'image-too-large': 1, 'turn-limit': 3 },
+          state: 'complete',
+          createdAt: '2026-08-22T10:00:00.000Z',
+          updatedAt: '2026-08-22T10:00:01.000Z',
+          providerMeta: {
+            providerId: 'claude',
+            providerItemId: null,
+            providerEventType: 'tool_result',
+          },
+        },
+      },
+    ],
+    [
       'session.patch',
       {
         kind: 'session.patch',
@@ -1351,10 +1455,81 @@ describe('delta round-trip local -> wire -> local', () => {
     expect(decoded.ok && decoded.warnings).toBeFalsy()
   })
 
+  /**
+   * MAR-4274: a download that failed here is this app's fact, with no wire
+   * code; the host's own codes travel.
+   */
+  it("sends a tool result's omission counts in the wire's codes only", () => {
+    const wire = toWireSessionDelta({
+      kind: 'conversation.item.add',
+      item: {
+        id: 'item-1',
+        turnId: null,
+        kind: 'tool-result',
+        toolName: 'Read',
+        relatedItemId: null,
+        outputText: '',
+        attachmentIds: ['att-1'],
+        attachmentOmissions: { 'download-failed': 2, 'storage-failed': 1 },
+        state: 'complete',
+        createdAt: '2026-08-22T10:00:00.000Z',
+        updatedAt: '2026-08-22T10:00:01.000Z',
+        providerMeta: {
+          providerId: 'claude',
+          providerItemId: null,
+          providerEventType: 'tool_result',
+        },
+      },
+    })
+    expect(wire?.kind === 'conversation.item.add' && wire.item).toMatchObject({
+      attachmentOmissions: { 'storage-failed': 1 },
+    })
+    expect(
+      wire?.kind === 'conversation.item.add' && wire.item,
+    ).not.toHaveProperty('attachmentIds')
+    const onlyLocal = toWireSessionDelta({
+      kind: 'conversation.item.add',
+      item: {
+        id: 'item-2',
+        turnId: null,
+        kind: 'tool-result',
+        toolName: 'Read',
+        relatedItemId: null,
+        outputText: '',
+        attachmentOmissions: { 'download-failed': 1 },
+        state: 'complete',
+        createdAt: '2026-08-22T10:00:00.000Z',
+        updatedAt: '2026-08-22T10:00:01.000Z',
+        providerMeta: {
+          providerId: 'claude',
+          providerItemId: null,
+          providerEventType: 'tool_result',
+        },
+      },
+    })
+    expect(
+      onlyLocal?.kind === 'conversation.item.add' && onlyLocal.item,
+    ).not.toHaveProperty('attachmentOmissions')
+  })
+
+  it('never sends image bytes to a host', () => {
+    expect(
+      toWireSessionDelta({
+        kind: 'conversation.item.toolImages',
+        itemId: 'item-1',
+        images: [
+          { name: 'a.png', mimeType: 'image/png', bytes: new Uint8Array([1]) },
+        ],
+        omissions: {},
+      }),
+    ).toBeNull()
+  })
+
   it('never sends local turn bookkeeping to a host', () => {
     expect(EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS).toEqual([
       'turn.add',
       'turn.fileChanges.add',
+      'conversation.item.toolImages',
     ])
     expect(
       toWireSessionDelta({
@@ -1850,6 +2025,7 @@ describe('the exhaustive wire inventory (protocol 0.31)', () => {
       provider: true,
       providerModel: true,
       snapshot: true,
+      toolAttachmentOmissionCodes: true,
       evidenceShape: true,
       sessionTask: true,
       sessionAgentRun: true,

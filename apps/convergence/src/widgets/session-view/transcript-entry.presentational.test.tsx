@@ -27,10 +27,11 @@ function renderConversationItemView({
     ...attachments.map((attachment) => attachment.id),
     ...missingAttachmentIds,
   ]
+  const takesAttachments =
+    (entry.kind === 'message' && entry.actor === 'user') ||
+    entry.kind === 'tool-result'
   const item =
-    attachmentIds.length > 0 &&
-    entry.kind === 'message' &&
-    entry.actor === 'user'
+    attachmentIds.length > 0 && takesAttachments
       ? { ...entry, attachmentIds }
       : entry
 
@@ -923,5 +924,114 @@ describe('annotatable agent messages (RA2)', () => {
     })
 
     expect(container.querySelector('[data-annotation-message-id]')).toBeNull()
+  })
+})
+
+describe('tool result images (MAR-4274)', () => {
+  function toolResultEntry(
+    overrides: Partial<Extract<ConversationItem, { kind: 'tool-result' }>> = {},
+  ): ConversationItem {
+    return {
+      id: 'tool-result-1',
+      sessionId: 'session-1',
+      sequence: 2,
+      turnId: 'turn-1',
+      kind: 'tool-result',
+      state: 'complete',
+      toolName: 'browser_screenshot',
+      relatedItemId: 'tool-call-1',
+      outputText: 'Captured the page.',
+      createdAt: '2026-10-01T10:00:00.000Z',
+      updatedAt: '2026-10-01T10:00:00.000Z',
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: null,
+      },
+      ...overrides,
+    }
+  }
+
+  function image(id: string, filename: string): Attachment {
+    return {
+      id,
+      sessionId: 'session-1',
+      kind: 'image',
+      mimeType: 'image/png',
+      filename,
+      sizeBytes: 1,
+      storagePath: `/tmp/${id}.png`,
+      thumbnailPath: null,
+      textPreview: null,
+      createdAt: '2026-10-01T10:00:00.000Z',
+    }
+  }
+
+  it('shows the images under the result without opening its output, and opens them', () => {
+    const onOpen = vi.fn()
+    const first = image('img-1', 'before.png')
+    renderConversationItemView({
+      entry: toolResultEntry(),
+      attachments: [first, image('img-2', 'after.png')],
+      onAttachmentOpen: onOpen,
+    })
+
+    const grid = screen.getByTestId('history-image-attachments')
+    expect(screen.getAllByTestId('attachment-inline-preview')).toHaveLength(2)
+    // Outside the folded output panel: seen without opening it.
+    expect(grid.closest('[data-slot="collapsible-panel"]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Preview before.png' })).toBe(
+      screen.getAllByTestId('attachment-inline-preview')[0],
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview before.png' }))
+    expect(onOpen).toHaveBeenCalledWith(first)
+    expect(screen.queryByTestId('tool-result-omitted-images')).toBeNull()
+  })
+
+  it('draws a missing image as a dashed chip', () => {
+    renderConversationItemView({
+      entry: toolResultEntry(),
+      attachments: [image('img-1', 'before.png')],
+      missingAttachmentIds: ['img-gone'],
+    })
+
+    expect(screen.getByTestId('missing-attachment-chip')).toHaveAttribute(
+      'data-attachment-id',
+      'img-gone',
+    )
+  })
+
+  it('says one image left out in the singular, with its reason', () => {
+    renderConversationItemView({
+      entry: toolResultEntry({ attachmentOmissions: { 'image-too-large': 1 } }),
+    })
+
+    expect(seen(screen.getByTestId('tool-result-omitted-images'))).toBe(
+      '1 image left out · too large',
+    )
+    expect(screen.queryByTestId('history-image-attachments')).toBeNull()
+  })
+
+  it('says N images left out in the plural, each reason counted', () => {
+    renderConversationItemView({
+      entry: toolResultEntry({
+        attachmentOmissions: { 'download-failed': 2, 'session-limit': 1 },
+      }),
+      attachments: [image('img-1', 'before.png')],
+    })
+
+    expect(screen.getAllByTestId('attachment-inline-preview')).toHaveLength(1)
+    expect(seen(screen.getByTestId('tool-result-omitted-images'))).toBe(
+      '3 images left out · 1 over the session limit · 2 couldn’t be downloaded from the host',
+    )
+  })
+
+  it('adds nothing under a result that produced no images', () => {
+    renderConversationItemView({ entry: toolResultEntry() })
+
+    expect(screen.queryByTestId('history-image-attachments')).toBeNull()
+    expect(screen.queryByTestId('history-attachments')).toBeNull()
+    expect(screen.queryByTestId('tool-result-omitted-images')).toBeNull()
   })
 })

@@ -45,10 +45,12 @@ import {
   EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY,
   EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
   toLocalSessionDelta,
+  wireToolImageReferences,
   withSettledAttention,
   withTurnOpenedBy,
   type LocalSessionPatch,
 } from './execution-host-wire-mapping.pure'
+import { RemoteToolImageFetcher } from './remote-tool-images'
 import type {
   ExecutionHostProviderCapabilities,
   ProviderExecutionHost,
@@ -246,6 +248,11 @@ export interface RemoteExecutionHostDeps {
    * and embedders that do not care skip the bookkeeping, not the construction.
    */
   debugSink?: ProviderDebugSink
+  /**
+   * The bounds on fetching a tool result's images (MAR-4274). Overridable so
+   * tests can prove them without waiting 30 seconds.
+   */
+  toolImages?: { timeoutMs?: number; maxConcurrent?: number }
 }
 
 /**
@@ -421,6 +428,8 @@ interface LandedListing {
  */
 export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly fetchFn: FetchFn
+  /** @internal Shared by RemoteSessionRun: one line of downloads per host. */
+  readonly toolImages: RemoteToolImageFetcher
   private readonly maxReconnectAttempts: number
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number, signal?: AbortSignal) => Promise<void>
@@ -527,6 +536,10 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
 
   constructor(private readonly deps: RemoteExecutionHostDeps) {
     this.fetchFn = deps.fetch ?? fetch
+    this.toolImages = new RemoteToolImageFetcher({
+      fetch: this.fetchFn,
+      ...deps.toolImages,
+    })
     this.healthProbeTimeoutMs =
       deps.healthProbeTimeoutMs ?? DEFAULT_HEALTH_PROBE_TIMEOUT_MS
     this.taskOutputTimeoutMs =
@@ -1595,6 +1608,18 @@ class RemoteSessionRun {
   /** Whether the stream has said `runningTasks` since this run began. */
   private streamSaidRunningTasks = false
   /**
+   * A tool result's images being fetched (MAR-4274), and the items they were
+   * fetched for, so an add the stream replays is not fetched twice.
+   *
+   * Their own lifetime, not the stream's: a turn that ends releases its handle
+   * the moment it settles, and the screenshot taken just before is still on
+   * its way. A download is bounded by its deadline, and `dispose` waits for
+   * it; only a quit gives it up (`toolImageAbort`).
+   */
+  private readonly toolImageFetches = new Set<Promise<void>>()
+  private readonly toolImageItems = new Set<string>()
+  private readonly toolImageAbort = new AbortController()
+  /**
    * Whether the read in progress tried to KEEP an envelope -- one it had read
    * as the next to dispatch. A read that tried and kept nothing is not a host
    * that stopped answering: the daemon delivered, and something on this side
@@ -1665,7 +1690,7 @@ class RemoteSessionRun {
       },
       stopTask: (taskId) => this.stopTask(taskId),
       stop: () => this.stop(),
-      dispose: () => this.dispose(),
+      dispose: (reason) => this.dispose(reason),
     }
   }
 
@@ -2445,13 +2470,15 @@ class RemoteSessionRun {
         // the same reason the dedicated event does: the settle and its outcome
         // are one fact. A patch that states an attention of its own keeps it,
         // and a patch with nothing to pair travels unchanged (MAR-2590).
-        if (delta)
+        if (delta) {
           this.notifyDelta(
             delta.kind === 'session.patch' && patch
               ? { ...delta, patch, executionHostSeq: seq }
               : delta,
           )
-        else {
+          const toolImages = wireToolImageReferences(event.delta)
+          if (toolImages) this.fetchToolImages(toolImages)
+        } else {
           this.recordDebug('event', {
             direction: 'in',
             method: event.delta.kind,
@@ -2526,6 +2553,48 @@ class RemoteSessionRun {
     const stamped = withTurnOpenedBy(patch, this.addedTurnOrigin)
     if (stamped !== patch) this.addedTurnOrigin = null
     return stamped
+  }
+
+  /**
+   * Fetches the images a tool result the host just added names, and hands
+   * them to the session once they are here (MAR-4274). Beside the stream,
+   * never in front of it: the item is already shown, and the next event is
+   * not held up behind eight screenshots.
+   *
+   * What could not be fetched is still said, as a count on the item, so a
+   * failed download reads as "1 image left out" and not as a tool that drew
+   * nothing.
+   */
+  private fetchToolImages(
+    references: NonNullable<ReturnType<typeof wireToolImageReferences>>,
+  ): void {
+    const connection = this.connection
+    if (!connection || this.toolImageItems.has(references.itemId)) return
+    this.toolImageItems.add(references.itemId)
+    const fetching = this.params.host.toolImages
+      .fetch(
+        connection,
+        this.params.config.sessionId,
+        references.attachments,
+        this.toolImageAbort.signal,
+      )
+      .then(({ images, omissions }) => {
+        this.notifyDelta({
+          kind: 'conversation.item.toolImages',
+          itemId: references.itemId,
+          images,
+          omissions,
+        })
+      })
+      .catch((error: unknown) => {
+        if (this.toolImageAbort.signal.aborted) return
+        this.recordDebug('lifecycle', {
+          direction: 'in',
+          note: `tool images of ${references.itemId} not recorded: ${describeRemoteExecutionHostFailure(error)}`,
+        })
+      })
+      .finally(() => this.toolImageFetches.delete(fetching))
+    this.toolImageFetches.add(fetching)
   }
 
   private notifyDelta(delta: SessionDelta): void {
@@ -2700,11 +2769,14 @@ class RemoteSessionRun {
     this.abort.abort()
   }
 
-  private dispose(): void {
-    if (this.stopped) return
+  private dispose(reason?: 'quit' | 'stop'): Promise<void> {
+    if (reason === 'quit') this.toolImageAbort.abort()
+    const toolImages = Promise.all(this.toolImageFetches).then(() => {})
+    if (this.stopped) return toolImages
     this.stopped = true
     this.pendingCommands.length = 0
     this.abort.abort()
+    return toolImages
   }
 
   /**
