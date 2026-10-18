@@ -2470,11 +2470,18 @@ class RemoteSessionRun {
         // the same reason the dedicated event does: the settle and its outcome
         // are one fact. A patch that states an attention of its own keeps it,
         // and a patch with nothing to pair travels unchanged (MAR-2590).
+        //
+        // Evidence carries the sequence for the first of those reasons: its
+        // write and the cursor commit together, so a crash before the trailing
+        // `notifyEventSeq` cannot hand the envelope back on the next attach and
+        // append its harness event a second time (MAR-4293).
         if (delta) {
           this.notifyDelta(
             delta.kind === 'session.patch' && patch
               ? { ...delta, patch, executionHostSeq: seq }
-              : delta,
+              : delta.kind === 'harness.evidence'
+                ? { ...delta, executionHostSeq: seq }
+                : delta,
           )
           const toolImages = wireToolImageReferences(event.delta)
           if (toolImages) this.fetchToolImages(toolImages)
