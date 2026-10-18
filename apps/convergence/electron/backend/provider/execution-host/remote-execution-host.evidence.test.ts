@@ -318,9 +318,13 @@ async function runLocalExploreTape(dir: string) {
 
 /**
  * A remote Claude session on a stub daemon, started and following its
- * stream: what the test emits is what the host said.
+ * stream: what the test emits is what the host said. `cursorWrite` stands in
+ * for the trailing cursor write, so a test can lose one the way a crash does.
  */
-async function startRemoteSession(dir: string) {
+async function startRemoteSession(
+  dir: string,
+  cursorWrite = (write: () => void, _seq: number) => write(),
+) {
   const db = getDatabase()
   db.prepare(
     "INSERT INTO projects (id, name, repository_path) VALUES ('remote-project', 'remote', ?)",
@@ -344,7 +348,8 @@ async function startRemoteSession(dir: string) {
       maxAttempts: 2,
       wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
     },
-    onEventSeq: (id, seq) => service.recordRemoteEventSeq(id, seq),
+    onEventSeq: (id, seq) =>
+      cursorWrite(() => service.recordRemoteEventSeq(id, seq), seq),
   })
   await host.refreshProviders()
   service.setRemoteExecutionHosts(
@@ -378,7 +383,7 @@ async function startRemoteSession(dir: string) {
     () => stub.eventStreamLastEventIds.length === 1,
     'the event stream to open',
   )
-  return { db, service, stub, sessionId, dispose }
+  return { db, host, service, stub, sessionId, dispose }
 }
 
 /**
@@ -765,4 +770,116 @@ it("records a run the host patches onto the subagent's items as one it named on 
   expect(
     asPatched.items.filter((item) => item.agentRunId === EXPLORE_RUN).length,
   ).toBe(3)
+})
+
+/**
+ * Replayed evidence lands once (MAR-4293). A hook, retry or other harness
+ * event is appended to `session_harness_events`, not folded into a keyed row
+ * as runs and tasks are, so an envelope the record applied while its cursor
+ * stayed behind came back on the next attach and was appended a second time.
+ *
+ * The crash is the lost trailing cursor write for the retry's envelope: the
+ * evidence is written, the app dies before `recordRemoteEventSeq`, and a new
+ * service over the same database reattaches from whatever cursor the record
+ * holds, the stub daemon replaying its log after it. Mutation: write the
+ * evidence without its cursor in `applyDelta`, and the retry is recorded
+ * twice.
+ */
+it('records a harness event once when the app dies between its evidence and the stream cursor', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'remote-evidence-replay-'))
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
+  let crashAt: number | null = 3
+  const { db, host, stub, sessionId } = await startRemoteSession(
+    dir,
+    (write, seq) => {
+      if (seq !== crashAt) write()
+    },
+  )
+  const evidence = (seq: number, fact: SessionDelta) =>
+    envelope(
+      seq,
+      { kind: 'delta', delta: toWireSessionDelta(fact)! },
+      sessionId,
+    )
+  const harnessEvents = () =>
+    db
+      .prepare(
+        'SELECT type, subtype FROM session_harness_events WHERE session_id = ? ORDER BY sequence',
+      )
+      .all(sessionId)
+  const cursor = () =>
+    (
+      db
+        .prepare(
+          'SELECT execution_host_last_seq AS seq FROM sessions WHERE id = ?',
+        )
+        .get(sessionId) as { seq: number }
+    ).seq
+
+  stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+  stub.emit(
+    evidence(2, {
+      kind: 'harness.evidence',
+      evidence: {
+        kind: 'harness.hook',
+        at: '2026-10-18T10:00:00.000Z',
+        hookId: 'hook-1',
+        hookName: 'pre-tool',
+        hookEvent: 'PreToolUse',
+        phase: 'response',
+        status: 'ok',
+        output: null,
+      },
+    }),
+  )
+  stub.emit(
+    evidence(3, {
+      kind: 'harness.evidence',
+      evidence: {
+        kind: 'harness.retry',
+        at: '2026-10-18T10:00:01.000Z',
+        phase: 'attempt',
+        attempt: 1,
+        maxRetries: 3,
+        retryDelayMs: 500,
+        errorStatus: 529,
+        message: 'overloaded',
+        noResponse: false,
+      },
+    }),
+  )
+  await waitUntil(
+    () => harnessEvents().length === 2,
+    'both harness events to reach the record',
+  )
+
+  // The restart: a second service over the same database reattaches the
+  // session, which is still running, from the cursor on its row.
+  crashAt = null
+  const revived = new SessionService(
+    db,
+    new LocalExecutionHost(new ProviderRegistry()),
+    join(dir, 'global-sessions'),
+  )
+  cleanups.push(() => revived.disposeAll())
+  revived.setRemoteExecutionHosts(
+    executionHostRegistryFor({ [TEST_EXECUTION_HOST_ENDPOINT_ID]: host }),
+  )
+  revived.setRemoteWorkspaceSourceResolver(() => ({
+    repository: 'git@github.com:acme/repo.git',
+  }))
+  await waitUntil(
+    () => stub.eventStreamLastEventIds.length === 2,
+    'the reattached stream to open',
+  )
+  // Whatever the daemon replayed lands before the frame that follows it.
+  stub.emit(envelope(4, { kind: 'heartbeat' }, sessionId))
+  await waitUntil(() => cursor() === 4, 'the reattached stream to catch up')
+
+  expect(harnessEvents()).toEqual([
+    { type: 'harness.hook', subtype: 'response' },
+    { type: 'harness.retry', subtype: 'attempt' },
+  ])
+  // Why: the cursor committed with the evidence, so nothing was owed.
+  expect(stub.eventStreamLastEventIds[1]).toBe('3')
 })
