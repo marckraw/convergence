@@ -516,9 +516,9 @@ describe('perf seed CLI on a generated real-schema database', () => {
   beforeAll(() => {
     const result = spawnSync('lsof', ['-v'], { encoding: 'utf8' })
     expect(
-      result.status,
+      (result.error as NodeJS.ErrnoException | undefined)?.code,
       'perf-seed CLI tests require real lsof on PATH; on Linux install the lsof package (e.g. apt-get install lsof).',
-    ).toBe(0)
+    ).not.toBe('ENOENT')
   })
   it('keeps both rows distinct for every schema UNIQUE key covering TEXT', () => {
     const count = assertSchemaUniquePairs()
