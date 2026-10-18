@@ -17,12 +17,15 @@ import { SessionService } from '../../session/session.service'
 import { ProviderRegistry } from '../provider-registry'
 import {
   createStubDaemon,
+  DAEMON_HEALTH_FIXTURE_0_26_1,
   envelope,
   waitUntil,
   type StubDaemon,
 } from '@convergence/execution-host-client'
 import { LocalExecutionHost } from './local-execution-host'
 import { RemoteExecutionHost } from './remote-execution-host'
+import { EXECUTION_HOST_STOP_TASK_CAPABILITY } from './execution-host-wire-mapping.pure'
+import type { HarnessEvidence } from '../../session/harness-evidence.types'
 import type { ProviderExecutionHost } from './execution-host.types'
 import type { SessionHandle } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
@@ -287,7 +290,11 @@ describe('remote wire events reaching the session record', () => {
     sessionId = await createRemoteSession()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Before the database closes: remote evidence schedules the service's
+    // 250 ms parallel-work recount, and a timer that outlives the test reads a
+    // closed database (MAR-3684, CI on 545714d). Disposing clears it.
+    await service.disposeAll()
     closeDatabase()
     resetDatabase()
     rmSync(tempDir, { recursive: true, force: true })
@@ -1519,6 +1526,221 @@ describe('remote wire events reaching the session record', () => {
       })
       expect(parallelWorkStatus(summary())).toBeNull()
       expect(assistantTexts()).toEqual(['The build runs in the background.'])
+    })
+
+    /**
+     * The panel's Stop, refused by the service for a remote host that does
+     * not take `stop-task`, in a remote host's words rather than a Claude
+     * Code version's (MAR-3684 review). Mutation: throw the local words for
+     * every session again, and this turns red.
+     */
+    it('refuses Stop on one task of a remote session whose host does not take it, saying so', async () => {
+      await answerWithATaskRunning()
+      stub.emit(
+        envelope(
+          6,
+          {
+            kind: 'delta',
+            delta: {
+              kind: 'evidence',
+              turnId: 'turn-1',
+              evidence: {
+                kind: 'task.changed',
+                taskId: 'bash-task',
+                at: '2026-10-18T10:00:00.000Z',
+                patch: { taskType: 'local_bash', status: 'running' },
+              },
+            },
+          },
+          sessionId,
+        ),
+      )
+      await waitUntil(
+        () => service.listTasks(sessionId).length === 1,
+        'the task to be recorded',
+      )
+      await expect(service.stopTask(sessionId, 'bash-task')).rejects.toThrow(
+        'Stop is not available on this remote host',
+      )
+      expect(stub.commandEnvelopes).toEqual([])
+    })
+
+    /**
+     * Stop on an answered remote session, through the service (MAR-3684
+     * review). The host takes `stop-task`, so Stop asks it to stop each row
+     * the session's evidence says still runs, once per task (an agent run is
+     * stopped as its linked task), and never a row that ended; only then the
+     * session's own `stop`, and the settle the aborted stream will not bring.
+     * Mutations: drop `stopTask` from the remote handle, stop a row that
+     * ended, or stop the session before its tasks, and this turns red. The
+     * service does not read `canStopTasks` here: `stopTask` refuses on a host
+     * without the capability, and `allSettled` goes on to the session's stop.
+     */
+    it('stops each running task of an answered remote session, then the session, then settles it', async () => {
+      const health = JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as {
+        executionProtocol: { capabilities: string[] }
+      }
+      health.executionProtocol.capabilities.push(
+        EXECUTION_HOST_STOP_TASK_CAPABILITY,
+      )
+      stub.setHealthBody(JSON.stringify(health))
+      await host.refreshProviders()
+
+      await service.start(sessionId, { text: 'build it' })
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'the event stream to open',
+      )
+      const at = '2026-10-18T10:00:00.000Z'
+      const evidence = (seq: number, fact: HarnessEvidence) =>
+        envelope(
+          seq,
+          {
+            kind: 'delta',
+            delta: { kind: 'evidence', turnId: 'turn-1', evidence: fact },
+          },
+          sessionId,
+        )
+      stub.emit(turnAdd(1, 1, 'user'))
+      stub.emit(envelope(2, { kind: 'status', status: 'running' }, sessionId))
+      stub.emit(
+        envelope(
+          3,
+          {
+            kind: 'delta',
+            delta: {
+              kind: 'conversation.item.add',
+              item: {
+                id: 'spawn-item',
+                kind: 'tool-call',
+                toolName: 'Agent',
+                inputText: '{"subagent_type":"Explore"}',
+                state: 'complete',
+                createdAt: at,
+                updatedAt: at,
+                providerMeta: {
+                  providerId: 'claude',
+                  providerItemId: 'agent-call',
+                  providerEventType: 'tool-use',
+                },
+              },
+            },
+          },
+          sessionId,
+        ),
+      )
+      stub.emit(
+        evidence(4, {
+          kind: 'agent.started',
+          run: {
+            id: 'agent-call',
+            spawnedByItemId: 'spawn-item',
+            agentType: 'Explore',
+            description: 'Look around',
+            model: null,
+            depth: 1,
+            startedAt: at,
+            transcriptPath: null,
+          },
+        }),
+      )
+      stub.emit(
+        evidence(5, {
+          kind: 'task.changed',
+          taskId: 'agent-run',
+          at,
+          patch: {
+            toolUseId: 'agent-call',
+            taskType: 'local_agent',
+            status: 'running',
+            startedAt: at,
+          },
+        }),
+      )
+      stub.emit(
+        evidence(6, {
+          kind: 'agent.identified',
+          spawnedByItemId: 'spawn-item',
+          id: 'agent-run',
+          agentType: 'Explore',
+          description: 'Look around',
+          depth: 1,
+          transcriptPath: null,
+        }),
+      )
+      stub.emit(
+        evidence(7, {
+          kind: 'task.changed',
+          taskId: 'bash-task',
+          at,
+          patch: {
+            toolUseId: 'bash-call',
+            taskType: 'local_bash',
+            status: 'running',
+            startedAt: at,
+          },
+        }),
+      )
+      stub.emit(
+        evidence(8, {
+          kind: 'task.changed',
+          taskId: 'done-task',
+          at,
+          patch: {
+            toolUseId: 'done-call',
+            taskType: 'local_bash',
+            status: 'completed',
+            startedAt: at,
+            endedAt: at,
+          },
+        }),
+      )
+      stub.emit(
+        sessionPatch(9, {
+          status: 'answered',
+          attention: 'none',
+          runningTasks: 2,
+        }),
+      )
+      await waitUntil(
+        () =>
+          service.getById(sessionId)?.status === 'answered' &&
+          service.listTasks(sessionId).length === 3,
+        'the session to read answered, with its tasks',
+      )
+      expect(stub.commandEnvelopes).toEqual([])
+
+      service.stop(sessionId)
+      await waitUntil(() => releases.length === 1, 'the handle to be released')
+      await waitUntil(
+        () => service.getById(sessionId)?.status === 'completed',
+        'the stopped answer to settle',
+      )
+
+      const commands = stub.commandRequests.map(
+        ({ sessionId: addressed, envelope: sent }) => ({
+          addressed,
+          command: (sent as { command: { kind: string; taskId?: string } })
+            .command,
+        }),
+      )
+      expect(commands.map(({ addressed }) => addressed)).toEqual([
+        sessionId,
+        sessionId,
+        sessionId,
+      ])
+      expect(commands.slice(0, 2).map(({ command }) => command)).toEqual(
+        expect.arrayContaining([
+          { kind: 'stop-task', taskId: 'agent-run' },
+          { kind: 'stop-task', taskId: 'bash-task' },
+        ]),
+      )
+      expect(commands[2]?.command).toEqual({ kind: 'stop' })
+      expect(summary()).toMatchObject({
+        status: 'completed',
+        attention: 'finished',
+        parallelWork: { running: 0 },
+      })
     })
 
     /**

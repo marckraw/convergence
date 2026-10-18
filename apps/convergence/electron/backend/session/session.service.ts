@@ -18,7 +18,10 @@ import {
 import { randomUUID } from 'crypto'
 import { answerWindowResult } from './answer-window.pure'
 import { HarnessEvidenceService } from './harness-evidence.service'
-import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
+import {
+  stopTaskUnavailableReason,
+  type ParallelWorkCounts,
+} from '../../../src/shared/lib/parallel-work.pure'
 import { mkdirSync } from 'fs'
 import Database from 'better-sqlite3'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
@@ -2140,7 +2143,7 @@ export class SessionService {
   async stopTask(sessionId: string, id: string): Promise<void> {
     const handle = this.activeHandles.get(sessionId)
     if (!handle?.canStopTasks || !handle.stopTask)
-      throw new Error('Stop is not available on this Claude Code version')
+      throw new Error(stopTaskUnavailableReason(this.getById(sessionId) ?? {}))
     const row = this.db
       .prepare(
         `SELECT status FROM session_agent_runs WHERE session_id=? AND id=?

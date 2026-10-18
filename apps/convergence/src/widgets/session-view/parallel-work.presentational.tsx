@@ -51,6 +51,8 @@ export interface ParallelWorkPanelProps {
   onResult?: (id: string) => void
   resultItems?: Map<string, string>
   canStop?: boolean
+  /** What Stop's tooltip says when `canStop` is false. */
+  stopUnavailableReason?: string
   stopStates?: Map<string, { pending?: boolean; error?: string }>
   transcript?: ReactNode
   details?: ReactNode
@@ -116,7 +118,8 @@ export const ParallelWorkPanelView: FC<
     const state = stopStates.get(workRowKey(row))
     const running = parallelWorkRowState(row).fact?.status === 'running'
     const stopReason = !props.canStop
-      ? 'Stop is not available on this Claude Code version'
+      ? (props.stopUnavailableReason ??
+        'Stop is not available on this Claude Code version')
       : !running
         ? 'This task is not running'
         : undefined
