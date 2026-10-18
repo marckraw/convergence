@@ -203,7 +203,7 @@ describe('RemoteExecutionHost structured answers', () => {
     /** Mutation: wait for a listing before sending an answer and this is red; a plain message sent right behind it would overtake it. */
     it('sends an answer from a run attached before its host was listed, without waiting to be told', async () => {
       // The listing the attach asks for fails, so the host stays unread.
-      stub.setMetaStatus(500)
+      stub.setProvidersStatus(500)
       const handle = host.attach('claude', startConfig('s-unlisted'), 0)
       await waitUntil(
         () => stub.eventStreamLastEventIds.length === 1,
