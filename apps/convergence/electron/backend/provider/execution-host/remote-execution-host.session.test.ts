@@ -290,7 +290,11 @@ describe('remote wire events reaching the session record', () => {
     sessionId = await createRemoteSession()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Before the database closes: remote evidence schedules the service's
+    // 250 ms parallel-work recount, and a timer that outlives the test reads a
+    // closed database (MAR-3684, CI on 545714d). Disposing clears it.
+    await service.disposeAll()
     closeDatabase()
     resetDatabase()
     rmSync(tempDir, { recursive: true, force: true })

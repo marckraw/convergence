@@ -353,7 +353,16 @@ async function startRemoteSession(dir: string) {
   service.setRemoteWorkspaceSourceResolver(() => ({
     repository: 'git@github.com:acme/repo.git',
   }))
-  cleanups.push(() => service.disposeAll())
+  // Disposed before its database closes, by the test or here at the end: a
+  // remote session's evidence schedules the service's parallel-work recount,
+  // and a timer outliving the database reads a closed one.
+  let disposed = false
+  const dispose = async () => {
+    if (disposed) return
+    disposed = true
+    await service.disposeAll()
+  }
+  cleanups.push(dispose)
   const sessionId = service.create({
     projectId: 'remote-project',
     workspaceId: null,
@@ -369,7 +378,7 @@ async function startRemoteSession(dir: string) {
     () => stub.eventStreamLastEventIds.length === 1,
     'the event stream to open',
   )
-  return { db, service, stub, sessionId }
+  return { db, service, stub, sessionId, dispose }
 }
 
 /**
@@ -526,11 +535,14 @@ async function followDaemonTape(
     () => remote.service.getById(remote.sessionId)?.status === 'completed',
     'the remote turn to settle',
   )
-  return {
+  const followed = {
     record: readRecord(remote.db, remote.sessionId),
     items: readItems(remote.service, remote.sessionId),
     conversation: remote.service.getConversation(remote.sessionId),
   }
+  // Read, then let go, so a caller may close the database and follow again.
+  await remote.dispose()
+  return followed
 }
 
 /**
