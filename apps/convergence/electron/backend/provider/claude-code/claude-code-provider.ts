@@ -43,6 +43,10 @@ import {
   readClaudeTaskNote,
   readClaudeToolResultMoment,
 } from './claude-code-task.pure'
+import {
+  hasClaudeToolImages,
+  readClaudeToolResultImages,
+} from './claude-tool-images.pure'
 import { ClaudeEvidenceService } from './claude-evidence.service'
 import { ClaudeMcpStatusService } from './claude-mcp-status.service'
 import {
@@ -123,7 +127,9 @@ interface ClaudeStreamEvent {
       name?: string
       input?: unknown
       tool_use_id?: string
-      content?: string | Array<{ type: string; text?: string }>
+      content?:
+        | string
+        | Array<{ type: string; text?: string; source?: unknown }>
     }>
   }
   is_error?: boolean
@@ -1438,7 +1444,7 @@ export class ClaudeCodeProvider implements Provider {
                           .map((c) => c.text)
                           .join('\n')
                       : 'Done'
-                sessionEmitter.addToolResult({
+                const toolResultId = sessionEmitter.addToolResult({
                   ...evidence.toolResult(data, block, now()),
                   ...evidence.identity(data, block.tool_use_id),
                   providerItemId: event.uuid,
@@ -1450,6 +1456,16 @@ export class ClaudeCodeProvider implements Provider {
                       ? `tool_result.${moment}`
                       : 'tool_result',
                 })
+                // The result's images follow its item; the session service
+                // stores them and patches that item (MAR-4274).
+                const toolImages = readClaudeToolResultImages(block.content)
+                if (hasClaudeToolImages(toolImages)) {
+                  emitDelta({
+                    kind: 'conversation.item.toolImages',
+                    itemId: toolResultId,
+                    ...toolImages,
+                  })
+                }
                 noteMcpAuthFailure(resultText)
               }
             }
