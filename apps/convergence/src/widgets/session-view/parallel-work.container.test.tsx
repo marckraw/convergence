@@ -27,6 +27,7 @@ vi.mock('./parallel-work.api', () => ({
     readTaskResultNotes: vi.fn().mockResolvedValue([]),
     stop: vi.fn(),
     readDetail: vi.fn(),
+    readTaskOutput: vi.fn(),
   },
 }))
 
@@ -1260,3 +1261,79 @@ it('CH2 R4 twenty resizes on one side of the bound render nothing; crossing it r
     crossed: true,
   })
 })
+
+/**
+ * A remote task's output tail (MAR-4275): offered on a task row of a session
+ * whose host serves it, read only when asked, and absent everywhere else.
+ */
+const outputTask: SessionTask = {
+  taskId: 'bash-task',
+  sessionId: 's',
+  taskType: 'local_bash',
+  status: 'running',
+  description: 'npm run build',
+  outputFile: '/home/host/.claude/tasks/bash-task.output',
+} as SessionTask
+
+const outputProps = (canReadTaskOutput?: boolean) => ({
+  ...props(),
+  session: { id: 's', canReadTaskOutput } as Session,
+  rows: buildParallelWork([run], [outputTask]),
+  selectedId: 'task:bash-task',
+})
+
+it('MAR-4275 reads a remote task’s output tail only when asked, by session and task id, and shows the host’s lines — mutation read on selection or send the row’s outputFile turns red', async () => {
+  vi.mocked(parallelWorkApi.readTaskOutput).mockReset().mockResolvedValue({
+    kind: 'output',
+    text: 'compiling\nlinking\n',
+    status: 'running',
+    truncated: false,
+    totalBytes: 18,
+    readAt: '2026-10-18T10:00:00.000Z',
+  })
+  render(<ParallelWork {...outputProps(true)} />)
+  expect(parallelWorkApi.readTaskOutput).not.toHaveBeenCalled()
+
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Read output tail' })),
+  )
+
+  expect(vi.mocked(parallelWorkApi.readTaskOutput).mock.calls).toEqual([
+    ['s', 'bash-task'],
+  ])
+  expect(screen.getByLabelText('Task output tail').textContent).toContain(
+    'compiling\nlinking',
+  )
+})
+
+it('MAR-4275 puts the host’s refusal in words beside the task', async () => {
+  vi.mocked(parallelWorkApi.readTaskOutput)
+    .mockReset()
+    .mockResolvedValue({ kind: 'refused', code: 'task-unknown' })
+  render(<ParallelWork {...outputProps(true)} />)
+
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Read output tail' })),
+  )
+
+  expect(screen.getByRole('status').textContent).toBe(
+    'The host has no record of this task.',
+  )
+})
+
+it.each([
+  ['a host that does not serve it', outputProps(false)],
+  ['a session on this machine', outputProps(undefined)],
+  [
+    'an agent row, which has no output file',
+    { ...outputProps(true), selectedId: 'agent:agent' },
+  ],
+])(
+  'MAR-4275 offers no output read for %s — mutation drop the gate turns red',
+  (_name, input) => {
+    render(<ParallelWork {...input} />)
+    expect(
+      screen.queryByRole('button', { name: 'Read output tail' }),
+    ).toBeNull()
+  },
+)

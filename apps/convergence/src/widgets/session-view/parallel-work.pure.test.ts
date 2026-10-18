@@ -114,6 +114,16 @@ it('L7 unwraps only the Stop IPC envelope — mutation display the remote-method
   ).toBe('Control refused')
 })
 
+it('L7 unwraps the output-tail IPC envelope too — mutation leave the readTaskOutput wrapper turns red', () => {
+  expect(
+    parallelWorkRefusal(
+      new Error(
+        "Error invoking remote method 'session:readTaskOutput': Error: Host unreachable",
+      ),
+    ),
+  ).toBe('Host unreachable')
+})
+
 it('T10 cyclic descendants terminate and exclude the starting row — mutation remove visited guard turns red', () => {
   const rows = [
     { id: 'a', parentId: 'b', kind: 'task', task: { status: 'running' } },

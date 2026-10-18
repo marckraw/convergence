@@ -381,6 +381,8 @@ export interface SessionSummary {
   originKind?: 'spawn' | 'resident' | null
   pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
+  /** Runtime fact: the session's remote host serves a task's output tail (MAR-4275). */
+  canReadTaskOutput?: boolean
   /** Runtime fact: a running process can reconnect its MCP servers (MAR-3206). */
   canReconnectMcpServers?: boolean
   parallelWork?: ParallelWorkCounts

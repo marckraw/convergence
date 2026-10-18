@@ -27,6 +27,7 @@ import {
 } from '@convergence/ui'
 import { ConversationItem } from './conversation-item.container'
 import { ParallelWorkPanel } from './parallel-work-panel.container'
+import { TaskOutputTailSection } from './task-output-tail.container'
 import { parallelWorkApi } from './parallel-work.api'
 import {
   parallelWorkDetailItems,
@@ -250,6 +251,13 @@ export const ParallelWork: FC<Props> = ({
       <h3 className="text-sm font-medium">
         {selected?.kind === 'agent' ? 'Agent transcript' : 'Task output'}
       </h3>
+      {selected?.task && session.canReadTaskOutput && (
+        <TaskOutputTailSection
+          key={`${session.id}:${selected.task.taskId}`}
+          sessionId={session.id}
+          taskId={selected.task.taskId}
+        />
+      )}
       {selected?.kind === 'agent' &&
         !visibleItems.some((item) => item.kind === 'message') && (
           <p className="text-xs text-ink-muted">

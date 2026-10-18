@@ -1,4 +1,5 @@
 import type { RemoteSessionWorkspaceInfo } from '@convergence/execution-host-client'
+import type { RemoteTaskOutputReading } from '../../../../src/shared/types/task-output.types'
 import type {
   AttentionState,
   OneShotInput,
@@ -156,4 +157,23 @@ export interface ProviderExecutionHost {
   fetchSessionWorkspaceInfo?(
     sessionId: string,
   ): Promise<RemoteSessionWorkspaceInfo>
+
+  /**
+   * Whether this host serves a remote task's output tail
+   * (`tasks.output.v1`, MAR-4275). Absent on a host that runs its tasks
+   * in-process, where a task's output is already on this machine.
+   */
+  readsTaskOutput?(): boolean
+
+  /**
+   * The end of one remote task's output as the host that runs the session
+   * redacted and cut it, or the host's coded refusal. Rejects when the host
+   * cannot be reached. On the interface for the reason
+   * `fetchSessionWorkspaceInfo` is: a session's task is read from the machine
+   * the session names (MAR-4275).
+   */
+  readTaskOutput?(
+    sessionId: string,
+    taskId: string,
+  ): Promise<RemoteTaskOutputReading>
 }

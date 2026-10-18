@@ -1900,10 +1900,11 @@ describe('the exhaustive wire inventory (protocol 0.31)', () => {
     expect(EXECUTION_HOST_CHECKED_CAPABILITIES).toEqual([
       'projects.v1',
       'commands.stopTask.v1',
+      'interactions.structured',
+      'tasks.output.v1',
     ])
     for (const id of [
       'sessions.permissionModes.v1',
-      'tasks.output.v1',
       'providers.usage.v1',
     ] as const)
       expect(EXECUTION_HOST_UNCHECKED_CAPABILITIES[id]).toMatch(/MAR-\d+/)

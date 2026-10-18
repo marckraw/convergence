@@ -222,7 +222,7 @@ export function descendantActivity(
 export function parallelWorkRefusal(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   return message.replace(
-    /^Error invoking remote method ['"]session:stopTask['"]: (?:Error: )?/,
+    /^Error invoking remote method ['"]session:(?:stopTask|readTaskOutput)['"]: (?:Error: )?/,
     '',
   )
 }

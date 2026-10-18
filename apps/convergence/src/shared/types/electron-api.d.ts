@@ -1,4 +1,5 @@
 import type { ConversationPageRequest } from './conversation-item.types'
+import type { RemoteTaskOutputReading } from './task-output.types'
 export interface ConversationRoutineAction {
   id: 'drill' | 'compact' | 'fork' | 'hand-off'
   kind: 'routine'
@@ -1136,6 +1137,8 @@ interface SessionSummaryData {
   pinnedAt?: string | null
   pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
+  /** Runtime fact: the session's remote host serves a task's output tail (MAR-4275). */
+  canReadTaskOutput?: boolean
   /** Runtime fact: a running process can reconnect its MCP servers (MAR-3206). */
   canReconnectMcpServers?: boolean
   parallelWork?: ParallelWorkCounts
@@ -2098,6 +2101,11 @@ interface ElectronAPI {
       callback: (event: { sessionId: string }) => void,
     ) => () => void
     stopTask: (sessionId: string, id: string) => Promise<void>
+    /** A remote task's output tail, read from its host (MAR-4275). */
+    readTaskOutput: (
+      sessionId: string,
+      taskId: string,
+    ) => Promise<RemoteTaskOutputReading>
     harnessFacts: (sessionId: string) => Promise<SessionHarnessFacts>
     /** Record the running process's MCP status; reconnect one server first when named (MAR-3206). */
     refreshMcpServers: (

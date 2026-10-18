@@ -1453,6 +1453,11 @@ export function registerIpcHandlers(
   ipcMain.handle('session:stopTask', (_event, sessionId: string, id: string) =>
     sessionService.stopTask(sessionId, id),
   )
+  ipcMain.handle(
+    'session:readTaskOutput',
+    (_event, sessionId: string, taskId: string) =>
+      sessionService.readTaskOutput(sessionId, taskId),
+  )
 
   ipcMain.handle('session:harnessFacts', (_event, sessionId: string) =>
     sessionService.harnessFacts(sessionId),

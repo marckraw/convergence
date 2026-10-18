@@ -26,6 +26,11 @@ export class RemoteExecutionHostError extends Error {
     public readonly kind: RemoteExecutionHostErrorKind,
     public readonly status?: number,
     public readonly cause?: unknown,
+    /**
+     * The refusal's body as the host sent it, for a caller that reads a code
+     * out of it. Never shown: `message` is what a person reads.
+     */
+    public readonly responseBody?: string,
   ) {
     super(message)
     this.name = 'RemoteExecutionHostError'

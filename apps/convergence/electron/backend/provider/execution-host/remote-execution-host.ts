@@ -4,6 +4,7 @@ import type {
   ExecutionTurnOrigin,
 } from '@mrck-labs/execution-host-protocol'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import type { RemoteTaskOutputReading } from '../../../../src/shared/types/task-output.types'
 import { RecordingError } from '../../session/session.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import type {
@@ -35,6 +36,11 @@ import {
   buildWireStopCommand,
   buildWireStopTaskCommand,
   EXECUTION_HOST_STOP_TASK_CAPABILITY,
+  EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY,
+  EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
+  buildTaskOutputTarget,
+  readTaskOutputAnswer,
+  taskOutputRefusalCode,
   toLocalSessionDelta,
   withSettledAttention,
   withTurnOpenedBy,
@@ -1266,6 +1272,66 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     return parseRemoteSessionWorkspaceInfo(snapshot, sessionId)
   }
 
+  /**
+   * Whether this host serves a task's output tail: it said `tasks.output.v1`
+   * in the handshake. A host that said nothing readable is not asked, as
+   * `stop-task` is not sent to one (MAR-4275).
+   */
+  readsTaskOutput(): boolean {
+    return (
+      this.handshake()?.executionProtocolCapabilities.includes(
+        EXECUTION_HOST_TASK_OUTPUT_CAPABILITY,
+      ) ?? false
+    )
+  }
+
+  /**
+   * Reads the end of a remote task's output from the host that runs it
+   * (`tasks.output.v1`, MAR-4275): whole lines, redacted by the host, at most
+   * 64 KiB. The request names a session and a task, never a file path.
+   *
+   * A host that does not advertise the route is not asked. A refusal the host
+   * gave, by code, is the reading's `refused`; a host that could not be
+   * reached, or did not answer, throws, since there is nothing to say about
+   * the task's output.
+   */
+  async readTaskOutput(
+    sessionId: string,
+    taskId: string,
+  ): Promise<RemoteTaskOutputReading> {
+    await this.ensureListed()
+    if (!this.readsTaskOutput()) return { kind: 'refused', code: 'unsupported' }
+    let target: string
+    try {
+      target = buildTaskOutputTarget(sessionId, taskId)
+    } catch {
+      return { kind: 'refused', code: 'rejected' }
+    }
+    const connection = await this.resolveConnection()
+    try {
+      const body = await this.requestJson(connection, target, {
+        method: 'GET',
+      })
+      return readTaskOutputAnswer(body, { sessionId, taskId })
+    } catch (error) {
+      // A 4xx the host answered is its refusal of this read, coded. A 401 is
+      // the token, a 5xx the host failing, and an unreachable host has no
+      // status at all: those say nothing of the task, so they are thrown.
+      if (
+        error instanceof RemoteExecutionHostError &&
+        error.status !== undefined &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        error.status !== 401
+      )
+        return {
+          kind: 'refused',
+          code: taskOutputRefusalCode(error.status, error.responseBody),
+        }
+      throw error
+    }
+  }
+
   async oneShot(
     providerId: string,
     _input: OneShotInput,
@@ -1349,6 +1415,8 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
           `Remote execution host request failed with ${response.status}.`,
         response.status === 401 || response.status === 403 ? 'auth' : 'http',
         response.status,
+        undefined,
+        text,
       )
     }
     if (!text.trim()) return {}
@@ -2473,6 +2541,13 @@ class RemoteSessionRun {
   }
 
   private async postCommand(command: ExecutionHostCommand): Promise<void> {
+    const refusal = this.structuredAnswerRefusal(command)
+    if (refusal) {
+      this.reportUndeliveredCommand(
+        `Remote session command was not delivered: ${refusal}`,
+      )
+      return
+    }
     this.recordDebug('request', {
       direction: 'out',
       method: command.kind,
@@ -2499,6 +2574,44 @@ class RemoteSessionRun {
         `Remote session command was not delivered: ${describeRemoteExecutionHostFailure(error)}`,
       )
     }
+  }
+
+  /**
+   * Why a structured answer (a choice, plan, form or url `interactionResponse`)
+   * must not be sent to this run's host, or null when it may be (MAR-4276).
+   *
+   * The protocol's shared client (0.26) refuses, unsent, such an answer to a
+   * host whose `/health` does not advertise `interactions.structured`; this
+   * transport is Convergence's own, so the same refusal is made here. A host
+   * that cannot read the answer would take it and do nothing with it, and the
+   * person would be left believing the request was answered.
+   *
+   * A host that said nothing readable is unknown, never unsupported (see
+   * `handshake`): the answer is sent, as it was before the gate, and the host
+   * says what it makes of it. Only a handshake that was read and lacks the id
+   * refuses. Every command but a send carrying an answer passes untouched.
+   *
+   * Synchronous on purpose: waiting for a listing here would let a plain
+   * message sent right after an answer overtake it. A run attached before its
+   * host was ever listed has no handshake yet, which reads as unknown.
+   */
+  private structuredAnswerRefusal(
+    command: ExecutionHostCommand,
+  ): string | null {
+    if (
+      command.kind !== 'send-message' ||
+      !command.options?.interactionResponse
+    )
+      return null
+    const handshake = this.params.host.handshake()
+    if (
+      !handshake ||
+      handshake.executionProtocolCapabilities.includes(
+        EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY,
+      )
+    )
+      return null
+    return `this host does not advertise structured answers (${EXECUTION_HOST_STRUCTURED_INTERACTIONS_CAPABILITY}), so the answer was not sent. Answer the request in a client the host supports, or update the host.`
   }
 
   /**
