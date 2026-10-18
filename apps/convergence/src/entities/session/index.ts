@@ -4,6 +4,8 @@ export type {
   ConversationPatchEvent,
   ConversationItemKind,
   ConversationItemState,
+  ToolAttachmentOmissionCode,
+  ToolAttachmentOmissions,
   InteractionChoiceOption,
   InteractionFormField,
   InteractionFormFieldType,

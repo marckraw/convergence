@@ -170,6 +170,70 @@ describe('conversation item timing', () => {
 })
 
 describe('buildTranscriptEntryViewModel', () => {
+  it("resolves a tool result's images and words what it left out (MAR-4274)", () => {
+    const item: ConversationItem = {
+      ...base,
+      kind: 'tool-result',
+      toolName: 'browser_screenshot',
+      relatedItemId: null,
+      outputText: 'Captured the page.',
+      attachmentIds: ['img-1', 'img-gone'],
+      attachmentOmissions: { 'image-too-large': 1, 'turn-limit': 1 },
+    }
+    const image = {
+      id: 'img-1',
+      sessionId: 'session-1',
+      kind: 'image' as const,
+      mimeType: 'image/png',
+      filename: 'page.png',
+      sizeBytes: 1,
+      storagePath: '/tmp/page.png',
+      thumbnailPath: null,
+      textPreview: null,
+      createdAt: '2026-04-22T00:00:00.000Z',
+    }
+
+    expect(
+      buildTranscriptEntryViewModel({
+        item,
+        resolvedAttachmentsById: { 'img-1': image },
+      }),
+    ).toMatchObject({
+      kind: 'tool-result',
+      attachments: [image],
+      missingAttachmentIds: ['img-gone'],
+      omittedImageCount: 2,
+      omittedImagesLabel: '2 images left out',
+      omittedImageReasons: ['1 too large', '1 over the per-turn limit'],
+    })
+  })
+
+  it('leaves a tool result without images, and other kinds, with nothing to show', () => {
+    const toolResult: ConversationItem = {
+      ...base,
+      kind: 'tool-result',
+      toolName: 'Bash',
+      relatedItemId: null,
+      outputText: 'ok',
+    }
+    const toolCall: ConversationItem = {
+      ...base,
+      kind: 'tool-call',
+      toolName: 'Bash',
+      inputText: 'ls',
+    }
+
+    for (const item of [toolResult, toolCall]) {
+      expect(buildTranscriptEntryViewModel({ item })).toMatchObject({
+        attachments: [],
+        missingAttachmentIds: [],
+        omittedImageCount: 0,
+        omittedImagesLabel: null,
+        omittedImageReasons: [],
+      })
+    }
+  })
+
   it('derives render facts for a user follow-up with resolved and missing attachments', () => {
     const item: ConversationItem = {
       ...base,

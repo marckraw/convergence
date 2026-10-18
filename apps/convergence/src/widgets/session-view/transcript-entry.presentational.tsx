@@ -95,6 +95,83 @@ function getHistoryImageAttachmentsStyle(
   }
 }
 
+/**
+ * The files under an entry: images as a grid of previews, other files as
+ * chips, and a dashed chip for each id whose file is gone. A user message's
+ * attachments and the images a tool result produced (MAR-4274) draw the same.
+ */
+function renderAttachments(
+  viewModel: TranscriptEntryViewModel,
+  onAttachmentOpen: ((attachment: Attachment) => void) | undefined,
+) {
+  const open = onAttachmentOpen ?? (() => {})
+  const imageAttachments = viewModel.attachments.filter(
+    (attachment) => attachment.kind === 'image',
+  )
+  const chipAttachments = viewModel.attachments.filter(
+    (attachment) => attachment.kind !== 'image',
+  )
+  const hasMissing = viewModel.missingAttachmentIds.length > 0
+  return (
+    <>
+      {imageAttachments.length > 0 && (
+        <div
+          className={getHistoryImageAttachmentsClassName(
+            imageAttachments.length,
+          )}
+          style={getHistoryImageAttachmentsStyle(imageAttachments.length)}
+          data-testid="history-image-attachments"
+        >
+          {imageAttachments.map((attachment) => (
+            <AttachmentInlinePreview
+              key={attachment.id}
+              attachment={attachment}
+              onOpen={open}
+            />
+          ))}
+        </div>
+      )}
+      {(chipAttachments.length > 0 || hasMissing) && (
+        <div
+          className="mt-2 flex flex-wrap gap-1.5"
+          data-testid="history-attachments"
+        >
+          {chipAttachments.map((attachment) => (
+            <AttachmentChip
+              key={attachment.id}
+              attachment={attachment}
+              onOpen={open}
+            />
+          ))}
+          {viewModel.missingAttachmentIds.map((id) => (
+            <MissingAttachmentChip key={id} attachmentId={id} />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * "2 images left out · too large": the images a tool produced that are not
+ * shown, and why, as one quiet line (MAR-4274).
+ */
+function renderOmittedImages(viewModel: TranscriptEntryViewModel) {
+  if (!viewModel.omittedImagesLabel) return null
+  return (
+    <MetaLine
+      wrap
+      className="mt-2 text-xs text-ink-muted"
+      data-testid="tool-result-omitted-images"
+    >
+      {viewModel.omittedImagesLabel}
+      {viewModel.omittedImageReasons.map((reason) => (
+        <span key={reason}>{reason}</span>
+      ))}
+    </MetaLine>
+  )
+}
+
 /** Who speaks a transcript entry: a 28 px disc with its glyph (CONV-11). */
 const AVATARS = {
   user: 'bg-strong text-on-strong',
@@ -140,11 +217,14 @@ function renderToolEntry({
   icon,
   text,
   attribution,
+  after,
 }: {
   viewModel: TranscriptEntryViewModel
   icon: ReactNode
   text: string
   attribution?: ReactNode
+  /** What shows under the folded text, without opening it: a result's images. */
+  after?: ReactNode
 }) {
   const { item: entry } = viewModel
   return (
@@ -186,6 +266,7 @@ function renderToolEntry({
               </CodeBlock>
             </CollapsiblePanel>
           </Collapsible>
+          {after}
         </div>
       </div>
     </ConversationItemShell>
@@ -237,15 +318,6 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
   switch (entry.kind) {
     case 'message':
       if (entry.actor === 'user') {
-        const imageAttachments = viewModel.attachments.filter(
-          (attachment) => attachment.kind === 'image',
-        )
-        const chipAttachments = viewModel.attachments.filter(
-          (attachment) => attachment.kind !== 'image',
-        )
-        const hasImageAttachments = imageAttachments.length > 0
-        const hasChipAttachments = chipAttachments.length > 0
-        const hasMissing = viewModel.missingAttachmentIds.length > 0
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
             <div className="flex gap-3 py-3">
@@ -292,42 +364,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   content={viewModel.displayText}
                   size="sm"
                 />
-                {hasImageAttachments && (
-                  <div
-                    className={getHistoryImageAttachmentsClassName(
-                      imageAttachments.length,
-                    )}
-                    style={getHistoryImageAttachmentsStyle(
-                      imageAttachments.length,
-                    )}
-                    data-testid="history-image-attachments"
-                  >
-                    {imageAttachments.map((attachment) => (
-                      <AttachmentInlinePreview
-                        key={attachment.id}
-                        attachment={attachment}
-                        onOpen={onAttachmentOpen ?? (() => {})}
-                      />
-                    ))}
-                  </div>
-                )}
-                {(hasChipAttachments || hasMissing) && (
-                  <div
-                    className="mt-2 flex flex-wrap gap-1.5"
-                    data-testid="history-attachments"
-                  >
-                    {chipAttachments.map((attachment) => (
-                      <AttachmentChip
-                        key={attachment.id}
-                        attachment={attachment}
-                        onOpen={onAttachmentOpen ?? (() => {})}
-                      />
-                    ))}
-                    {viewModel.missingAttachmentIds.map((id) => (
-                      <MissingAttachmentChip key={id} attachmentId={id} />
-                    ))}
-                  </div>
-                )}
+                {renderAttachments(viewModel, onAttachmentOpen)}
               </div>
             </div>
           </ConversationItemShell>
@@ -404,6 +441,12 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
         viewModel,
         icon: <Terminal className="size-3.5" />,
         text: entry.outputText,
+        after: (
+          <>
+            {renderAttachments(viewModel, onAttachmentOpen)}
+            {renderOmittedImages(viewModel)}
+          </>
+        ),
       })
 
     case 'approval-request':
