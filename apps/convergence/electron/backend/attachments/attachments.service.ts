@@ -9,14 +9,24 @@ import type {
   IngestFileInput,
   IngestRejection,
   IngestResult,
+  ToolImageIngestResult,
 } from './attachments.types'
+import type {
+  ToolAttachmentOmissionCode,
+  ToolImageBytes,
+} from '../session/conversation-item.types'
 import {
   isValidUtf8,
   mimeTypeForTextExtension,
   sniffMime,
 } from './mime-sniff.pure'
 import { normalizeImageBytes } from './image-normalize.pure'
-import { DRAFT_SESSION_ID, MAX_TOTAL_BYTES } from './attachments.constants'
+import {
+  DRAFT_SESSION_ID,
+  MAX_TOOL_IMAGE_BYTES,
+  MAX_TOOL_IMAGES_PER_RESULT,
+  MAX_TOTAL_BYTES,
+} from './attachments.constants'
 import {
   type AttachmentRow,
   extensionFor,
@@ -64,6 +74,70 @@ export class AttachmentsService {
     }
 
     return { attachments, rejections }
+  }
+
+  /**
+   * Stores the images a tool result produced (MAR-4274), one at a time, so
+   * one refusal costs only its own image. Only an image is kept, by its bytes
+   * and not by the name or type it came with, within the tool-image limits.
+   * Never throws: what is not stored is counted under the reason it was not,
+   * and the caller shows the count.
+   */
+  async ingestToolImages(
+    sessionId: string,
+    images: readonly ToolImageBytes[],
+  ): Promise<ToolImageIngestResult> {
+    const attachments: Attachment[] = []
+    const omissions: ToolImageIngestResult['omissions'] = {}
+    const omit = (code: ToolAttachmentOmissionCode) => {
+      omissions[code] = (omissions[code] ?? 0) + 1
+    }
+
+    for (const image of images) {
+      if (attachments.length >= MAX_TOOL_IMAGES_PER_RESULT) {
+        omit('turn-limit')
+        continue
+      }
+      if (image.bytes.length === 0) {
+        omit('invalid-image')
+        continue
+      }
+      if (image.bytes.length > MAX_TOOL_IMAGE_BYTES) {
+        omit('image-too-large')
+        continue
+      }
+      const sniffed = sniffMime(image.bytes)
+      if (sniffed?.kind !== 'image') {
+        omit('unsupported-mime-type')
+        continue
+      }
+      let bytes: Uint8Array
+      try {
+        bytes = normalizeImageBytes(image.bytes, sniffed.mimeType)
+      } catch {
+        omit('invalid-image')
+        continue
+      }
+      try {
+        attachments.push(
+          await this.storeBytes(
+            sessionId,
+            sanitizeFilename(image.name),
+            bytes,
+            sniffed.mimeType,
+            'image',
+          ),
+        )
+      } catch (error) {
+        console.error(
+          `[attachments] A tool image of session ${sessionId} could not be stored`,
+          error,
+        )
+        omit('storage-failed')
+      }
+    }
+
+    return { attachments, omissions }
   }
 
   private insertAttachmentRow(
@@ -172,6 +246,17 @@ export class AttachmentsService {
       // sniff is authoritative; caller's declared type is advisory only
     }
 
+    return this.storeBytes(sessionId, filename, bytes, mimeType, kind)
+  }
+
+  /** Writes checked bytes under the session's directory and records the row. */
+  private async storeBytes(
+    sessionId: string,
+    filename: string,
+    bytes: Uint8Array,
+    mimeType: string,
+    kind: AttachmentKind,
+  ): Promise<Attachment> {
     const id = randomUUID()
     const ext = extensionFor(mimeType, filename)
     const sessionDir = join(this.rootDir, sessionId)

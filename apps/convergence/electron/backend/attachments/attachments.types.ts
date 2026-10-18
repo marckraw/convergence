@@ -1,3 +1,5 @@
+import type { ToolAttachmentOmissions } from '../session/conversation-item.types'
+
 export type AttachmentKind = 'image' | 'pdf' | 'text'
 
 export interface Attachment {
@@ -32,6 +34,12 @@ export interface IngestFileInput {
 export interface IngestRejection {
   filename: string
   reason: string
+}
+
+/** What became of a tool result's images (MAR-4274). */
+export interface ToolImageIngestResult {
+  attachments: Attachment[]
+  omissions: ToolAttachmentOmissions
 }
 
 export interface IngestResult {
