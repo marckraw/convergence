@@ -21,6 +21,13 @@ interface AgentIdentity {
   depth: number
   transcriptPath: string | null
 }
+type EndStatus = Exclude<AgentRunStatus, 'running' | 'unknown'>
+interface AgentEnd {
+  agent: AgentIdentity
+  status: EndStatus
+  at: string
+  stopReason?: 'stop'
+}
 interface ToolIdentity {
   itemId: string
   name: string
@@ -36,6 +43,12 @@ export class ClaudeEvidenceService {
   private readonly stoppedTasks = new Set<string>()
   private readonly stopReceipts = new Map<string, string>()
   private readonly terminalAgents = new Set<string>()
+  /**
+   * The end a `task_updated` said, held one message for the
+   * `task_notification` that follows it with the subagent's last words (R0:
+   * always next; MAR-4292). The run still ends at the update's moment.
+   */
+  private pendingEnd: AgentEnd | null = null
   private readonly readMetadata = new Set<string>()
   private readonly unmatchedMetadata = new Set<string>()
   private metadataListing = ''
@@ -90,6 +103,8 @@ export class ClaudeEvidenceService {
   consume(data: unknown, at: string): void {
     const event = claudeRecord(data)
     if (!event) return
+    if (this.pendingEnd && !this.notifiesEnd(event, this.pendingEnd.agent))
+      this.settlePendingEnd()
     if (event.type === 'system' && event.subtype === 'api_retry')
       this.outstandingRetries++
     const isResult = event.type === 'result'
@@ -231,13 +246,18 @@ export class ClaudeEvidenceService {
           if (
             fact.patch.status &&
             ['completed', 'failed', 'stopped'].includes(fact.patch.status)
-          )
-            this.endAgent(
-              agent,
-              fact.patch.status as 'completed' | 'failed' | 'stopped',
-              fact.patch.endedAt ?? at,
-              fact.patch.endedSummary,
-            )
+          ) {
+            const status = fact.patch.status as EndStatus
+            if (event.subtype === 'task_updated')
+              this.holdEnd(agent, status, fact.patch.endedAt ?? at)
+            else
+              this.endAgent(
+                agent,
+                status,
+                fact.patch.endedAt ?? at,
+                fact.patch.endedSummary,
+              )
+          }
         }
         if (
           fact.patch.status &&
@@ -384,6 +404,7 @@ export class ClaudeEvidenceService {
     reason?: 'quit' | 'idle' | 'account' | 'maintenance' | 'stop' | 'exit',
     unresolvedStatus?: 'unknown',
   ): void {
+    this.settlePendingEnd()
     this.outstandingRetries = 0
     this.requestedStops.clear()
     this.stopReceipts.clear()
@@ -401,24 +422,61 @@ export class ClaudeEvidenceService {
       if (agent.id === taskId || this.tasksByTool.get(toolId) === taskId)
         this.endAgent(agent, 'stopped', at)
   }
+  private holdEnd(agent: AgentIdentity, status: EndStatus, at: string): void {
+    if (
+      this.terminalAgents.has(agent.itemId) ||
+      this.pendingEnd?.agent.itemId === agent.itemId
+    )
+      return
+    this.settlePendingEnd()
+    this.pendingEnd = { agent, status, at, ...this.stopReason(agent, status) }
+  }
+  private settlePendingEnd(): void {
+    const pending = this.pendingEnd
+    if (pending) this.endAgent(pending.agent, pending.status, pending.at)
+  }
+  /** The task notification that may carry a held end's summary. */
+  private notifiesEnd(
+    event: Record<string, unknown>,
+    agent: AgentIdentity,
+  ): boolean {
+    if (event.type !== 'system' || event.subtype !== 'task_notification')
+      return false
+    const toolId = claudeString(event.tool_use_id)
+    return (
+      claudeString(event.task_id) === agent.id ||
+      (!!toolId && this.agents.get(toolId)?.itemId === agent.itemId)
+    )
+  }
+  private stopReason(
+    agent: AgentIdentity,
+    status: EndStatus,
+  ): { stopReason?: 'stop' } {
+    return status === 'stopped' && this.requestedStops.has(agent.id)
+      ? { stopReason: 'stop' }
+      : {}
+  }
   private endAgent(
     agent: AgentIdentity,
-    status: Exclude<AgentRunStatus, 'running' | 'unknown'>,
+    status: EndStatus,
     at: string,
     summary?: string | null,
   ): void {
-    // The task update, notification and foreground result name one terminal moment.
+    // The task update, notification and foreground result name one terminal
+    // moment: the first to say it, a held update's included.
     if (this.terminalAgents.has(agent.itemId)) return
     this.terminalAgents.add(agent.itemId)
+    const held =
+      this.pendingEnd?.agent.itemId === agent.itemId ? this.pendingEnd : null
+    if (held) this.pendingEnd = null
+    const end = held ?? { status, at, ...this.stopReason(agent, status) }
     this.emit({
       kind: 'agent.ended',
-      ...(status === 'stopped' && this.requestedStops.has(agent.id)
-        ? { stopReason: 'stop' as const }
-        : {}),
+      ...(end.stopReason ? { stopReason: end.stopReason } : {}),
       ...(summary !== undefined ? { summary } : {}),
       spawnedByItemId: agent.itemId,
-      status,
-      at,
+      status: end.status,
+      at: end.at,
     })
   }
   private identify(

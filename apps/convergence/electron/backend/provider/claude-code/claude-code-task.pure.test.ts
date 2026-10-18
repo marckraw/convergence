@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   readClaudeResultOriginKind,
+  readClaudeTaskBackgrounded,
   readClaudeTaskNote,
   readClaudeToolResultMoment,
 } from './claude-code-task.pure'
@@ -181,4 +182,24 @@ it('M5 a single non-Agent status has no moment — mutation trust any status tur
       () => null,
     ),
   ).toBeNull()
+})
+
+it("reads whether a task runs in the background from its start and its updates — mutation read the flag off progress or ignore the update's patch turns red", () => {
+  expect(
+    [
+      { subtype: 'task_started', task_id: 'a', is_backgrounded: false },
+      {
+        subtype: 'task_updated',
+        task_id: 'a',
+        patch: { is_backgrounded: true },
+      },
+      { subtype: 'task_progress', task_id: 'a', is_backgrounded: true },
+      { subtype: 'task_started', task_id: 'b' },
+    ].map((event) => readClaudeTaskBackgrounded({ type: 'system', ...event })),
+  ).toEqual([
+    { taskId: 'a', backgrounded: false },
+    { taskId: 'a', backgrounded: true },
+    null,
+    null,
+  ])
 })

@@ -124,6 +124,13 @@ export function parallelWorkMarkers(
           : null
     if (!row) continue
     const eventType = item.providerMeta.providerEventType
+    // A foreground run's own result is its return even when its message
+    // withheld the moment: only a background run's result can be a launch
+    // (MAR-4292; Claude Code writes no task notes for a foreground run).
+    const foregroundReturn =
+      item.kind === 'tool-result' &&
+      eventType === 'tool_result' &&
+      row.run?.isBackgrounded === false
     if (eventType === 'tool_result.async_launched') {
       markers.set(item.id, {
         rowKey: workRowKey(row),
@@ -132,19 +139,25 @@ export function parallelWorkMarkers(
       })
     } else if (
       !returned.has(workRowKey(row)) &&
-      [
-        'tool_result.completed',
-        'tool_result.failed',
-        'harness.task.terminal',
-      ].includes(eventType ?? '')
+      (foregroundReturn ||
+        [
+          'tool_result.completed',
+          'tool_result.failed',
+          'harness.task.terminal',
+        ].includes(eventType ?? ''))
     ) {
       returned.add(workRowKey(row))
+      // The recorded end says how the work ended (a stopped run's result is
+      // an error); the result's own moment only until there is one.
+      const ended = parallelWorkRowState(row).fact?.status
       const outcome =
-        eventType === 'tool_result.failed'
-          ? 'failed'
-          : eventType === 'tool_result.completed'
-            ? 'completed'
-            : parallelWorkRowState(row).fact?.status
+        ended && ended !== 'running' && ended !== 'unknown'
+          ? ended
+          : eventType === 'tool_result.failed'
+            ? 'failed'
+            : eventType === 'tool_result.completed'
+              ? 'completed'
+              : ended
       markers.set(item.id, {
         rowKey: workRowKey(row),
         replace: item.kind !== 'note',

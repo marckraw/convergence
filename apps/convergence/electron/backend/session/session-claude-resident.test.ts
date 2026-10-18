@@ -217,6 +217,14 @@ it('R6′ stops only the selected id and waits for its terminal fact — mutatio
     task_id: 'selected',
     patch: { status: 'killed' },
   })
+  // Claude Code's notification follows the update; the run ends with it.
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'selected',
+    tool_use_id: 'spawn',
+    status: 'stopped',
+  })
   await vi.waitUntil(
     () => service.listAgentRuns(session.id)[0]?.status === 'stopped',
   )

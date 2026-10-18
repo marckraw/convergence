@@ -50,6 +50,29 @@ it('reads task birth, killed patches and consumed snapshots without inventing un
   ])
 })
 
+it("keeps the task's description through a progress step — read task_progress's description as the task's turns red", () => {
+  expect(
+    readClaudeTaskFacts(
+      {
+        type: 'system',
+        subtype: 'task_progress',
+        task_id: 'task',
+        tool_use_id: 'tool',
+        description: 'Running List directory contents',
+        last_tool_name: 'Bash',
+      },
+      'now',
+    ),
+  ).toEqual([
+    {
+      kind: 'task.changed',
+      taskId: 'task',
+      at: 'now',
+      patch: { toolUseId: 'tool' },
+    },
+  ])
+})
+
 it('R11 preserves terminal summaries verbatim — drop endedSummary at the reader turns red', () => {
   const summary = '  Fixture failure: upstream request rejected\nexact detail  '
   expect([

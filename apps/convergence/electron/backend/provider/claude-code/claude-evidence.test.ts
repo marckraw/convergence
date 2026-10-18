@@ -78,7 +78,19 @@ function fixture() {
       },
       'terminal',
     )
-  return { adapter, call, start, result, update, facts, runs: () => runs }
+  /** Any message after a task update: a held end is settled by it. */
+  const next = () =>
+    adapter.consume({ type: 'assistant', message: { content: [] } }, 'next')
+  return {
+    adapter,
+    call,
+    start,
+    result,
+    update,
+    next,
+    facts,
+    runs: () => runs,
+  }
 }
 
 it('background launch stays running until the task ends — mutation complete on async_launched turns red', () => {
@@ -90,6 +102,7 @@ it('background launch stays running until the task ends — mutation complete on
     { status: 'running', model: 'haiku' },
   ])
   f.update('completed')
+  f.next()
   expect(f.runs()[0].status).toBe('completed')
 })
 it('foreground completion has one terminal moment — mutation drop terminal dedupe turns red', () => {
@@ -122,7 +135,67 @@ it('task kill ends the adopted agent — mutation ignore killed turns red', () =
   f.call()
   f.start()
   f.update('killed')
+  f.next()
   expect(f.runs()[0].status).toBe('stopped')
+})
+it("a task update's end waits one message for its notification's summary — mutation end at the update or drop the held end turns red", () => {
+  const ended = (then: (f: ReturnType<typeof fixture>) => void) => {
+    const f = fixture()
+    f.call()
+    f.start()
+    f.update('completed')
+    const held = f.runs()[0].status
+    then(f)
+    return {
+      held,
+      runs: f.runs().map(({ status, endedAt, endedSummary }) => ({
+        status,
+        endedAt,
+        endedSummary,
+      })),
+      ends: f.facts.filter((fact) => fact.kind === 'agent.ended').length,
+    }
+  }
+  expect({
+    notified: ended((f) =>
+      f.adapter.consume(
+        {
+          type: 'system',
+          subtype: 'task_notification',
+          task_id: 'agent',
+          tool_use_id: 'spawn',
+          status: 'failed',
+          summary: 'last words',
+        },
+        'notified',
+      ),
+    ),
+    unnotified: ended((f) => f.next()),
+    exited: ended((f) => f.adapter.processEnded('exit')),
+  }).toEqual({
+    // The update's moment and status, with the notification's summary.
+    notified: {
+      held: 'running',
+      runs: [
+        {
+          status: 'completed',
+          endedAt: 'terminal',
+          endedSummary: 'last words',
+        },
+      ],
+      ends: 1,
+    },
+    unnotified: {
+      held: 'running',
+      runs: [{ status: 'completed', endedAt: 'terminal', endedSummary: null }],
+      ends: 1,
+    },
+    exited: {
+      held: 'running',
+      runs: [{ status: 'completed', endedAt: 'terminal', endedSummary: null }],
+      ends: 1,
+    },
+  })
 })
 it('an unanswered background run becomes unknown on process exit — mutation complete on exit turns red', () => {
   const f = fixture()

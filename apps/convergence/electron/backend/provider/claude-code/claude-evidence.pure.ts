@@ -68,6 +68,9 @@ export function readClaudeTaskFacts(
       ['description', 'description'],
       ['output_file', 'outputFile'],
     ] as const) {
+      // `task_progress`'s description is the step the task is on ("Running
+      // …"), not the task's own (MAR-4292).
+      if (wire === 'description' && subtype === 'task_progress') continue
       const text = claudeString(input[wire])
       if (text) patch[key] = text
     }
