@@ -1,10 +1,20 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import BetterSqlite3 from 'better-sqlite3'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { AttachmentsService, DRAFT_SESSION_ID } from './attachments.service'
+import {
+  MAX_TOOL_IMAGE_BYTES,
+  MAX_TOOL_IMAGES_PER_RESULT,
+} from './attachments.constants'
 import type Database from 'better-sqlite3'
 
 const PNG_BYTES = new Uint8Array([
@@ -14,6 +24,14 @@ const PNG_BYTES = new Uint8Array([
 const PDF_BYTES = new Uint8Array([
   0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a,
 ])
+
+// A complete 1x1 transparent PNG, the kind of image a tool hands back.
+const TINY_PNG_BYTES = new Uint8Array(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+  ),
+)
 
 function textBytes(str: string): Uint8Array {
   return new TextEncoder().encode(str)
@@ -193,6 +211,177 @@ describe('AttachmentsService', () => {
     ])
     const ordered = service.getMany([attachments[1].id, attachments[0].id])
     expect(ordered.map((a) => a.filename)).toEqual(['b.txt', 'a.png'])
+  })
+
+  describe('ingestToolImages', () => {
+    it('stores a tool image by its bytes, not by the type it came with', async () => {
+      const { attachments, omissions } = await service.ingestToolImages(
+        sessionId,
+        [
+          {
+            name: 'screenshot.jpg',
+            mimeType: 'image/jpeg',
+            bytes: TINY_PNG_BYTES,
+          },
+        ],
+      )
+
+      expect(omissions).toEqual({})
+      expect(attachments).toHaveLength(1)
+      const [att] = attachments
+      expect(att.kind).toBe('image')
+      expect(att.mimeType).toBe('image/png')
+      expect(att.sessionId).toBe(sessionId)
+      expect(att.filename).toBe('screenshot.jpg')
+      expect(att.sizeBytes).toBe(TINY_PNG_BYTES.length)
+      expect(service.getById(att.id)).toEqual(att)
+      expect(readFileSync(att.storagePath)).toEqual(Buffer.from(TINY_PNG_BYTES))
+    })
+
+    it('leaves out a PDF or text payload as an unsupported type', async () => {
+      const { attachments, omissions } = await service.ingestToolImages(
+        sessionId,
+        [
+          { name: 'doc.png', mimeType: 'image/png', bytes: PDF_BYTES },
+          {
+            name: 'notes.png',
+            mimeType: 'image/png',
+            bytes: textBytes('not an image'),
+          },
+        ],
+      )
+
+      expect(attachments).toEqual([])
+      expect(omissions).toEqual({ 'unsupported-mime-type': 2 })
+      expect(service.getForSession(sessionId)).toEqual([])
+      expect(existsSync(join(rootDir, sessionId))).toBe(false)
+    })
+
+    it('leaves out empty bytes as an invalid image', async () => {
+      const { attachments, omissions } = await service.ingestToolImages(
+        sessionId,
+        [{ name: 'empty.png', mimeType: 'image/png', bytes: new Uint8Array() }],
+      )
+
+      expect(attachments).toEqual([])
+      expect(omissions).toEqual({ 'invalid-image': 1 })
+    })
+
+    it('leaves out an image over the tool-image size limit', async () => {
+      const oversize = new Uint8Array(MAX_TOOL_IMAGE_BYTES + 1)
+      oversize.set(PNG_BYTES, 0)
+
+      const { attachments, omissions } = await service.ingestToolImages(
+        sessionId,
+        [{ name: 'big.png', mimeType: 'image/png', bytes: oversize }],
+      )
+
+      expect(attachments).toEqual([])
+      expect(omissions).toEqual({ 'image-too-large': 1 })
+      expect(service.getForSession(sessionId)).toEqual([])
+    })
+
+    it('stores an image exactly at the size limit', async () => {
+      const atLimit = new Uint8Array(MAX_TOOL_IMAGE_BYTES)
+      atLimit.set(PNG_BYTES, 0)
+
+      const { attachments, omissions } = await service.ingestToolImages(
+        sessionId,
+        [{ name: 'edge.png', mimeType: 'image/png', bytes: atLimit }],
+      )
+
+      expect(omissions).toEqual({})
+      expect(attachments).toHaveLength(1)
+    })
+
+    it('counts the images past the per-result limit as over the turn limit', async () => {
+      const images = Array.from(
+        { length: MAX_TOOL_IMAGES_PER_RESULT + 3 },
+        (_, i) => ({
+          name: `shot-${i}.png`,
+          mimeType: 'image/png',
+          bytes: TINY_PNG_BYTES,
+        }),
+      )
+
+      const { attachments, omissions } = await service.ingestToolImages(
+        sessionId,
+        images,
+      )
+
+      expect(attachments).toHaveLength(MAX_TOOL_IMAGES_PER_RESULT)
+      expect(attachments.map((a) => a.filename)).toEqual(
+        images.slice(0, MAX_TOOL_IMAGES_PER_RESULT).map((i) => i.name),
+      )
+      expect(omissions).toEqual({ 'turn-limit': 3 })
+      expect(service.getForSession(sessionId)).toHaveLength(
+        MAX_TOOL_IMAGES_PER_RESULT,
+      )
+    })
+
+    it('counts a storage failure without throwing', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const blocker = join(rootDir, 'not-a-directory')
+      writeFileSync(blocker, 'a regular file')
+      const broken = new AttachmentsService(db, join(blocker, 'attachments'))
+
+      try {
+        const { attachments, omissions } = await broken.ingestToolImages(
+          sessionId,
+          [
+            { name: 'a.png', mimeType: 'image/png', bytes: TINY_PNG_BYTES },
+            { name: 'b.png', mimeType: 'image/png', bytes: TINY_PNG_BYTES },
+          ],
+        )
+
+        expect(attachments).toEqual([])
+        expect(omissions).toEqual({ 'storage-failed': 2 })
+        expect(service.getForSession(sessionId)).toEqual([])
+        expect(errorSpy).toHaveBeenCalledTimes(2)
+      } finally {
+        errorSpy.mockRestore()
+      }
+    })
+
+    it('stores what it can and counts the rest by reason', async () => {
+      const oversize = new Uint8Array(MAX_TOOL_IMAGE_BYTES + 1)
+      oversize.set(PNG_BYTES, 0)
+      const png = (name: string) => ({
+        name,
+        mimeType: 'image/png',
+        bytes: TINY_PNG_BYTES,
+      })
+
+      const { attachments, omissions } = await service.ingestToolImages(
+        sessionId,
+        [
+          png('one.png'),
+          { name: 'empty.png', mimeType: 'image/png', bytes: new Uint8Array() },
+          { name: 'doc.pdf', mimeType: 'application/pdf', bytes: PDF_BYTES },
+          png('two.png'),
+          { name: 'big.png', mimeType: 'image/png', bytes: oversize },
+          { name: 'note.txt', mimeType: 'text/plain', bytes: textBytes('hi') },
+          { name: 'blank.png', mimeType: 'image/png', bytes: new Uint8Array() },
+          png('three.png'),
+          png('nine.png'),
+          png('ten.png'),
+        ],
+      )
+
+      // A refused image takes no place: the limit counts what was stored.
+      expect(attachments.map((a) => a.filename)).toEqual([
+        'one.png',
+        'two.png',
+        'three.png',
+        'nine.png',
+        'ten.png',
+      ])
+      expect(omissions).toEqual({
+        'invalid-image': 2,
+        'unsupported-mime-type': 2,
+        'image-too-large': 1,
+      })
+    })
   })
 
   it('self-heals a legacy attachment FK when ingesting draft attachments', async () => {

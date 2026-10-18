@@ -11,7 +11,9 @@ import type {
   InteractionFormField,
   InteractionQuestion,
   InteractionRequest,
+  ToolAttachmentOmissions,
 } from './conversation-item.types'
+import { TOOL_ATTACHMENT_OMISSION_CODES } from './conversation-item.types'
 import type {
   SkillInvocationStatus,
   SkillProviderId,
@@ -50,6 +52,51 @@ function stateFromTranscriptEntry(
     return 'error'
   }
   return 'complete'
+}
+
+/**
+ * Tool-result omission counts read from anywhere that is not this process: a
+ * stored payload, a host's item. Only the known codes with a positive whole
+ * count survive, so nothing a reader shows is a code it cannot name. Absent
+ * when nothing survives, which is how "no image was left out" is spelled.
+ */
+export function readToolAttachmentOmissions(
+  value: unknown,
+): ToolAttachmentOmissions | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined
+  const record = value as Record<string, unknown>
+  const omissions: ToolAttachmentOmissions = {}
+  let any = false
+  for (const code of TOOL_ATTACHMENT_OMISSION_CODES) {
+    const count = record[code]
+    if (typeof count === 'number' && Number.isSafeInteger(count) && count > 0) {
+      omissions[code] = count
+      any = true
+    }
+  }
+  return any ? omissions : undefined
+}
+
+/** Two sets of omission counts added together, code by code. */
+export function addToolAttachmentOmissions(
+  a: ToolAttachmentOmissions | undefined,
+  b: ToolAttachmentOmissions | undefined,
+): ToolAttachmentOmissions | undefined {
+  const sum: Record<string, number> = {}
+  for (const code of TOOL_ATTACHMENT_OMISSION_CODES) {
+    const count = (a?.[code] ?? 0) + (b?.[code] ?? 0)
+    if (count > 0) sum[code] = count
+  }
+  return readToolAttachmentOmissions(sum)
+}
+
+function readStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const strings = value.filter(
+    (entry): entry is string => typeof entry === 'string',
+  )
+  return strings.length > 0 ? strings : undefined
 }
 
 function kindFromValue(value: string): ConversationItemKind {
@@ -541,7 +588,11 @@ export function conversationItemFromRow(
         inputText: payload.inputText as string,
       }
 
-    case 'tool-result':
+    case 'tool-result': {
+      const attachmentIds = readStringList(payload.attachmentIds)
+      const attachmentOmissions = readToolAttachmentOmissions(
+        payload.attachmentOmissions,
+      )
       return {
         ...base,
         kind,
@@ -549,7 +600,10 @@ export function conversationItemFromRow(
         relatedItemId:
           (payload.relatedItemId as string | null | undefined) ?? null,
         outputText: payload.outputText as string,
+        ...(attachmentIds ? { attachmentIds } : {}),
+        ...(attachmentOmissions ? { attachmentOmissions } : {}),
       }
+    }
 
     case 'approval-request':
       return {

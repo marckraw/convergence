@@ -100,6 +100,7 @@ import type {
   SessionDelta,
 } from './conversation-item.types'
 import {
+  addToolAttachmentOmissions,
   conversationItemFromRow,
   conversationItemToInsertRow,
 } from './conversation-item.pure'
@@ -305,6 +306,14 @@ export class SessionService {
 
   private activeHandles = new Map<string, SessionHandle>()
   private pendingHandleDisposals = new Set<Promise<void>>()
+  /**
+   * Tool-result images on their way into the attachment store (MAR-4274),
+   * awaited by `disposeAll` so none writes after the database closes, and the
+   * items they are for, so a second delta for the same item, arriving while
+   * the first is written, does not store the images twice.
+   */
+  private pendingToolImageWrites = new Set<Promise<void>>()
+  private toolImageItemsInFlight = new Set<string>()
   /**
    * Handles that joined a run which had already come to rest, and so have no
    * run of their own to end yet (MAR-2582).
@@ -4383,6 +4392,7 @@ export class SessionService {
     for (const sessionId of Array.from(this.activeHandles.keys()))
       this.releaseHandle(sessionId, 'quit')
     await Promise.all(this.pendingHandleDisposals)
+    await Promise.all(this.pendingToolImageWrites)
     // A provider may enqueue one last coalesced patch while its dispose runs;
     // write those while the database is still open (MAR-3274 R2).
     dropped += this.flushAllPendingConversationPatches()
@@ -4523,6 +4533,10 @@ export class SessionService {
         })
         return
       }
+
+      case 'conversation.item.toolImages':
+        this.storeToolImages(sessionId, delta)
+        return
 
       case 'conversation.item.patch': {
         if (this.shouldCoalesceConversationPatch(delta.patch)) {
@@ -4916,6 +4930,83 @@ export class SessionService {
       }
     }
     return item
+  }
+
+  /**
+   * Stores the images a tool result produced and patches the item with them
+   * (MAR-4274). The bytes go to the attachment store, off the delta's own
+   * synchronous path: the item is already shown, and its images join it when
+   * they are written. What did not make it is counted on the item, added to
+   * what it already counts, so a person reads "2 images left out" rather than
+   * nothing.
+   *
+   * Once per item: an item that already has images keeps them, which is what
+   * makes a replayed delta harmless. Content, like an item add, so it lands
+   * whichever handle spoke.
+   */
+  private storeToolImages(
+    sessionId: string,
+    delta: Extract<SessionDelta, { kind: 'conversation.item.toolImages' }>,
+  ): void {
+    if (this.quitting || this.toolImageItemsInFlight.has(delta.itemId)) return
+    const current = this.readConversationItem(sessionId, delta.itemId)
+    if (current?.kind !== 'tool-result' || current.attachmentIds?.length) return
+    this.toolImageItemsInFlight.add(delta.itemId)
+    const attachments = this.attachments
+    const write = (async () => {
+      const stored =
+        delta.images.length === 0
+          ? { attachments: [], omissions: {} }
+          : attachments
+            ? await attachments.ingestToolImages(sessionId, delta.images)
+            : {
+                attachments: [],
+                omissions: { 'storage-failed': delta.images.length },
+              }
+      const latest = this.readConversationItem(sessionId, delta.itemId)
+      if (latest?.kind !== 'tool-result') return
+      const attachmentOmissions = addToolAttachmentOmissions(
+        addToolAttachmentOmissions(latest.attachmentOmissions, delta.omissions),
+        stored.omissions,
+      )
+      const attachmentIds = stored.attachments.map(
+        (attachment) => attachment.id,
+      )
+      if (attachmentIds.length === 0 && !attachmentOmissions) return
+      const item = this.patchConversationItem(sessionId, delta.itemId, {
+        ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+        ...(attachmentOmissions ? { attachmentOmissions } : {}),
+      } as Partial<ConversationItem>)
+      if (item)
+        this.notifySessionChange(sessionId, { sessionId, op: 'patch', item })
+    })()
+      .catch((error) => {
+        console.error(
+          `[session] The images of tool result ${delta.itemId} could not be recorded`,
+          error,
+        )
+      })
+      .finally(() => {
+        this.toolImageItemsInFlight.delete(delta.itemId)
+        this.pendingToolImageWrites.delete(write)
+      })
+    this.pendingToolImageWrites.add(write)
+  }
+
+  private readConversationItem(
+    sessionId: string,
+    itemId: string,
+  ): ConversationItem | null {
+    const row = this.db
+      .prepare(
+        `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
+         FROM session_conversation_items items
+         INNER JOIN sessions ON sessions.id = items.session_id
+         LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id
+         WHERE items.session_id = ? AND items.id = ?`,
+      )
+      .get(sessionId, itemId) as ConversationItemRow | undefined
+    return row ? conversationItemFromRow(row) : null
   }
 
   private patchConversationItem(
