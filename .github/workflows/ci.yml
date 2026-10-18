@@ -35,6 +35,9 @@ jobs:
         if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
         run: npx changeset status --since=origin/master
 
+      - name: Install perf-seed target-check dependency
+        run: sudo apt-get update && sudo apt-get install -y lsof
+
       - name: Run pure tests
         run: npm run test:pure
 

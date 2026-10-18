@@ -30,7 +30,8 @@ No attachments or session-outputs are copied: database measurements do not need 
 Known secrets are blanked; token-shaped text and secret-keyed JSON strings are masked at equal length.
 This is pattern-based scrubbing, not anonymization of arbitrary prose or personal data.
 The target must be closed (checked with lsof); there is no force override.
-Requires the Node version in .nvmrc and a Node-compatible better-sqlite3 build.
+Requires lsof on PATH (Linux: install the lsof package), the Node version in .nvmrc,
+and a Node-compatible better-sqlite3 build.
 Reports counts only. On failure, the unpublished copy is deleted; an older output is preserved.`
 
 const quote = (name) => `"${name.replaceAll('"', '""')}"`
@@ -40,6 +41,11 @@ function closedTarget(path) {
     if (!existsSync(file)) continue
     if (!lstatSync(file).isFile()) throw new Error('unsafe target')
     const result = spawnSync('lsof', ['-t', '--', file], { encoding: 'utf8' })
+    if (result.error?.code === 'ENOENT') {
+      throw Object.assign(new Error('lsof unavailable'), {
+        code: 'LSOF_UNAVAILABLE',
+      })
+    }
     if (
       result.error ||
       ![0, 1].includes(result.status) ||
@@ -364,11 +370,14 @@ try {
   const table =
     activeTable === undefined ? '(none)' : maskTokens(activeTable).value
   const code =
-    typeof error?.code === 'string' && /^SQLITE_[A-Z_]+$/.test(error.code)
+    typeof error?.code === 'string' &&
+    (/^SQLITE_[A-Z_]+$/.test(error.code) || error.code === 'LSOF_UNAVAILABLE')
       ? error.code
       : 'NON_SQLITE'
   console.error(
     `perf:seed failed during ${phase}; table=${JSON.stringify(table)}; code=${code}; unpublished copy removed. No source values are reported.`,
   )
+  if (code === 'LSOF_UNAVAILABLE')
+    console.error('Install lsof and ensure it is on PATH to check the target.')
   process.exitCode = 1
 }

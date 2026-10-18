@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
 import Database from 'better-sqlite3'
 import { build } from 'esbuild'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../database/database'
 import { hasTokens, scrubStateJson, SECRET_COLUMN } from './perf-seed.pure'
 import { assertUniquePairs, plantUniquePairs } from './perf-seed-unique.fixture'
@@ -513,6 +513,13 @@ function assertSchemaUniquePairs(entry = script) {
 }
 
 describe('perf seed CLI on a generated real-schema database', () => {
+  beforeAll(() => {
+    const result = spawnSync('lsof', ['-v'], { encoding: 'utf8' })
+    expect(
+      result.status,
+      'perf-seed CLI tests require real lsof on PATH; on Linux install the lsof package (e.g. apt-get install lsof).',
+    ).toBe(0)
+  })
   it('keeps both rows distinct for every schema UNIQUE key covering TEXT', () => {
     const count = assertSchemaUniquePairs()
     expect(count).toBeGreaterThan(40)
@@ -675,6 +682,28 @@ describe('perf seed CLI on a generated real-schema database', () => {
     )
     db.close()
     assertRejected(f)
+  })
+  it('reports missing lsof and preserves an existing target without publishing a copy', () => {
+    const f = fixture()
+    assertScrubbed(f)
+    const target = join(f.out, 'convergence.db')
+    const before = hash(target)
+    const sourceBefore = hash(f.source)
+    const emptyPath = join(f.root, 'empty-path')
+    mkdirSync(emptyPath)
+    const result = spawnSync(
+      process.execPath,
+      [script, '--source', f.source, '--out', f.out],
+      { encoding: 'utf8', env: { ...process.env, PATH: emptyPath } },
+    )
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('code=LSOF_UNAVAILABLE;')
+    expect(result.stderr).toContain('Install lsof and ensure it is on PATH')
+    expect(hash(target)).toBe(before)
+    expect(hash(f.source)).toBe(sourceBefore)
+    expect(readdirSync(f.out)).toEqual(['convergence.db'])
+    for (const secret of f.planted) expect(result.stderr).not.toContain(secret)
   })
   it('backs up committed WAL data while the source remains open, then reseeds a closed target', () => {
     const f = fixture(),
