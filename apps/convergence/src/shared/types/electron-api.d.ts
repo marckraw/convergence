@@ -2174,7 +2174,7 @@ interface ElectronAPI {
       agentRunIds: string[],
     ) => Promise<ConversationItemData[]>
     /** Latest terminal note per task, at most one each (MAR-3398 R10). */
-    listTaskResultNotes: (
+    listTaskResultItems: (
       sessionId: string,
       taskIds: string[],
     ) => Promise<ConversationItemData[]>

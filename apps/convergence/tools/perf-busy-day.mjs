@@ -388,8 +388,8 @@ async function main() {
   const pr = { start() {}, stop() {}, refreshForSession: async () => null, getForSession: async () => null, listByProjectId: async () => [], listGlobal: async () => [] }
   const registered = new Set()
   const resultReads = []
-  const readResults = sessions.listTaskResultNotes.bind(sessions)
-  sessions.listTaskResultNotes = (sessionId, ids) => {
+  const readResults = sessions.listTaskResultItems.bind(sessions)
+  sessions.listTaskResultItems = (sessionId, ids) => {
     const started = performance.now()
     const items = readResults(sessionId, ids)
     resultReads.push({ sessionId, items: items.length, bytes: Buffer.byteLength(JSON.stringify(items)), ms: performance.now() - started })
@@ -465,12 +465,12 @@ async function main() {
     }
   }
   if (params.panel) {
-    if (underNode) sessions.listTaskResultNotes(target.id, sessions.listAgentRuns(target.id).map(run => run.id))
+    if (underNode) sessions.listTaskResultItems(target.id, sessions.listAgentRuns(target.id).map(run => run.id))
     else {
       const opened = await window.webContents.executeJavaScript('(() => { const button = [...document.querySelectorAll("button")].find(button => button.textContent.trim().startsWith("Parallel work")); if (!button) return false; button.click(); return true })()')
       if (!opened) throw new Error('Parallel work button not mounted')
       for (let attempt = 0; attempt < 100 && !resultReads.length; attempt++) await wait(50)
-      if (!resultReads.length) throw new Error('Open panel did not read result notes')
+      if (!resultReads.length) throw new Error('Open panel did not read result items')
     }
   }
   for (const row of streamingRows) await sessions.start(row.id, { text: 'Run synthetic busy day' })

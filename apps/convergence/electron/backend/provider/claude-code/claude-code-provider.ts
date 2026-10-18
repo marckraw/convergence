@@ -40,6 +40,7 @@ import {
 import {
   CLAUDE_TASK_NOTIFICATION_FALLBACK,
   readClaudeResultOriginKind,
+  readClaudeTaskBackgrounded,
   readClaudeTaskNote,
   readClaudeToolResultMoment,
 } from './claude-code-task.pure'
@@ -684,6 +685,9 @@ export class ClaudeCodeProvider implements Provider {
     let stoppedByUser = false
     const notifiedTaskMoments = new Set<string>()
     const taskDescriptions = new Map<string, string>()
+    // Tasks Claude Code runs in the foreground: their own tool call and
+    // result mark both moments, so they get no background-task notes.
+    const foregroundTasks = new Set<string>()
     // The synthetic result has no task id; its preceding notification owns the note.
     let taskNotificationSinceResult = false
     let stderrBuffer = ''
@@ -1277,6 +1281,10 @@ export class ClaudeCodeProvider implements Provider {
           const rawEvent = event as unknown as Record<string, unknown>
           const subtype = rawEvent.subtype as string | undefined
           if (subtype === 'init' && event.session_id) sawHarnessOutput = true
+          const backgrounding = readClaudeTaskBackgrounded(data)
+          if (backgrounding?.backgrounded === false)
+            foregroundTasks.add(backgrounding.taskId)
+          else if (backgrounding) foregroundTasks.delete(backgrounding.taskId)
           const taskNote = readClaudeTaskNote(data, taskDescriptions)
           if (taskNote) {
             if (taskNote.notification) {
@@ -1284,6 +1292,7 @@ export class ClaudeCodeProvider implements Provider {
             }
             if (taskNote.taskId) {
               taskDescriptions.set(taskNote.taskId, taskNote.description)
+              if (foregroundTasks.has(taskNote.taskId)) break
               const key = JSON.stringify([taskNote.taskId, taskNote.moment])
               if (notifiedTaskMoments.has(key)) break
               notifiedTaskMoments.add(key)

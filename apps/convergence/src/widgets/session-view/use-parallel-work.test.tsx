@@ -16,7 +16,7 @@ import { parallelWorkApi } from './parallel-work.api'
 vi.mock('./parallel-work.api', () => ({
   parallelWorkApi: {
     subscribeConversation: vi.fn(() => () => {}),
-    readTaskResultNotes: vi.fn().mockResolvedValue([]),
+    readTaskResultItems: vi.fn().mockResolvedValue([]),
     read: vi.fn(),
     subscribe: vi.fn(),
     readDetail: vi.fn(),
@@ -245,7 +245,7 @@ it.each(['detail', 'results'] as const)(
     const read =
       mode === 'detail'
         ? parallelWorkApi.readDetail
-        : parallelWorkApi.readTaskResultNotes
+        : parallelWorkApi.readTaskResultItems
     vi.mocked(read)
       .mockReset()
       .mockResolvedValue([detailItem('old')])
@@ -303,7 +303,7 @@ it.each(['detail', 'results'] as const)(
     const read =
       mode === 'detail'
         ? parallelWorkApi.readDetail
-        : parallelWorkApi.readTaskResultNotes
+        : parallelWorkApi.readTaskResultItems
     vi.mocked(read)
       .mockReset()
       .mockImplementation(() => new Promise((resolve) => pending.push(resolve)))

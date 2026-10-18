@@ -568,24 +568,23 @@ function comparable(
       model: run.model,
       status: run.status,
       depth: run.depth,
+      endedSummary: run.ended_summary,
     })),
     tasks: (record.tasks as Row[]).map((task) => ({
       taskId: task.task_id,
       toolUseId: task.tool_use_id,
       taskType: task.task_type,
+      description: task.description,
       status: task.status,
       endedAt: task.ended_at,
       outputFile: task.output_file,
     })),
-    // Local writes task notes the daemon does not (see `differences`).
-    items: items
-      .filter((item) => item.kind !== 'note')
-      .map(({ kind, agentRunId, taskId, agentAttribution }) => ({
-        kind,
-        agentRunId,
-        taskId,
-        agentAttribution,
-      })),
+    items: items.map(({ kind, agentRunId, taskId, agentAttribution }) => ({
+      kind,
+      agentRunId,
+      taskId,
+      agentAttribution,
+    })),
   }
 }
 
@@ -638,6 +637,12 @@ it("records the daemon's own Explore tape as the local pipeline records the same
     local.items,
     (id) => localCalls.get(id) ?? null,
   )
+  // The run ends with the subagent's last words, its task's notification's
+  // summary; the task keeps the description it started with, not a progress
+  // step's; and a foreground run gets no background-task notes (MAR-4292).
+  const notification = readTape<Row[]>('sdk-messages.json').find(
+    (message) => message.subtype === 'task_notification',
+  )!
   expect(expected.agentRuns).toEqual([
     {
       id: EXPLORE_RUN,
@@ -647,8 +652,13 @@ it("records the daemon's own Explore tape as the local pipeline records the same
       model: 'claude-sonnet-5-5',
       status: 'completed',
       depth: 1,
+      endedSummary: notification.summary,
     },
   ])
+  expect(expected.tasks).toMatchObject([
+    { taskId: EXPLORE_RUN, description: 'List files in folder' },
+  ])
+  expect(expected.items.some((item) => item.kind === 'note')).toBe(false)
   expect(
     comparable(
       remote.record,
@@ -670,19 +680,17 @@ it("records the daemon's own Explore tape as the local pipeline records the same
     },
   })
 
-  // Where the two producers disagree on the same recording, pinned so either
-  // side moving is a visible change (MAR-4292). None of it is the mapping's:
+  // Where the two producers still disagree on the same recording, pinned so
+  // either side moving is a visible change. Both are the daemon's to move
+  // (MAR-4292): it stamps `agent.ended` with the time it handled it, not the
+  // task's `end_time`, and it reports a run's transcript only when it
+  // identified the run from its metadata file. None of it is the mapping's:
   // the daemon's evidence reaches the record unchanged.
   const localRun = local.record.agentRuns[0] as Row
   const remoteRun = remote.record.agentRuns[0] as Row
   const localTask = local.record.tasks[0] as Row
   const remoteTask = remote.record.tasks[0] as Row
   expect({
-    taskDescription: [localTask.description, remoteTask.description],
-    runEndedSummary: [
-      localRun.ended_summary,
-      String(remoteRun.ended_summary).split('\n')[0],
-    ],
     runEndedAtIsTheTasks: [
       localRun.ended_at === localTask.ended_at,
       remoteRun.ended_at === remoteTask.ended_at,
@@ -693,22 +701,9 @@ it("records the daemon's own Explore tape as the local pipeline records the same
       ),
       remoteRun.transcript_path,
     ],
-    taskNotes: [
-      local.items.filter((item) => item.kind === 'note').length,
-      remote.items.filter((item) => item.kind === 'note').length,
-    ],
   }).toEqual({
-    taskDescription: [
-      'Running List directory contents including hidden files',
-      'List files in folder',
-    ],
-    runEndedSummary: [
-      null,
-      'The working directory has two files and no hidden files or subfolders:',
-    ],
     runEndedAtIsTheTasks: [true, false],
     transcriptPath: [true, null],
-    taskNotes: [2, 0],
   })
 })
 

@@ -329,7 +329,7 @@ describe('SessionService — parallel-work reads by id (MAR-3310 O0b)', () => {
     )
     db.exec('ANALYZE')
     const prepare = vi.spyOn(db, 'prepare')
-    const items = service.listTaskResultNotes(sessionId, [
+    const items = service.listTaskResultItems(sessionId, [
       ...taskIds,
       taskIds[0]!,
     ])
@@ -363,5 +363,51 @@ describe('SessionService — parallel-work reads by id (MAR-3310 O0b)', () => {
       }),
     )
     prepare.mockRestore()
+  })
+
+  it("R10 a foreground task with no notes still returns its own result 400 items back, and a background task's terminal note wins over its launch — mutation keep the note-only filter turns red", () => {
+    const result = (taskId: string, text: string, agentRunId?: string) => ({
+      kind: 'tool-result',
+      taskId,
+      agentRunId,
+      eventType: 'tool_result.completed',
+      payload: { toolName: 'Agent', relatedItemId: null, outputText: text },
+    })
+    const [foreground] = seed([
+      result('foreground', 'the subagent hands back'),
+      ...Array.from({ length: 400 }, () => message('later', 'other')),
+      // The subagent's own results belong to its run, not the task's return.
+      result('foreground', 'a child result', 'foreground'),
+      result('background', 'launched'),
+      {
+        kind: 'note',
+        taskId: 'background',
+        eventType: 'harness.task.terminal',
+        payload: { level: 'info', text: 'Background task finished' },
+      },
+    ])
+    expect(
+      service
+        .listTaskResultItems(sessionId, ['foreground', 'background'])
+        .map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          taskId: item.taskId,
+          agentRunId: item.agentRunId ?? null,
+        })),
+    ).toEqual([
+      {
+        id: foreground,
+        kind: 'tool-result',
+        taskId: 'foreground',
+        agentRunId: null,
+      },
+      {
+        id: `${sessionId}-404`,
+        kind: 'note',
+        taskId: 'background',
+        agentRunId: null,
+      },
+    ])
   })
 })

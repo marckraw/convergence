@@ -24,7 +24,7 @@ import { useTranscriptViewStore } from './transcript-view.model'
 vi.mock('./parallel-work.api', () => ({
   parallelWorkApi: {
     subscribeConversation: vi.fn(() => () => {}),
-    readTaskResultNotes: vi.fn().mockResolvedValue([]),
+    readTaskResultItems: vi.fn().mockResolvedValue([]),
     stop: vi.fn(),
     readDetail: vi.fn(),
     readTaskOutput: vi.fn(),
@@ -1145,7 +1145,7 @@ it('O1 R4 an unselected card keeps View result when its task note predates the w
       providerEventType: 'harness.task.terminal',
     },
   } as ConversationItem
-  vi.mocked(parallelWorkApi.readTaskResultNotes).mockResolvedValueOnce([note])
+  vi.mocked(parallelWorkApi.readTaskResultItems).mockResolvedValueOnce([note])
   render(<ParallelWork {...input} />)
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: 'View result' }))

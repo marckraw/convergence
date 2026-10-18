@@ -2237,15 +2237,22 @@ export class SessionService {
     return this.listItemsById(sessionId, 'task_id', taskIds)
   }
 
-  /** Only the latest terminal note per task crosses IPC for the cards. */
-  listTaskResultNotes(
+  /**
+   * Only each task's latest result item crosses IPC for the cards: its
+   * terminal note, or its own result in the main conversation. A foreground
+   * task writes no notes, so its tool's result is the only one there is
+   * (MAR-4292). A background task's later terminal note wins over its launch
+   * acknowledgement.
+   */
+  listTaskResultItems(
     sessionId: string,
     taskIds: string[],
   ): ConversationItem[] {
     this.flushPendingConversationPatchesForSession(sessionId)
     const statement = this.db.prepare(`${ITEMS_BY_ID_SELECT}
       WHERE items.session_id = ? AND items.task_id = ?
-        AND items.kind = 'note' AND items.provider_event_type = 'harness.task.terminal'
+        AND ((items.kind = 'note' AND items.provider_event_type = 'harness.task.terminal')
+          OR (items.kind = 'tool-result' AND items.agent_run_id IS NULL))
       ORDER BY items.sequence DESC LIMIT 1`)
     return [...new Set(taskIds)].flatMap((id) => {
       const row = statement.get(sessionId, id) as

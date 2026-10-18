@@ -59,6 +59,27 @@ export function readClaudeResultOriginKind(data: unknown): string | null {
 export const CLAUDE_TASK_NOTIFICATION_FALLBACK =
   'Claude Code closed a background-task turn without a notification.'
 
+/**
+ * Whether a task event says if its task outlives its tool call:
+ * `task_started`'s `is_backgrounded`, or an update moving it (MAR-4292).
+ */
+export function readClaudeTaskBackgrounded(
+  data: unknown,
+): { taskId: string; backgrounded: boolean } | null {
+  const event = record(data)
+  if (
+    event?.type !== 'system' ||
+    (event.subtype !== 'task_started' && event.subtype !== 'task_updated') ||
+    typeof event.task_id !== 'string'
+  )
+    return null
+  const backgrounded =
+    record(event.patch)?.is_backgrounded ?? event.is_backgrounded
+  return typeof backgrounded === 'boolean'
+    ? { taskId: event.task_id, backgrounded }
+    : null
+}
+
 /** The hotfix records lifecycle notes; CC2-1 owns structured projections. */
 export function readClaudeTaskNote(
   data: unknown,

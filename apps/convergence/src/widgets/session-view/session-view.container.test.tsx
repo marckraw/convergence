@@ -348,7 +348,7 @@ describe('SessionView', () => {
           listAgentRuns: vi.fn().mockResolvedValue([]),
           listTasks: vi.fn().mockResolvedValue([]),
           listTaskItems: vi.fn().mockResolvedValue([]),
-          listTaskResultNotes: vi.fn().mockResolvedValue([]),
+          listTaskResultItems: vi.fn().mockResolvedValue([]),
           listRunItems: vi.fn().mockResolvedValue([]),
           onSessionConversationPatched: vi.fn().mockReturnValue(() => {}),
           onEvidenceUpdated: vi.fn().mockReturnValue(() => {}),

@@ -464,3 +464,75 @@ it('MAR-3310 F1e R4 two reads are the same evidence only when runs and tasks bot
     ),
   }).toEqual({ same: true, taskChanged: false, runChanged: false })
 })
+
+it("a foreground run's withheld result is its return and the marker says how the run ended — mutations require the result's moment or prefer it to the recorded end turn red", () => {
+  const rows = [
+    {
+      id: 'foreground',
+      kind: 'agent',
+      parentId: null,
+      run: {
+        spawnedByItemId: 'spawn-a',
+        description: 'Read routes',
+        status: 'completed',
+        isBackgrounded: false,
+      },
+    },
+    {
+      id: 'stopped',
+      kind: 'agent',
+      parentId: null,
+      run: {
+        spawnedByItemId: 'spawn-b',
+        description: 'Read tests',
+        status: 'stopped',
+        isBackgrounded: false,
+      },
+    },
+    {
+      id: 'background',
+      kind: 'agent',
+      parentId: null,
+      run: {
+        spawnedByItemId: 'spawn-c',
+        description: 'Read docs',
+        status: 'completed',
+        isBackgrounded: true,
+      },
+    },
+  ] as ParallelWorkRow[]
+  const result = (id: string, spawn: string, providerEventType: string) =>
+    ({
+      id,
+      kind: 'tool-result',
+      relatedItemId: spawn,
+      providerMeta: { providerEventType },
+    }) as ConversationItem
+  expect([
+    ...parallelWorkMarkers(
+      [
+        result('withheld', 'spawn-a', 'tool_result'),
+        result('error', 'spawn-b', 'tool_result.failed'),
+        result('launch-ack', 'spawn-c', 'tool_result'),
+      ],
+      rows,
+    ),
+  ]).toEqual([
+    [
+      'withheld',
+      {
+        rowKey: 'agent:foreground',
+        label: 'Result returned · Read routes · completed',
+        replace: true,
+      },
+    ],
+    [
+      'error',
+      {
+        rowKey: 'agent:stopped',
+        label: 'Result returned · Read tests · stopped',
+        replace: true,
+      },
+    ],
+  ])
+})

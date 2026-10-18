@@ -340,7 +340,9 @@ export const ParallelWork: FC<Props> = ({
    *
    * Two sources, and the marker wins: a return marker already names its row,
    * while a terminal task note carries only the harness's task id and has to
-   * be matched against each row's evidence ids.
+   * be matched against each row's evidence ids. A result the loaded page does
+   * not hold is read by id (`readTaskResultItems`) into `panelItems`: a
+   * foreground run's own result then draws its marker (MAR-4292).
    */
   const resultItems = useMemo(() => {
     const byRowKey = new Map(
