@@ -87,6 +87,12 @@ list, so the horse's checklist and the brief cannot diverge.
 
 ## Post-task requirement
 
+The perf-seed CLI and its tests require real `lsof` on PATH to prove an
+existing target is closed. macOS supplies it; Linux agents must install the
+`lsof` package (for example, `apt-get update && apt-get install -y lsof` in
+the host's provisioning). Without it, initial copies can succeed while
+reseeding an existing target fails closed before any SQLite work.
+
 Agents must use the Node version from `.nvmrc` for all repo commands that
 depend on Node tooling (`npm install`, Vitest, typecheck, chaperone, Vite,
 Electron build/dev). If the current shell is on a different Node version,
