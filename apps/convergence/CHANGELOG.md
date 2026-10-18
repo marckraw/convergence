@@ -1,5 +1,14 @@
 # convergence
 
+## 0.98.8
+
+### Patch Changes
+
+- 3299194: Remote sessions speak execution-host protocol 0.31, and a remote Claude session's subagents and background tasks now show up like a local one's. When it spawns an agent, the agent's tool calls carry "↳ description (type)", and the parallel-work panel lists the session's agent runs and tasks, from the host's own record of them. Its counts still hold after Convergence restarts. On a host that takes it, Stop on one task stops just that task; on one that does not, Stop says the remote host cannot, instead of blaming a Claude Code version.
+- 50a3369: Remote hosts: the composer reads the host's own provider catalogue. A remote model offers the efforts that host takes, the permission choices are the host's, a Codex sandbox the host runs as another (a container host's Workspace write as Full access) is said before the session starts, and the host account's usage and credits show beside the provider. The account a host's provider is signed in as is not shown.
+- 8bc2ed4: On a remote host that serves it, the parallel-work panel can now show the end of a background task's output: select the task and press "Read output tail". The host redacts it and sends up to 64 KiB of whole lines; if it will not, the panel says why in words. And an answer to a request (a choice, a plan, a form) is no longer sent to a remote host that cannot read it: Convergence leaves a note saying so instead.
+- 4ae9d78: The images a tool produces now show under its result, in a local Claude session and in a remote one. A screenshot, or a Read of a PNG, appears below the tool's output without opening it, and opens full size on a click. A remote session downloads them from its host in the background, a few at a time and never more than the host said they weigh, so the transcript never waits on them. Images that could not be shown read as "2 images left out", with the reason: too large, over the per-turn limit, or not downloaded from the host.
+
 ## 0.98.7
 
 ### Patch Changes
