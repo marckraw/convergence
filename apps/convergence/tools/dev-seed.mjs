@@ -2,6 +2,7 @@ import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { LSOF_INSTALL_HINT } from './seed-diagnostics.mjs'
 
 /**
  * Snapshots the real app's data into the dev sandbox.
@@ -32,6 +33,13 @@ if (!existsSync(realDb)) {
 // honest check on macOS: any process with the file open blocks the seed.
 if (existsSync(sandboxDb) && !force) {
   const lsof = spawnSync('lsof', ['-t', sandboxDb], { encoding: 'utf8' })
+  if (lsof.error || ![0, 1].includes(lsof.status) || lsof.stderr?.trim()) {
+    console.error(
+      'refusing to seed: cannot check whether the sandbox database is open; code=LSOF_UNAVAILABLE.',
+    )
+    console.error(LSOF_INSTALL_HINT)
+    process.exit(1)
+  }
   const holders = (lsof.stdout ?? '').trim()
   if (holders) {
     console.error(
