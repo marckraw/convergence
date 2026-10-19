@@ -1,5 +1,12 @@
 # convergence
 
+## 0.98.9
+
+### Patch Changes
+
+- bc347d2: Claude subagents: a finished subagent keeps its last words as its run's summary, a task keeps the description it started with instead of turning into each progress step ("Running …"), and a subagent working in the foreground no longer leaves "Background task started" and "Background task … finished" notes in the transcript. Its "Result returned" marker comes from its own result and says how the run ended, so a stopped subagent reads "stopped" rather than "failed".
+- 108dcf6: A remote session no longer records a hook, retry or other harness event twice when Convergence quits or crashes right after the event arrives. The event and the point the stream resumes from are now saved together, so the host does not send it again on the next start.
+
 ## 0.98.8
 
 ### Patch Changes
